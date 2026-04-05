@@ -11,10 +11,10 @@ export default function PaymentSuccessPage() {
   const [qrCode, setQrCode] = useState('');
 
   useEffect(() => {
-    if (collectionCode) {
-      QRCode.toDataURL(collectionCode, { width: 200 }).then(setQrCode);
+    if (collectionCode && quoteId) {
+      QRCode.toDataURL(`TONSE-COLLECT-QT-${quoteId}-${collectionCode}`, { width: 200 }).then(setQrCode);
     }
-  }, [collectionCode]);
+  }, [collectionCode, quoteId]);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(collectionCode);

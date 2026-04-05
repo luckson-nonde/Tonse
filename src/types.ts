@@ -47,7 +47,7 @@ export interface Quote {
   price: number;
   condition: string;
   message: string;
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'ARCHIVED' | 'PAID' | 'PENDING_COLLECTION' | 'COMPLETED';
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'ARCHIVED' | 'PAID' | 'PENDING_COLLECTION' | 'AWAITING_PICKUP' | 'COMPLETED';
   createdAt: number;
   expiryDuration?: string;
   isRead?: boolean;

@@ -89,7 +89,7 @@ export default function CollectionCodePage() {
 
             <div className="flex justify-center mb-8">
               <div className="bg-white p-4 rounded-3xl border-2 border-slate-100 shadow-sm">
-                <QRCodeSVG value={quoteData.collectionCode || ''} size={200} />
+                <QRCodeSVG value={`TONSE-COLLECT-QT-${quoteData.id}-${quoteData.collectionCode}`} size={200} />
               </div>
             </div>
 

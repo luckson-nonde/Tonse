@@ -7,8 +7,11 @@ import {
   TrendingUp, FileText, MessageSquare, Truck, Star, Search, 
   PackageOpen, Plus, MapPin, Clock, User, Check, ChevronDown, 
   ChevronUp, Eye, ArrowRight, Settings, Loader2, Archive, X, Printer,
-  ChevronRight, MoreHorizontal, Zap, Calendar, CheckCircle, Music, Heart
+  ChevronRight, MoreHorizontal, Zap, Calendar, CheckCircle, Music, Heart,
+  QrCode, Camera, Image as ImageIcon, ShieldCheck, ArrowLeft, Info
 } from 'lucide-react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
+import { motion, AnimatePresence } from 'motion/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { isRelatedCategory } from '../services/categories';
@@ -18,7 +21,7 @@ import ProductManagement from './ProductManagement';
 import { generateQuoteSchema, QuoteField } from '../services/quoteSchemaGenerator';
 
 const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, itemPricesTotal }: { inquiry: Inquiry, onSubmit: (data: any) => void, onCancel: () => void, venueSpaces: any[], user: any, itemPricesTotal: number }) => {
-  const quoteSchema = React.useMemo(() => 
+  const { fields: quoteSchema, zodSchema } = React.useMemo(() => 
     generateQuoteSchema(inquiry.category || '', inquiry.attributes || {}),
     [inquiry.category, inquiry.attributes]
   );
@@ -28,6 +31,7 @@ const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, i
     condition: 'Brand New'
   });
   const [calculatedTotal, setCalculatedTotal] = useState(0);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   // Auto-calculate totals based on inquiry attributes
   useEffect(() => {
@@ -59,7 +63,22 @@ const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, i
   return (
     <div className="mt-6 p-6 bg-slate-50 rounded-2xl border border-slate-100">
       <h5 className="font-bold text-slate-900 mb-4">Submit Your Quotation</h5>
-      <form onSubmit={(e) => { e.preventDefault(); onSubmit({ ...quoteData, calculatedTotal }); }} className="space-y-4">
+      <form onSubmit={(e) => { 
+        e.preventDefault(); 
+        const result = zodSchema.safeParse({ ...quoteData, calculatedTotal });
+        if (!result.success) {
+          const errors: Record<string, string> = {};
+          result.error.issues.forEach(issue => {
+            if (issue.path.length > 0) {
+              errors[issue.path[0] as string] = issue.message;
+            }
+          });
+          setValidationErrors(errors);
+          return;
+        }
+        setValidationErrors({});
+        onSubmit(result.data);
+      }} className="space-y-4">
         {quoteSchema.map(field => {
           // Handle conditional visibility
           if (field.name === 'optionalDeliveryFee' && quoteData.optionalDeliveryOffer !== true) {
@@ -79,9 +98,14 @@ const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, i
                   type="number"
                   required={field.required && !(field.name === 'price' && itemPricesTotal > 0)}
                   value={field.name === 'price' && itemPricesTotal > 0 ? itemPricesTotal : (quoteData[field.name] || '')}
-                  onChange={e => setQuoteData({...quoteData, [field.name]: e.target.value})}
+                  onChange={e => {
+                    setQuoteData({...quoteData, [field.name]: e.target.value});
+                    if (validationErrors[field.name]) {
+                      setValidationErrors({...validationErrors, [field.name]: ''});
+                    }
+                  }}
                   readOnly={field.name === 'price' && itemPricesTotal > 0}
-                  className={`w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] ${field.name === 'price' && itemPricesTotal > 0 ? 'bg-slate-100 font-bold text-[#d49b35]' : ''}`}
+                  className={`w-full pl-12 pr-4 py-3 rounded-xl border ${validationErrors[field.name] ? 'border-rose-500' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] ${field.name === 'price' && itemPricesTotal > 0 ? 'bg-slate-100 font-bold text-[#d49b35]' : ''}`}
                   placeholder={field.placeholder || "0.00"}
                 />
                 <span className="absolute left-4 top-3.5 text-sm font-bold text-slate-400">ZMW</span>
@@ -103,8 +127,13 @@ const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, i
                 type="number"
                 required={field.required}
                 value={quoteData[field.name] || ''}
-                onChange={e => setQuoteData({...quoteData, [field.name]: e.target.value})}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35]"
+                onChange={e => {
+                  setQuoteData({...quoteData, [field.name]: e.target.value});
+                  if (validationErrors[field.name]) {
+                    setValidationErrors({...validationErrors, [field.name]: ''});
+                  }
+                }}
+                className={`w-full px-4 py-3 rounded-xl border ${validationErrors[field.name] ? 'border-rose-500' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35]`}
                 placeholder={field.placeholder}
               />
             )}
@@ -113,8 +142,13 @@ const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, i
               <textarea
                 required={field.required}
                 value={quoteData[field.name] || ''}
-                onChange={e => setQuoteData({...quoteData, [field.name]: e.target.value})}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] resize-none"
+                onChange={e => {
+                  setQuoteData({...quoteData, [field.name]: e.target.value});
+                  if (validationErrors[field.name]) {
+                    setValidationErrors({...validationErrors, [field.name]: ''});
+                  }
+                }}
+                className={`w-full px-4 py-3 rounded-xl border ${validationErrors[field.name] ? 'border-rose-500' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] resize-none`}
                 placeholder={field.placeholder}
                 rows={3}
               />
@@ -124,8 +158,13 @@ const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, i
               <select
                 required={field.required}
                 value={quoteData[field.name] || ''}
-                onChange={e => setQuoteData({...quoteData, [field.name]: e.target.value})}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] bg-white"
+                onChange={e => {
+                  setQuoteData({...quoteData, [field.name]: e.target.value});
+                  if (validationErrors[field.name]) {
+                    setValidationErrors({...validationErrors, [field.name]: ''});
+                  }
+                }}
+                className={`w-full px-4 py-3 rounded-xl border ${validationErrors[field.name] ? 'border-rose-500' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] bg-white`}
               >
                 {!quoteData[field.name] && <option value="" disabled>Select {field.label}</option>}
                 {field.options.map(opt => (
@@ -145,6 +184,7 @@ const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, i
             )}
             
             {field.helpText && <p className="text-[11px] text-slate-500 mt-1.5 italic">{field.helpText}</p>}
+            {validationErrors[field.name] && <p className="text-[11px] text-rose-500 mt-1.5 font-bold">{validationErrors[field.name]}</p>}
           </div>
           );
         })}
@@ -375,6 +415,14 @@ export default function ProviderDashboard() {
   const [quoteSort, setQuoteSort] = useState<'recent' | 'expensive'>('recent');
   const [isUpdating, setIsUpdating] = useState(false);
   const [itemPrices, setItemPrices] = useState<{ [key: string]: string }>({});
+  
+  // Collection Handshake State
+  const [scanningQuoteId, setScanningQuoteId] = useState<number | null>(null);
+  const [verifyingQuote, setVerifyingQuote] = useState<Quote | null>(null);
+  const [activeChecklistQuote, setActiveChecklistQuote] = useState<Quote | null>(null);
+  const [checklistSteps, setChecklistSteps] = useState({ photo: false, received: false });
+  const [handoverCompleteQuote, setHandoverCompleteQuote] = useState<Quote | null>(null);
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
 
   const venueSpaces = useLiveQuery(
     async () => {
@@ -421,27 +469,86 @@ export default function ProviderDashboard() {
 
       await db.quotes.update(quoteId, { status: 'COMPLETED' });
 
+      // Release funds from escrow
       const escrowTx = await db.transactions
         .where('quoteId').equals(quoteId)
-        .filter(tx => tx.userId === user.id && tx.status === 'ESCROW')
+        .filter(tx => tx.status === 'ESCROW')
         .first();
       
       if (escrowTx && escrowTx.id) {
         await db.transactions.update(escrowTx.id, { 
           status: 'COMPLETED',
-          description: `Funds released for Quote #${quoteId} (Booking Completed)`,
+          description: `Funds released for Quote #${quoteId} (Handover Completed)`,
           category: 'ESCROW_RELEASE',
           createdAt: Date.now()
         });
       }
 
-      alert('Collection confirmed! Funds have been released to your account.');
+      setHandoverCompleteQuote(quote);
+      setActiveChecklistQuote(null);
+      setChecklistSteps({ photo: false, received: false });
+      setCapturedPhoto(null);
     } catch (error) {
       console.error('Failed to confirm collection:', error);
       alert('Failed to confirm collection. Please try again.');
     } finally {
       setIsUpdating(false);
     }
+  };
+
+  const handleStartScan = (quoteId: number) => {
+    setScanningQuoteId(quoteId);
+  };
+
+  useEffect(() => {
+    let scanner: Html5QrcodeScanner | null = null;
+    if (scanningQuoteId) {
+      scanner = new Html5QrcodeScanner(
+        "qr-reader",
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        /* verbose= */ false
+      );
+      
+      scanner.render((decodedText) => {
+        // Assume decodedText is the quote ID or a specific code
+        if (decodedText.includes(`QT-${scanningQuoteId}`)) {
+          scanner?.clear();
+          setScanningQuoteId(null);
+          db.quotes.get(scanningQuoteId).then(quote => {
+            if (quote) setVerifyingQuote(quote);
+          });
+        } else {
+          alert("Invalid QR Code for this order.");
+        }
+      }, (error) => {
+        // Ignore errors
+      });
+    }
+    return () => {
+      if (scanner) {
+        scanner.clear().catch(err => console.error("Failed to clear scanner", err));
+      }
+    };
+  }, [scanningQuoteId]);
+
+  const handleVerifyBuyer = async () => {
+    if (!verifyingQuote?.id) return;
+    setIsUpdating(true);
+    try {
+      await db.quotes.update(verifyingQuote.id, { status: 'AWAITING_PICKUP' });
+      setActiveChecklistQuote(verifyingQuote);
+      setVerifyingQuote(null);
+    } catch (error) {
+      console.error("Failed to update status:", error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleTakePhoto = () => {
+    // Simulate taking a photo
+    setCapturedPhoto("https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&fit=crop&q=80&w=400&h=400");
+    setChecklistSteps(prev => ({ ...prev, photo: true }));
   };
 
   const handleDynamicQuoteSubmit = async (submittedQuoteData: any) => {
@@ -1309,30 +1416,34 @@ export default function ProviderDashboard() {
     <div className="space-y-4 sm:space-y-6">
       <h2 className="text-2xl font-serif font-bold text-slate-900 px-0 sm:px-0">{isBookingBased ? 'Paid Bookings' : 'Paid Orders (Escrow)'}</h2>
       <div className="space-y-4 sm:space-y-6">
-        {displayQuotes.filter(q => q.status === 'PAID').length === 0 ? (
+        {displayQuotes.filter(q => q.status === 'PAID' || q.status === 'AWAITING_PICKUP').length === 0 ? (
           <div className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-12 text-center border border-slate-100">
             <Truck className="w-12 h-12 text-slate-200 mx-auto mb-4" />
             <p className="text-slate-500 font-medium">No paid orders awaiting collection.</p>
           </div>
-        ) : displayQuotes.filter(q => q.status === 'PAID').map(quote => {
+        ) : displayQuotes.filter(q => q.status === 'PAID' || q.status === 'AWAITING_PICKUP').map(quote => {
           const lead = (quote as any).inquiry as Inquiry;
           if (!lead) return null;
+          
+          const isAwaitingPickup = quote.status === 'AWAITING_PICKUP';
+
           return (
             <div key={quote.id} className="bg-white rounded-2xl sm:rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
-              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 bg-emerald-50/30 flex items-center justify-between">
+              <div className={`px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between ${isAwaitingPickup ? 'bg-[#fffaf5]' : 'bg-emerald-50/30'}`}>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold text-sm overflow-hidden border border-emerald-200">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden border ${isAwaitingPickup ? 'bg-[#fdf6e9] text-[#d49b35] border-[#d49b35]/20' : 'bg-emerald-100 text-emerald-600 border-emerald-200'}`}>
                     <img src={`https://picsum.photos/seed/${lead.buyerId}/100/100`} alt={lead.buyerName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-slate-900 leading-tight">{lead.buyerName}</h3>
-                    <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest flex items-center gap-1">
-                      <Check className="w-3 h-3" /> Paid - Awaiting Completion
+                    <p className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 ${isAwaitingPickup ? 'text-[#d49b35]' : 'text-emerald-600'}`}>
+                      {isAwaitingPickup ? <Clock className="w-3 h-3" /> : <Check className="w-3 h-3" />}
+                      {isAwaitingPickup ? 'Awaiting Pickup' : 'Paid - Awaiting Collection'}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-xl font-black text-emerald-600">ZMW {quote.price.toLocaleString()}</p>
+                  <p className={`text-xl font-black ${isAwaitingPickup ? 'text-[#d49b35]' : 'text-emerald-600'}`}>ZMW {quote.price.toLocaleString()}</p>
                 </div>
               </div>
               <div className="p-4 sm:p-6">
@@ -1350,33 +1461,24 @@ export default function ProviderDashboard() {
                     </div>
                   </div>
                 </div>
-                <div className="space-y-4">
-                  <input 
-                    type="text" placeholder="Enter Digital Collection Code"
-                    className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-[#d49b35]"
-                    value={(quote as any).tempCode || ''}
-                    onChange={(e) => {
-                      (quote as any).tempCode = e.target.value;
-                      // Force re-render to update input value
-                      setIsUpdating(isUpdating);
-                    }}
-                  />
+                
+                {isAwaitingPickup ? (
                   <button 
-                    onClick={() => {
-                      const code = (quote as any).tempCode;
-                      if (code !== quote.collectionCode) {
-                        alert('Invalid collection code.');
-                        return;
-                      }
-                      handleConfirmCollection(quote.id!);
-                    }}
-                    disabled={isUpdating}
-                    className="w-full py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
+                    onClick={() => setActiveChecklistQuote(quote)}
+                    className="w-full py-4 bg-[#1e293b] text-white font-bold rounded-2xl hover:bg-[#0f172a] transition-all shadow-lg shadow-slate-200 flex items-center justify-center gap-2"
                   >
-                    {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
-                    Confirm Booking Completion
+                    <FileText className="w-5 h-5" />
+                    Complete Pickup Checklist
                   </button>
-                </div>
+                ) : (
+                  <button 
+                    onClick={() => handleStartScan(quote.id!)}
+                    className="w-full py-4 bg-[#d49b35] text-white font-bold rounded-2xl hover:bg-[#a37d35] transition-all shadow-lg shadow-[#d49b35]/20 flex items-center justify-center gap-2"
+                  >
+                    <QrCode className="w-5 h-5" />
+                    Scan to Collect
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -1787,6 +1889,282 @@ export default function ProviderDashboard() {
        activeTab === 'products' ? renderProducts() :
        activeTab === 'schedule' ? renderSchedule() :
        renderHome()}
+
+      <AnimatePresence>
+        {/* QR Scanner Modal */}
+        {scanningQuoteId && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] flex flex-col"
+          >
+            <div className="p-6 flex items-center justify-between text-white">
+              <button onClick={() => setScanningQuoteId(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+              <h3 className="text-lg font-bold">Scan Buyer QR Code</h3>
+              <div className="w-10" />
+            </div>
+            
+            <div className="flex-1 flex flex-col items-center justify-center p-6">
+              <div className="w-full max-w-sm aspect-square bg-black rounded-3xl overflow-hidden border-4 border-[#d49b35] relative shadow-2xl shadow-[#d49b35]/20">
+                <div id="qr-reader" className="w-full h-full"></div>
+                <div className="absolute inset-0 border-[40px] border-black/40 pointer-events-none"></div>
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-2 border-[#d49b35] border-dashed rounded-2xl animate-pulse"></div>
+              </div>
+              
+              <div className="mt-12 text-center space-y-4 max-w-xs">
+                <div className="w-12 h-12 bg-[#d49b35]/20 rounded-2xl flex items-center justify-center mx-auto">
+                  <QrCode className="w-6 h-6 text-[#d49b35]" />
+                </div>
+                <p className="text-white/80 text-sm font-medium leading-relaxed">
+                  Position the buyer's collection QR code within the frame to verify identity
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Buyer Verification Modal */}
+        {verifyingQuote && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              className="bg-white rounded-[32px] w-full max-w-md overflow-hidden shadow-2xl"
+            >
+              <div className="p-8 text-center border-b border-slate-50">
+                <div className="w-20 h-20 bg-[#fdf6e9] rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-white shadow-xl">
+                  <ShieldCheck className="w-10 h-10 text-[#d49b35]" />
+                </div>
+                <h3 className="text-2xl font-serif font-black text-slate-900 mb-2">Verify Buyer Identity</h3>
+                <p className="text-slate-500 text-sm font-medium">Please confirm the details match the person in front of you</p>
+              </div>
+              
+              <div className="p-8 space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-sm">
+                      <img src={`https://picsum.photos/seed/${verifyingQuote.inquiryId}/100/100`} alt="Buyer" className="w-full h-full object-cover" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Buyer Name</p>
+                      <p className="text-base font-black text-slate-900">{(verifyingQuote as any).inquiry?.buyerName || 'Verified Buyer'}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Quote ID</p>
+                      <p className="text-sm font-black text-slate-900">#QT-{verifyingQuote.id?.toString().padStart(4, '0')}</p>
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Amount</p>
+                      <p className="text-sm font-black text-[#d49b35]">ZMW {verifyingQuote.price.toLocaleString()}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Item Details</p>
+                    <p className="text-sm font-bold text-slate-700 truncate">{verifyingQuote.inquiryTitle}</p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3 pt-2">
+                  <button 
+                    onClick={() => setVerifyingQuote(null)}
+                    className="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-2xl hover:bg-slate-200 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={handleVerifyBuyer}
+                    className="flex-[2] py-4 bg-[#d49b35] text-white font-bold rounded-2xl hover:bg-[#a37d35] transition-all shadow-lg shadow-[#d49b35]/20"
+                  >
+                    Confirm Identity
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Pickup Checklist Modal */}
+        {activeChecklistQuote && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              className="bg-white rounded-[32px] w-full max-w-md overflow-hidden shadow-2xl"
+            >
+              <div className="p-6 border-b border-slate-50 flex items-center justify-between">
+                <h3 className="text-xl font-serif font-black text-slate-900">Pickup Checklist</h3>
+                <button onClick={() => setActiveChecklistQuote(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+              
+              <div className="p-8">
+                <div className="space-y-12 relative">
+                  {/* Vertical Line */}
+                  <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100"></div>
+                  
+                  {/* Step 1 */}
+                  <div className="relative flex gap-6">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center z-10 border-4 border-white shadow-sm transition-colors ${checklistSteps.photo ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                      {checklistSteps.photo ? <Check className="w-5 h-5" /> : <span className="text-sm font-black">1</span>}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-black text-slate-900 text-lg mb-1">Take Handover Photo</h4>
+                      <p className="text-slate-500 text-sm mb-4">Capture the item being handed over to the buyer</p>
+                      
+                      {capturedPhoto ? (
+                        <div className="relative w-full aspect-video rounded-2xl overflow-hidden border-2 border-emerald-500 shadow-md">
+                          <img src={capturedPhoto} alt="Handover" className="w-full h-full object-cover" />
+                          <button 
+                            onClick={() => setCapturedPhoto(null)}
+                            className="absolute top-2 right-2 p-2 bg-black/50 text-white rounded-full backdrop-blur-md"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={handleTakePhoto}
+                          className="w-full py-4 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-2 hover:border-[#d49b35] hover:bg-[#fdf6e9] transition-all group"
+                        >
+                          <Camera className="w-6 h-6 text-slate-400 group-hover:text-[#d49b35]" />
+                          <span className="text-xs font-bold text-slate-500 group-hover:text-[#d49b35]">Tap to capture photo</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Step 2 */}
+                  <div className="relative flex gap-6">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center z-10 border-4 border-white shadow-sm transition-colors ${checklistSteps.received ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                      {checklistSteps.received ? <Check className="w-5 h-5" /> : <span className="text-sm font-black">2</span>}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-black text-slate-900 text-lg mb-1">Confirm Item Receipt</h4>
+                      <p className="text-slate-500 text-sm mb-4">Buyer has inspected and received all items</p>
+                      
+                      <button 
+                        onClick={() => setChecklistSteps(prev => ({ ...prev, received: !prev.received }))}
+                        className={`w-full py-4 rounded-2xl border-2 font-bold text-sm transition-all flex items-center justify-center gap-2 ${checklistSteps.received ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                      >
+                        {checklistSteps.received ? <CheckCircle className="w-5 h-5" /> : <div className="w-5 h-5 rounded-full border-2 border-slate-200" />}
+                        {checklistSteps.received ? 'Items Received' : 'Confirm Receipt'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mt-12 pt-8 border-t border-slate-50">
+                  <button 
+                    disabled={!checklistSteps.photo || !checklistSteps.received || isUpdating}
+                    onClick={() => handleConfirmCollection(activeChecklistQuote.id!)}
+                    className={`w-full py-5 rounded-2xl font-black text-lg shadow-xl transition-all flex items-center justify-center gap-3 ${(!checklistSteps.photo || !checklistSteps.received) ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none' : 'bg-[#1e293b] text-white hover:bg-[#0f172a] shadow-slate-200 active:scale-[0.98]'}`}
+                  >
+                    {isUpdating ? <Loader2 className="w-6 h-6 animate-spin" /> : <CheckCircle className="w-6 h-6" />}
+                    Confirm Handover
+                  </button>
+                  <p className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-4 flex items-center justify-center gap-2">
+                    <Info className="w-3 h-3" />
+                    Funds will be released immediately
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Handover Complete Screen */}
+        {handoverCompleteQuote && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-[#fffaf5] z-[200] flex flex-col"
+          >
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+              <motion.div 
+                initial={{ scale: 0, rotate: -20 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: 'spring', damping: 12 }}
+                className="w-32 h-32 bg-emerald-500 rounded-[40px] flex items-center justify-center mb-8 shadow-2xl shadow-emerald-500/30"
+              >
+                <Check className="w-16 h-16 text-white" />
+              </motion.div>
+              
+              <motion.h2 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="text-4xl font-serif font-black text-slate-900 mb-4"
+              >
+                Handover Complete!
+              </motion.h2>
+              
+              <motion.p 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="text-slate-500 font-medium max-w-xs mx-auto mb-12"
+              >
+                The items have been successfully collected and funds have been released to your account.
+              </motion.p>
+              
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.4 }}
+                className="w-full max-w-sm bg-white rounded-[32px] p-8 shadow-xl shadow-slate-200/50 border border-slate-100 space-y-6"
+              >
+                <div className="flex justify-between items-center pb-4 border-b border-slate-50">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Amount Released</span>
+                  <span className="text-2xl font-black text-emerald-600">ZMW {handoverCompleteQuote.price.toLocaleString()}</span>
+                </div>
+                
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Order ID</span>
+                    <span className="text-sm font-black text-slate-900">#QT-{handoverCompleteQuote.id?.toString().padStart(4, '0')}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Buyer</span>
+                    <span className="text-sm font-black text-slate-900">{(handoverCompleteQuote as any).inquiry?.buyerName || 'Verified Buyer'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Date</span>
+                    <span className="text-sm font-black text-slate-900">{new Date().toLocaleDateString()}</span>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+            
+            <div className="p-8">
+              <button 
+                onClick={() => setHandoverCompleteQuote(null)}
+                className="w-full py-5 bg-[#1e293b] text-white font-black text-lg rounded-2xl hover:bg-[#0f172a] transition-all shadow-xl shadow-slate-200"
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

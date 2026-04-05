@@ -81,30 +81,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (existingUser) {
       throw new Error('Email already in use');
     }
-    const id = await db.users.add(userData);
-    const newUser = { ...userData, id };
 
-    // Create a shop entry for providers
-    if (['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS'].includes(userData.role)) {
-      await db.shops.add({
-        providerId: id,
-        name: userData.name,
-        logo: userData.logo || '',
-        coverImage: userData.coverImage || 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=1200&q=80',
-        description: 'New shop on TONSE Marketplace',
-        category: userData.categories?.[0] || 'General',
-        location: userData.location || 'Zambia',
-        rating: 5,
-        reviewCount: 0,
-        isVerified: false,
-        registrationDate: Date.now(),
-        registrationDocuments: [],
-        proofPhotos: []
-      });
+    let newUser: User | null = null;
+
+    await db.transaction('rw', db.users, db.shops, async () => {
+      const id = await db.users.add(userData);
+      newUser = { ...userData, id };
+
+      // Create a shop entry for providers
+      if (['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS'].includes(userData.role)) {
+        await db.shops.add({
+          providerId: id,
+          name: userData.name,
+          logo: userData.logo || '',
+          coverImage: userData.coverImage || 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=1200&q=80',
+          description: 'New shop on TONSE Marketplace',
+          category: userData.categories?.[0] || 'General',
+          location: userData.location || 'Zambia',
+          rating: 5,
+          reviewCount: 0,
+          isVerified: false,
+          registrationDate: Date.now(),
+          registrationDocuments: [],
+          proofPhotos: []
+        });
+      }
+    });
+
+    if (newUser && newUser.id) {
+      setUser(newUser);
+      localStorage.setItem('auth_user_id', newUser.id.toString());
     }
-
-    setUser(newUser);
-    localStorage.setItem('auth_user_id', id.toString());
   };
 
   const updateUser = async (updates: Partial<User>) => {
