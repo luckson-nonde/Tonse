@@ -1,0 +1,129 @@
+import React, { useState, useEffect } from 'react';
+import { X, Lock, Loader2 } from 'lucide-react';
+import { useAuth } from '../AuthContext';
+import Button from './Button';
+
+interface PinModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+export default function PinModal({ isOpen, onClose, onSuccess }: PinModalProps) {
+  const { user, updateUser } = useAuth();
+  const [pin, setPin] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setPin('');
+      setError('');
+      setIsCreating(!user?.pin);
+    }
+  }, [isOpen, user]);
+
+  if (!isOpen) return null;
+
+  const handleNumberClick = (num: number) => {
+    if (pin.length < 4) {
+      setPin(prev => prev + num);
+      setError('');
+    }
+  };
+
+  const handleDelete = () => {
+    setPin(prev => prev.slice(0, -1));
+  };
+
+  const handleConfirm = async () => {
+    if (pin.length !== 4) return;
+
+    setIsSubmitting(true);
+    try {
+      if (isCreating) {
+        await updateUser({ pin });
+        onSuccess();
+      } else {
+        if (pin === user?.pin) {
+          onSuccess();
+        } else {
+          setError('Incorrect PIN. Please try again.');
+          setPin('');
+        }
+      }
+    } catch (err) {
+      setError('An error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-sm bg-white rounded-[32px] max-h-[90vh] overflow-hidden shadow-2xl border border-slate-100 text-center animate-in zoom-in-95 duration-200 flex flex-col">
+        <div className="p-8 overflow-y-auto flex-1 scrollbar-hide">
+          <h3 className="text-2xl font-black text-slate-900 mb-2">
+            {isCreating ? 'Create PIN' : 'Enter PIN'}
+          </h3>
+          <p className="text-slate-500 text-sm font-medium mb-8 leading-relaxed px-4">
+            {isCreating 
+              ? 'Set a 4-digit PIN to secure your financial account.' 
+              : 'Please enter your 4-digit PIN to access your financial account.'}
+          </p>
+
+          <div className="flex justify-center gap-3 mb-8">
+            {[0, 1, 2, 3].map((i) => (
+              <div 
+                key={i} 
+                className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center text-2xl font-black transition-all ${
+                  pin.length > i ? 'border-[#d49b35] bg-[#fdf6e9] text-[#d49b35]' : 'border-slate-100 bg-slate-50 text-slate-300'
+                }`}
+              >
+                {pin[i] ? '•' : ''}
+              </div>
+            ))}
+          </div>
+
+          {error && <p className="text-rose-500 text-xs font-bold mb-4 uppercase tracking-wider">{error}</p>}
+
+          {/* Numeric Keypad */}
+          <div className="grid grid-cols-3 gap-3 mb-8">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, '', 0, 'delete'].map((val, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  if (typeof val === 'number') handleNumberClick(val);
+                  if (val === 'delete') handleDelete();
+                }}
+                className={`h-14 rounded-2xl flex items-center justify-center text-xl font-bold transition-all ${
+                  val === '' ? 'invisible' : 'bg-slate-50 text-slate-900 hover:bg-slate-100 active:scale-95'
+                }`}
+              >
+                {val === 'delete' ? '⌫' : val}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-8 pt-0 space-y-3 shrink-0">
+          <Button 
+            onClick={handleConfirm}
+            disabled={pin.length !== 4 || isSubmitting}
+            className="w-full py-4 rounded-2xl font-bold text-lg shadow-lg shadow-[#d49b35]/20"
+          >
+            {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'Confirm'}
+          </Button>
+          
+          <button 
+            onClick={onClose}
+            className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

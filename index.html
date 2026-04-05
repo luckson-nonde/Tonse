@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Google AI Studio App</title>
+    <script>
+      (function() {
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+          console.error('Global Error:', msg, 'at', url, ':', lineNo, ':', columnNo);
+          if (error && error.stack) {
+            console.error('Stack trace:', error.stack);
+          }
+          return false;
+        };
+
+        var originalFetch = window.fetch;
+        
+        // Try to make window.fetch robust against assignments
+        try {
+          var desc = Object.getOwnPropertyDescriptor(window, 'fetch') || Object.getOwnPropertyDescriptor(Window.prototype, 'fetch');
+          if (!desc || desc.configurable) {
+            Object.defineProperty(window, 'fetch', {
+              get: function() { return originalFetch; },
+              set: function(v) { console.warn('Ignoring attempt to overwrite window.fetch'); },
+              configurable: true,
+              enumerable: true
+            });
+          } else {
+            console.warn('window.fetch is not configurable');
+            // If it's not configurable but has only a getter, we might still be able to add a setter to the prototype?
+            // Usually not if it's shadowed, but let's try to at least log it.
+          }
+        } catch (e) {
+          console.error('Failed to redefine window.fetch:', e);
+        }
+
+        window.process = { env: { NODE_ENV: 'development' } };
+        
+        var globalProxy = new Proxy(window, {
+          set: function(target, prop, value) {
+            if (prop === 'fetch' || prop === 'FormData') {
+              console.warn('Ignoring assignment to ' + prop + ' on global object via Proxy');
+              return true;
+            }
+            try {
+              target[prop] = value;
+            } catch (e) {
+              console.warn('Failed to set property ' + String(prop) + ' on target:', e);
+            }
+            return true;
+          },
+          get: function(target, prop) {
+            if (prop === 'global' || prop === 'globalThis' || prop === 'self') return globalProxy;
+            var value = target[prop];
+            if ((prop === 'fetch' || prop === 'FormData') && typeof value === 'function') {
+              return value.bind(target);
+            }
+            return value;
+          },
+          defineProperty: function(target, prop, descriptor) {
+            if (prop === 'fetch' || prop === 'FormData') {
+              console.warn('Ignoring defineProperty on ' + prop + ' on global object via Proxy');
+              return true;
+            }
+            try {
+              return Object.defineProperty(target, prop, descriptor);
+            } catch (e) {
+              console.warn('Failed to defineProperty ' + String(prop) + ' on target:', e);
+              return true;
+            }
+          }
+        });
+        
+        window.global = globalProxy;
+        try {
+          Object.defineProperty(window, 'globalThis', {
+            value: globalProxy,
+            configurable: true,
+            writable: true
+          });
+        } catch (e) {
+          // Fallback if globalThis is not configurable
+          try { window.globalThis = globalProxy; } catch(e2) {}
+        }
+        try {
+          Object.defineProperty(window, 'self', {
+            value: globalProxy,
+            configurable: true,
+            writable: true
+          });
+        } catch (e) {
+          // Fallback if self is not configurable
+          try { window.self = globalProxy; } catch(e2) {}
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

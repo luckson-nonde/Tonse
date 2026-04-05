@@ -1,0 +1,7 @@
+{
+  "name": " TONSE v6 Dynamic account",
+  "description": "A bridge between demand and supply, connecting buyers with sellers, suppliers, and service providers.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
