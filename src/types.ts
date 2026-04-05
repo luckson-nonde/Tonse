@@ -63,6 +63,14 @@ export interface Quote {
   venueSpaceName?: string;
   damageDeposit?: number;
   cleaningFee?: number;
+  dynamicFields?: Record<string, any>;
+  delivery?: {
+    offered: boolean;
+    fee: number;
+    method: 'PICKUP' | 'SELLER_DELIVERY';
+  };
+  pickupLocation?: string;
+  pickupInstructions?: string;
 }
 
 export interface Product {

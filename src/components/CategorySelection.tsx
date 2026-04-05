@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Check, X, Loader2, Smartphone, Armchair, Shirt, Home, Car, ShoppingBasket, Sparkles, Hammer, Music, ShoppingBag, Calendar, ChevronLeft, ChevronDown } from 'lucide-react';
+import { Search, Check, X, Loader2, Smartphone, Armchair, Shirt, Home, Car, ShoppingBasket, Sparkles, Hammer, Music, ShoppingBag, Calendar, ChevronLeft, ChevronDown, Tractor, Laptop } from 'lucide-react';
 import Button from './Button';
 import { fetchCategories, Category } from '../services/categories';
 
@@ -24,6 +24,8 @@ const getCategoryStyles = (id: string) => {
     'construction': { icon: Hammer, bg: 'bg-[#f5f2ed]' },
     'entertainment': { icon: Music, bg: 'bg-[#f5f2ed]' },
     'events': { icon: Calendar, bg: 'bg-[#f5f2ed]' },
+    'agriculture': { icon: Tractor, bg: 'bg-[#f5f2ed]' },
+    'it-services': { icon: Laptop, bg: 'bg-[#f5f2ed]' },
   };
   return styles[id] || { icon: ShoppingBag, bg: 'bg-[#f5f2ed]' };
 };
@@ -52,7 +54,12 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
       } else if (role === 'EVENTS') {
         filtered = cats.filter(c => c.id === 'events');
       } else if (role === 'SERVICE_PROVIDER') {
-        filtered = cats.filter(c => ['construction', 'electronics'].includes(c.id));
+        const defaultCategory = initialSelectedIds.length > 0 ? initialSelectedIds[0] : null;
+        if (defaultCategory) {
+          filtered = cats.filter(c => c.id === defaultCategory || c.parentId === defaultCategory);
+        } else {
+          filtered = cats.filter(c => ['construction', 'electronics', 'it-services'].includes(c.id));
+        }
       } else if (role === 'SELLER' || role === 'SUPPLIER') {
         // If we have an initial category from role selection, filter to just that
         if (initialSelectedIds.length > 0) {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingBag, Store, Truck, Wrench, Check, Music, Calendar, Smartphone, Armchair, Shirt, Home, Car } from 'lucide-react';
+import { ShoppingBag, Store, Truck, Wrench, Check, Music, Calendar, Smartphone, Armchair, Shirt, Home, Car, Hammer, Tractor, Laptop } from 'lucide-react';
 import AuthLayout from '../components/AuthLayout';
 import Button from '../components/Button';
 
@@ -57,6 +57,30 @@ const roles = [
     description: 'Sell groceries, beauty products, and more.',
     icon: Store,
     role: 'SELLER'
+  },
+  {
+    id: 'SERVICE_CONSTRUCTION',
+    title: 'Construction & Machinery',
+    description: 'Offer construction services, materials, and machinery.',
+    icon: Hammer,
+    role: 'SERVICE_PROVIDER',
+    category: 'construction'
+  },
+  {
+    id: 'SUPPLIER_AGRICULTURE',
+    title: 'Agriculture & Farming',
+    description: 'Supply agricultural products, livestock, and equipment.',
+    icon: Tractor,
+    role: 'SUPPLIER',
+    category: 'agriculture'
+  },
+  {
+    id: 'SERVICE_IT',
+    title: 'IT & Telecom Services',
+    description: 'Provide IT support, networking, and telecom services.',
+    icon: Laptop,
+    role: 'SERVICE_PROVIDER',
+    category: 'it-services'
   },
   {
     id: 'SUPPLIER',

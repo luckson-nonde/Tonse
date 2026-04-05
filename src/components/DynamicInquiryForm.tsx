@@ -106,10 +106,6 @@ export default function DynamicInquiryForm({
   const progress = requiredFields.length > 0 ? (filledRequiredFields.length / requiredFields.length) * 100 : 0;
 
   const renderField = (field: FieldSchema, isTemp: boolean = false) => {
-    if (field.name === 'deliveryAddress' && formData['deliveryStatus'] !== 'Delivery Required') {
-      return null;
-    }
-
     const value = isTemp ? (tempItemData[field.name] ?? '') : (formData[field.name] ?? '');
     const error = errors[field.name];
 
@@ -397,7 +393,7 @@ export default function DynamicInquiryForm({
               initial={{ y: 100 }}
               animate={{ y: 0 }}
               exit={{ y: 100 }}
-              className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-[#f1f5f9] z-40"
+              className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-[#f1f5f9] z-[120]"
             >
               <div className="max-w-[448px] mx-auto flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
@@ -425,7 +421,7 @@ export default function DynamicInquiryForm({
         {/* Specification Modal */}
         <AnimatePresence>
           {currentDetailItem && (
-            <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4">
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -661,7 +657,7 @@ export default function DynamicInquiryForm({
           )}
 
           {/* Submit Button */}
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#f5f2ed] via-[#f5f2ed] to-transparent pt-10 z-20">
+          <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#f5f2ed] via-[#f5f2ed] to-transparent pt-10 z-[120]">
             <div className="max-w-[448px] mx-auto">
               <motion.button
                 whileTap={{ scale: 0.97 }}

@@ -15,6 +15,208 @@ import { isRelatedCategory } from '../services/categories';
 import CollectionPage from './CollectionPage';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import ProductManagement from './ProductManagement';
+import { generateQuoteSchema, QuoteField } from '../services/quoteSchemaGenerator';
+
+const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, itemPricesTotal }: { inquiry: Inquiry, onSubmit: (data: any) => void, onCancel: () => void, venueSpaces: any[], user: any, itemPricesTotal: number }) => {
+  const quoteSchema = React.useMemo(() => 
+    generateQuoteSchema(inquiry.category || '', inquiry.attributes || {}),
+    [inquiry.category, inquiry.attributes]
+  );
+
+  const [quoteData, setQuoteData] = useState<Record<string, any>>({
+    expiryDuration: '1 Month',
+    condition: 'Brand New'
+  });
+  const [calculatedTotal, setCalculatedTotal] = useState(0);
+
+  // Auto-calculate totals based on inquiry attributes
+  useEffect(() => {
+    let total = 0;
+    let hasCalculatedFields = false;
+    quoteSchema.forEach(field => {
+      if (field.calculation === 'unit' && inquiry.attributes?.quantity) {
+        total += (Number(quoteData[field.name]) || 0) * Number(inquiry.attributes.quantity);
+        hasCalculatedFields = true;
+      }
+      if (field.calculation === 'rate' && inquiry.attributes?.rentalDuration) {
+        total += (Number(quoteData[field.name]) || 0) * Number(inquiry.attributes.rentalDuration);
+        hasCalculatedFields = true;
+      }
+    });
+    
+    // If there are no calculated fields, but there is a generic 'price' field
+    if (!hasCalculatedFields) {
+        if (itemPricesTotal > 0) {
+            total += itemPricesTotal;
+        } else if (quoteData.price) {
+            total += Number(quoteData.price) || 0;
+        }
+    }
+    
+    setCalculatedTotal(total);
+  }, [quoteData, quoteSchema, inquiry.attributes, itemPricesTotal]);
+
+  return (
+    <div className="mt-6 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+      <h5 className="font-bold text-slate-900 mb-4">Submit Your Quotation</h5>
+      <form onSubmit={(e) => { e.preventDefault(); onSubmit({ ...quoteData, calculatedTotal }); }} className="space-y-4">
+        {quoteSchema.map(field => {
+          // Handle conditional visibility
+          if (field.name === 'optionalDeliveryFee' && quoteData.optionalDeliveryOffer !== true) {
+            return null;
+          }
+
+          return (
+          <div key={field.name}>
+            <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">
+              {field.label}
+              {field.required && <span className="text-rose-500 ml-1">*</span>}
+            </label>
+            
+            {field.type === 'currency' && (
+              <div className="relative">
+                <input
+                  type="number"
+                  required={field.required && !(field.name === 'price' && itemPricesTotal > 0)}
+                  value={field.name === 'price' && itemPricesTotal > 0 ? itemPricesTotal : (quoteData[field.name] || '')}
+                  onChange={e => setQuoteData({...quoteData, [field.name]: e.target.value})}
+                  readOnly={field.name === 'price' && itemPricesTotal > 0}
+                  className={`w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] ${field.name === 'price' && itemPricesTotal > 0 ? 'bg-slate-100 font-bold text-[#d49b35]' : ''}`}
+                  placeholder={field.placeholder || "0.00"}
+                />
+                <span className="absolute left-4 top-3.5 text-sm font-bold text-slate-400">ZMW</span>
+                {field.calculation && inquiry.attributes?.quantity && field.calculation === 'unit' && (
+                  <span className="text-[11px] font-medium text-slate-500 mt-1.5 block">
+                    × {inquiry.attributes.quantity} units = ZMW {((Number(quoteData[field.name]) || 0) * Number(inquiry.attributes.quantity)).toLocaleString()}
+                  </span>
+                )}
+                {field.calculation && inquiry.attributes?.rentalDuration && field.calculation === 'rate' && (
+                  <span className="text-[11px] font-medium text-slate-500 mt-1.5 block">
+                    × {inquiry.attributes.rentalDuration} days = ZMW {((Number(quoteData[field.name]) || 0) * Number(inquiry.attributes.rentalDuration)).toLocaleString()}
+                  </span>
+                )}
+              </div>
+            )}
+            
+            {field.type === 'number' && (
+              <input
+                type="number"
+                required={field.required}
+                value={quoteData[field.name] || ''}
+                onChange={e => setQuoteData({...quoteData, [field.name]: e.target.value})}
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35]"
+                placeholder={field.placeholder}
+              />
+            )}
+
+            {field.type === 'textarea' && (
+              <textarea
+                required={field.required}
+                value={quoteData[field.name] || ''}
+                onChange={e => setQuoteData({...quoteData, [field.name]: e.target.value})}
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] resize-none"
+                placeholder={field.placeholder}
+                rows={3}
+              />
+            )}
+            
+            {field.type === 'select' && field.options && (
+              <select
+                required={field.required}
+                value={quoteData[field.name] || ''}
+                onChange={e => setQuoteData({...quoteData, [field.name]: e.target.value})}
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] bg-white"
+              >
+                {!quoteData[field.name] && <option value="" disabled>Select {field.label}</option>}
+                {field.options.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            )}
+
+            {field.type === 'toggle' && (
+              <button
+                type="button"
+                onClick={() => setQuoteData({...quoteData, [field.name]: !quoteData[field.name]})}
+                className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${quoteData[field.name] ? 'bg-[#d49b35] text-white' : 'bg-slate-200 text-slate-600'}`}
+              >
+                {quoteData[field.name] ? 'Yes' : 'No'}
+              </button>
+            )}
+            
+            {field.helpText && <p className="text-[11px] text-slate-500 mt-1.5 italic">{field.helpText}</p>}
+          </div>
+          );
+        })}
+
+        {user?.role === 'EVENTS' && venueSpaces.length > 0 && (
+          <div className="space-y-4 pt-4 border-t border-slate-100">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">Select Venue Space to Quote (Optional)</label>
+              <select 
+                value={quoteData.venueSpaceId || ''}
+                onChange={e => setQuoteData({...quoteData, venueSpaceId: e.target.value})}
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] bg-white"
+              >
+                <option value="">No specific space / General quote</option>
+                {venueSpaces.map(space => (
+                  <option key={space.id} value={space.id}>{space.name} (Capacity: {space.capacity})</option>
+                ))}
+              </select>
+            </div>
+            {quoteData.venueSpaceId && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">Damage Deposit (ZMW)</label>
+                  <input 
+                    type="number" 
+                    placeholder="0.00"
+                    value={quoteData.damageDeposit || ''}
+                    onChange={e => setQuoteData({...quoteData, damageDeposit: e.target.value})}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">Cleaning Fee (ZMW)</label>
+                  <input 
+                    type="number" 
+                    placeholder="0.00"
+                    value={quoteData.cleaningFee || ''}
+                    onChange={e => setQuoteData({...quoteData, cleaningFee: e.target.value})}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35]"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {calculatedTotal > 0 && (
+          <div className="bg-[#fffaf5] border border-[#d49b35]/20 p-4 rounded-xl mt-6">
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total Quote Amount</p>
+            <p className="text-2xl font-black text-[#d49b35]">ZMW {calculatedTotal.toLocaleString()}</p>
+          </div>
+        )}
+        
+        <div className="pt-4 flex gap-3">
+          <button 
+            type="button"
+            onClick={onCancel}
+            className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-600 text-sm font-bold rounded-xl hover:bg-slate-50 transition-all"
+          >
+            Cancel
+          </button>
+          <button 
+            type="submit"
+            className="flex-[2] px-4 py-3 bg-[#1e293b] text-white text-sm font-bold rounded-xl hover:bg-[#0f172a] transition-all shadow-lg shadow-slate-200"
+          >
+            Send Quotation
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
 
 const renderSpecifications = (data: any, title: string = "Specifications") => {
   if (!data || Object.keys(data).length === 0) return null;
@@ -173,17 +375,6 @@ export default function ProviderDashboard() {
   const [quoteSort, setQuoteSort] = useState<'recent' | 'expensive'>('recent');
   const [isUpdating, setIsUpdating] = useState(false);
   const [itemPrices, setItemPrices] = useState<{ [key: string]: string }>({});
-  
-  const [quoteData, setQuoteData] = useState({
-    price: '',
-    condition: 'Brand New',
-    message: '',
-    expiryDuration: '1 Month',
-    requirements: [] as { item: string; description: string }[],
-    venueSpaceId: '',
-    damageDeposit: '',
-    cleaningFee: ''
-  });
 
   const venueSpaces = useLiveQuery(
     async () => {
@@ -192,8 +383,6 @@ export default function ProviderDashboard() {
     },
     [user]
   ) || [];
-
-  const [newRequirement, setNewRequirement] = useState({ item: '', description: '' });
 
   useEffect(() => {
     // Filter leads by provider categories AND exclude already quoted ones
@@ -255,12 +444,10 @@ export default function ProviderDashboard() {
     }
   };
 
-  const handleSubmitQuote = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleDynamicQuoteSubmit = async (submittedQuoteData: any) => {
     if (!quotingInquiryId || !user) return;
 
     const lead = leads.find(l => l.id === quotingInquiryId);
-    const isEntertainmentInquiry = lead ? isServiceOrEvent(lead) : false;
     
     // Calculate total from item prices if they exist, otherwise use the manual price
     const itemPricesArray = lead?.items.map((item, idx) => ({
@@ -270,33 +457,40 @@ export default function ProviderDashboard() {
 
     const totalPrice = itemPricesArray && itemPricesArray.length > 0 
       ? itemPricesArray.reduce((sum, ip) => sum + ip.price, 0)
-      : Number(quoteData.price);
+      : (submittedQuoteData.calculatedTotal > 0 ? submittedQuoteData.calculatedTotal : Number(submittedQuoteData.price || 0));
 
-    const newQuote = {
+    const newQuote: Quote = {
       inquiryId: quotingInquiryId,
       inquiryTitle: lead?.title || 'Inquiry',
       price: totalPrice,
-      condition: isEntertainmentInquiry ? 'N/A' : quoteData.condition,
-      message: quoteData.message,
-      expiryDuration: quoteData.expiryDuration,
+      condition: submittedQuoteData.condition || 'N/A',
+      message: submittedQuoteData.message || '',
+      expiryDuration: submittedQuoteData.expiryDuration || '1 Month',
       status: 'PENDING' as const,
       providerId: user.id!,
       providerName: user.name,
       createdAt: Date.now(),
       itemPrices: itemPricesArray && itemPricesArray.length > 0 ? itemPricesArray : undefined,
-      requirements: quoteData.requirements,
-      ...(quoteData.venueSpaceId ? {
-        venueSpaceId: Number(quoteData.venueSpaceId),
-        venueSpaceName: venueSpaces.find(v => v.id === Number(quoteData.venueSpaceId))?.name,
-        damageDeposit: quoteData.damageDeposit ? Number(quoteData.damageDeposit) : undefined,
-        cleaningFee: quoteData.cleaningFee ? Number(quoteData.cleaningFee) : undefined,
-      } : {})
+      requirements: [], // We can omit requirements for now, or add them to the dynamic form
+      dynamicFields: submittedQuoteData, // Save all dynamic fields
+      ...(submittedQuoteData.venueSpaceId ? {
+        venueSpaceId: Number(submittedQuoteData.venueSpaceId),
+        venueSpaceName: venueSpaces.find(v => v.id === Number(submittedQuoteData.venueSpaceId))?.name,
+        damageDeposit: submittedQuoteData.damageDeposit ? Number(submittedQuoteData.damageDeposit) : undefined,
+        cleaningFee: submittedQuoteData.cleaningFee ? Number(submittedQuoteData.cleaningFee) : undefined,
+      } : {}),
+      delivery: {
+        offered: submittedQuoteData.optionalDeliveryOffer === true || !!submittedQuoteData.deliveryFee,
+        fee: Number(submittedQuoteData.optionalDeliveryFee || submittedQuoteData.deliveryFee || 0),
+        method: (submittedQuoteData.optionalDeliveryOffer === true || !!submittedQuoteData.deliveryFee) ? 'SELLER_DELIVERY' : 'PICKUP'
+      },
+      pickupInstructions: submittedQuoteData.pickupInstructions || ''
     };
 
     console.log('ProviderDashboard: Adding new quote:', newQuote);
     await db.quotes.add(newQuote);
     console.log('ProviderDashboard: Quote added successfully');
-    setQuoteData({ price: '', condition: 'Brand New', message: '', expiryDuration: '1 Month', requirements: [], venueSpaceId: '', damageDeposit: '', cleaningFee: '' });
+    setQuotingInquiryId(null);
     setItemPrices({});
     handleTabClick('my-quotes');
   };
@@ -311,23 +505,6 @@ export default function ProviderDashboard() {
         await db.inquiries.update(id, { viewCount: (inquiry.viewCount || 0) + 1 });
       }
     }
-  };
-
-  const addRequirement = () => {
-    if (newRequirement.item && newRequirement.description) {
-      setQuoteData(prev => ({
-        ...prev,
-        requirements: [...prev.requirements, newRequirement]
-      }));
-      setNewRequirement({ item: '', description: '' });
-    }
-  };
-
-  const removeRequirement = (index: number) => {
-    setQuoteData(prev => ({
-      ...prev,
-      requirements: prev.requirements.filter((_, i) => i !== index)
-    }));
   };
 
   const handleArchiveQuote = async (quoteId: number) => {
@@ -1108,144 +1285,18 @@ export default function ProviderDashboard() {
               </div>
 
               {quotingInquiryId === lead.id && (
-                <div className="mt-6 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                  <h5 className="font-bold text-slate-900 mb-4">Submit Your Quotation</h5>
-                  <form onSubmit={handleSubmitQuote} className="space-y-4">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">
-                        {lead.items.some((_, idx) => itemPrices[`${lead.id}-${idx}`]) ? 'Calculated Total Price (ZMW)' : 'Price (ZMW)'}
-                      </label>
-                      <input 
-                        type="number" required 
-                        value={
-                          lead.items.some((_, idx) => itemPrices[`${lead.id}-${idx}`])
-                            ? lead.items.reduce((sum, _, idx) => sum + Number(itemPrices[`${lead.id}-${idx}`] || 0), 0)
-                            : quoteData.price
-                        }
-                        onChange={e => setQuoteData({...quoteData, price: e.target.value})}
-                        readOnly={lead.items.some((_, idx) => itemPrices[`${lead.id}-${idx}`])}
-                        placeholder="0.00" 
-                        className={`w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] ${lead.items.some((_, idx) => itemPrices[`${lead.id}-${idx}`]) ? 'bg-slate-100 font-bold text-[#d49b35]' : ''}`}
-                      />
-                    </div>
-                    {!isServiceOrEvent(lead) && (
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">Equipment / Item Condition</label>
-                        <select 
-                          required value={quoteData.condition}
-                          onChange={e => setQuoteData({...quoteData, condition: e.target.value})}
-                          className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] bg-white"
-                        >
-                          <option value="Brand New">Brand New</option>
-                          <option value="Used - Like New">Used - Like New</option>
-                          <option value="Used - Good">Used - Good</option>
-                          <option value="Refurbished">Refurbished</option>
-                        </select>
-                      </div>
-                    )}
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">Message to Buyer (e.g., Terms, availability, extra details)</label>
-                      <textarea 
-                        required value={quoteData.message}
-                        onChange={e => setQuoteData({...quoteData, message: e.target.value})}
-                        placeholder="Describe your offer, delivery time, and any other important details..." rows={3}
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] resize-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">Quotation Validity Period (How long is this quote valid?)</label>
-                      <select 
-                        required value={quoteData.expiryDuration}
-                        onChange={e => setQuoteData({...quoteData, expiryDuration: e.target.value})}
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] bg-white"
-                      >
-                        <option value="1 Week">1 Week</option>
-                        <option value="2 Weeks">2 Weeks</option>
-                        <option value="1 Month">1 Month</option>
-                        <option value="2 Months">2 Months</option>
-                        <option value="3 Months">3 Months</option>
-                        <option value="6 Months">6 Months</option>
-                      </select>
-                    </div>
-
-                    {user?.role === 'EVENTS' && venueSpaces.length > 0 && (
-                      <div className="space-y-4 pt-4 border-t border-slate-100">
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">Select Venue Space to Quote (Optional)</label>
-                          <select 
-                            value={quoteData.venueSpaceId}
-                            onChange={e => setQuoteData({...quoteData, venueSpaceId: e.target.value})}
-                            className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] bg-white"
-                          >
-                            <option value="">No specific space / General quote</option>
-                            {venueSpaces.map(space => (
-                              <option key={space.id} value={space.id}>{space.name} (Cap: {space.capacityStanding} / {space.capacitySeating})</option>
-                            ))}
-                          </select>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">Refundable Damage Deposit (ZMW)</label>
-                            <input 
-                              type="number"
-                              value={quoteData.damageDeposit}
-                              onChange={e => setQuoteData({...quoteData, damageDeposit: e.target.value})}
-                              placeholder="e.g., 1000"
-                              className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35]"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">Post-Event Cleaning Fee (ZMW)</label>
-                            <input 
-                              type="number"
-                              value={quoteData.cleaningFee}
-                              onChange={e => setQuoteData({...quoteData, cleaningFee: e.target.value})}
-                              placeholder="e.g., 500"
-                              className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35]"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {isServiceOrEvent(lead) && (
-                      <div className="space-y-3 pt-4 border-t border-slate-100">
-                        <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase">Additional Requirements (e.g., Logistics, Rider)</label>
-                        {quoteData.requirements.map((req, index) => (
-                          <div key={index} className="flex gap-2 items-center bg-white p-2 rounded-lg border border-slate-200">
-                            <div className="flex-1">
-                              <p className="text-xs font-bold text-slate-900">{req.item}</p>
-                              <p className="text-[10px] text-slate-500">{req.description}</p>
-                            </div>
-                            <button type="button" onClick={() => removeRequirement(index)} className="text-red-500 hover:text-red-700">
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ))}
-                        <div className="flex gap-2">
-                          <input 
-                            type="text" placeholder="Requirement (e.g., Logistics)" value={newRequirement.item}
-                            onChange={e => setNewRequirement({...newRequirement, item: e.target.value})}
-                            className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm"
-                          />
-                          <input 
-                            type="text" placeholder="Description" value={newRequirement.description}
-                            onChange={e => setNewRequirement({...newRequirement, description: e.target.value})}
-                            className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm"
-                          />
-                          <button type="button" onClick={addRequirement} className="px-3 py-2 bg-slate-100 rounded-lg text-slate-600 hover:bg-slate-200">
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex gap-3 pt-2">
-                      <button type="submit" className="flex-1 py-3 bg-[#d49b35] text-white text-sm font-bold rounded-xl hover:bg-[#a37d35] transition-colors shadow-sm">Send Quote</button>
-                      <button type="button" onClick={() => setQuotingInquiryId(null)} className="px-6 py-3 bg-white text-slate-600 text-sm font-bold rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors">Cancel</button>
-                    </div>
-                  </form>
-                </div>
+                <QuoteSubmissionForm 
+                  inquiry={lead} 
+                  onSubmit={handleDynamicQuoteSubmit} 
+                  onCancel={() => setQuotingInquiryId(null)} 
+                  venueSpaces={venueSpaces} 
+                  user={user} 
+                  itemPricesTotal={
+                    lead.items.some((_, idx) => itemPrices[`${lead.id}-${idx}`])
+                      ? lead.items.reduce((sum, _, idx) => sum + Number(itemPrices[`${lead.id}-${idx}`] || 0), 0)
+                      : 0
+                  }
+                />
               )}
             </div>
           </div>
