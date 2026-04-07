@@ -9,8 +9,9 @@ Here is the inventory of every form found in the codebase:
    - **Purpose:** Standard product/service inquiry request (Buy, Repair, Restore, Booking).
    - **Role:** Buyer
    - **Fields:** Dynamic (based on JSON schema in `categories.ts`).
-   - **Type:** Schema-driven dynamic form.
-   - **Validation:** Supported via schema properties (required, min, max, options).
+   - **Type:** Schema-driven dynamic form using `react-hook-form` and `zod`.
+   - **Validation:** Robust runtime validation via dynamically generated Zod schemas.
+   - **Features:** Supports `dependsOn` for conditional field visibility and `group` for section-based rendering.
 
 2. **Inquiry Preferences Form**
    - **File:** `/src/components/InquiryPreferences.tsx`
@@ -64,9 +65,9 @@ Here is the inventory of every form found in the codebase:
    - **File:** `/src/pages/ProviderDashboard.tsx`
    - **Purpose:** Providers submitting a quote to a buyer's inquiry.
    - **Role:** Shop/Provider
-   - **Fields:** 9 static fields + dynamic item pricing fields.
-   - **Type:** Hardcoded.
-   - **Validation:** Custom/None.
+   - **Fields:** Dynamic based on `archetype` (Product, Service, Rental).
+   - **Type:** Schema-driven dynamic form using `react-hook-form` and `zod`.
+   - **Validation:** Robust runtime validation via dynamically generated Zod schemas from `quoteSchemaGenerator.ts`.
 
 9. **Venue Spaces Manager Form**
    - **File:** `/src/pages/VenueSpacesManager.tsx`
@@ -87,7 +88,7 @@ Here is the inventory of every form found in the codebase:
    Fields are entirely dynamic, generated from `FieldSchema[]` definitions in `/src/services/categories.ts`. Common fields include `images`, `title`, `description`, `quantity`, `budget_limit`, and `urgency`.
 
 3. **Does the form change based on shop category?**
-   **Yes.** The `DynamicInquiryForm` receives the selected category and its associated `formSchema`. It dynamically renders inputs (text, select, toggle, counter, image_upload, currency) based on the schema.
+   **Yes.** The `DynamicInquiryForm` receives the selected category and its associated `formSchema`. It dynamically renders inputs (text, select, toggle, counter, image_upload, currency, date) based on the schema.
 
 4. **How is the form submitted?**
    Direct DB write. It uses Dexie.js to write directly to IndexedDB: `db.inquiries.add(newInquiry)`.
@@ -122,165 +123,156 @@ Here is the inventory of every form found in the codebase:
 
 ---
 
-## PART 3: CATEGORY SYSTEM
+## PART 3: CATEGORY HIERARCHY & MASTER CATEGORIES
 
-1. **Where are categories defined?**
-   `/src/services/categories.ts`
+The system follows a strict Master Category → Subcategory relationship.
 
-2. **List ALL categories currently in the system (Hierarchical Order):**
+### 1. Electronics (Master)
+- Mobile Phones & Accessories (Buy New)
+- Mobile Phones & Accessories (Repair)
+- Laptops & Computers (Buy New)
+- Laptops & Computers (Repair)
+- Home Appliances (Buy New)
+- Home Appliances (Repair)
+- Audio & Video Equipment (Buy New)
+- Audio & Video Equipment (Repair)
+- Gaming Consoles & Accessories (Buy)
 
-   * **Electronics**
-     * Mobile Phones & Accessories (Buy New)
-     * Mobile Phones & Accessories (Repair)
-     * Laptops & Computers (Buy New)
-     * Laptops & Computers (Repair)
-     * Home Appliances (Buy New)
-     * Home Appliances (Repair)
-     * Audio & Video Equipment (Buy New)
-     * Audio & Video Equipment (Repair)
-     * Gaming Consoles & Accessories (Buy)
-   * **Furniture**
-     * Living Room Furniture (Buy / Custom)
-     * Living Room Furniture (Repair / Upholstery)
-     * Bedroom Furniture (Buy / Custom)
-     * Bedroom Furniture (Repair / Restoration)
-     * Office Furniture (Buy / Custom)
-     * Office Furniture (Repair)
-     * Outdoor & Patio (Buy / Custom)
-     * Outdoor & Patio (Repair)
-   * **Fashion**
-     * Men's Clothing
-     * Women's Clothing
-     * Shoes & Footwear
-     * Accessories & Jewelry
-   * **Home Decor**
-     * Lighting & Lamps
-     * Wall Art & Mirrors
-     * Rugs & Carpets
-     * Curtains & Blinds
-   * **Automotive**
-     * Car Parts & Spares (Buy New)
-     * Car Parts & Spares (Buy from Car Breakers)
-     * Car Accessories
-     * Car Breakdown & Recovery
-     * Motorcycles & Parts
-     * Automotive Tools
-   * **Groceries**
-     * Fresh Produce
-     * Pantry Staples
-     * Beverages
-     * Snacks & Sweets
-   * **Beauty**
-     * Skincare
-     * Makeup & Cosmetics
-     * Haircare
-     * Fragrances
-   * **Construction**
-     * Building Materials
-     * Plumbing & Fixtures
-     * Electrical Supplies
-     * Hardware & Tools
-     * Construction Machinery
-   * **Entertainment**
-     * DJs
-     * Live Bands
-     * MCs & Hosts
-     * Dancers
-     * Public Speaker
-     * Comedians
-     * Influencers
-     * Spoken Word Artists
-   * **Events**
-     * Event Equipment Rental
-     * Event Management
-     * Event Catering
-     * Event Planning
-     * Event Venues
-     * Event Decor
-   * **Telecommunications**
-     * Internet Service Providers (ISP)
-     * Mobile Network Services
-     * Satellite & VSAT Installation
-   * **IT Services**
-     * Software & Web Development
-     * Networking & Security
-     * IT Support & Maintenance
-   * **IT Products**
-     * Computers & Laptops (Business)
-     * Servers & Storage
-     * Networking Hardware
-     * Software Licenses
-     * Printers & Office Equipment
-   * **Drilling Services**
-     * Borehole Drilling
-     * Mining Exploration
-     * Geotechnical Drilling
-   * **Agriculture & Agro-Dealers**
-     * Poultry Farming
-     * Aquaculture (Fish)
-     * Crop Production
-     * Livestock & Veterinary
-     * Irrigation & Hardware
-     * Agro-Tech & Services
+### 2. Furniture (Master)
+- Living Room Furniture (Buy / Custom)
+- Living Room Furniture (Repair / Upholstery)
+- Bedroom Furniture (Buy / Custom)
+- Bedroom Furniture (Repair / Restoration)
+- Office Furniture (Buy / Custom)
+- Office Furniture (Repair)
+- Outdoor & Patio (Buy / Custom)
+- Outdoor & Patio (Repair)
 
-3. **How are categories stored?**
-   A hardcoded array in the frontend, now enriched with `formSchema` properties.
+### 3. Fashion (Master)
+- Men's Clothing
+- Women's Clothing
+- Shoes & Footwear
+- Accessories & Jewelry
 
-4. **Does each category have metadata attached?**
-   Yes. Categories now include `id`, `name`, `baseName`, `type` ('buy', 'repair', 'restore'), `image`, `parentId`, and critically, `formSchema` (an array of `FieldSchema` objects defining the required form fields).
+### 4. Home Decor (Master)
+- Lighting & Lamps
+- Wall Art & Mirrors
+- Rugs & Carpets
+- Curtains & Blinds
 
-5. **Is there a category → subcategory relationship?**
-   Yes, it is a flat array where subcategories have a `parentId` pointing to the main category (a 1-level deep relationship).
+### 5. Automotive (Master)
+- Car Parts & Spares (Buy New)
+- Car Parts & Spares (Buy from Car Breakers)
+- Car Accessories
+- Car Breakdown & Recovery
+- Motorcycles & Parts
+- Automotive Tools
 
----
+### 6. Groceries (Master)
+- Fresh Produce
+- Pantry Staples
+- Beverages
+- Snacks & Sweets
 
-## PART 4: STATE MANAGEMENT & DATA FLOW
+### 7. Beauty (Master)
+- Skincare
+- Makeup & Cosmetics
+- Haircare
+- Fragrances
 
-1. **What state management is being used?**
-   - **React Context:** `AuthContext` (user state) and `DashboardContext` (active tab state).
-   - **Local State:** `useState` for form inputs. The `DynamicInquiryForm` manages its own internal state mapping schema field names to values.
-   - **IndexedDB Hooks:** `useLiveQuery` from `dexie-react-hooks` for reactive database queries.
+### 8. Construction (Master)
+- Building Materials
+- Plumbing & Fixtures
+- Electrical Supplies
+- Hardware & Tools
+- Construction Machinery
 
-2. **What data is available in state when opening an inquiry form?**
-   The `user` object (buyer profile) and the `pendingInquiry` object, which at that moment contains the `categories` array selected in the previous step.
+### 9. Entertainment (Master)
+- DJs
+- Live Bands
+- MCs & Hosts
+- Dancers
+- Public Speaker
+- Comedians
+- Influencers
+- Spoken Word Artists
 
-3. **How is form state managed during multi-step flows?**
-   There is a multi-step flow managed in `/src/pages/BuyerDashboard.tsx`. A single local state object `pendingInquiry` accumulates data across steps. The `activeTab` state dictates which step is visible (`category-selection` → `create-inquiry` → `inquiry-preferences` → `location-details`).
+### 10. Events (Master)
+- Event Equipment Rental
+- Event Management
+- Event Catering
+- Event Planning
+- Event Venues
+- Event Decor
 
-4. **When a form is submitted, what happens to the data?**
-   The accumulated `pendingInquiry` state is formatted into an `Inquiry` object and written to IndexedDB via `db.inquiries.add()`. The UI tab is then set to `inquiry-success`. The `useLiveQuery` hook automatically detects the DB change and updates the buyer's dashboard list.
+### 11. Telecommunications (Master)
+- Internet Service Providers (ISP)
+- Mobile Network Services
+- Satellite & VSAT Installation
+
+### 12. IT Services (Master)
+- Software & Web Development
+- Networking & Security
+- IT Support & Maintenance
+
+### 13. IT Products (Master)
+- Computers & Laptops (Business)
+- Servers & Storage
+- Networking Hardware
+- Software Licenses
+- Printers & Office Equipment
+
+### 14. Drilling Services (Master)
+- Borehole Drilling
+- Mining Exploration
+- Geotechnical Drilling
+
+### 15. Agriculture & Agro-Dealers (Master)
+- Poultry Farming
+- Aquaculture (Fish)
+- Crop Production
+- Livestock & Veterinary
+- Irrigation & Hardware
+- Agro-Tech & Services
 
 ---
 
-## PART 5: DATABASE STRUCTURE
+## PART 4: SYSTEM ENHANCEMENTS (IMPLEMENTED)
 
-1. **Database Schema (from `/src/db.ts`):**
-   - **Inquiries:** `++id, buyerId, status, createdAt`
-   - **Quotes:** `++id, inquiryId, providerId, status, collectionCode, createdAt`
-   - **Categories:** (Does not exist in DB)
-   - **Shop/Provider profiles:** `++id, providerId, name, category, location`
+### 1. Robust Validation (Zod Integration)
+- **Status:** COMPLETED.
+- **Implementation:** `generateZodSchema` utility creates Zod schemas from `FieldSchema[]`. Integrated into `DynamicInquiryForm.tsx` and `QuoteSubmissionForm`.
 
-2. **Is there a field in the Inquiries table that stores category-specific data?**
-   Yes. The `Inquiry` interface uses `attributes?: Record<string, any>;` to store all dynamic data captured by the schema-driven forms.
+### 2. UI Organization (Field Grouping)
+- **Status:** COMPLETED.
+- **Implementation:** `DynamicInquiryForm.tsx` renders fields in groups if the `group` property is present in the schema.
 
-3. **How flexible is the current schema?**
-   Highly flexible. Because Dexie.js (IndexedDB) is a NoSQL document store, it can store any JSON object. The `attributes` field perfectly accommodates the dynamic schema-driven approach without requiring database migrations for new categories or fields.
+### 3. Conditional Logic (`dependsOn`)
+- **Status:** COMPLETED.
+- **Implementation:** Added `dependsOn` to `FieldSchema`. `DynamicInquiryForm.tsx` and `QuoteSubmissionForm` handle conditional field visibility based on other field values.
+
+### 4. Provider-Side Data Rendering
+- **Status:** COMPLETED.
+- **Implementation:** `DynamicDataDisplay` component renders `attributes` based on `FieldSchema`, ensuring providers see structured data.
+
+### 5. Dynamic Quote System
+- **Status:** COMPLETED.
+- **Implementation:** `generateQuoteSchema` dynamically generates quote fields based on category `archetype` (Product, Service, Rental) and inquiry attributes.
 
 ---
 
-## PART 6: ASSESSMENT REQUEST
+## PART 5: NEXT STEPS
 
-1. **VERDICT**
-   **Refactored & Schema-Driven.** The form system has been successfully upgraded to support dynamic category-based forms. It no longer relies on hardcoded React components for each category. Instead, it uses a centralized `DynamicInquiryForm` powered by JSON schemas defined in `categories.ts`.
+### Phase 1: Advanced Quoting Features
+- [ ] Implement multi-item quoting for complex inquiries.
+- [ ] Add support for recurring service quotes (e.g., monthly maintenance).
 
-2. **CURRENT CAPABILITIES**
-   - **Schema Definitions:** Every category now has a `formSchema` defining its fields, types, and validation rules.
-   - **Dynamic Renderer:** `DynamicInquiryForm.tsx` reads the schema and generates inputs dynamically.
-   - **Unified Data Storage:** Category-specific data is saved into a generic `attributes` object, eliminating fragmented keys like `repairData` or `entertainmentData`.
-   - **Archetype Mapping:** Categories are mapped to archetypes (e.g., `buy_product`, `repair_service`) to ensure consistent data structures and UI rendering.
+### Phase 2: Buyer Dashboard Enhancements
+- [ ] Improve quote comparison view.
+- [ ] Add "Accept Quote" flow with payment integration.
 
-3. **NEXT STEPS / RECOMMENDATIONS**
-   - **Validation:** While the schema defines `required`, `min`, and `max`, consider integrating a robust validation library like `zod` or `yup` with `react-hook-form` for more complex cross-field validation if needed in the future.
-   - **Provider Dashboard:** Ensure the Provider Dashboard's `renderSpecifications` function correctly and comprehensively displays all data from the new `attributes` object for all archetypes.
-   - **Quote Submission:** Consider making the Quote Submission form dynamic as well, allowing providers to submit structured data based on the category archetype (e.g., itemized parts for repairs vs. flat rate for services).
+### Phase 3: Collection Handshake Flow
+- [ ] Finalize QR code scanning and verification.
+- [ ] Implement pickup checklist with photo capture.
+- [ ] Trigger fund release upon successful collection.
 

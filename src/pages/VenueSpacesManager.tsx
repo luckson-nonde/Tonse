@@ -32,7 +32,8 @@ export default function VenueSpacesManager() {
   const spaces = useLiveQuery(
     async () => {
       if (!user?.id) return [];
-      return await db.venueSpaces.where('providerId').equals(user.id).reverse().sortBy('createdAt');
+      const effectiveProviderId = user.parentProviderId || user.id;
+      return await db.venueSpaces.where('providerId').equals(effectiveProviderId).reverse().sortBy('createdAt');
     },
     [user]
   ) || [];

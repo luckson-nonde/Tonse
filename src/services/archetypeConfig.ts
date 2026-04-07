@@ -851,55 +851,48 @@ export const ARCHETYPE_CONFIG: Record<string, ArchetypeConfig> = {
   "event-equipment-rental": {
     "categoryName": "Event Equipment Rental",
     "archetype": "RENTAL",
-    "quoteMapping": {
-      "quantity": "unitPrice",
-      "duration": "rate"
-    },
+    "quoteMapping": {},
     "requiredAdditions": [
+      "deliveryFee",
+      "setupFee",
       "securityDeposit"
     ]
   },
   "event-management": {
     "categoryName": "Event Management",
     "archetype": "SERVICE",
-    "quoteMapping": {
-      "quantity": "unitPrice",
-      "duration": "rate"
-    },
+    "quoteMapping": {},
     "requiredAdditions": [
+      "managementFee",
       "availabilityDate"
     ]
   },
   "event-catering": {
     "categoryName": "Event Catering",
     "archetype": "SERVICE",
-    "quoteMapping": {
-      "quantity": "unitPrice",
-      "duration": "rate"
-    },
+    "quoteMapping": {},
     "requiredAdditions": [
+      "pricePerPlate",
+      "serviceFee",
       "availabilityDate"
     ]
   },
   "event-planning": {
     "categoryName": "Event Planning",
     "archetype": "SERVICE",
-    "quoteMapping": {
-      "quantity": "unitPrice",
-      "duration": "rate"
-    },
+    "quoteMapping": {},
     "requiredAdditions": [
+      "planningFee",
       "availabilityDate"
     ]
   },
   "event-venues": {
     "categoryName": "Event Venues",
     "archetype": "RENTAL",
-    "quoteMapping": {
-      "quantity": "unitPrice",
-      "duration": "rate"
-    },
+    "quoteMapping": {},
     "requiredAdditions": [
+      "cleaningFee",
+      "damageDeposit",
       "securityDeposit"
     ]
   },

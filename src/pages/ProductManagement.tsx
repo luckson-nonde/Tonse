@@ -24,7 +24,8 @@ export default function ProductManagement() {
   const products = useLiveQuery(
     async () => {
       if (!user?.id) return [];
-      return await db.products.where('providerId').equals(user.id).reverse().sortBy('createdAt');
+      const effectiveProviderId = user.parentProviderId || user.id;
+      return await db.products.where('providerId').equals(effectiveProviderId).reverse().sortBy('createdAt');
     },
     [user]
   ) || [];

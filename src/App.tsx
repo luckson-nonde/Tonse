@@ -132,33 +132,33 @@ export default function App() {
               </ProtectedRoute>
             } />
             <Route path="/provider" element={
-              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS']}>
+              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS', 'PROVIDER_STAFF']}>
                 <DashboardLayout>
                   <ProviderDashboard />
                 </DashboardLayout>
               </ProtectedRoute>
             } />
             <Route path="/provider/suppliers" element={
-              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS']}>
+              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS', 'PROVIDER_STAFF']}>
                 <DashboardLayout>
                   <SuppliersPage />
                 </DashboardLayout>
               </ProtectedRoute>
             } />
             <Route path="/provider/financial" element={
-              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS']}>
+              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS', 'PROVIDER_STAFF']}>
                 <FinancialPage />
               </ProtectedRoute>
             } />
             <Route path="/provider/profile" element={
-              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS']}>
+              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS', 'PROVIDER_STAFF']}>
                 <DashboardLayout>
                   <ShopProfilePage />
                 </DashboardLayout>
               </ProtectedRoute>
             } />
             <Route path="/provider/venue-spaces" element={
-              <ProtectedRoute allowedRoles={['EVENTS']}>
+              <ProtectedRoute allowedRoles={['EVENTS', 'PROVIDER_STAFF']}>
                 <DashboardLayout>
                   <VenueSpacesManager />
                 </DashboardLayout>

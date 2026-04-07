@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Menu, Bell, Home, ClipboardCheck, List, Store, X, ChevronLeft, PlusCircle, MessageSquare, FileText, User, Users, Truck, QrCode, ChevronRight, Archive, Calendar, MapPin } from 'lucide-react';
 import Logo from './Logo';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db';
 
 import { useDashboard } from '../DashboardContext';
+import { hasPermission, PERMISSIONS } from '../utils/rbac';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -13,6 +16,63 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { activeTab, setActiveTab } = useDashboard();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
+
+  const notificationCounts = useLiveQuery(async () => {
+    if (!user) return { inquiries: 0, quotes: 0 };
+    
+    if (user.role === 'BUYER') {
+      if (!user.id) return { inquiries: 0, quotes: 0 };
+      const userInquiries = await db.inquiries.where('buyerId').equals(user.id).toArray();
+      const allInquiryIds = userInquiries.map(i => i.id!).filter(id => id !== undefined);
+      
+      if (allInquiryIds.length === 0) return { inquiries: 0, quotes: 0 };
+      
+      // Quotes tab badge: Total number of unread PENDING quotes across all inquiries
+      const pendingQuotes = await db.quotes
+        .where('inquiryId').anyOf(allInquiryIds)
+        .filter(q => q.status === 'PENDING' && !q.isRead)
+        .toArray();
+        
+      // Inquiries tab badge: Number of open inquiries that have NO quotes yet
+      const openInquiryIds = userInquiries.filter(i => i.status === 'OPEN').map(i => i.id!);
+      let unquotedInquiriesCount = 0;
+      
+      if (openInquiryIds.length > 0) {
+        const allQuotesForOpenInquiries = await db.quotes
+          .where('inquiryId').anyOf(openInquiryIds)
+          .toArray();
+        
+        const inquiriesWithQuotes = new Set(allQuotesForOpenInquiries.map(q => q.inquiryId));
+        unquotedInquiriesCount = openInquiryIds.filter(id => !inquiriesWithQuotes.has(id)).length;
+      }
+      
+      return { inquiries: unquotedInquiriesCount, quotes: pendingQuotes.length };
+    } else {
+      const inquiries = await db.inquiries.where('status').equals('OPEN').toArray();
+      const relevantInquiries = user.categories && user.categories.length > 0
+        ? inquiries.filter(i => user.categories!.includes(i.category))
+        : inquiries;
+        
+      if (relevantInquiries.length === 0) return { inquiries: 0, quotes: 0 };
+      
+      const relevantInquiryIds = relevantInquiries.map(i => i.id!).filter(id => id !== undefined);
+      
+      const effectiveProviderId = user.parentProviderId || user.id;
+      if (!effectiveProviderId) return { inquiries: 0, quotes: 0 };
+      
+      // Find quotes submitted by THIS seller
+      const sellerQuotes = await db.quotes
+        .where('providerId').equals(effectiveProviderId)
+        .toArray();
+        
+      const inquiriesQuotedBySeller = new Set(sellerQuotes.map(q => q.inquiryId));
+      
+      // Seller Inquiries badge: Relevant open inquiries that the seller HAS NOT quoted yet
+      const unquotedRelevantInquiriesCount = relevantInquiryIds.filter(id => !inquiriesQuotedBySeller.has(id)).length;
+      
+      return { inquiries: unquotedRelevantInquiriesCount, quotes: 0 };
+    }
+  }, [user]);
 
   const handleTabClick = React.useCallback((tab: string) => {
     setActiveTab(tab);
@@ -72,16 +132,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     navigate('/login');
   };
 
-  const NavLink = ({ tab, icon: Icon, label, isActive }: { tab: string, icon: any, label: string, isActive: boolean }) => (
+  const NavLink = ({ tab, icon: Icon, label, isActive, badgeCount }: { tab: string, icon: any, label: string, isActive: boolean, badgeCount?: number }) => (
     <button 
       onClick={() => handleTabClick(tab)}
-      className={`flex items-center w-full px-4 py-3 text-[14px] font-medium font-sans transition-all duration-200 ${
+      className={`flex items-center justify-between w-full px-4 py-3 text-[14px] font-medium font-sans transition-all duration-200 ${
         isActive 
           ? 'border-l-[3px] border-[#C9973A] bg-[#fdf8f0] text-[#1e293b]' 
           : 'text-[#64748b] hover:bg-slate-50 hover:text-[#1e293b] border-l-[3px] border-transparent'
       }`}
     >
-      <Icon className="w-[18px] h-[18px] mr-4 stroke-[1.8]" /> {label}
+      <div className="flex items-center">
+        <Icon className="w-[18px] h-[18px] mr-4 stroke-[1.8]" /> {label}
+      </div>
+      {badgeCount !== undefined && badgeCount > 0 && (
+        <span className="bg-[#ef4444] text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1.5 shadow-sm">
+          {badgeCount}
+        </span>
+      )}
     </button>
   );
 
@@ -145,12 +212,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               Profile
             </button>
             
-            <NavLink tab="home" icon={Home} label="Home" isActive={activeTab === 'home'} />
+            {(user?.role === 'BUYER' || hasPermission(user, PERMISSIONS.VIEW_ANALYTICS)) && (
+              <NavLink tab="home" icon={Home} label="Home" isActive={activeTab === 'home'} />
+            )}
             
             {user?.role === 'BUYER' ? (
               <>
-                <NavLink tab="inquiries" icon={FileText} label="My Inquiries" isActive={['inquiries', 'create-inquiry', 'inquiry-items', 'category-selection', 'inquiry-preferences', 'location-details'].includes(activeTab)} />
-                <NavLink tab="quotes" icon={MessageSquare} label="Quotes Received" isActive={activeTab === 'quotes'} />
+                <NavLink tab="inquiries" icon={FileText} label="My Inquiries" isActive={['inquiries', 'create-inquiry', 'inquiry-items', 'category-selection', 'inquiry-preferences', 'location-details'].includes(activeTab)} badgeCount={notificationCounts?.inquiries} />
+                <NavLink tab="quotes" icon={MessageSquare} label="Quotes Received" isActive={activeTab === 'quotes'} badgeCount={notificationCounts?.quotes} />
                 <NavLink tab="shops" icon={Store} label="Saved Shops" isActive={activeTab === 'shops'} />
                 <NavLink tab="suppliers" icon={Users} label="Suppliers" isActive={activeTab === 'suppliers'} />
                 <NavLink tab="paid-orders" icon={Truck} label="Paid Orders" isActive={activeTab === 'paid-orders'} />
@@ -159,24 +228,40 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </>
             ) : (
               <>
-                <NavLink tab="leads" icon={List} label={(user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS') ? 'Incoming Booking Requests' : 'Incoming Leads'} isActive={activeTab === 'leads'} />
-                <NavLink tab="my-quotes" icon={ClipboardCheck} label="My Quotes" isActive={activeTab === 'my-quotes'} />
-                <NavLink tab="schedule" icon={Calendar} label="My Schedule" isActive={activeTab === 'schedule'} />
-                {user?.role === 'EVENTS' && (
-                  <NavLink tab="venue-spaces" icon={MapPin} label="Venue Spaces" isActive={activeTab === 'venue-spaces'} />
+                {hasPermission(user, PERMISSIONS.MANAGE_QUOTES) && (
+                  <>
+                    <NavLink tab="leads" icon={FileText} label={(user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS') ? 'Incoming Booking Requests' : 'Incoming Leads'} isActive={activeTab === 'leads'} badgeCount={notificationCounts?.inquiries} />
+                    <NavLink tab="my-quotes" icon={MessageSquare} label="My Quotes" isActive={activeTab === 'my-quotes'} badgeCount={notificationCounts?.quotes} />
+                  </>
                 )}
-                <NavLink tab="paid-orders" icon={Truck} label={(user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS') ? 'Paid Bookings' : 'Paid Orders'} isActive={activeTab === 'paid-orders'} />
-                <NavLink tab="collection" icon={QrCode} label="Collection" isActive={activeTab === 'collection'} />
-                {user?.role === 'EVENTS' && user?.categories?.some(c => c.toLowerCase().includes('equipment rental')) ? (
-                  <NavLink tab="products" icon={Store} label="Inventory" isActive={activeTab === 'products'} />
-                ) : user?.role === 'EVENTS' ? (
-                  // For other event types, maybe they don't need inventory? 
-                  // But the user said "This account allows the user to have an inventory" specifically for equipment rental.
-                  // For now, I'll keep it visible for all EVENTS but maybe rename it if not rental?
-                  // Actually, let's stick to the user's request: "specifically Late event equipment lenders This account allows the user to have an inventory"
-                  null 
-                ) : user?.role !== 'ENTERTAINMENT' && (
-                  <NavLink tab="products" icon={Store} label="My Products" isActive={activeTab === 'products'} />
+                
+                {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && (
+                  <>
+                    <NavLink tab="schedule" icon={Calendar} label="My Schedule" isActive={activeTab === 'schedule'} />
+                    {user?.role === 'EVENTS' && (
+                      <NavLink tab="venue-spaces" icon={MapPin} label="Venue Spaces" isActive={activeTab === 'venue-spaces'} />
+                    )}
+                    <NavLink tab="paid-orders" icon={Truck} label={(user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS') ? 'Paid Bookings' : 'Paid Orders'} isActive={activeTab === 'paid-orders'} />
+                  </>
+                )}
+                
+                {hasPermission(user, PERMISSIONS.MANAGE_COLLECTIONS) && (
+                  <NavLink tab="collection" icon={QrCode} label="Collection" isActive={activeTab === 'collection'} />
+                )}
+
+                {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && (
+                  <>
+                    {user?.role === 'EVENTS' && user?.categories?.some(c => c.toLowerCase().includes('equipment rental')) ? (
+                      <NavLink tab="products" icon={Store} label="Inventory" isActive={activeTab === 'products'} />
+                    ) : user?.role === 'EVENTS' ? (
+                      null 
+                    ) : user?.role !== 'ENTERTAINMENT' && (
+                      <NavLink tab="products" icon={Store} label="My Products" isActive={activeTab === 'products'} />
+                    )}
+                    {hasPermission(user, PERMISSIONS.MANAGE_TEAM) && (
+                      <NavLink tab="team" icon={Users} label="Team Management" isActive={activeTab === 'team'} />
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -245,57 +330,149 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             onClick={() => handleTabClick('home')}
             className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'home' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
           >
-            <Home className="w-[22px] h-[22px] mb-1" strokeWidth={2} />
-            <span className="text-[11px] font-medium font-sans uppercase tracking-wider">Home</span>
+            <Home 
+              className="w-[22px] h-[22px] mb-1" 
+              stroke="white"
+              strokeWidth={1.5} 
+              fill="currentColor"
+            />
+            <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'home' ? 'font-bold' : 'font-normal'}`}>Home</span>
           </button>
           
           {user?.role === 'BUYER' ? (
             <>
               <button 
                 onClick={() => handleTabClick('inquiries')}
-                className={`flex flex-col items-center justify-center w-full h-full transition-all ${['inquiries', 'create-inquiry', 'inquiry-items', 'category-selection', 'inquiry-preferences', 'location-details'].includes(activeTab) ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
+                className={`flex flex-col items-center justify-center w-full h-full transition-all relative ${['inquiries', 'create-inquiry', 'inquiry-items', 'category-selection', 'inquiry-preferences', 'location-details'].includes(activeTab) ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
               >
-                <FileText className="w-[22px] h-[22px] mb-1" strokeWidth={2} />
-                <span className="text-[11px] font-medium font-sans uppercase tracking-wider">Inquiries</span>
+                <FileText 
+                  className="w-[22px] h-[22px] mb-1" 
+                  stroke="white"
+                  strokeWidth={1.5} 
+                  fill="currentColor"
+                />
+                {notificationCounts?.inquiries > 0 && (
+                  <span className="absolute top-1.5 right-1/2 translate-x-3.5 bg-[#ef4444] text-white text-[9px] font-bold min-w-[14px] h-3.5 flex items-center justify-center rounded-full px-1 shadow-[0_2px_4px_rgba(239,68,68,0.3)] border border-white">
+                    {notificationCounts.inquiries}
+                  </span>
+                )}
+                <span className={`text-[11px] font-sans tracking-tight ${['inquiries', 'create-inquiry', 'inquiry-items', 'category-selection', 'inquiry-preferences', 'location-details'].includes(activeTab) ? 'font-bold' : 'font-normal'}`}>Inquiries</span>
               </button>
               <button 
                 onClick={() => handleTabClick('quotes')}
-                className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'quotes' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
+                className={`flex flex-col items-center justify-center w-full h-full transition-all relative ${activeTab === 'quotes' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
               >
-                <MessageSquare className="w-[22px] h-[22px] mb-1" strokeWidth={2} />
-                <span className="text-[11px] font-medium font-sans uppercase tracking-wider">Quotes</span>
+                <MessageSquare 
+                  className="w-[22px] h-[22px] mb-1" 
+                  stroke="white"
+                  strokeWidth={1.5} 
+                  fill="currentColor"
+                />
+                {notificationCounts?.quotes > 0 && (
+                  <span className="absolute top-1.5 right-1/2 translate-x-3.5 bg-[#ef4444] text-white text-[9px] font-bold min-w-[14px] h-3.5 flex items-center justify-center rounded-full px-1 shadow-[0_2px_4px_rgba(239,68,68,0.3)] border border-white">
+                    {notificationCounts.quotes}
+                  </span>
+                )}
+                <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'quotes' ? 'font-bold' : 'font-normal'}`}>Quotes</span>
               </button>
               <button 
                 onClick={() => handleTabClick('shops')}
                 className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'shops' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
               >
-                <Store className="w-[22px] h-[22px] mb-1" strokeWidth={2} />
-                <span className="text-[11px] font-medium font-sans uppercase tracking-wider">Shops</span>
+                <Store 
+                  className="w-[22px] h-[22px] mb-1" 
+                  stroke="white"
+                  strokeWidth={1.5} 
+                  fill="currentColor"
+                />
+                <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'shops' ? 'font-bold' : 'font-normal'}`}>Shops</span>
               </button>
             </>
           ) : (
             <>
-              <button 
-                onClick={() => handleTabClick('my-quotes')}
-                className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'my-quotes' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
-              >
-                <ClipboardCheck className="w-[22px] h-[22px] mb-1" strokeWidth={2} />
-                <span className="text-[11px] font-medium font-sans uppercase tracking-wider">My Quotes</span>
-              </button>
-              <button 
-                onClick={() => handleTabClick('leads')}
-                className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'leads' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
-              >
-                <List className="w-[22px] h-[22px] mb-1" strokeWidth={2} />
-                <span className="text-[11px] font-medium font-sans uppercase tracking-wider">Inquiries</span>
-              </button>
-              <button 
-                onClick={() => handleTabClick('suppliers')}
-                className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'suppliers' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
-              >
-                <Users className="w-[22px] h-[22px] mb-1" strokeWidth={2} />
-                <span className="text-[11px] font-medium font-sans uppercase tracking-wider">Suppliers</span>
-              </button>
+              {hasPermission(user, PERMISSIONS.MANAGE_QUOTES) && (
+                <>
+                  <button 
+                    onClick={() => handleTabClick('leads')}
+                    className={`flex flex-col items-center justify-center w-full h-full transition-all relative ${activeTab === 'leads' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
+                  >
+                    <FileText 
+                      className="w-[22px] h-[22px] mb-1" 
+                      stroke="white"
+                      strokeWidth={1.5} 
+                      fill="currentColor"
+                    />
+                    {notificationCounts?.inquiries > 0 && (
+                      <span className="absolute top-1.5 right-1/2 translate-x-3.5 bg-[#ef4444] text-white text-[9px] font-bold min-w-[14px] h-3.5 flex items-center justify-center rounded-full px-1 shadow-[0_2px_4px_rgba(239,68,68,0.3)] border border-white">
+                        {notificationCounts.inquiries}
+                      </span>
+                    )}
+                    <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'leads' ? 'font-bold' : 'font-normal'}`}>Inquiries</span>
+                  </button>
+                  <button 
+                    onClick={() => handleTabClick('my-quotes')}
+                    className={`flex flex-col items-center justify-center w-full h-full transition-all relative ${activeTab === 'my-quotes' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
+                  >
+                    <MessageSquare 
+                      className="w-[22px] h-[22px] mb-1" 
+                      stroke="white"
+                      strokeWidth={1.5} 
+                      fill="currentColor"
+                    />
+                    {notificationCounts?.quotes > 0 && (
+                      <span className="absolute top-1.5 right-1/2 translate-x-3.5 bg-[#ef4444] text-white text-[9px] font-bold min-w-[14px] h-3.5 flex items-center justify-center rounded-full px-1 shadow-[0_2px_4px_rgba(239,68,68,0.3)] border border-white">
+                        {notificationCounts.quotes}
+                      </span>
+                    )}
+                    <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'my-quotes' ? 'font-bold' : 'font-normal'}`}>Quotes</span>
+                  </button>
+                </>
+              )}
+              
+              {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && (
+                <button 
+                  onClick={() => handleTabClick('products')}
+                  className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'products' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
+                >
+                  <Store 
+                    className="w-[22px] h-[22px] mb-1" 
+                    stroke="white"
+                    strokeWidth={1.5} 
+                    fill="currentColor"
+                  />
+                  <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'products' ? 'font-bold' : 'font-normal'}`}>Shops</span>
+                </button>
+              )}
+
+              {user?.parentProviderId && hasPermission(user, PERMISSIONS.MANAGE_COLLECTIONS) && (
+                <button 
+                  onClick={() => handleTabClick('collections')}
+                  className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'collections' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
+                >
+                  <QrCode 
+                    className="w-[22px] h-[22px] mb-1" 
+                    stroke="white"
+                    strokeWidth={1.5} 
+                    fill="currentColor"
+                  />
+                  <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'collections' ? 'font-bold' : 'font-normal'}`}>Collections</span>
+                </button>
+              )}
+
+              {user?.parentProviderId && !hasPermission(user, PERMISSIONS.MANAGE_COLLECTIONS) && (
+                <button 
+                  onClick={() => handleTabClick('profile')}
+                  className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'profile' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
+                >
+                  <User 
+                    className="w-[22px] h-[22px] mb-1" 
+                    stroke="white"
+                    strokeWidth={1.5} 
+                    fill="currentColor"
+                  />
+                  <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'profile' ? 'font-bold' : 'font-normal'}`}>Profile</span>
+                </button>
+              )}
             </>
           )}
         </div>

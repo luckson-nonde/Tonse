@@ -51,19 +51,19 @@ export default function Login() {
           </div>
         )}
         
-        {/* Email Field */}
+        {/* Email/Phone Field */}
         <div>
-          <label className="block text-[11px] font-bold text-[#1a1612]/40 uppercase tracking-[0.2em] mb-3 ml-1">Email Address</label>
+          <label className="block text-[11px] font-bold text-[#1a1612]/40 uppercase tracking-[0.2em] mb-3 ml-1">Email or Phone Number</label>
           <div className="relative group">
             <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
               <Mail className="h-4 w-4 text-[#C9973A]/40 group-focus-within:text-[#C9973A] transition-colors" strokeWidth={2} />
             </div>
             <input 
-              type="email" 
+              type="text" 
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="you@example.com" 
+              placeholder="you@example.com or 097..." 
               className="block w-full pl-14 pr-5 py-4 bg-[#fcfcfc] border border-[#e8e0d0] rounded-2xl text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20 font-medium" 
             />
           </div>

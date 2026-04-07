@@ -176,10 +176,10 @@ export default function ShopProfilePage() {
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
-        location: formData.location,
       };
 
-      if (user?.role !== 'BUYER') {
+      if (user?.role !== 'BUYER' && !isStaff) {
+        updates.location = formData.location;
         updates.coverImage = formData.coverImage;
         updates.latitude = formData.latitude;
         updates.longitude = formData.longitude;
@@ -189,7 +189,7 @@ export default function ShopProfilePage() {
         updates.whatsappLink = formData.whatsappLink;
       }
 
-      // Logo is used as profile picture for buyers and shop logo for others
+      // Logo is used as profile picture for buyers/staff and shop logo for others
       updates.logo = formData.logo;
 
       if (formData.password) {
@@ -198,9 +198,10 @@ export default function ShopProfilePage() {
 
       await updateUser(updates);
 
-      // Also update the shop entry in the shops table - Only for non-buyers
-      if (user?.role !== 'BUYER' && user.id) {
-        const shop = await db.shops.where('providerId').equals(user.id).first();
+      // Also update the shop entry in the shops table - Only for non-buyers and non-staff
+      if (user?.role !== 'BUYER' && !isStaff && user.id) {
+        const effectiveProviderId = user.parentProviderId || user.id;
+        const shop = await db.shops.where('providerId').equals(effectiveProviderId).first();
         if (shop && shop.id) {
           await db.shops.update(shop.id, {
             name: formData.name,
@@ -305,14 +306,16 @@ export default function ShopProfilePage() {
     );
   };
 
+  const isStaff = user?.role === 'PROVIDER_STAFF';
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-8">
         <h1 className="text-[26px] font-serif font-bold text-[#1e293b] leading-tight">
-          {user?.role === 'BUYER' ? 'My Profile' : 'Shop Profile'}
+          {user?.role === 'BUYER' ? 'My Profile' : isStaff ? 'Personal Profile' : 'Shop Profile'}
         </h1>
         <p className="text-[14px] font-sans text-[#64748b] mt-1">
-          {user?.role === 'BUYER' ? 'Manage your account and personal details' : 'Manage your account and shop details'}
+          {user?.role === 'BUYER' ? 'Manage your account and personal details' : isStaff ? 'Manage your personal account details' : 'Manage your account and shop details'}
         </p>
       </div>
 
@@ -425,8 +428,8 @@ export default function ShopProfilePage() {
           </div>
         </div>
 
-        {/* Social Media Links - Only for Sellers/Suppliers */}
-        {user?.role !== 'BUYER' && (
+        {/* Social Media Links - Only for Sellers/Suppliers (Not for Staff) */}
+        {user?.role !== 'BUYER' && !isStaff && (
           <section className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-200 hover:border-[#d49b35]/30 transition-colors">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 bg-[#d49b35]/10 rounded-xl flex items-center justify-center text-[#d49b35]">
@@ -519,8 +522,8 @@ export default function ShopProfilePage() {
           </div>
         </div>
 
-        {/* Shop Details - Only for Sellers/Suppliers */}
-        {user?.role !== 'BUYER' && (
+        {/* Shop Details - Only for Sellers/Suppliers (Not for Staff) */}
+        {user?.role !== 'BUYER' && !isStaff && (
           <section className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-200 hover:border-[#d49b35]/30 transition-colors">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 bg-[#d49b35]/10 rounded-xl flex items-center justify-center text-[#d49b35]">
@@ -573,8 +576,8 @@ export default function ShopProfilePage() {
           </section>
         )}
 
-        {/* GPS Pinpointing - Only for Sellers/Suppliers */}
-        {user?.role !== 'BUYER' && (
+        {/* GPS Pinpointing - Only for Sellers/Suppliers (Not for Staff) */}
+        {user?.role !== 'BUYER' && !isStaff && (
           <section className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-200 hover:border-[#d49b35]/30 transition-colors">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-3">

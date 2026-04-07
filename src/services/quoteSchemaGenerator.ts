@@ -19,37 +19,63 @@ export const generateQuoteSchema = (
   inquiryAttributes: Record<string, any>
 ): { fields: QuoteField[], zodSchema: z.ZodObject<any> } => {
   const category = CATEGORIES_DB.find(c => c.name === inquiryCategory || c.id === inquiryCategory);
-  if (!category) {
-    const fields = getGenericQuoteSchema();
-    return { fields, zodSchema: generateZodSchema(fields) };
-  }
-
-  const config = ARCHETYPE_CONFIG[category.id];
-  if (!config) {
-    const fields = getGenericQuoteSchema();
-    return { fields, zodSchema: generateZodSchema(fields) };
-  }
-
+  
   const schema: QuoteField[] = [];
-  const inquirySchema = category.formSchema || [];
 
-  // 1. Transform inquiry fields based on archetype mapping
-  inquirySchema.forEach((field: FieldSchema) => {
-    const mappedName = config.quoteMapping[field.name];
-    if (mappedName) {
-      schema.push({
-        name: `quote_${mappedName}`,
-        label: `Quote for ${field.label}`,
-        type: 'currency', // Default to currency for mapped fields
-        required: field.required,
+  // 1. Add Archetype-specific fields
+  if (category) {
+    const config = ARCHETYPE_CONFIG[category.id];
+    if (config) {
+      if (config.archetype === 'PRODUCT') {
+        schema.push({ 
+          name: 'price', 
+          label: inquiryAttributes.quantity ? 'Unit Price (ZMW)' : 'Total Price (ZMW)', 
+          type: 'currency', 
+          required: true,
+          calculation: inquiryAttributes.quantity ? 'unit' : 'total'
+        });
+        schema.push({ name: 'condition', label: 'Item Condition', type: 'select', required: true, options: ['Brand New', 'Refurbished', 'Used - Excellent', 'Used - Good'] });
+      } else if (config.archetype === 'SERVICE') {
+        schema.push({ 
+          name: 'price', 
+          label: inquiryAttributes.rentalDuration ? 'Daily Rate (ZMW)' : 'Service Fee (ZMW)', 
+          type: 'currency', 
+          required: true,
+          calculation: inquiryAttributes.rentalDuration ? 'rate' : 'total'
+        });
+        schema.push({ name: 'availabilityDate', label: 'Earliest Availability', type: 'date', required: true });
+      } else if (config.archetype === 'RENTAL') {
+        schema.push({ 
+          name: 'price', 
+          label: 'Daily Rental Rate (ZMW)', 
+          type: 'currency', 
+          required: true,
+          calculation: 'rate'
+        });
+        schema.push({ name: 'securityDeposit', label: 'Security Deposit (Refundable)', type: 'currency', required: false });
+      }
+
+      // Add required additions from config
+      config.requiredAdditions.forEach(addition => {
+        if (!schema.find(f => f.name === addition)) {
+          schema.push({ 
+            name: addition, 
+            label: addition.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()), 
+            type: addition.toLowerCase().includes('fee') || addition.toLowerCase().includes('price') ? 'currency' : 'textarea', 
+            required: false 
+          });
+        }
       });
+    } else {
+      schema.push(...getGenericQuoteSchema());
     }
-  });
+  } else {
+    schema.push(...getGenericQuoteSchema());
+  }
 
-  // 2. Add archetype-specific modifiers
-  config.requiredAdditions.forEach(addition => {
-    schema.push({ name: addition, label: addition, type: 'textarea', required: false });
-  });
+  // 2. Add delivery options if applicable
+  schema.push({ name: 'optionalDeliveryOffer', label: 'Offer Delivery?', type: 'toggle', required: false });
+  schema.push({ name: 'optionalDeliveryFee', label: 'Delivery Fee (ZMW)', type: 'currency', required: false });
 
   // 3. Always add universal fields
   schema.push(

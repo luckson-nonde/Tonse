@@ -1,7 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ImagePlus, CalendarDays, Minus, Plus, AlertCircle, Loader2, Send, X, PlusCircle, ShoppingBasket, Check, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { FieldSchema, RENTAL_CATALOG_ITEMS } from '../services/categories';
+import { generateZodSchema } from '../services/schemaGenerator';
 import CustomDropdown from './CustomDropdown';
 
 interface DynamicInquiryFormProps {
@@ -19,275 +22,252 @@ export default function DynamicInquiryForm({
   onBack,
   isLoading
 }: DynamicInquiryFormProps) {
-  const [formData, setFormData] = useState<Record<string, any>>({});
   const [view, setView] = useState<'form' | 'catalog'>('form');
   const [selectedItems, setSelectedItems] = useState<Record<string, any>>({});
   const [currentDetailItem, setCurrentDetailItem] = useState<typeof RENTAL_CATALOG_ITEMS[0] | null>(null);
   const [tempItemData, setTempItemData] = useState<Record<string, any>>({});
   
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const zodSchema = generateZodSchema(schema);
+  const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm({
+    resolver: zodResolver(zodSchema),
+    defaultValues: schema.reduce((acc, field) => ({
+      ...acc,
+      [field.name]: field.type === 'counter' ? (field.min || 1) : (field.type === 'toggle' ? false : '')
+    }), {})
+  });
+
+  const formValues = watch();
 
   const isEquipmentRental = categoryName.toLowerCase().includes('equipment rental');
 
-  const validate = (): boolean => {
-    const newErrors: Record<string, string> = {};
-    
-    // Validate core schema
-    schema.forEach(field => {
-      if (field.name === 'deliveryAddress' && formData['deliveryStatus'] !== 'Delivery Required') {
-        return;
-      }
-
-      if (field.required) {
-        const value = formData[field.name];
-        if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
-          newErrors[field.name] = `${field.label} is required`;
-        }
-      }
-    });
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (validate()) {
-      // Combine core data with selected items
-      const finalData = {
-        ...formData,
-        rentalItems: selectedItems
-      };
-      onSubmit(finalData);
-    } else {
-      const firstError = document.querySelector('.error-field');
-      if (firstError) {
-        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }
-  };
-
-  const handleChange = (name: string, value: any, isTemp: boolean = false) => {
-    if (isTemp) {
-      setTempItemData(prev => ({ ...prev, [name]: value }));
-    } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
-    }
-    
-    if (errors[name]) {
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
-    }
+  const onFormSubmit = (data: Record<string, any>) => {
+    // Combine core data with selected items
+    const finalData = {
+      ...data,
+      rentalItems: selectedItems
+    };
+    onSubmit(finalData);
   };
 
   const handleImageUpload = (name: string, files: FileList | null) => {
     if (!files) return;
-    const currentImages = formData[name] || [];
+    const currentImages = (formValues[name] as string[]) || [];
     const newImages = Array.from(files).slice(0, 5 - currentImages.length);
     const imageUrls = newImages.map(file => URL.createObjectURL(file));
-    handleChange(name, [...currentImages, ...imageUrls]);
+    setValue(name, [...currentImages, ...imageUrls]);
   };
 
   const removeImage = (name: string, index: number) => {
-    const currentImages = formData[name] || [];
+    const currentImages = (formValues[name] as string[]) || [];
     const updatedImages = currentImages.filter((_: any, i: number) => i !== index);
-    handleChange(name, updatedImages);
+    setValue(name, updatedImages);
   };
 
   const requiredFields = schema.filter(f => f.required);
   const filledRequiredFields = requiredFields.filter(f => {
-    const val = formData[f.name];
+    const val = formValues[f.name];
     return val !== undefined && val !== null && val !== '' && !(Array.isArray(val) && val.length === 0);
   });
   const progress = requiredFields.length > 0 ? (filledRequiredFields.length / requiredFields.length) * 100 : 0;
 
   const renderField = (field: FieldSchema, isTemp: boolean = false) => {
-    const value = isTemp ? (tempItemData[field.name] ?? '') : (formData[field.name] ?? '');
-    const error = errors[field.name];
+    // Check dependency
+    if (field.dependsOn) {
+      const dependentValue = formValues[field.dependsOn.field];
+      if (dependentValue !== field.dependsOn.value) {
+        return null;
+      }
+    }
 
-    const fieldContent = (() => {
-      switch (field.type) {
-        case 'text':
-        case 'number':
-          return (
-            <div className={`flex items-center bg-white border-[1.5px] rounded-[12px] px-4 py-3.5 transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-[#ef4444] shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#f1f5f9]'}`}>
-              <input
-                type={field.type === 'number' ? 'number' : 'text'}
-                value={value}
-                onChange={(e) => handleChange(field.name, e.target.value, isTemp)}
-                placeholder={field.placeholder}
-                min={field.min}
-                max={field.max}
-                className="w-full bg-transparent border-none outline-none font-sans text-[15px] text-[#1a1a2e] placeholder:text-[#94a3b8]"
-              />
-            </div>
-          );
-        case 'textarea':
-          return (
-            <div className={`flex items-start bg-white border-[1.5px] rounded-[12px] px-4 py-3.5 min-h-[100px] transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-[#ef4444] shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#f1f5f9]'}`}>
-              <textarea
-                value={value}
-                onChange={(e) => handleChange(field.name, e.target.value, isTemp)}
-                placeholder={field.placeholder}
-                rows={4}
-                className="w-full bg-transparent border-none outline-none font-sans text-[15px] text-[#1a1a2e] placeholder:text-[#94a3b8] resize-none"
-              />
-            </div>
-          );
-        case 'counter':
-          return (
-            <div className="flex items-center bg-white border-[1.5px] border-[#f1f5f9] rounded-[12px] overflow-hidden w-fit min-w-[160px]">
-              <motion.button
-                whileTap={{ scale: 0.88 }}
-                type="button"
-                onClick={() => handleChange(field.name, Math.max(field.min ?? 0, (Number(value) || 0) - 1), isTemp)}
-                disabled={field.min !== undefined && (Number(value) || 0) <= field.min}
-                className="w-[48px] h-[52px] bg-[#f8fafc] border-r border-[#f1f5f9] flex items-center justify-center disabled:opacity-40 disabled:pointer-events-none transition-colors"
-              >
-                <Minus className={`w-[18px] h-[18px] ${(field.min !== undefined && (Number(value) || 0) <= field.min) ? 'text-[#d1d5db]' : 'text-[#1a1a2e]'}`} />
-              </motion.button>
-              <div className="flex-1 text-center px-4 font-serif text-[22px] font-bold text-[#C9973A]">
-                {value || field.min || 0}
-              </div>
-              <motion.button
-                whileTap={{ scale: 0.88 }}
-                type="button"
-                onClick={() => handleChange(field.name, Math.min(field.max ?? Infinity, (Number(value) || 0) + 1), isTemp)}
-                disabled={field.max !== undefined && (Number(value) || 0) >= field.max}
-                className="w-[48px] h-[52px] bg-[#C9973A] flex items-center justify-center disabled:opacity-40 disabled:pointer-events-none"
-              >
-                <Plus className="w-[18px] h-[18px] text-white" />
-              </motion.button>
-            </div>
-          );
-        case 'currency':
-          return (
-            <div className={`flex items-stretch bg-white border-[1.5px] rounded-[12px] overflow-hidden transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-[#ef4444] shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#f1f5f9]'}`}>
-              <div className="w-[72px] bg-[rgba(201,151,58,0.08)] border-r-[1.5px] border-[rgba(201,151,58,0.2)] flex items-center justify-center font-sans text-[12px] font-bold text-[#C9973A] tracking-[0.05em]">
-                ZMW
-              </div>
-              <input
-                type="number"
-                value={value}
-                onChange={(e) => handleChange(field.name, e.target.value, isTemp)}
-                placeholder="0.00"
-                min="0"
-                className="flex-1 px-4 py-3.5 font-sans text-[16px] font-semibold text-[#1a1a2e] bg-transparent border-none outline-none placeholder:text-[#94a3b8]"
-              />
-            </div>
-          );
-        case 'select':
-          if (field.options && field.options.length > 4) {
-            return (
-              <CustomDropdown
-                options={field.options.map(opt => ({ value: opt, label: opt }))}
-                value={String(value)}
-                onChange={(val) => handleChange(field.name, val, isTemp)}
-                placeholder={field.placeholder || `Select ${field.label}`}
-              />
-            );
-          }
-          return (
-            <div className="flex flex-wrap gap-x-[10px] gap-y-[12px]">
-              {field.options?.map(option => (
-                <motion.button
-                  key={option}
-                  whileTap={{ scale: 0.95 }}
-                  type="button"
-                  onClick={() => handleChange(field.name, option, isTemp)}
-                  className={`px-[18px] py-[10px] rounded-[50px] font-sans text-[13px] transition-all duration-[0.18s] ${
-                    String(value) === String(option)
-                      ? 'bg-[#C9973A] border-[1.5px] border-[#C9973A] text-white shadow-[0_2px_8px_rgba(201,151,58,0.35)] font-semibold'
-                      : 'bg-white border-[1.5px] border-[#e2e8f0] text-[#64748b] font-medium'
-                  }`}
-                >
-                  {option}
-                </motion.button>
-              ))}
-            </div>
-          );
-        case 'date':
-          return (
-            <div className={`flex items-center bg-white border-[1.5px] rounded-[12px] px-4 py-3.5 transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-[#ef4444] shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#f1f5f9]'}`}>
-              <input
-                type="date"
-                value={value}
-                onChange={(e) => handleChange(field.name, e.target.value, isTemp)}
-                className="flex-1 bg-transparent border-none outline-none font-sans text-[15px] text-[#1a1a2e]"
-              />
-              <CalendarDays className="w-[18px] h-[18px] text-[#C9973A] pointer-events-none" />
-            </div>
-          );
-        case 'toggle':
-          return (
-            <div className="flex items-center justify-between w-full">
-              <div className="flex flex-col">
-                <label className="text-[13px] font-semibold text-[#1a1a2e] flex items-center gap-[6px]">
-                  {field.label}
-                  {field.required && <span className="text-[#C9973A] text-[14px]">✦</span>}
-                </label>
-                {field.helpText && <p className="text-[11px] text-[#94a3b8] mt-[6px] italic">{field.helpText}</p>}
-              </div>
-              <button
-                type="button"
-                onClick={() => handleChange(field.name, !value, isTemp)}
-                className={`relative w-[48px] h-[26px] rounded-[50px] transition-colors duration-[0.25s] ${value ? 'bg-[#C9973A]' : 'bg-[#e2e8f0]'}`}
-              >
-                <motion.span
-                  animate={{ x: value ? 25 : 3 }}
-                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                  className="absolute top-[3px] left-0 w-[20px] h-[20px] rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.15)]"
-                />
-              </button>
-            </div>
-          );
-        case 'image_upload':
-          return (
-            <div className="flex flex-col gap-1">
-              <div 
-                onClick={() => fileInputRef.current?.click()}
-                className="bg-white border-2 border-dashed border-[rgba(201,151,58,0.35)] rounded-[16px] p-[32px_20px] flex flex-col items-center gap-[10px] cursor-pointer"
-              >
-                <ImagePlus className="w-[32px] h-[32px] text-[#C9973A]" />
-                <div className="text-center">
-                  <p className="font-sans text-[14px] font-medium text-[#1a1a2e]">Tap to upload photos</p>
-                  <p className="font-sans text-[11px] text-[#94a3b8]">Up to 5 images • JPG, PNG</p>
+    const error = errors[field.name]?.message as string | undefined;
+
+    const fieldContent = (
+      <Controller
+        name={field.name}
+        control={control}
+        render={({ field: { onChange, value } }) => {
+          switch (field.type) {
+            case 'text':
+            case 'number':
+              return (
+                <div className={`flex items-center bg-white border-[1.5px] rounded-[12px] px-4 py-3.5 transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-[#ef4444] shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#f1f5f9]'}`}>
+                  <input
+                    type={field.type === 'number' ? 'number' : 'text'}
+                    value={(value as string | number) || ''}
+                    onChange={(e) => onChange(field.type === 'number' ? Number(e.target.value) : e.target.value)}
+                    placeholder={field.placeholder}
+                    min={field.min}
+                    max={field.max}
+                    className="w-full bg-transparent border-none outline-none font-sans text-[15px] text-[#1a1a2e] placeholder:text-[#94a3b8]"
+                  />
                 </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => handleImageUpload(field.name, e.target.files)}
-                />
-              </div>
-              {value && Array.isArray(value) && value.length > 0 && (
-                <div className="grid grid-cols-3 gap-2 mt-3">
-                  {value.map((url: string, idx: number) => (
-                    <div key={idx} className="relative aspect-square rounded-[10px] overflow-hidden">
-                      <img src={url} alt={`Upload ${idx}`} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(field.name, idx)}
-                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
-                      >
-                        <X className="w-[10px] h-[10px] text-white" />
-                      </button>
-                    </div>
+              );
+            case 'textarea':
+              return (
+                <div className={`flex items-start bg-white border-[1.5px] rounded-[12px] px-4 py-3.5 min-h-[100px] transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-[#ef4444] shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#f1f5f9]'}`}>
+                  <textarea
+                    value={(value as string) || ''}
+                    onChange={(e) => onChange(e.target.value)}
+                    placeholder={field.placeholder}
+                    rows={4}
+                    className="w-full bg-transparent border-none outline-none font-sans text-[15px] text-[#1a1a2e] placeholder:text-[#94a3b8] resize-none"
+                  />
+                </div>
+              );
+            case 'counter':
+              return (
+                <div className="flex items-center bg-white border-[1.5px] border-[#f1f5f9] rounded-[12px] overflow-hidden w-fit min-w-[160px]">
+                  <motion.button
+                    whileTap={{ scale: 0.88 }}
+                    type="button"
+                    onClick={() => onChange(Math.max(field.min ?? 0, (Number(value) || 0) - 1))}
+                    disabled={field.min !== undefined && (Number(value) || 0) <= field.min}
+                    className="w-[48px] h-[52px] bg-[#f8fafc] border-r border-[#f1f5f9] flex items-center justify-center disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                  >
+                    <Minus className={`w-[18px] h-[18px] ${(field.min !== undefined && (Number(value) || 0) <= field.min) ? 'text-[#d1d5db]' : 'text-[#1a1a2e]'}`} />
+                  </motion.button>
+                  <div className="flex-1 text-center px-4 font-serif text-[22px] font-bold text-[#C9973A]">
+                    {(value as React.ReactNode) || field.min || 0}
+                  </div>
+                  <motion.button
+                    whileTap={{ scale: 0.88 }}
+                    type="button"
+                    onClick={() => onChange(Math.min(field.max ?? Infinity, (Number(value) || 0) + 1))}
+                    disabled={field.max !== undefined && (Number(value) || 0) >= field.max}
+                    className="w-[48px] h-[52px] bg-[#C9973A] flex items-center justify-center disabled:opacity-40 disabled:pointer-events-none"
+                  >
+                    <Plus className="w-[18px] h-[18px] text-white" />
+                  </motion.button>
+                </div>
+              );
+            case 'currency':
+              return (
+                <div className={`flex items-stretch bg-white border-[1.5px] rounded-[12px] overflow-hidden transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-[#ef4444] shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#f1f5f9]'}`}>
+                  <div className="w-[72px] bg-[rgba(201,151,58,0.08)] border-r-[1.5px] border-[rgba(201,151,58,0.2)] flex items-center justify-center font-sans text-[12px] font-bold text-[#C9973A] tracking-[0.05em]">
+                    ZMW
+                  </div>
+                  <input
+                    type="number"
+                    value={(value as string | number) || ''}
+                    onChange={(e) => onChange(Number(e.target.value))}
+                    placeholder="0.00"
+                    min="0"
+                    className="flex-1 px-4 py-3.5 font-sans text-[16px] font-semibold text-[#1a1a2e] bg-transparent border-none outline-none placeholder:text-[#94a3b8]"
+                  />
+                </div>
+              );
+            case 'select':
+              if (field.options && field.options.length > 4) {
+                return (
+                  <CustomDropdown
+                    options={field.options.map(opt => ({ value: opt, label: opt }))}
+                    value={String(value || '')}
+                    onChange={onChange}
+                    placeholder={field.placeholder || `Select ${field.label}`}
+                  />
+                );
+              }
+              return (
+                <div className="flex flex-wrap gap-x-[10px] gap-y-[12px]">
+                  {field.options?.map(option => (
+                    <motion.button
+                      key={option}
+                      whileTap={{ scale: 0.95 }}
+                      type="button"
+                      onClick={() => onChange(option)}
+                      className={`px-[18px] py-[10px] rounded-[50px] font-sans text-[13px] transition-all duration-[0.18s] ${
+                        String(value) === String(option)
+                          ? 'bg-[#C9973A] border-[1.5px] border-[#C9973A] text-white shadow-[0_2px_8px_rgba(201,151,58,0.35)] font-semibold'
+                          : 'bg-white border-[1.5px] border-[#e2e8f0] text-[#64748b] font-medium'
+                      }`}
+                    >
+                      {option}
+                    </motion.button>
                   ))}
                 </div>
-              )}
-            </div>
-          );
-        default:
-          return null;
-      }
-    })();
+              );
+            case 'date':
+              return (
+                <div className={`flex items-center bg-white border-[1.5px] rounded-[12px] px-4 py-3.5 transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-[#ef4444] shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#f1f5f9]'}`}>
+                  <input
+                    type="date"
+                    value={(value as string) || ''}
+                    onChange={(e) => onChange(e.target.value)}
+                    className="flex-1 bg-transparent border-none outline-none font-sans text-[15px] text-[#1a1a2e]"
+                  />
+                  <CalendarDays className="w-[18px] h-[18px] text-[#C9973A] pointer-events-none" />
+                </div>
+              );
+            case 'toggle':
+              return (
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex flex-col">
+                    <label className="text-[13px] font-semibold text-[#1a1a2e] flex items-center gap-[6px]">
+                      {field.label}
+                      {field.required && <span className="text-[#C9973A] text-[14px]">✦</span>}
+                    </label>
+                    {field.helpText && <p className="text-[11px] text-[#94a3b8] mt-[6px] italic">{field.helpText}</p>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onChange(!value)}
+                    className={`relative w-[48px] h-[26px] rounded-[50px] transition-colors duration-[0.25s] ${value ? 'bg-[#C9973A]' : 'bg-[#e2e8f0]'}`}
+                  >
+                    <motion.span
+                      animate={{ x: value ? 25 : 3 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                      className="absolute top-[3px] left-0 w-[20px] h-[20px] rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.15)]"
+                    />
+                  </button>
+                </div>
+              );
+            case 'image_upload':
+              return (
+                <div className="flex flex-col gap-1">
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="bg-white border-2 border-dashed border-[rgba(201,151,58,0.35)] rounded-[16px] p-[32px_20px] flex flex-col items-center gap-[10px] cursor-pointer"
+                  >
+                    <ImagePlus className="w-[32px] h-[32px] text-[#C9973A]" />
+                    <div className="text-center">
+                      <p className="font-sans text-[14px] font-medium text-[#1a1a2e]">Tap to upload photos</p>
+                      <p className="font-sans text-[11px] text-[#94a3b8]">Up to 5 images • JPG, PNG</p>
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => handleImageUpload(field.name, e.target.files)}
+                    />
+                  </div>
+                  {value && Array.isArray(value) && value.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2 mt-3">
+                      {value.map((url: string, idx: number) => (
+                        <div key={idx} className="relative aspect-square rounded-[10px] overflow-hidden">
+                          <img src={url} alt={`Upload ${idx}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeImage(field.name, idx)}
+                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
+                          >
+                            <X className="w-[10px] h-[10px] text-white" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            default:
+              return null;
+          }
+        }}
+      />
+    );
 
     return (
       <motion.div
@@ -543,7 +523,7 @@ export default function DynamicInquiryForm({
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="relative">
+      <form onSubmit={handleSubmit(onFormSubmit)} className="relative">
         <motion.div 
           initial="hidden"
           animate="visible"

@@ -9,6 +9,10 @@ export interface FieldSchema {
   max?: number;
   helpText?: string;
   group?: string;
+  dependsOn?: {
+    field: string;
+    value: any;
+  };
 }
 
 export interface Category {
@@ -1240,4 +1244,9 @@ export const fetchCategories = async (parentId: string | null = null): Promise<C
   // Simulate network delay to mimic database fetch
   await new Promise(resolve => setTimeout(resolve, 400));
   return CATEGORIES_DB.filter(c => c.parentId === parentId);
+};
+
+export const getCategorySchema = (categoryName: string): FieldSchema[] => {
+  const category = CATEGORIES_DB.find(c => c.name.toLowerCase() === categoryName.toLowerCase() || c.id === categoryName);
+  return category?.formSchema || GENERIC_FALLBACK_SCHEMA;
 };

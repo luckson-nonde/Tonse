@@ -14,11 +14,18 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
-import { isRelatedCategory } from '../services/categories';
+import { isRelatedCategory, getCategorySchema } from '../services/categories';
 import CollectionPage from './CollectionPage';
+import { hasPermission, PERMISSIONS } from '../utils/rbac';
+import DynamicDataDisplay from '../components/DynamicDataDisplay';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import ProductManagement from './ProductManagement';
 import { generateQuoteSchema, QuoteField } from '../services/quoteSchemaGenerator';
+import Notification from '../components/Notification';
+import TeamManagement from './TeamManagement';
+
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 
 const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, itemPricesTotal }: { inquiry: Inquiry, onSubmit: (data: any) => void, onCancel: () => void, venueSpaces: any[], user: any, itemPricesTotal: number }) => {
   const { fields: quoteSchema, zodSchema } = React.useMemo(() => 
@@ -26,12 +33,19 @@ const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, i
     [inquiry.category, inquiry.attributes]
   );
 
-  const [quoteData, setQuoteData] = useState<Record<string, any>>({
-    expiryDuration: '1 Month',
-    condition: 'Brand New'
+  const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm({
+    resolver: zodResolver(zodSchema),
+    defaultValues: {
+      expiryDuration: '1 Month',
+      condition: 'Brand New',
+      optionalDeliveryOffer: false,
+      optionalDeliveryFee: 0,
+      ...Object.fromEntries(quoteSchema.map(f => [f.name, f.type === 'toggle' ? false : '']))
+    }
   });
+
+  const formData = watch();
   const [calculatedTotal, setCalculatedTotal] = useState(0);
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   // Auto-calculate totals based on inquiry attributes
   useEffect(() => {
@@ -39,11 +53,11 @@ const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, i
     let hasCalculatedFields = false;
     quoteSchema.forEach(field => {
       if (field.calculation === 'unit' && inquiry.attributes?.quantity) {
-        total += (Number(quoteData[field.name]) || 0) * Number(inquiry.attributes.quantity);
+        total += (Number(formData[field.name]) || 0) * Number(inquiry.attributes.quantity);
         hasCalculatedFields = true;
       }
       if (field.calculation === 'rate' && inquiry.attributes?.rentalDuration) {
-        total += (Number(quoteData[field.name]) || 0) * Number(inquiry.attributes.rentalDuration);
+        total += (Number(formData[field.name]) || 0) * Number(inquiry.attributes.rentalDuration);
         hasCalculatedFields = true;
       }
     });
@@ -52,140 +66,134 @@ const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, i
     if (!hasCalculatedFields) {
         if (itemPricesTotal > 0) {
             total += itemPricesTotal;
-        } else if (quoteData.price) {
-            total += Number(quoteData.price) || 0;
+        } else if (formData.price) {
+            total += Number(formData.price) || 0;
         }
     }
     
     setCalculatedTotal(total);
-  }, [quoteData, quoteSchema, inquiry.attributes, itemPricesTotal]);
+  }, [formData, quoteSchema, inquiry.attributes, itemPricesTotal]);
+
+  const onFormSubmit = (data: any) => {
+    onSubmit({ ...data, calculatedTotal });
+  };
 
   return (
     <div className="mt-6 p-6 bg-slate-50 rounded-2xl border border-slate-100">
       <h5 className="font-bold text-slate-900 mb-4">Submit Your Quotation</h5>
-      <form onSubmit={(e) => { 
-        e.preventDefault(); 
-        const result = zodSchema.safeParse({ ...quoteData, calculatedTotal });
-        if (!result.success) {
-          const errors: Record<string, string> = {};
-          result.error.issues.forEach(issue => {
-            if (issue.path.length > 0) {
-              errors[issue.path[0] as string] = issue.message;
-            }
-          });
-          setValidationErrors(errors);
-          return;
-        }
-        setValidationErrors({});
-        onSubmit(result.data);
-      }} className="space-y-4">
+      <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
         {quoteSchema.map(field => {
           // Handle conditional visibility
-          if (field.name === 'optionalDeliveryFee' && quoteData.optionalDeliveryOffer !== true) {
+          if (field.name === 'optionalDeliveryFee' && formData.optionalDeliveryOffer !== true) {
             return null;
           }
 
           return (
-          <div key={field.name}>
-            <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">
-              {field.label}
-              {field.required && <span className="text-rose-500 ml-1">*</span>}
-            </label>
-            
-            {field.type === 'currency' && (
-              <div className="relative">
-                <input
-                  type="number"
-                  required={field.required && !(field.name === 'price' && itemPricesTotal > 0)}
-                  value={field.name === 'price' && itemPricesTotal > 0 ? itemPricesTotal : (quoteData[field.name] || '')}
-                  onChange={e => {
-                    setQuoteData({...quoteData, [field.name]: e.target.value});
-                    if (validationErrors[field.name]) {
-                      setValidationErrors({...validationErrors, [field.name]: ''});
-                    }
-                  }}
-                  readOnly={field.name === 'price' && itemPricesTotal > 0}
-                  className={`w-full pl-12 pr-4 py-3 rounded-xl border ${validationErrors[field.name] ? 'border-rose-500' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] ${field.name === 'price' && itemPricesTotal > 0 ? 'bg-slate-100 font-bold text-[#d49b35]' : ''}`}
-                  placeholder={field.placeholder || "0.00"}
-                />
-                <span className="absolute left-4 top-3.5 text-sm font-bold text-slate-400">ZMW</span>
-                {field.calculation && inquiry.attributes?.quantity && field.calculation === 'unit' && (
-                  <span className="text-[11px] font-medium text-slate-500 mt-1.5 block">
-                    × {inquiry.attributes.quantity} units = ZMW {((Number(quoteData[field.name]) || 0) * Number(inquiry.attributes.quantity)).toLocaleString()}
-                  </span>
-                )}
-                {field.calculation && inquiry.attributes?.rentalDuration && field.calculation === 'rate' && (
-                  <span className="text-[11px] font-medium text-slate-500 mt-1.5 block">
-                    × {inquiry.attributes.rentalDuration} days = ZMW {((Number(quoteData[field.name]) || 0) * Number(inquiry.attributes.rentalDuration)).toLocaleString()}
-                  </span>
-                )}
-              </div>
-            )}
-            
-            {field.type === 'number' && (
-              <input
-                type="number"
-                required={field.required}
-                value={quoteData[field.name] || ''}
-                onChange={e => {
-                  setQuoteData({...quoteData, [field.name]: e.target.value});
-                  if (validationErrors[field.name]) {
-                    setValidationErrors({...validationErrors, [field.name]: ''});
+            <div key={field.name}>
+              <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">
+                {field.label}
+                {field.required && <span className="text-rose-500 ml-1">*</span>}
+              </label>
+              
+              <Controller
+                name={field.name}
+                control={control}
+                render={({ field: { onChange, value } }) => {
+                  if (field.type === 'currency') {
+                    return (
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={field.name === 'price' && itemPricesTotal > 0 ? itemPricesTotal : ((value as string | number) || '')}
+                          onChange={onChange}
+                          readOnly={field.name === 'price' && itemPricesTotal > 0}
+                          className={`w-full pl-12 pr-4 py-3 rounded-xl border ${errors[field.name] ? 'border-rose-500' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] ${field.name === 'price' && itemPricesTotal > 0 ? 'bg-slate-100 font-bold text-[#d49b35]' : ''}`}
+                          placeholder={field.placeholder || "0.00"}
+                        />
+                        <span className="absolute left-4 top-3.5 text-sm font-bold text-slate-400">ZMW</span>
+                        {field.calculation && inquiry.attributes?.quantity && field.calculation === 'unit' && (
+                          <span className="text-[11px] font-medium text-slate-500 mt-1.5 block">
+                            × {inquiry.attributes.quantity} units = ZMW {((Number(value) || 0) * Number(inquiry.attributes.quantity)).toLocaleString()}
+                          </span>
+                        )}
+                        {field.calculation && inquiry.attributes?.rentalDuration && field.calculation === 'rate' && (
+                          <span className="text-[11px] font-medium text-slate-500 mt-1.5 block">
+                            × {inquiry.attributes.rentalDuration} days = ZMW {((Number(value) || 0) * Number(inquiry.attributes.rentalDuration)).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                    );
                   }
-                }}
-                className={`w-full px-4 py-3 rounded-xl border ${validationErrors[field.name] ? 'border-rose-500' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35]`}
-                placeholder={field.placeholder}
-              />
-            )}
 
-            {field.type === 'textarea' && (
-              <textarea
-                required={field.required}
-                value={quoteData[field.name] || ''}
-                onChange={e => {
-                  setQuoteData({...quoteData, [field.name]: e.target.value});
-                  if (validationErrors[field.name]) {
-                    setValidationErrors({...validationErrors, [field.name]: ''});
+                  if (field.type === 'number') {
+                    return (
+                      <input
+                        type="number"
+                        value={(value as string | number) || ''}
+                        onChange={onChange}
+                        className={`w-full px-4 py-3 rounded-xl border ${errors[field.name] ? 'border-rose-500' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35]`}
+                        placeholder={field.placeholder}
+                      />
+                    );
                   }
-                }}
-                className={`w-full px-4 py-3 rounded-xl border ${validationErrors[field.name] ? 'border-rose-500' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] resize-none`}
-                placeholder={field.placeholder}
-                rows={3}
-              />
-            )}
-            
-            {field.type === 'select' && field.options && (
-              <select
-                required={field.required}
-                value={quoteData[field.name] || ''}
-                onChange={e => {
-                  setQuoteData({...quoteData, [field.name]: e.target.value});
-                  if (validationErrors[field.name]) {
-                    setValidationErrors({...validationErrors, [field.name]: ''});
-                  }
-                }}
-                className={`w-full px-4 py-3 rounded-xl border ${validationErrors[field.name] ? 'border-rose-500' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] bg-white`}
-              >
-                {!quoteData[field.name] && <option value="" disabled>Select {field.label}</option>}
-                {field.options.map(opt => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            )}
 
-            {field.type === 'toggle' && (
-              <button
-                type="button"
-                onClick={() => setQuoteData({...quoteData, [field.name]: !quoteData[field.name]})}
-                className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${quoteData[field.name] ? 'bg-[#d49b35] text-white' : 'bg-slate-200 text-slate-600'}`}
-              >
-                {quoteData[field.name] ? 'Yes' : 'No'}
-              </button>
-            )}
-            
-            {field.helpText && <p className="text-[11px] text-slate-500 mt-1.5 italic">{field.helpText}</p>}
-            {validationErrors[field.name] && <p className="text-[11px] text-rose-500 mt-1.5 font-bold">{validationErrors[field.name]}</p>}
-          </div>
+                  if (field.type === 'textarea') {
+                    return (
+                      <textarea
+                        value={(value as string) || ''}
+                        onChange={onChange}
+                        className={`w-full px-4 py-3 rounded-xl border ${errors[field.name] ? 'border-rose-500' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] resize-none`}
+                        placeholder={field.placeholder}
+                        rows={3}
+                      />
+                    );
+                  }
+
+                  if (field.type === 'select' && field.options) {
+                    return (
+                      <select
+                        value={(value as string) || ''}
+                        onChange={onChange}
+                        className={`w-full px-4 py-3 rounded-xl border ${errors[field.name] ? 'border-rose-500' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] bg-white`}
+                      >
+                        {!value && <option value="" disabled>Select {field.label}</option>}
+                        {field.options.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    );
+                  }
+
+                  if (field.type === 'toggle') {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => onChange(!(value as boolean))}
+                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${(value as boolean) ? 'bg-[#d49b35] text-white' : 'bg-slate-200 text-slate-600'}`}
+                      >
+                        {(value as boolean) ? 'Yes' : 'No'}
+                      </button>
+                    );
+                  }
+
+                  if (field.type === 'date') {
+                    return (
+                      <input
+                        type="date"
+                        value={(value as string) || ''}
+                        onChange={onChange}
+                        className={`w-full px-4 py-3 rounded-xl border ${errors[field.name] ? 'border-rose-500' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35]`}
+                      />
+                    );
+                  }
+
+                  return null;
+                }}
+              />
+              
+              {field.helpText && <p className="text-[11px] text-slate-500 mt-1.5 italic">{field.helpText}</p>}
+              {errors[field.name] && <p className="text-[11px] text-rose-500 mt-1.5 font-bold">{errors[field.name]?.message as string}</p>}
+            </div>
           );
         })}
 
@@ -193,37 +201,55 @@ const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, i
           <div className="space-y-4 pt-4 border-t border-slate-100">
             <div>
               <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">Select Venue Space to Quote (Optional)</label>
-              <select 
-                value={quoteData.venueSpaceId || ''}
-                onChange={e => setQuoteData({...quoteData, venueSpaceId: e.target.value})}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] bg-white"
-              >
-                <option value="">No specific space / General quote</option>
-                {venueSpaces.map(space => (
-                  <option key={space.id} value={space.id}>{space.name} (Capacity: {space.capacity})</option>
-                ))}
-              </select>
+              <Controller
+                name="venueSpaceId"
+                control={control}
+                render={({ field: { onChange, value } }) => (
+                  <select 
+                    value={(value as string | number) || ''}
+                    onChange={onChange}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] bg-white"
+                  >
+                    <option value="">No specific space / General quote</option>
+                    {venueSpaces.map(space => (
+                      <option key={space.id} value={space.id}>{space.name} (Capacity: {space.capacity})</option>
+                    ))}
+                  </select>
+                )}
+              />
             </div>
-            {quoteData.venueSpaceId && (
+            {formData.venueSpaceId && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">Damage Deposit (ZMW)</label>
-                  <input 
-                    type="number" 
-                    placeholder="0.00"
-                    value={quoteData.damageDeposit || ''}
-                    onChange={e => setQuoteData({...quoteData, damageDeposit: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35]"
+                  <Controller
+                    name="damageDeposit"
+                    control={control}
+                    render={({ field: { onChange, value } }) => (
+                      <input 
+                        type="number" 
+                        placeholder="0.00"
+                        value={(value as string | number) || ''}
+                        onChange={onChange}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35]"
+                      />
+                    )}
                   />
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-500 tracking-wider uppercase mb-2">Cleaning Fee (ZMW)</label>
-                  <input 
-                    type="number" 
-                    placeholder="0.00"
-                    value={quoteData.cleaningFee || ''}
-                    onChange={e => setQuoteData({...quoteData, cleaningFee: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35]"
+                  <Controller
+                    name="cleaningFee"
+                    control={control}
+                    render={({ field: { onChange, value } }) => (
+                      <input 
+                        type="number" 
+                        placeholder="0.00"
+                        value={(value as string | number) || ''}
+                        onChange={onChange}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35]"
+                      />
+                    )}
                   />
                 </div>
               </div>
@@ -258,57 +284,36 @@ const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, i
   );
 };
 
-const renderSpecifications = (data: any, title: string = "Specifications") => {
-  if (!data || Object.keys(data).length === 0) return null;
-  
-  const formatKey = (key: string) => {
-    return key
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/^./, (str) => str.toUpperCase());
-  };
+  const renderSpecifications = (data: any, category: string = "", title: string = "Specifications") => {
+    if (!data || Object.keys(data).length === 0) return null;
+    
+    const schema = getCategorySchema(category);
 
-  return (
-    <div className="space-y-4">
-      <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">
-        {title}
-      </h5>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {Object.entries(data).map(([key, value]) => {
-          if (!value || (Array.isArray(value) && value.length === 0)) return null;
-          
-          if (key === 'equipment' && Array.isArray(value)) {
-            return (
-              <div key={key} className="col-span-1 sm:col-span-2 bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
-                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Equipment Needed</span>
-                <div className="flex flex-wrap gap-2">
-                  {value.map((eq: any, i: number) => (
-                    <span key={i} className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">
-                      {eq.quantity}x {eq.type}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            );
-          }
-
-          return (
-            <div key={key} className="flex flex-col p-4 bg-slate-50 rounded-2xl border border-slate-100">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 truncate">{formatKey(key)}</span>
-              <span className="text-sm font-bold text-[#1a1612] capitalize break-words whitespace-pre-wrap">
-                {Array.isArray(value) ? value.join(', ') : String(value)}
-              </span>
-            </div>
-          );
-        })}
+    return (
+      <div className="space-y-4">
+        <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">
+          {title}
+        </h5>
+        <DynamicDataDisplay schema={schema} attributes={data} />
       </div>
-    </div>
-  );
-};
+    );
+  };
 
 export default function ProviderDashboard() {
   const { activeTab, setActiveTab } = useDashboard();
   const { user } = useAuth();
   const navigate = useNavigate();
+  
+  const effectiveProviderId = user?.parentProviderId || user?.id;
+  
+  // RBAC Redirect Logic
+  useEffect(() => {
+    if (user && user.role === 'PROVIDER_STAFF' && activeTab === 'home') {
+      if (!user.permissions?.includes('VIEW_ANALYTICS')) {
+        setActiveTab('leads');
+      }
+    }
+  }, [user, activeTab, setActiveTab]);
   
   const isBookingBased = user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS';
   
@@ -327,31 +332,31 @@ export default function ProviderDashboard() {
   
   const products = useLiveQuery(
     async () => {
-      if (!user?.id) return [];
-      return await db.products.where('providerId').equals(user.id).reverse().limit(5).toArray();
+      if (!effectiveProviderId) return [];
+      return await db.products.where('providerId').equals(effectiveProviderId).reverse().limit(5).toArray();
     },
-    [user]
+    [effectiveProviderId]
   ) || [];
 
   const myQuotes = useLiveQuery(
     async () => {
-      if (!user?.id) return [];
-      const quotes = await db.quotes.where('providerId').equals(user.id).reverse().sortBy('createdAt');
+      if (!effectiveProviderId) return [];
+      const quotes = await db.quotes.where('providerId').equals(effectiveProviderId).reverse().sortBy('createdAt');
       const enrichedQuotes = await Promise.all(quotes.map(async (quote) => {
         const inquiry = await db.inquiries.get(quote.inquiryId);
         return { ...quote, inquiry };
       }));
       return enrichedQuotes;
     },
-    [user]
+    [effectiveProviderId]
   ) || [];
 
   const schedules = useLiveQuery(
     async () => {
-      if (!user?.id) return [];
-      return await db.schedules.where('providerId').equals(user.id).toArray();
+      if (!effectiveProviderId) return [];
+      return await db.schedules.where('providerId').equals(effectiveProviderId).toArray();
     },
-    [user]
+    [effectiveProviderId]
   ) || [];
 
   const [selectedSchedule, setSelectedSchedule] = useState<any | null>(null);
@@ -363,7 +368,7 @@ export default function ProviderDashboard() {
 
   const chartData = useLiveQuery(
     async () => {
-      if (!user?.id) return [];
+      if (!effectiveProviderId) return [];
       const now = new Date();
       const last7Days = Array.from({ length: 7 }, (_, i) => {
         const d = new Date();
@@ -376,7 +381,7 @@ export default function ProviderDashboard() {
       });
 
       const completedQuotes = await db.quotes
-        .where('providerId').equals(user.id)
+        .where('providerId').equals(effectiveProviderId)
         .filter(q => q.status === 'COMPLETED' || q.status === 'PAID')
         .toArray();
 
@@ -422,14 +427,23 @@ export default function ProviderDashboard() {
   const [activeChecklistQuote, setActiveChecklistQuote] = useState<Quote | null>(null);
   const [checklistSteps, setChecklistSteps] = useState({ photo: false, received: false });
   const [handoverCompleteQuote, setHandoverCompleteQuote] = useState<Quote | null>(null);
+  const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error', isVisible: boolean }>({
+    message: '',
+    type: 'success',
+    isVisible: false
+  });
+
+  const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message, type, isVisible: true });
+  };
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
 
   const venueSpaces = useLiveQuery(
     async () => {
-      if (!user?.id || user.role !== 'EVENTS') return [];
-      return await db.venueSpaces.where('providerId').equals(user.id).toArray();
+      if (!effectiveProviderId || user?.role !== 'EVENTS') return [];
+      return await db.venueSpaces.where('providerId').equals(effectiveProviderId).toArray();
     },
-    [user]
+    [effectiveProviderId, user]
   ) || [];
 
   useEffect(() => {
@@ -490,7 +504,7 @@ export default function ProviderDashboard() {
       setCapturedPhoto(null);
     } catch (error) {
       console.error('Failed to confirm collection:', error);
-      alert('Failed to confirm collection. Please try again.');
+      showNotification('Failed to confirm collection. Please try again.', 'error');
     } finally {
       setIsUpdating(false);
     }
@@ -518,7 +532,7 @@ export default function ProviderDashboard() {
             if (quote) setVerifyingQuote(quote);
           });
         } else {
-          alert("Invalid QR Code for this order.");
+          showNotification("Invalid QR Code for this order.", "error");
         }
       }, (error) => {
         // Ignore errors
@@ -538,8 +552,10 @@ export default function ProviderDashboard() {
       await db.quotes.update(verifyingQuote.id, { status: 'AWAITING_PICKUP' });
       setActiveChecklistQuote(verifyingQuote);
       setVerifyingQuote(null);
+      showNotification("Buyer identity verified successfully!");
     } catch (error) {
       console.error("Failed to update status:", error);
+      showNotification("Failed to verify buyer. Please try again.", "error");
     } finally {
       setIsUpdating(false);
     }
@@ -566,6 +582,8 @@ export default function ProviderDashboard() {
       ? itemPricesArray.reduce((sum, ip) => sum + ip.price, 0)
       : (submittedQuoteData.calculatedTotal > 0 ? submittedQuoteData.calculatedTotal : Number(submittedQuoteData.price || 0));
 
+    const adminUser = user.parentProviderId ? await db.users.get(user.parentProviderId) : user;
+    
     const newQuote: Quote = {
       inquiryId: quotingInquiryId,
       inquiryTitle: lead?.title || 'Inquiry',
@@ -574,8 +592,8 @@ export default function ProviderDashboard() {
       message: submittedQuoteData.message || '',
       expiryDuration: submittedQuoteData.expiryDuration || '1 Month',
       status: 'PENDING' as const,
-      providerId: user.id!,
-      providerName: user.name,
+      providerId: effectiveProviderId!,
+      providerName: adminUser?.name || user.name,
       createdAt: Date.now(),
       itemPrices: itemPricesArray && itemPricesArray.length > 0 ? itemPricesArray : undefined,
       requirements: [], // We can omit requirements for now, or add them to the dynamic form
@@ -954,25 +972,27 @@ export default function ProviderDashboard() {
     
     return (
     <div className="space-y-6">
-      {/* Virtual Account Card */}
-      <div className="bg-[#1e293b] rounded-[16px] p-[28px] shadow-sm text-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-[#C9973A]/20 to-transparent rounded-bl-full -z-0 opacity-50"></div>
-        <div className="relative z-10 min-w-0">
-          <p className="text-[#C9973A] text-[11px] font-bold font-sans uppercase tracking-wider mb-2 truncate">AVAILABLE BALANCE</p>
-          <h2 className="text-[42px] font-bold mb-2 truncate font-serif text-white leading-none" title={`ZMW ${availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}>
-            ZMW {availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </h2>
-          <p className="text-[#94a3b8] text-[13px] font-sans mb-6 truncate">
-            {pendingClearance > 0 ? `ZMW ${pendingClearance.toLocaleString(undefined, { minimumFractionDigits: 2 })} pending clearance` : 'No pending clearance'}
-          </p>
-          <button 
-            onClick={() => navigate('/provider/financial')}
-            className="border border-[#C9973A] text-[#C9973A] bg-transparent font-medium font-sans py-2.5 px-6 rounded-[8px] text-[13px] hover:bg-[#C9973A]/10 transition-colors"
-          >
-            My Account 425*******12
-          </button>
+      {/* Virtual Account Card - Only for Admins/Managers with Analytics Permission */}
+      {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && (
+        <div className="bg-[#1e293b] rounded-[16px] p-[28px] shadow-sm text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-[#C9973A]/20 to-transparent rounded-bl-full -z-0 opacity-50"></div>
+          <div className="relative z-10 min-w-0">
+            <p className="text-[#C9973A] text-[11px] font-bold font-sans uppercase tracking-wider mb-2 truncate">AVAILABLE BALANCE</p>
+            <h2 className="text-[42px] font-bold mb-2 truncate font-serif text-white leading-none" title={`ZMW ${availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}>
+              ZMW {availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </h2>
+            <p className="text-[#94a3b8] text-[13px] font-sans mb-6 truncate">
+              {pendingClearance > 0 ? `ZMW ${pendingClearance.toLocaleString(undefined, { minimumFractionDigits: 2 })} pending clearance` : 'No pending clearance'}
+            </p>
+            <button 
+              onClick={() => navigate('/provider/financial')}
+              className="border border-[#C9973A] text-[#C9973A] bg-transparent font-medium font-sans py-2.5 px-6 rounded-[8px] text-[13px] hover:bg-[#C9973A]/10 transition-colors"
+            >
+              My Account 425*******12
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
         <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100">
@@ -1026,8 +1046,8 @@ export default function ProviderDashboard() {
       </div>
 
 
-      {/* Sales Summary Card - Only for Sellers */}
-      {!isBookingBased && (
+      {/* Sales Summary Card - Only for Sellers with Analytics Permission */}
+      {!isBookingBased && hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && (
         <div className="bg-white rounded-2xl sm:rounded-[32px] p-4 sm:p-8 shadow-sm border border-slate-100">
           <div className="flex justify-between items-center mb-6 sm:mb-8">
             <h3 className="text-xl font-serif font-black text-slate-900">Sales Summary</h3>
@@ -1201,7 +1221,9 @@ export default function ProviderDashboard() {
                 </div>
                 <div className="min-w-0">
                   <h4 className="font-bold text-slate-900 text-sm truncate">{quote.inquiryTitle}</h4>
-                  <p className="text-[#d49b35] font-black text-xs mt-0.5">ZMW {quote.price.toLocaleString()}</p>
+                  {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && (
+                    <p className="text-[#d49b35] font-black text-xs mt-0.5">ZMW {quote.price.toLocaleString()}</p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -1290,19 +1312,19 @@ export default function ProviderDashboard() {
 
               {lead.attributes && (
                 <div className="mb-6">
-                  {renderSpecifications(lead.attributes, "Inquiry Details")}
+                  {renderSpecifications(lead.attributes, lead.category || "", "Inquiry Details")}
                 </div>
               )}
 
               {lead.entertainmentData && (
                 <div className="mb-6">
-                  {renderSpecifications(lead.entertainmentData, "Event Specifications")}
+                  {renderSpecifications(lead.entertainmentData, lead.category || "", "Event Specifications")}
                 </div>
               )}
 
               {lead.repairData && (
                 <div className="mb-6">
-                  {renderSpecifications(lead.repairData, "Repair Specifications")}
+                  {renderSpecifications(lead.repairData, lead.category || "", "Repair Specifications")}
                 </div>
               )}
 
@@ -1443,7 +1465,9 @@ export default function ProviderDashboard() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className={`text-xl font-black ${isAwaitingPickup ? 'text-[#d49b35]' : 'text-emerald-600'}`}>ZMW {quote.price.toLocaleString()}</p>
+                  {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && (
+                    <p className={`text-xl font-black ${isAwaitingPickup ? 'text-[#d49b35]' : 'text-emerald-600'}`}>ZMW {quote.price.toLocaleString()}</p>
+                  )}
                 </div>
               </div>
               <div className="p-4 sm:p-6">
@@ -1539,7 +1563,11 @@ export default function ProviderDashboard() {
                       <div className="flex justify-between items-center mb-3">
                         <div>
                           <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Your Price</p>
-                          <p className="text-[10px] font-black text-[#d49b35]">k{quote.price.toLocaleString()}</p>
+                          {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) ? (
+                            <p className="text-[10px] font-black text-[#d49b35]">k{quote.price.toLocaleString()}</p>
+                          ) : (
+                            <p className="text-[10px] font-black text-[#d49b35]">Price Hidden</p>
+                          )}
                         </div>
                         <div className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${
                           quote.status === 'ACCEPTED' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
@@ -1578,19 +1606,19 @@ export default function ProviderDashboard() {
                       <div className="mt-6 space-y-6 border-t border-slate-100 pt-6">
                         {lead.attributes && (
                           <div className="mb-6">
-                            {renderSpecifications(lead.attributes, "Inquiry Details")}
+                            {renderSpecifications(lead.attributes, lead.category || "", "Inquiry Details")}
                           </div>
                         )}
 
                         {lead.entertainmentData && (
                           <div className="mb-6">
-                            {renderSpecifications(lead.entertainmentData, "Event Specifications")}
+                            {renderSpecifications(lead.entertainmentData, lead.category || "", "Event Specifications")}
                           </div>
                         )}
 
                         {lead.repairData && (
                           <div className="mb-6">
-                            {renderSpecifications(lead.repairData, "Repair Specifications")}
+                            {renderSpecifications(lead.repairData, lead.category || "", "Repair Specifications")}
                           </div>
                         )}
 
@@ -1888,10 +1916,19 @@ export default function ProviderDashboard() {
        activeTab === 'my-quotes' ? renderMyQuotes() :
        activeTab === 'products' ? renderProducts() :
        activeTab === 'schedule' ? renderSchedule() :
+       activeTab === 'team' ? <TeamManagement /> :
        renderHome()}
 
       <AnimatePresence>
         {/* QR Scanner Modal */}
+        {/* Notification System */}
+        <Notification 
+          message={notification.message}
+          type={notification.type}
+          isVisible={notification.isVisible}
+          onClose={() => setNotification(prev => ({ ...prev, isVisible: false }))}
+        />
+
         {scanningQuoteId && (
           <motion.div 
             initial={{ opacity: 0 }}

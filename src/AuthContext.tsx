@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from './db';
 
-export type Role = 'BUYER' | 'SELLER' | 'SUPPLIER' | 'SERVICE_PROVIDER' | 'ENTERTAINMENT' | 'EVENTS';
+export type Role = 'BUYER' | 'SELLER' | 'SUPPLIER' | 'SERVICE_PROVIDER' | 'ENTERTAINMENT' | 'EVENTS' | 'PROVIDER_STAFF';
 
 export interface User {
   id?: number;
@@ -9,8 +9,8 @@ export interface User {
   name: string;
   email: string;
   phone: string;
-  nrc: string;
-  location: string;
+  nrc?: string;
+  location?: string;
   password?: string;
   categories?: string[];
   businessDocs?: string[];
@@ -28,6 +28,9 @@ export interface User {
   longitude?: number;
   verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED';
   pin?: string;
+  parentProviderId?: number;
+  permissions?: string[];
+  createdAt?: string;
 }
 
 interface AuthContextType {
@@ -62,8 +65,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const login = async (email: string, password?: string) => {
-    const foundUser = await db.users.where('email').equals(email).first();
+  const login = React.useCallback(async (identifier: string, password?: string) => {
+    // Try finding by email first, then by phone
+    let foundUser = await db.users.where('email').equals(identifier).first();
+    if (!foundUser) {
+      foundUser = await db.users.where('phone').equals(identifier).first();
+    }
+
     if (!foundUser) {
       throw new Error('User not found');
     }
@@ -74,9 +82,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (foundUser.id) {
       localStorage.setItem('auth_user_id', foundUser.id.toString());
     }
-  };
+  }, []);
 
-  const register = async (userData: User) => {
+  const register = React.useCallback(async (userData: User) => {
     const existingUser = await db.users.where('email').equals(userData.email).first();
     if (existingUser) {
       throw new Error('Email already in use');
@@ -112,9 +120,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(newUser);
       localStorage.setItem('auth_user_id', newUser.id.toString());
     }
-  };
+  }, []);
 
-  const updateUser = async (updates: Partial<User>) => {
+  const updateUser = React.useCallback(async (updates: Partial<User>) => {
     if (!user || !user.id) return;
     const updatedUser = { ...user, ...updates };
     await db.users.update(user.id, updates);
@@ -133,15 +141,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     
     setUser(updatedUser);
-  };
+  }, [user]);
 
-  const logout = () => {
+  const logout = React.useCallback(() => {
     setUser(null);
     localStorage.removeItem('auth_user_id');
-  };
+  }, []);
+
+  const value = React.useMemo(() => ({ 
+    user, 
+    login, 
+    register, 
+    updateUser, 
+    logout, 
+    isLoading 
+  }), [user, isLoading]);
 
   return (
-    <AuthContext.Provider value={{ user, login, register, updateUser, logout, isLoading }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

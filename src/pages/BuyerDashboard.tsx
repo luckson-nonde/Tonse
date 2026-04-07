@@ -11,6 +11,7 @@ import InquirySuccess from '../components/InquirySuccess';
 import Button from '../components/Button';
 import { type Inquiry, type Quote, type InquiryItem } from '../types';
 import { CATEGORIES_DB, GENERIC_FALLBACK_SCHEMA } from '../services/categories';
+import InquiryCard from '../components/InquiryCard';
 import { useAuth } from '../AuthContext';
 import { useDashboard } from '../DashboardContext';
 import { db } from '../db';
@@ -54,15 +55,15 @@ export default function BuyerDashboard() {
   }, []);
   
   const inquiries = useLiveQuery(
-    () => user ? db.inquiries.where('buyerId').equals(user.id!).reverse().sortBy('createdAt') : [],
+    () => (user && user.id) ? db.inquiries.where('buyerId').equals(user.id).reverse().sortBy('createdAt') : [],
     [user]
   ) || [];
 
   const quotes = useLiveQuery(
     () => {
-      if (!user) return [];
+      if (!user || !user.id) return [];
       console.log('BuyerDashboard: Fetching quotes for user:', user.id);
-      return db.inquiries.where('buyerId').equals(user.id!).toArray().then(userInquiries => {
+      return db.inquiries.where('buyerId').equals(user.id).toArray().then(userInquiries => {
         console.log('BuyerDashboard: Found inquiries:', userInquiries);
         const inquiryIds = userInquiries.map(i => i.id!).filter(id => id !== undefined);
         if (inquiryIds.length === 0) return [];
@@ -78,8 +79,8 @@ export default function BuyerDashboard() {
   const awaitingPaymentQuotes = quotes.filter(q => q.status === 'ACCEPTED');
   const awaitingPaymentTotal = awaitingPaymentQuotes.reduce((sum, q) => sum + q.price, 0);
   
-  const paidOrders = quotes.filter(q => q.status === 'PAID' || q.status === 'COMPLETED');
-  const completedOrdersCount = quotes.filter(q => q.status === 'COMPLETED').length;
+  const paidOrders = quotes.filter(q => q.status === 'PAID' || q.status === 'PENDING_COLLECTION' || q.status === 'AWAITING_PICKUP' || q.status === 'COMPLETED');
+  const completedOrdersCount = paidOrders.length;
 
   const [loading, setLoading] = useState(false);
   const [pendingInquiry, setPendingInquiry] = useState<{ 
@@ -292,6 +293,11 @@ export default function BuyerDashboard() {
   };
 
   if (activeTab === 'inquiries') {
+    const displayInquiries = inquiries.filter(inquiry => {
+      const inquiryQuotes = quotes.filter(q => q.inquiryId === inquiry.id);
+      return inquiryQuotes.length === 0;
+    });
+
     return (
       <div className="flex flex-col space-y-6 max-w-3xl mx-auto pb-6 px-0 sm:px-4">
         <div className="flex items-center justify-between px-1">
@@ -305,7 +311,7 @@ export default function BuyerDashboard() {
         </div>
 
         <div className="space-y-4">
-          {inquiries.length === 0 ? (
+          {displayInquiries.length === 0 ? (
             <div className="bg-white rounded-2xl sm:rounded-[32px] p-3 sm:p-12 text-center border border-slate-200 shadow-sm">
               <FileText className="w-12 h-12 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-500 font-medium mb-6">You haven't created any inquiries yet.</p>
@@ -317,89 +323,16 @@ export default function BuyerDashboard() {
               </Button>
             </div>
           ) : (
-            inquiries.map((inquiry) => (
-              <div key={inquiry.id} className="bg-white rounded-2xl sm:rounded-[32px] p-3 sm:p-8 shadow-sm border border-slate-200 hover:shadow-md hover:border-[#d49b35]/30 transition-all group relative overflow-hidden">
-                {/* Decorative accent */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#d49b35]/5 to-transparent rounded-bl-full -z-0 opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                
-                <div className="relative z-10">
-                  <div className="flex justify-between items-start mb-6 gap-4">
-                    <div className="flex-1">
-                      <div className="flex flex-wrap items-center gap-2 mb-3">
-                        <span className={`px-3 py-1 text-[10px] font-bold rounded-full uppercase tracking-widest ${
-                          inquiry.status === 'OPEN' ? 'bg-[#d49b35]/10 text-[#d49b35] border border-[#d49b35]/20' : 'bg-slate-100 text-slate-500 border border-slate-200'
-                        }`}>
-                          {inquiry.status}
-                        </span>
-                        <p className="text-xs font-bold text-[#d49b35] uppercase tracking-widest">{inquiry.category}</p>
-                      </div>
-                      <h3 className="font-serif text-2xl sm:text-3xl font-bold text-[#1a1612] mb-2 leading-tight">{inquiry.title}</h3>
-                      <p className="text-sm text-slate-500 flex items-center gap-1.5">
-                        <MapPin className="w-4 h-4 text-[#d49b35]" />
-                        {inquiry.location}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="mb-8">
-                    <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed">{inquiry.description}</p>
-                  </div>
-                  
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-6 border-t border-slate-100 gap-6">
-                    <div className="flex items-center gap-4 sm:gap-8 flex-wrap">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Created</span>
-                        <span className="text-xs font-bold text-[#1a1612]">{new Date(inquiry.createdAt).toLocaleDateString()}</span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Views</span>
-                        <div className="flex items-center gap-1.5">
-                          <Eye className="w-3.5 h-3.5 text-[#d49b35]" />
-                          <span className="text-xs font-bold text-[#1a1612]">{inquiry.viewCount || 0}</span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-[#d49b35] uppercase tracking-widest mb-1">Items</span>
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#d49b35]/10 border border-[#d49b35]/20 rounded text-[#d49b35]">
-                          <PackageOpen className="w-3.5 h-3.5" />
-                          <span className="text-xs font-bold">{inquiry.items.length}</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-3 w-full sm:w-auto">
-                      <button 
-                        onClick={() => {
-                          setSelectedInquiryId(inquiry.id!);
-                          handleTabClick('view-inquiry');
-                        }}
-                        className="flex-1 sm:flex-none px-4 py-3 text-xs font-bold text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 uppercase tracking-widest transition-colors text-center"
-                      >
-                        Details
-                      </button>
-                      
-                      {quotes.filter(q => q.inquiryId === inquiry.id).length > 0 ? (
-                        <Button 
-                          onClick={() => {
-                            setSelectedInquiryId(inquiry.id!);
-                            handleTabClick('quotes');
-                          }}
-                          className="flex-1 sm:flex-none px-6 py-3 text-xs uppercase tracking-widest relative shadow-sm"
-                        >
-                          Quotes ({quotes.filter(q => q.inquiryId === inquiry.id).length})
-                          {quotes.filter(q => q.inquiryId === inquiry.id && !q.isRead).length > 0 && (
-                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white"></span>
-                          )}
-                        </Button>
-                      ) : (
-                        <span className="flex-1 sm:flex-none text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 py-3 bg-slate-50 rounded-xl border border-slate-100 text-center flex items-center justify-center">
-                          No Quotes
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
+            displayInquiries.map((inquiry) => (
+              <InquiryCard
+                key={inquiry.id}
+                inquiry={inquiry}
+                state="open"
+                onAction={() => {
+                  setSelectedInquiryId(inquiry.id!);
+                  handleTabClick('view-inquiry');
+                }}
+              />
             ))
           )}
         </div>
@@ -767,46 +700,83 @@ export default function BuyerDashboard() {
 
     const filteredQuotes = (selectedInquiryId 
       ? quotes.filter(q => q.inquiryId === selectedInquiryId)
-      : quotes).filter(q => q.status !== 'ARCHIVED');
+      : quotes).filter(q => {
+        const inquiryHasPaidQuote = quotes.some(otherQ => 
+          otherQ.inquiryId === q.inquiryId && 
+          ['PAID', 'PENDING_COLLECTION', 'AWAITING_PICKUP', 'COMPLETED'].includes(otherQ.status)
+        );
+        return (q.status === 'PENDING' || q.status === 'ACCEPTED') && !inquiryHasPaidQuote;
+      });
+
+    const inquiriesWithQuotes = inquiries.filter(inquiry => {
+      const inquiryQuotes = quotes.filter(q => q.inquiryId === inquiry.id);
+      const hasPaidQuote = inquiryQuotes.some(q => ['PAID', 'PENDING_COLLECTION', 'AWAITING_PICKUP', 'COMPLETED'].includes(q.status));
+      const hasPendingOrAccepted = inquiryQuotes.some(q => q.status === 'PENDING' || q.status === 'ACCEPTED');
+      return !hasPaidQuote && hasPendingOrAccepted;
+    });
 
     return (
       <div className="space-y-6">
         {/* Header with Clear Filter */}
         <div className="flex items-center justify-between px-1">
           <h2 className="text-2xl font-bold text-[#1a1612]">
-            {selectedInquiryId ? 'Inquiry Quotes' : 'All Quotes'}
+            {selectedInquiryId ? 'Inquiry Quotes' : 'My Quotes'}
           </h2>
           {selectedInquiryId && (
             <button 
               onClick={() => setSelectedInquiryId(null)}
               className="text-sm font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1"
             >
-              <X className="w-4 h-4" /> Clear Filter
+              <X className="w-4 h-4" /> Back to Inquiries
             </button>
           )}
         </div>
 
-        {/* Filters */}
-        <div className="flex gap-2">
-          {['Lowest Price', 'Top Rated', 'Nearest'].map((filter, i) => (
-            <button key={filter} className={`flex-1 py-2 px-2 rounded-full text-xs font-bold border ${i === 0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'} flex items-center justify-center gap-1`}>
-              {i === 0 && <TrendingUp className="w-3 h-3" />}
-              {i === 1 && <Star className="w-3 h-3" />}
-              {i === 2 && <Truck className="w-3 h-3" />}
-              {filter}
-            </button>
-          ))}
-        </div>
-
-        {/* Quotes List */}
-        <div className="space-y-4">
-          {filteredQuotes.length === 0 ? (
-            <div className="bg-white rounded-[32px] p-12 text-center border border-slate-200 shadow-sm">
-              <MessageSquare className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-              <p className="text-slate-500 font-medium">No quotes received yet. Send an inquiry to get started!</p>
+        {!selectedInquiryId ? (
+          <div className="space-y-4">
+            {inquiriesWithQuotes.length === 0 ? (
+              <div className="bg-white rounded-[32px] p-12 text-center border border-slate-200 shadow-sm">
+                <MessageSquare className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                <p className="text-slate-500 font-medium">No quotes received yet. Send an inquiry to get started!</p>
+              </div>
+            ) : (
+              inquiriesWithQuotes.map((inquiry) => {
+                const inquiryQuotes = quotes.filter(q => q.inquiryId === inquiry.id && (q.status === 'PENDING' || q.status === 'ACCEPTED'));
+                return (
+                  <InquiryCard
+                    key={inquiry.id}
+                    inquiry={inquiry}
+                    state="quoted"
+                    quoteCount={inquiryQuotes.length}
+                    onAction={() => setSelectedInquiryId(inquiry.id)}
+                  />
+                );
+              })
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Filters */}
+            <div className="flex gap-2">
+              {['Lowest Price', 'Top Rated', 'Nearest'].map((filter, i) => (
+                <button key={filter} className={`flex-1 py-2 px-2 rounded-full text-xs font-bold border ${i === 0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'} flex items-center justify-center gap-1`}>
+                  {i === 0 && <TrendingUp className="w-3 h-3" />}
+                  {i === 1 && <Star className="w-3 h-3" />}
+                  {i === 2 && <Truck className="w-3 h-3" />}
+                  {filter}
+                </button>
+              ))}
             </div>
-          ) : (
-            filteredQuotes.map((quote, index) => (
+
+            {/* Quotes List */}
+            <div className="space-y-4">
+              {filteredQuotes.length === 0 ? (
+                <div className="bg-white rounded-[32px] p-12 text-center border border-slate-200 shadow-sm">
+                  <MessageSquare className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                  <p className="text-slate-500 font-medium">No quotes received yet. Send an inquiry to get started!</p>
+                </div>
+              ) : (
+                filteredQuotes.map((quote, index) => (
               <div key={quote.id} className="group bg-white rounded-[24px] p-5 shadow-sm border border-slate-200 relative hover:shadow-md hover:border-[#d49b35]/30 transition-all duration-300 flex flex-col gap-4">
                 
                 {/* Unread Indicator */}
@@ -966,6 +936,8 @@ export default function BuyerDashboard() {
             ))
           )}
         </div>
+        </>
+        )}
       </div>
     );
   }
@@ -1103,56 +1075,22 @@ export default function BuyerDashboard() {
               <p className="text-slate-500 font-medium">You don't have any paid orders yet.</p>
             </div>
           ) : (
-            paidOrders.map((quote) => (
-              <div key={quote.id} className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-200">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="font-bold text-lg text-[#1a1612]">{quote.providerName || 'Provider'}</h3>
-                    <p className="text-sm text-slate-500">Order ID: QID-{quote.id}</p>
-                  </div>
-                  <div className="text-right">
-                    <span className={`px-3 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider ${
-                      quote.status === 'PAID' ? 'bg-[#fdf6e9] text-[#d49b35] border border-[#d49b35]/20' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                    }`}>
-                      {quote.status === 'PAID' ? 'In Escrow' : 'Completed'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 mb-4 flex justify-between items-center">
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Amount Paid</p>
-                    <p className="text-lg font-black text-[#1a1612]">ZMW {quote.price.toLocaleString()}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Date</p>
-                    <p className="text-sm font-bold text-[#1a1612]">{new Date(quote.createdAt).toLocaleDateString()}</p>
-                  </div>
-                </div>
-
-                {quote.status === 'PAID' && (
-                  <div className="flex flex-col gap-3">
-                    <div className="p-3 bg-[#fdf6e9] rounded-xl border border-[#d49b35]/20">
-                      <p className="text-xs text-[#d49b35] font-medium">
-                        Funds are being held in escrow. Generate your collection code to pick up your parcel.
-                      </p>
-                    </div>
-                    <Button 
-                      onClick={() => navigate(`/buyer/collection-code/${quote.id}`)}
-                      className="w-full py-3 flex items-center justify-center gap-2"
-                    >
-                      <QrCode className="w-4 h-4" /> Confirm Parcel Collection
-                    </Button>
-                  </div>
-                )}
-
-                {quote.status === 'COMPLETED' && (
-                  <div className="flex items-center gap-2 text-emerald-600 font-bold text-sm justify-center py-2">
-                    <Check className="w-5 h-5" /> Parcel Collected & Funds Released
-                  </div>
-                )}
-              </div>
-            ))
+            paidOrders.map((quote) => {
+              const inquiry = inquiries.find(i => i.id === quote.inquiryId);
+              if (!inquiry) return null;
+              
+              return (
+                <InquiryCard
+                  key={quote.id}
+                  inquiry={inquiry}
+                  state="paid"
+                  paidQuote={quote}
+                  onAction={() => {
+                    navigate(`/buyer/collection-code/${quote.id}`);
+                  }}
+                />
+              );
+            })
           )}
         </div>
       </div>
@@ -1330,7 +1268,9 @@ export default function BuyerDashboard() {
           <p className="text-[11px] font-bold font-sans text-[#94a3b8] tracking-[0.2em] uppercase mb-6">MY INQUIRIES</p>
           <div className="w-full h-px bg-[#f1f0ee] mb-8"></div>
           <div className="flex items-end gap-4">
-            <h2 className="text-[84px] font-bold text-[#1e293b] font-serif leading-none">{inquiries.length}</h2>
+            <h2 className="text-[84px] font-bold text-[#1e293b] font-serif leading-none">
+              {inquiries.filter(inquiry => quotes.filter(q => q.inquiryId === inquiry.id).length === 0).length}
+            </h2>
             <div className="mb-2">
               <p className="text-[14px] font-bold text-[#1e293b] font-sans tracking-widest uppercase">ACTIVE</p>
               <p className="text-[12px] text-[#94a3b8] font-sans">Pending Responses</p>
@@ -1346,7 +1286,15 @@ export default function BuyerDashboard() {
           <p className="text-[11px] font-bold font-sans text-[#94a3b8] tracking-[0.2em] uppercase mb-6">QUOTES RECEIVED</p>
           <div className="w-full h-px bg-[#f1f0ee] mb-8"></div>
           <div className="flex items-end gap-4">
-            <h2 className="text-[84px] font-bold text-[#94a3b8]/30 font-serif leading-none">{quotes.filter(q => q.status !== 'ARCHIVED').length}</h2>
+            <h2 className="text-[84px] font-bold text-[#94a3b8]/30 font-serif leading-none">
+              {quotes.filter(q => {
+                const inquiryHasPaidQuote = quotes.some(otherQ => 
+                  otherQ.inquiryId === q.inquiryId && 
+                  ['PAID', 'PENDING_COLLECTION', 'AWAITING_PICKUP', 'COMPLETED'].includes(otherQ.status)
+                );
+                return (q.status === 'PENDING' || q.status === 'ACCEPTED') && !inquiryHasPaidQuote;
+              }).length}
+            </h2>
             <div className="mb-2">
               <p className="text-[14px] font-bold text-[#94a3b8] font-sans tracking-widest uppercase">VERIFIED</p>
               <p className="text-[12px] text-[#94a3b8] font-sans">From Suppliers</p>
@@ -1400,7 +1348,7 @@ export default function BuyerDashboard() {
                   <h4 className="text-sm font-bold text-[#1e293b] truncate font-sans">Inquiry: {inquiry.title}</h4>
                   <div className="flex items-center gap-2 mt-1">
                     <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Status: {inquiry.status}</p>
-                    {quotes.filter(q => q.inquiryId === inquiry.id && !q.isRead && q.status !== 'ARCHIVED').length > 0 && (
+                    {quotes.filter(q => q.inquiryId === inquiry.id && !q.isRead && q.status === 'PENDING').length > 0 && (
                       <span className="flex items-center gap-1 text-[9px] font-bold text-[#C9973A] bg-[#fdf6e9] px-2 py-0.5 rounded uppercase tracking-wider">
                         New Quote
                       </span>

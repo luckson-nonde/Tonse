@@ -15,8 +15,8 @@ export class AppDatabase extends Dexie {
 
   constructor() {
     super('AppDatabase');
-    this.version(10).stores({
-      users: '++id, email, role',
+    this.version(11).stores({
+      users: '++id, email, role, phone, parentProviderId',
       inquiries: '++id, buyerId, status, createdAt',
       quotes: '++id, inquiryId, providerId, status, collectionCode, createdAt',
       transactions: '++id, userId, type, category, quoteId, createdAt, status',

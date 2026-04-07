@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { QrCode, Search, Check, X, Loader2, Package, Clock, User, ArrowRight } from 'lucide-react';
+import { QrCode, Search, Check, X, Loader2, Package, Clock, User, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { Quote } from '../types';
+import { useAuth } from '../AuthContext';
+import { hasPermission, PERMISSIONS } from '../utils/rbac';
 
 export default function CollectionPage() {
+  const { user } = useAuth();
   const [collectionCode, setCollectionCode] = useState('');
   const [quote, setQuote] = useState<Quote | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  const canViewFinancials = hasPermission(user, PERMISSIONS.VIEW_ANALYTICS);
 
   const recentCollections = useLiveQuery(
     async () => {
@@ -57,11 +63,33 @@ export default function CollectionPage() {
     await db.quotes.update(quote.id, { status: 'COMPLETED' });
     setQuote(null);
     setCollectionCode('');
-    alert('Parcel collected successfully!');
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 5000);
   };
 
   return (
     <div className="p-4 max-w-lg mx-auto">
+      {/* Success Message Overlay */}
+      {showSuccess && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-emerald-900/20 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[32px] p-8 shadow-2xl border border-emerald-100 max-w-xs w-full text-center animate-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 mx-auto mb-6">
+              <ShieldCheck className="w-10 h-10" />
+            </div>
+            <h2 className="text-2xl font-black text-slate-900 mb-2">Transfer Successful</h2>
+            <p className="text-slate-500 text-sm leading-relaxed mb-6">
+              The parcel has been handed over and funds have been securely transferred to the shop's account.
+            </p>
+            <button 
+              onClick={() => setShowSuccess(false)}
+              className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
       <h1 className="text-2xl font-bold text-slate-900 mb-6">Parcel Collection</h1>
 
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 mb-6">
@@ -119,10 +147,12 @@ export default function CollectionPage() {
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Buyer Name</span>
               <span className="text-sm font-black text-slate-900">{quote.buyerContact?.name || 'N/A'}</span>
             </div>
-            <div className="flex justify-between items-center p-3 bg-slate-50 rounded-2xl border border-slate-100">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Amount Paid</span>
-              <span className="text-sm font-black text-emerald-600">ZMW {quote.price.toLocaleString()}</span>
-            </div>
+            {canViewFinancials && (
+              <div className="flex justify-between items-center p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Amount Paid</span>
+                <span className="text-sm font-black text-emerald-600">ZMW {quote.price.toLocaleString()}</span>
+              </div>
+            )}
           </div>
 
           <button
@@ -169,10 +199,14 @@ export default function CollectionPage() {
                       <User className="w-3 h-3" />
                       {item.buyerContact?.name || 'Buyer'}
                     </div>
-                    <span className="text-slate-300">•</span>
-                    <div className="text-[10px] font-black text-emerald-600">
-                      ZMW {item.price.toLocaleString()}
-                    </div>
+                    {canViewFinancials && (
+                      <>
+                        <span className="text-slate-300">•</span>
+                        <div className="text-[10px] font-black text-emerald-600">
+                          ZMW {item.price.toLocaleString()}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
