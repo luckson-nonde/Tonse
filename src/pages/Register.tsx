@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth, type Role } from '../AuthContext';
-import { Mail, Key, Phone, Eye, EyeOff, User } from 'lucide-react';
+import { Mail, Key, Phone, Eye, EyeOff, User, Building2, FileText, Upload, CheckCircle2 } from 'lucide-react';
 import AuthLayout from '../components/AuthLayout';
 import Button from '../components/Button';
+import { SubRole, EntityType } from '../types';
 
 export default function Register() {
-  const { register } = useAuth();
+  const { register, user, updateUser } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const role = searchParams.get('role') || 'BUYER';
-  const initialCategory = searchParams.get('category');
+  const subRole = searchParams.get('subRole') as SubRole;
+  const categoriesParam = searchParams.get('categories');
+  const initialCategories = categoriesParam ? categoriesParam.split(',') : [];
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [name, setName] = useState(user?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [phone, setPhone] = useState(user?.phone || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -22,6 +25,8 @@ export default function Register() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
+
+  const isCompany = subRole === 'COMPANY_BUYER';
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,18 +44,30 @@ export default function Register() {
 
     setIsLoading(true);
     try {
-      await register({
+      const entityType: EntityType = isCompany ? 'BUSINESS' : 'INDIVIDUAL';
+      
+      const userData = {
         role: role as Role,
+        subRole,
+        entityType,
         name,
         email,
         phone,
         password,
         nrc: '', // Default empty, can be updated later
         location: '', // Default empty
-        categories: initialCategory ? [initialCategory] : [],
-      });
+        categories: initialCategories,
+      };
+
+      if (user) {
+        await updateUser(userData);
+      } else {
+        await register(userData);
+      }
       
-      if (role === 'BUYER') {
+      if (isCompany) {
+        navigate('/register/company-documents');
+      } else if (role === 'BUYER') {
         navigate('/buyer');
       } else {
         navigate('/seller/location');
@@ -64,13 +81,17 @@ export default function Register() {
 
   return (
     <AuthLayout 
-      title="Create Account" 
+      title={isCompany ? "Business Registration" : "Create Account"} 
       align="left"
       subtitle={
         <span className="text-[#1a1612]/60 whitespace-nowrap">
-          Join the <span className="text-brand-yellow font-bold">TONSE</span> luxury trade community.
+          {isCompany 
+            ? "Register your company on the TONSE professional network."
+            : "Join the TONSE luxury trade community."
+          }
         </span>
       }
+      onBack={() => navigate('/role-selection')}
     >
       <form className="space-y-5" onSubmit={handleRegister}>
         {error && (
@@ -79,9 +100,11 @@ export default function Register() {
           </div>
         )}
 
-        {/* Username Field */}
+        {/* Username / Contact Person Field */}
         <div>
-          <label className="block text-[11px] font-bold text-[#1a1612]/40 uppercase tracking-[0.2em] mb-3 ml-1">Username</label>
+          <label className="block text-[11px] font-bold text-[#1a1612]/40 uppercase tracking-[0.2em] mb-3 ml-1">
+            {isCompany ? 'Contact Person Name' : 'Username'}
+          </label>
           <div className="relative group">
             <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
               <User className="h-4 w-4 text-brand-yellow/40 group-focus-within:text-brand-yellow transition-colors" strokeWidth={2} />
@@ -90,7 +113,7 @@ export default function Register() {
               type="text" 
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Enter username" 
+              placeholder={isCompany ? "Full name of representative" : "Enter username"} 
               required
               className="block w-full pl-14 pr-5 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-2xl text-[15px] text-[#1a1612] focus:ring-4 focus:ring-brand-yellow/10 focus:border-brand-yellow outline-none transition-all placeholder:text-[#1a1612]/20 font-medium" 
             />
@@ -228,7 +251,7 @@ export default function Register() {
             disabled={isLoading}
             className="w-full py-5 px-4 shadow-md disabled:opacity-50 text-[18px] font-serif font-normal"
           >
-            {isLoading ? 'Creating Account...' : 'Initialize Membership'}
+            {isLoading ? 'Creating Account...' : (isCompany ? 'Next: Documents →' : 'Initialize Membership')}
           </Button>
         </div>
       </form>

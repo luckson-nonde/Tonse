@@ -14,7 +14,7 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
-import { isRelatedCategory, getCategorySchema } from '../services/categories';
+import { isRelatedCategory, getCategorySchema, getCategoryNature, CATEGORIES_DB } from '../services/categories';
 import CollectionPage from './CollectionPage';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';
 import { logAuditAction } from '../utils/auditLogger';
@@ -308,9 +308,8 @@ export default function ProviderDashboard() {
   
   // RBAC Redirect Logic
   useEffect(() => {
-    if (user && user.role === 'PROVIDER_STAFF' && activeTab === 'home') {
-      if (!user.permissions?.includes('VIEW_ANALYTICS')) {
-        // Use a slight delay or ensure this only runs once per tab change
+    if (user && user.role === 'PROVIDER_STAFF') {
+      if (activeTab === 'team' && !hasPermission(user, PERMISSIONS.MANAGE_TEAM)) {
         setActiveTab('leads');
       }
     }
@@ -365,7 +364,9 @@ export default function ProviderDashboard() {
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleTime, setRescheduleTime] = useState('');
 
-  const displayQuotes = myQuotes;
+  const displayQuotes = React.useMemo(() => {
+    return myQuotes.filter(q => !q.isArchived);
+  }, [myQuotes]);
 
   const chartData = useLiveQuery(
     async () => {
@@ -429,6 +430,25 @@ export default function ProviderDashboard() {
     const quotedIds = new Set(myQuotes.map(q => q.inquiryId));
     filtered = filtered.filter(lead => !quotedIds.has(lead.id!));
 
+    // Filter by Role/SubRole Nature
+    if (user?.role === 'SELLER' && user?.subRole) {
+      filtered = filtered.filter(lead => {
+        if (!lead.category) return true;
+        const leadCats = lead.category.split(',').map(c => c.trim());
+        const leadCatIds = leadCats.map(name => CATEGORIES_DB.find(c => c.name === name)?.id).filter(Boolean) as string[];
+        
+        const natures = leadCatIds.map(id => getCategoryNature(id));
+        
+        if (user.subRole === 'PRODUCT_SELLER') {
+          return natures.some(n => n === 'PRODUCT' || n === 'BOTH');
+        }
+        if (user.subRole === 'SERVICE_SELLER') {
+          return natures.some(n => n === 'SERVICE' || n === 'BOTH');
+        }
+        return true; // HYBRID_SELLER
+      });
+    }
+
     if (user?.categories && user.categories.length > 0) {
       filtered = filtered.filter(lead => {
         if (!lead.category) return true; // Show uncategorized leads to everyone
@@ -443,7 +463,7 @@ export default function ProviderDashboard() {
     }
     
     return filtered;
-  }, [user?.categories, allLeads, myQuotes]);
+  }, [user?.categories, user?.role, user?.subRole, allLeads, myQuotes]);
 
   // Collection Handshake State
   const [scanningQuoteId, setScanningQuoteId] = useState<number | null>(null);
@@ -801,27 +821,84 @@ export default function ProviderDashboard() {
 
   const renderEventsHome = () => (
     <div className="space-y-6">
-      {/* Virtual Account Card */}
-      <div className="bg-[#1e293b] rounded-[16px] p-[28px] shadow-sm text-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-[#C9973A]/20 to-transparent rounded-bl-full -z-0 opacity-50"></div>
-        <div className="relative z-10 min-w-0">
-          <p className="text-[#C9973A] text-[11px] font-bold font-sans uppercase tracking-wider mb-2 truncate">AVAILABLE BALANCE</p>
-          <h2 className="text-[42px] font-bold mb-2 truncate font-serif text-white leading-none" title={`ZMW ${availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}>
-            ZMW {availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </h2>
-          <p className="text-[#94a3b8] text-[13px] font-sans mb-6 truncate">
-            {pendingClearance > 0 ? `ZMW ${pendingClearance.toLocaleString(undefined, { minimumFractionDigits: 2 })} pending clearance` : 'No pending clearance'}
-          </p>
-          <button 
-            onClick={() => navigate('/provider/financial')}
-            className="border border-[#C9973A] text-[#C9973A] bg-transparent font-medium font-sans py-2.5 px-6 rounded-[8px] text-[13px] hover:bg-[#C9973A]/10 transition-colors"
-          >
-            My Account 425*******12
-          </button>
+      {/* Virtual Account Card - Only for Admins/Managers with Wallet Permission */}
+      {hasPermission(user, PERMISSIONS.VIEW_WALLET) && (
+        <div className="bg-[#1e293b] rounded-[16px] p-[28px] shadow-sm text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-[#C9973A]/20 to-transparent rounded-bl-full -z-0 opacity-50"></div>
+          <div className="relative z-10 min-w-0">
+            <p className="text-[#C9973A] text-[11px] font-bold font-sans uppercase tracking-wider mb-2 truncate">AVAILABLE BALANCE</p>
+            <h2 className="text-[42px] font-bold mb-2 truncate font-serif text-white leading-none" title={`ZMW ${availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}>
+              ZMW {availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </h2>
+            <p className="text-[#94a3b8] text-[13px] font-sans mb-6 truncate">
+              {pendingClearance > 0 ? `ZMW ${pendingClearance.toLocaleString(undefined, { minimumFractionDigits: 2 })} pending clearance` : 'No pending clearance'}
+            </p>
+            <button 
+              onClick={() => navigate('/provider/financial')}
+              className="border border-[#C9973A] text-[#C9973A] bg-transparent font-medium font-sans py-2.5 px-6 rounded-[8px] text-[13px] hover:bg-[#C9973A]/10 transition-colors"
+            >
+              My Account 425*******12
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+      {/* Sales Analytics Chart - Only for Admins/Managers */}
+      {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && (
+        <div className="bg-white rounded-2xl sm:rounded-[32px] p-4 sm:p-8 shadow-sm border border-slate-100">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h3 className="text-xl font-serif font-black text-slate-900">Sales Analytics</h3>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">Revenue performance over the last 7 days</p>
+            </div>
+          </div>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#d49b35" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#d49b35" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
+                  dy={10}
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
+                  tickFormatter={(value) => `K${value}`}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    borderRadius: '16px', 
+                    border: 'none', 
+                    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                    fontSize: '12px',
+                    fontWeight: '700'
+                  }}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="sales" 
+                  stroke="#d49b35" 
+                  strokeWidth={3}
+                  fillOpacity={1} 
+                  fill="url(#colorSales)" 
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100">
           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#fdf6e9] rounded-xl sm:rounded-2xl flex items-center justify-center mb-3 sm:mb-4">
             <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-[#d49b35]" />
@@ -854,24 +931,39 @@ export default function ProviderDashboard() {
           </p>
         </div>
 
-        {user?.categories?.some(c => c.toLowerCase().includes('equipment rental')) && (
-          <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#fdf6e9] rounded-xl sm:rounded-2xl flex items-center justify-center mb-3 sm:mb-4">
-              <PackageOpen className="w-5 h-5 sm:w-6 sm:h-6 text-[#d49b35]" />
-            </div>
-            <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
-              INVENTORY ITEMS
-            </p>
-            <div className="flex items-end gap-3 mb-1 min-w-0">
-              <h2 className="text-[clamp(1.25rem,5vw,2.25rem)] font-black text-[#d49b35] leading-none truncate" title={products.length.toString()}>
-                {products.length}
-              </h2>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium">
-              Active equipment
-            </p>
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#fffaf5] rounded-xl sm:rounded-2xl flex items-center justify-center mb-3 sm:mb-4 border border-[#d49b35]/10">
+            <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-[#d49b35]" />
           </div>
-        )}
+          <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
+            TOTAL QUOTED VALUE
+          </p>
+          <div className="flex items-end gap-3 mb-1 min-w-0">
+            <h2 className="text-[clamp(1.25rem,5vw,2.25rem)] font-black text-[#d49b35] leading-none truncate" title={`ZMW ${displayQuotes.reduce((sum, q) => sum + q.price, 0).toLocaleString()}`}>
+              ZMW {displayQuotes.reduce((sum, q) => sum + q.price, 0).toLocaleString()}
+            </h2>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium">
+            Potential revenue
+          </p>
+        </div>
+
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#fdf6e9] rounded-xl sm:rounded-2xl flex items-center justify-center mb-3 sm:mb-4">
+            <PackageOpen className="w-5 h-5 sm:w-6 sm:h-6 text-[#d49b35]" />
+          </div>
+          <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
+            INVENTORY ITEMS
+          </p>
+          <div className="flex items-end gap-3 mb-1 min-w-0">
+            <h2 className="text-[clamp(1.25rem,5vw,2.25rem)] font-black text-[#d49b35] leading-none truncate" title={products.length.toString()}>
+              {products.length}
+            </h2>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium">
+            Active equipment
+          </p>
+        </div>
       </div>
 
       {/* Recent Inventory Items - Only for Equipment Rental */}
@@ -1006,7 +1098,7 @@ export default function ProviderDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100">
           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#fdf6e9] rounded-xl sm:rounded-2xl flex items-center justify-center mb-3 sm:mb-4">
             <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6 text-[#d49b35]" />
@@ -1036,6 +1128,23 @@ export default function ProviderDashboard() {
           </div>
           <p className="text-xs sm:text-sm text-slate-500 font-medium">
             Track your submissions
+          </p>
+        </div>
+
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#fffaf5] rounded-xl sm:rounded-2xl flex items-center justify-center mb-3 sm:mb-4 border border-[#d49b35]/10">
+            <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-[#d49b35]" />
+          </div>
+          <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
+            TOTAL QUOTED VALUE
+          </p>
+          <div className="flex items-end gap-3 mb-1 min-w-0">
+            <h2 className="text-[clamp(1.25rem,5vw,2.25rem)] font-black text-[#d49b35] leading-none truncate" title={`ZMW ${displayQuotes.reduce((sum, q) => sum + q.price, 0).toLocaleString()}`}>
+              ZMW {displayQuotes.reduce((sum, q) => sum + q.price, 0).toLocaleString()}
+            </h2>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium">
+            Potential revenue
           </p>
         </div>
 
@@ -1233,7 +1342,7 @@ export default function ProviderDashboard() {
                 </div>
                 <div className="min-w-0">
                   <h4 className="font-bold text-slate-900 text-sm truncate">{quote.inquiryTitle}</h4>
-                  {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && (
+                  {(hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) || hasPermission(user, PERMISSIONS.MANAGE_QUOTES)) && (
                     <p className="text-[#d49b35] font-black text-xs mt-0.5">ZMW {quote.price.toLocaleString()}</p>
                   )}
                 </div>
@@ -1477,7 +1586,7 @@ export default function ProviderDashboard() {
                   </div>
                 </div>
                 <div className="text-right">
-                  {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && (
+                  {(hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) || hasPermission(user, PERMISSIONS.MANAGE_QUOTES)) && (
                     <p className={`text-xl font-black ${isAwaitingPickup ? 'text-[#d49b35]' : 'text-emerald-600'}`}>ZMW {quote.price.toLocaleString()}</p>
                   )}
                 </div>
@@ -1575,7 +1684,7 @@ export default function ProviderDashboard() {
                       <div className="flex justify-between items-center mb-3">
                         <div>
                           <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Your Price</p>
-                          {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) ? (
+                          {(hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) || hasPermission(user, PERMISSIONS.MANAGE_QUOTES)) ? (
                             <p className="text-[10px] font-black text-[#d49b35]">k{quote.price.toLocaleString()}</p>
                           ) : (
                             <p className="text-[10px] font-black text-[#d49b35]">Price Hidden</p>
@@ -1928,7 +2037,7 @@ export default function ProviderDashboard() {
        activeTab === 'my-quotes' ? renderMyQuotes() :
        activeTab === 'products' ? renderProducts() :
        activeTab === 'schedule' ? renderSchedule() :
-       activeTab === 'team' ? <TeamManagement /> :
+       activeTab === 'team' && hasPermission(user, PERMISSIONS.MANAGE_TEAM) ? <TeamManagement /> :
        renderHome()}
 
       <AnimatePresence>

@@ -139,14 +139,9 @@ export default function BusinessVerification() {
           TONSE MARKETPLACE ONBOARDING © 2026
         </p>
       }
+      onBack={() => navigate('/seller/categories')}
     >
       <div className="space-y-6">
-        <button 
-          onClick={() => navigate('/seller/categories')}
-          className="flex items-center gap-2 text-sm font-bold text-brand-yellow hover:brightness-90 transition-colors mb-2"
-        >
-          ← Back to Categories
-        </button>
 
         {/* Social Media Links - Hidden for Shop Owners */}
         {(isServiceProvider || isEntertainment) && (

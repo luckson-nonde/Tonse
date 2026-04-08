@@ -224,7 +224,7 @@ export default function AuditTrailPage() {
                       </div>
                     )}
 
-                    {log.amount !== undefined && hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && (
+                    {log.amount !== undefined && (hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) || hasPermission(user, PERMISSIONS.MANAGE_QUOTES)) && (
                       <div className="flex items-center gap-1 text-[11px] font-black text-emerald-600">
                         <TrendingUp className="w-3 h-3" />
                         ZMW {log.amount.toLocaleString()}

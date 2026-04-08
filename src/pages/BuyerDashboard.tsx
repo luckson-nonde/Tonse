@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, FileText, MessageSquare, Truck, Star, Search, PackageOpen, Plus, X, ArrowRight, MapPin, SlidersHorizontal, Check, Eye, ChevronLeft, Calendar, Settings, Archive, Printer, ShoppingBag, QrCode, Clock, Music } from 'lucide-react';
+import { TrendingUp, FileText, MessageSquare, Truck, Star, Search, PackageOpen, Plus, X, ArrowRight, MapPin, SlidersHorizontal, Check, Eye, ChevronLeft, Calendar, Settings, Archive, Printer, ShoppingBag, QrCode, Clock, Music, AlertCircle } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { motion } from 'motion/react';
 import DynamicInquiryForm from '../components/DynamicInquiryForm';
@@ -1131,6 +1131,27 @@ export default function BuyerDashboard() {
 
   return (
     <div className="flex flex-col w-full max-w-7xl pb-6 pt-2 sm:pt-5 px-0 sm:px-0">
+      {/* Verification Warning Banner */}
+      {user?.verificationStatus === 'INCOMPLETE' && (
+        <div className="mb-6 bg-amber-50 border border-amber-200 rounded-[2rem] p-6 flex items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+              <AlertCircle className="w-6 h-6 text-amber-600" />
+            </div>
+            <div>
+              <h4 className="text-[15px] font-bold text-[#1a1612]">Complete your verification</h4>
+              <p className="text-[13px] text-[#1a1612]/60">Upload your PACRA Certificate to unlock all business features.</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => navigate('/register/company-documents')}
+            className="px-6 py-2.5 bg-brand-yellow text-[#1a1612] font-bold text-[13px] rounded-xl hover:bg-brand-yellow/90 transition-colors shrink-0"
+          >
+            Complete Now
+          </button>
+        </div>
+      )}
+
       {/* Awaiting Payment Card */}
       <div className="bg-[#1e293b] rounded-[32px] p-6 sm:p-[28px] shadow-sm text-white relative overflow-hidden">
         <div className="relative z-10 min-w-0">

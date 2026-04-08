@@ -12,6 +12,12 @@
   --font-sans: "DM Sans", sans-serif;
 }
 
+@layer base {
+  body {
+    @apply overflow-x-hidden;
+  }
+}
+
 @layer utilities {
   .scrollbar-hide::-webkit-scrollbar {
     display: none;

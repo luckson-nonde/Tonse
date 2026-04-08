@@ -1,4 +1,5 @@
 import React from 'react';
+import { ArrowLeft } from 'lucide-react';
 import Logo from './Logo';
 
 interface AuthLayoutProps {
@@ -11,6 +12,7 @@ interface AuthLayoutProps {
   align?: 'center' | 'left';
   titleClassName?: string;
   maxWidth?: string;
+  onBack?: () => void;
 }
 
 export default function AuthLayout({ 
@@ -22,7 +24,8 @@ export default function AuthLayout({
   footerText,
   align = 'center',
   titleClassName = "text-3xl",
-  maxWidth = "max-w-[440px]"
+  maxWidth = "max-w-[440px]",
+  onBack
 }: AuthLayoutProps) {
   // We'll force light theme for this redesign as per user request
   const isLight = true;
@@ -51,7 +54,17 @@ export default function AuthLayout({
           {/* Subtle background gradient */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-brand-yellow/5 rounded-full blur-3xl -mr-16 -mt-16"></div>
           
-          <div className={`${align === 'center' ? 'text-center' : 'text-left'} mb-10 relative z-10`}>
+          {onBack && (
+            <button 
+              onClick={onBack}
+              className="absolute top-8 left-8 sm:top-10 sm:left-10 z-20 flex items-center justify-center w-10 h-10 rounded-full bg-[#f5f2ee] text-[#1a1612]/60 hover:bg-brand-yellow hover:text-white transition-all duration-300 shadow-sm"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="w-5 h-5" strokeWidth={2} />
+            </button>
+          )}
+
+          <div className={`${align === 'center' ? 'text-center' : 'text-left'} mb-10 relative z-10 ${onBack ? 'mt-12' : ''}`}>
             <h2 className={`${titleClassName} font-serif font-normal text-[#1a1612] tracking-tight`}>{title}</h2>
             <div className="mt-3 text-[#1a1612]/60 text-[15px] leading-relaxed">{subtitle}</div>
           </div>

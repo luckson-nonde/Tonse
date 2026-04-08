@@ -279,7 +279,7 @@ export default function QuoteDetailsPage() {
               </button>
 
               <button 
-                onClick={() => navigate('/buyer/dashboard')}
+                onClick={() => navigate('/buyer')}
                 className="w-full bg-slate-50 text-slate-700 border border-slate-200 font-bold py-3 rounded-xl hover:bg-slate-100 transition-colors"
               >
                 Go to Dashboard

@@ -270,10 +270,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </>
             )}
             
-            <div className="pt-6 pb-4 px-4">
-              <LogoutToggle user={user} onLogout={handleLogout} />
-            </div>
           </nav>
+        </div>
+
+        <div className="p-4 border-t border-[#f1f5f9] mt-auto h-[70px] flex items-center justify-center bg-white">
+          <LogoutToggle user={user} onLogout={handleLogout} />
         </div>
       </div>
 
@@ -324,7 +325,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </header>
         )}
         
-        <main className="flex-1 px-4 sm:px-8 pt-4 sm:pt-7 pb-24 md:pb-8 relative">
+        <main className="flex-1 px-4 sm:px-8 pt-4 sm:pt-7 pb-24 md:pb-8 relative overflow-x-hidden">
           {children}
         </main>
 

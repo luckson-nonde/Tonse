@@ -32,14 +32,15 @@ export default function SellerCategorySelection() {
           TONSE MARKETPLACE ONBOARDING © 2026
         </p>
       }
+      onBack={() => navigate('/seller/location')}
     >
       <CategorySelection 
-        onBack={() => navigate('/seller/location')} 
         onComplete={handleComplete} 
         submitLabel="Next: Verification →"
         hideHeader
         role={user?.role}
         initialSelectedIds={user?.categories}
+        isStandalone={false}
       />
     </AuthLayout>
   );

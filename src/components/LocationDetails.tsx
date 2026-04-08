@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { MapPin, ChevronDown, Globe, Map, Building2, Navigation, ChevronLeft } from 'lucide-react';
 
 interface LocationDetailsProps {
-  onBack: () => void;
+  onBack?: () => void;
   onComplete: (data: { 
     province: string; 
     city: string; 
@@ -13,6 +13,7 @@ interface LocationDetailsProps {
   }) => void;
   submitLabel?: string;
   showRadius?: boolean;
+  isStandalone?: boolean;
 }
 
 const ZAMBIA_DATA: Record<string, string[]> = {
@@ -28,7 +29,7 @@ const ZAMBIA_DATA: Record<string, string[]> = {
   "Western": ["Mongu", "Kaoma", "Senanga", "Sesheke", "Lukulu", "Kalabo", "Shang'ombo", "Sikongo", "Sioma", "Mitete", "Nkeyema", "Mulobezi", "Limulunga", "Luampa", "Mwandi", "Nalolo"]
 };
 
-export default function LocationDetails({ onBack, onComplete, submitLabel = 'Next →', showRadius = true }: LocationDetailsProps) {
+export default function LocationDetails({ onBack, onComplete, submitLabel = 'Next →', showRadius = true, isStandalone = true }: LocationDetailsProps) {
   const [country, setCountry] = useState('Zambia');
   const [province, setProvince] = useState('');
   const [city, setCity] = useState('');
@@ -88,27 +89,31 @@ export default function LocationDetails({ onBack, onComplete, submitLabel = 'Nex
   const labelClasses = "block text-[10px] font-bold text-[#94a3b8] tracking-[0.1em] uppercase mb-2 ml-1 font-sans";
 
   return (
-    <div className="max-w-[480px] mx-auto w-full bg-[#f5f2ed] min-h-screen">
+    <div className={isStandalone ? "max-w-[480px] mx-auto w-full bg-[#f5f2ed] min-h-screen" : "w-full"}>
       {/* Sticky Header */}
-      <div className="sticky top-0 bg-[#f5f2ed] z-20 px-4 pt-4 pb-5">
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={onBack} 
-            className="w-10 h-10 -ml-2 flex items-center justify-center"
-          >
-            <ChevronLeft className="w-5 h-5 text-[#1a1a2e]" />
-          </button>
-          <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">STEP 3</p>
+      {isStandalone && (
+        <div className="sticky top-0 bg-[#f5f2ed] z-20 px-4 pt-4 pb-5">
+          <div className="flex items-center gap-3">
+            {onBack && (
+              <button 
+                onClick={onBack} 
+                className="w-10 h-10 -ml-2 flex items-center justify-center"
+              >
+                <ChevronLeft className="w-5 h-5 text-[#1a1a2e]" />
+              </button>
+            )}
+            <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">STEP 3</p>
+          </div>
+          
+          <div className="mt-2">
+            <h1 className="font-serif text-[22px] font-bold text-[#1a1a2e] leading-tight">
+              Location
+            </h1>
+          </div>
         </div>
-        
-        <div className="mt-2">
-          <h1 className="font-serif text-[22px] font-bold text-[#1a1a2e] leading-tight">
-            Location
-          </h1>
-        </div>
-      </div>
+      )}
 
-      <div className="p-[20px_16px_140px_16px] flex flex-col gap-6">
+      <div className={isStandalone ? "p-[20px_16px_140px_16px] flex flex-col gap-6" : "flex flex-col gap-6"}>
         {/* Mode Selector */}
         <div className="flex p-1 bg-[#e2e8f0] rounded-full shadow-sm">
           <button

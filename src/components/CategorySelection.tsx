@@ -4,12 +4,13 @@ import Button from './Button';
 import { fetchCategories, Category } from '../services/categories';
 
 interface CategorySelectionProps {
-  onBack: () => void;
+  onBack?: () => void;
   onComplete?: (selectedCategories: string[]) => void;
   submitLabel?: string;
   hideHeader?: boolean;
   role?: string;
   initialSelectedIds?: string[];
+  isStandalone?: boolean;
 }
 
 const getCategoryStyles = (id: string) => {
@@ -30,7 +31,7 @@ const getCategoryStyles = (id: string) => {
   return styles[id] || { icon: ShoppingBag, bg: 'bg-[#f5f2ed]' };
 };
 
-export default function CategorySelection({ onBack, onComplete, submitLabel = 'Submit Inquiry', hideHeader = false, role, initialSelectedIds = [] }: CategorySelectionProps) {
+export default function CategorySelection({ onBack, onComplete, submitLabel = 'Submit Inquiry', hideHeader = false, role, initialSelectedIds = [], isStandalone = true }: CategorySelectionProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [generalCategories, setGeneralCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -275,9 +276,9 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
   };
 
   return (
-    <div className="max-w-[480px] mx-auto w-full bg-[#f5f2ed] min-h-screen">
+    <div className={isStandalone ? "max-w-[480px] mx-auto w-full bg-[#f5f2ed] min-h-screen relative" : "w-full relative"}>
       {/* Sticky Header */}
-      {!hideHeader && (
+      {!hideHeader && isStandalone && (
       <div className="sticky top-0 bg-[#f5f2ed] z-20 px-4 pt-4 pb-5">
         <div className="flex items-center gap-3">
           <button 
@@ -297,7 +298,7 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
       </div>
       )}
 
-      <div className="p-[20px_16px_120px_16px] flex flex-col gap-6">
+      <div className={isStandalone ? "p-[20px_16px_120px_16px] flex flex-col gap-6" : "flex flex-col gap-6 pb-24"}>
         {/* Search Bar */}
         <div className="relative group">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">

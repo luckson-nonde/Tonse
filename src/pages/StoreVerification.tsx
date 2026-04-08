@@ -60,14 +60,9 @@ export default function StoreVerification() {
           TONSE MARKETPLACE ONBOARDING © 2026
         </p>
       }
+      onBack={() => navigate('/seller/location')}
     >
       <div className="space-y-6">
-        <button 
-          onClick={() => navigate('/seller/location')}
-          className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors mb-2"
-        >
-          ← Back to Location
-        </button>
         {/* Front View Section */}
         <div>
           <div className="flex justify-between items-center mb-3 px-1">

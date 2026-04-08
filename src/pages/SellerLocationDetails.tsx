@@ -45,12 +45,13 @@ export default function SellerLocationDetails() {
           TONSE MARKETPLACE ONBOARDING © 2026
         </p>
       }
+      onBack={() => navigate(`/register?role=${user?.role || 'SELLER'}`)}
     >
       <LocationDetails 
-        onBack={() => navigate(`/register?role=${user?.role || 'SELLER'}`)} 
         onComplete={handleComplete} 
         submitLabel="Next: Categories →"
         showRadius={false}
+        isStandalone={false}
       />
     </AuthLayout>
   );

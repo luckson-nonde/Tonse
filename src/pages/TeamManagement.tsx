@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useAuth } from '../AuthContext';
 import { db } from '../db';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Users, UserPlus, Shield, Trash2, CheckCircle, FileText, QrCode } from 'lucide-react';
-import { PERMISSIONS } from '../utils/rbac';
+import { Users, UserPlus, Shield, Trash2, CheckCircle, FileText, QrCode, ShieldAlert } from 'lucide-react';
+import { PERMISSIONS, hasPermission } from '../utils/rbac';
 import { motion, AnimatePresence } from 'motion/react';
 
 const ROLES = [
@@ -26,6 +26,21 @@ const ROLES = [
 export default function TeamManagement() {
   const { user } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState('');
+
+  if (!hasPermission(user, PERMISSIONS.MANAGE_TEAM)) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 text-center bg-white rounded-[32px] border border-slate-100 shadow-sm">
+        <div className="w-20 h-20 bg-rose-50 rounded-full flex items-center justify-center mb-6">
+          <ShieldAlert className="w-10 h-10 text-rose-500" />
+        </div>
+        <h2 className="text-2xl font-serif font-black text-slate-900 mb-2">Access Denied</h2>
+        <p className="text-slate-500 max-w-xs mx-auto">
+          You do not have the required permissions to manage team members. Please contact your shop administrator.
+        </p>
+      </div>
+    );
+  }
+
   const [staffName, setStaffName] = useState('');
   const [staffEmail, setStaffEmail] = useState('');
   const [role, setRole] = useState('QUOTATION_ONLY');
@@ -76,9 +91,9 @@ export default function TeamManagement() {
       // Assign permissions based on role
       let permissions: string[] = [];
       if (role === 'QUOTATION_ONLY') {
-        permissions = [PERMISSIONS.MANAGE_QUOTES];
+        permissions = [PERMISSIONS.MANAGE_QUOTES, PERMISSIONS.VIEW_ANALYTICS];
       } else if (role === 'COLLECTION_MANAGER') {
-        permissions = [PERMISSIONS.MANAGE_QUOTES, PERMISSIONS.MANAGE_COLLECTIONS];
+        permissions = [PERMISSIONS.MANAGE_QUOTES, PERMISSIONS.MANAGE_COLLECTIONS, PERMISSIONS.VIEW_ANALYTICS];
       }
 
       // Create the new staff user

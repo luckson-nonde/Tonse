@@ -1,15 +1,21 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from './db';
+import { SubRole, EntityType } from './types';
 
 export type Role = 'BUYER' | 'SELLER' | 'SUPPLIER' | 'SERVICE_PROVIDER' | 'ENTERTAINMENT' | 'EVENTS' | 'PROVIDER_STAFF';
 
 export interface User {
   id?: number;
   role: Role;
+  subRole?: SubRole;
+  entityType?: EntityType;
   name: string;
+  companyName?: string;
   email: string;
   phone: string;
   nrc?: string;
+  tpin?: string;
+  incorporationCertUrl?: string;
   location?: string;
   password?: string;
   categories?: string[];
@@ -26,7 +32,7 @@ export interface User {
   coverImage?: string;
   latitude?: number;
   longitude?: number;
-  verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'INCOMPLETE';
   pin?: string;
   parentProviderId?: number;
   permissions?: string[];
@@ -94,18 +100,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let newUser: User | null = null;
 
     await db.transaction('rw', db.users, db.shops, async () => {
-      const id = await db.users.add(userData);
-      newUser = { ...userData, id };
+      const userToSave = {
+        ...userData,
+        verificationStatus: userData.entityType === 'BUSINESS' ? 'PENDING' as const : undefined
+      };
+      const id = await db.users.add(userToSave);
+      newUser = { ...userToSave, id };
 
       // Create a shop entry for providers
       if (['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS'].includes(userData.role)) {
         await db.shops.add({
           providerId: id,
           name: userData.name,
+          subRole: userData.subRole,
+          entityType: userData.entityType,
           logo: userData.logo || '',
           coverImage: userData.coverImage || 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=1200&q=80',
           description: 'New shop on TONSE Marketplace',
-          category: userData.categories?.[0] || 'General',
+          category: userData.categories?.join(', ') || 'General',
+          categories: userData.categories || [],
           location: userData.location || 'Zambia',
           rating: 5,
           reviewCount: 0,

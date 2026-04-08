@@ -118,24 +118,24 @@ export default function CollectionPage() {
       <h1 className="text-2xl font-bold text-slate-900 mb-6">Parcel Collection</h1>
 
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 mb-6">
-        <div className="flex gap-3 mb-4">
+        <div className="relative mb-4">
           <input
             type="text"
             value={collectionCode}
             onChange={(e) => setCollectionCode(e.target.value)}
             placeholder="Enter unique ID..."
-            className="flex-1 bg-slate-50 rounded-2xl border border-slate-100 p-4 font-bold text-slate-900 outline-none"
+            className="w-full bg-slate-50 rounded-2xl border border-slate-100 p-4 pr-14 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-[#d49b35]/20 transition-all"
           />
           <button
             onClick={() => handleFindParcel(collectionCode)}
-            className="bg-[#d49b35] hover:brightness-95 text-slate-900 p-4 rounded-2xl"
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-[#d49b35] hover:brightness-95 text-slate-900 p-2.5 rounded-xl transition-all shadow-sm active:scale-95"
           >
-            <Search className="w-6 h-6" />
+            <Search className="w-5 h-5" />
           </button>
         </div>
         <button
           onClick={() => setIsScanning(!isScanning)}
-          className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2"
+          className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-slate-800 transition-all active:scale-[0.98]"
         >
           <QrCode className="w-5 h-5" />
           {isScanning ? 'Stop Scanning' : 'Scan QR Code'}

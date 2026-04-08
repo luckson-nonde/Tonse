@@ -7,6 +7,7 @@ import Register from './pages/Register';
 import BusinessVerification from './pages/BusinessVerification';
 import SellerCategorySelection from './pages/SellerCategorySelection';
 import SellerLocationDetails from './pages/SellerLocationDetails';
+import CompanyDocuments from './pages/CompanyDocuments';
 import StoreVerification from './pages/StoreVerification';
 import VerificationPending from './pages/VerificationPending';
 import DashboardLayout from './components/DashboardLayout';
@@ -57,6 +58,7 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/role-selection" element={<RoleSelection />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/register/company-documents" element={<CompanyDocuments />} />
             <Route path="/business-verification" element={<BusinessVerification />} />
             <Route path="/seller/categories" element={<SellerCategorySelection />} />
             <Route path="/seller/location" element={<SellerLocationDetails />} />
@@ -157,7 +159,7 @@ export default function App() {
               </ProtectedRoute>
             } />
             <Route path="/provider/financial" element={
-              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS', 'PROVIDER_STAFF']}>
+              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS']}>
                 <FinancialPage />
               </ProtectedRoute>
             } />

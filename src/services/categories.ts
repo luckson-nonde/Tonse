@@ -1220,6 +1220,42 @@ const BASE_CATEGORIES_DB: Category[] = [
   { id: 'agro-tech-services', name: 'Agro-Tech & Services', parentId: 'agriculture', formSchema: agroTechServicesSchema },
 ];
 
+export type CategoryNature = 'PRODUCT' | 'SERVICE' | 'BOTH';
+
+export const getCategoryNature = (categoryId: string): CategoryNature => {
+  const productParents = ['fashion', 'groceries', 'beauty', 'home-decor', 'it-products'];
+  const serviceParents = ['entertainment', 'events', 'telecommunications', 'it-services', 'drilling-services'];
+  
+  const category = CATEGORIES_DB.find(c => c.id === categoryId);
+  if (!category) return 'BOTH';
+
+  const rootId = category.parentId || category.id;
+
+  if (productParents.includes(rootId)) return 'PRODUCT';
+  if (serviceParents.includes(rootId)) return 'SERVICE';
+
+  // Specific subcategories
+  if (category.id.includes('-buy')) return 'PRODUCT';
+  if (category.id.includes('-repair') || category.id.includes('-restore')) return 'SERVICE';
+
+  if (category.parentId === 'construction') {
+    if (category.id === 'building-materials') return 'PRODUCT';
+    return 'BOTH';
+  }
+
+  if (category.parentId === 'automotive') {
+    if (category.id.includes('parts') || category.id === 'car-accessories' || category.id === 'automotive-tools') return 'PRODUCT';
+    return 'SERVICE';
+  }
+
+  if (category.parentId === 'agriculture') {
+    if (category.id === 'agro-tech-services') return 'SERVICE';
+    return 'PRODUCT';
+  }
+
+  return 'BOTH';
+};
+
 export const CATEGORIES_DB: Category[] = BASE_CATEGORIES_DB.map(cat => ({
   ...cat,
   formSchema: cat.formSchema || GENERIC_FALLBACK_SCHEMA

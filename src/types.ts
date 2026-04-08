@@ -1,3 +1,6 @@
+export type SubRole = 'INDIVIDUAL_BUYER' | 'COMPANY_BUYER' | 'PRODUCT_SELLER' | 'SERVICE_SELLER' | 'HYBRID_SELLER';
+export type EntityType = 'INDIVIDUAL' | 'BUSINESS';
+
 export interface InquiryItem {
   id?: string;
   title: string;
@@ -51,6 +54,7 @@ export interface Quote {
   createdAt: number;
   expiryDuration?: string;
   isRead?: boolean;
+  isArchived?: boolean;
   itemPrices?: { itemId: string | number; price: number }[];
   buyerContact?: {
     name: string;
@@ -102,10 +106,13 @@ export interface Shop {
   id?: number;
   providerId: number;
   name: string;
+  subRole?: SubRole;
+  entityType?: EntityType;
   logo: string;
   coverImage: string;
   description: string;
   category: string;
+  categories?: string[];
   location: string;
   latitude?: number;
   longitude?: number;
