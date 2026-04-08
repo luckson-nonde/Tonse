@@ -25,11 +25,14 @@ import SuppliersPage from './pages/SuppliersPage';
 import ShopProfilePage from './pages/ShopProfilePage';
 import BuyerProfilePage from './pages/BuyerProfilePage';
 import VenueSpacesManager from './pages/VenueSpacesManager';
+import ForcePasswordChange from './pages/ForcePasswordChange';
+import AuditTrailPage from './pages/AuditTrailPage';
 
 function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode, allowedRoles?: string[] }) {
   const { user, isLoading } = useAuth();
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div></div>;
   if (!user) return <Navigate to="/login" replace />;
+  if (user.mustChangePassword && window.location.pathname !== '/force-password-change') return <Navigate to="/force-password-change" replace />;
   if (allowedRoles && !allowedRoles.includes(user.role)) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
@@ -38,6 +41,7 @@ function RootRedirect() {
   const { user, isLoading } = useAuth();
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div></div>;
   if (!user) return <Navigate to="/login" replace />;
+  if (user.mustChangePassword) return <Navigate to="/force-password-change" replace />;
   if (user.role === 'BUYER') return <Navigate to="/buyer" replace />;
   return <Navigate to="/provider" replace />;
 }
@@ -58,6 +62,11 @@ export default function App() {
             <Route path="/seller/location" element={<SellerLocationDetails />} />
             <Route path="/store-verification" element={<StoreVerification />} />
             <Route path="/verification-pending" element={<VerificationPending />} />
+            <Route path="/force-password-change" element={
+              <ProtectedRoute>
+                <ForcePasswordChange />
+              </ProtectedRoute>
+            } />
             <Route path="/" element={<RootRedirect />} />
             <Route path="/buyer" element={
               <ProtectedRoute allowedRoles={['BUYER']}>
@@ -128,7 +137,9 @@ export default function App() {
             } />
             <Route path="/schedule" element={
               <ProtectedRoute>
-                <SchedulePage />
+                <DashboardLayout>
+                  <SchedulePage />
+                </DashboardLayout>
               </ProtectedRoute>
             } />
             <Route path="/provider" element={
@@ -161,6 +172,13 @@ export default function App() {
               <ProtectedRoute allowedRoles={['EVENTS', 'PROVIDER_STAFF']}>
                 <DashboardLayout>
                   <VenueSpacesManager />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/provider/audit-trail" element={
+              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS', 'PROVIDER_STAFF']}>
+                <DashboardLayout>
+                  <AuditTrailPage />
                 </DashboardLayout>
               </ProtectedRoute>
             } />

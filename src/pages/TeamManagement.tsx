@@ -90,6 +90,7 @@ export default function TeamManagement() {
         role: 'PROVIDER_STAFF',
         parentProviderId: user!.id,
         permissions: permissions,
+        mustChangePassword: true,
         createdAt: new Date().toISOString()
       });
 

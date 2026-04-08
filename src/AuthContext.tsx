@@ -30,6 +30,7 @@ export interface User {
   pin?: string;
   parentProviderId?: number;
   permissions?: string[];
+  mustChangePassword?: boolean;
   createdAt?: string;
 }
 

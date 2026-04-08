@@ -17,6 +17,7 @@ import { db } from '../db';
 import { isRelatedCategory, getCategorySchema } from '../services/categories';
 import CollectionPage from './CollectionPage';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';
+import { logAuditAction } from '../utils/auditLogger';
 import DynamicDataDisplay from '../components/DynamicDataDisplay';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import ProductManagement from './ProductManagement';
@@ -45,10 +46,9 @@ const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, i
   });
 
   const formData = watch();
-  const [calculatedTotal, setCalculatedTotal] = useState(0);
-
+  
   // Auto-calculate totals based on inquiry attributes
-  useEffect(() => {
+  const calculatedTotal = React.useMemo(() => {
     let total = 0;
     let hasCalculatedFields = false;
     quoteSchema.forEach(field => {
@@ -71,7 +71,7 @@ const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, i
         }
     }
     
-    setCalculatedTotal(total);
+    return total;
   }, [formData, quoteSchema, inquiry.attributes, itemPricesTotal]);
 
   const onFormSubmit = (data: any) => {
@@ -310,10 +310,11 @@ export default function ProviderDashboard() {
   useEffect(() => {
     if (user && user.role === 'PROVIDER_STAFF' && activeTab === 'home') {
       if (!user.permissions?.includes('VIEW_ANALYTICS')) {
+        // Use a slight delay or ensure this only runs once per tab change
         setActiveTab('leads');
       }
     }
-  }, [user, activeTab, setActiveTab]);
+  }, [user?.id, user?.permissions, activeTab, setActiveTab]);
   
   const isBookingBased = user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS';
   
@@ -414,13 +415,36 @@ export default function ProviderDashboard() {
     .filter(q => q.status === 'ACCEPTED')
     .reduce((sum, q) => sum + q.price, 0);
 
-  const [leads, setLeads] = useState<Inquiry[]>([]);
   const [quotingInquiryId, setQuotingInquiryId] = useState<number | null>(null);
   const [expandedInquiryId, setExpandedInquiryId] = useState<number | null>(null);
   const [quoteSort, setQuoteSort] = useState<'recent' | 'expensive'>('recent');
   const [isUpdating, setIsUpdating] = useState(false);
   const [itemPrices, setItemPrices] = useState<{ [key: string]: string }>({});
   
+  // Filter leads by provider categories AND exclude already quoted ones
+  const leads = React.useMemo(() => {
+    let filtered = allLeads;
+    
+    // Exclude already quoted
+    const quotedIds = new Set(myQuotes.map(q => q.inquiryId));
+    filtered = filtered.filter(lead => !quotedIds.has(lead.id!));
+
+    if (user?.categories && user.categories.length > 0) {
+      filtered = filtered.filter(lead => {
+        if (!lead.category) return true; // Show uncategorized leads to everyone
+        
+        const leadCats = lead.category.split(',').map(c => c.trim());
+        
+        const isMatch = user.categories?.some(providerCat => 
+          leadCats.some(leadCat => isRelatedCategory(providerCat, leadCat))
+        );
+        return isMatch;
+      });
+    }
+    
+    return filtered;
+  }, [user?.categories, allLeads, myQuotes]);
+
   // Collection Handshake State
   const [scanningQuoteId, setScanningQuoteId] = useState<number | null>(null);
   const [verifyingQuote, setVerifyingQuote] = useState<Quote | null>(null);
@@ -443,32 +467,8 @@ export default function ProviderDashboard() {
       if (!effectiveProviderId || user?.role !== 'EVENTS') return [];
       return await db.venueSpaces.where('providerId').equals(effectiveProviderId).toArray();
     },
-    [effectiveProviderId, user]
+    [effectiveProviderId, user?.role]
   ) || [];
-
-  useEffect(() => {
-    // Filter leads by provider categories AND exclude already quoted ones
-    let filtered = allLeads;
-    
-    // Exclude already quoted
-    const quotedIds = new Set(myQuotes.map(q => q.inquiryId));
-    filtered = filtered.filter(lead => !quotedIds.has(lead.id!));
-
-    if (user?.categories && user.categories.length > 0) {
-      filtered = filtered.filter(lead => {
-        if (!lead.category) return true; // Show uncategorized leads to everyone
-        
-        const leadCats = lead.category.split(',').map(c => c.trim());
-        
-        const isMatch = user.categories?.some(providerCat => 
-          leadCats.some(leadCat => isRelatedCategory(providerCat, leadCat))
-        );
-        return isMatch;
-      });
-    }
-    
-    setLeads(filtered);
-  }, [user, allLeads, myQuotes, isBookingBased]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -613,8 +613,20 @@ export default function ProviderDashboard() {
     };
 
     console.log('ProviderDashboard: Adding new quote:', newQuote);
-    await db.quotes.add(newQuote);
+    const quoteId = await db.quotes.add(newQuote);
     console.log('ProviderDashboard: Quote added successfully');
+
+    // Log Audit Action
+    await logAuditAction(
+      user,
+      'QUOTE_SENT',
+      quoteId,
+      newQuote.inquiryTitle,
+      lead?.buyerName || 'Unknown Buyer',
+      newQuote.price,
+      `Quote sent for ${newQuote.inquiryTitle}`
+    );
+
     setQuotingInquiryId(null);
     setItemPrices({});
     handleTabClick('my-quotes');

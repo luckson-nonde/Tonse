@@ -6,6 +6,7 @@ import { db } from '../db';
 import { Quote } from '../types';
 import { useAuth } from '../AuthContext';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';
+import { logAuditAction } from '../utils/auditLogger';
 
 export default function CollectionPage() {
   const { user } = useAuth();
@@ -52,6 +53,17 @@ export default function CollectionPage() {
     const foundQuote = await db.quotes.where('collectionCode').equals(code).first();
     if (foundQuote) {
       setQuote(foundQuote);
+      if (user) {
+        await logAuditAction(
+          user,
+          'COLLECTION_STARTED',
+          foundQuote.id!,
+          foundQuote.inquiryTitle,
+          foundQuote.buyerContact?.name || 'Unknown Buyer',
+          foundQuote.price,
+          `Started collection for parcel ${code}`
+        );
+      }
     } else {
       setError('Parcel not found. Please check the code.');
     }
@@ -61,6 +73,19 @@ export default function CollectionPage() {
   const handleProcessCollection = async () => {
     if (!quote || !quote.id) return;
     await db.quotes.update(quote.id, { status: 'COMPLETED' });
+    
+    if (user) {
+      await logAuditAction(
+        user,
+        'HANDOVER_COMPLETED',
+        quote.id,
+        quote.inquiryTitle,
+        quote.buyerContact?.name || 'Unknown Buyer',
+        quote.price,
+        `Completed handover for parcel #QT-${quote.id.toString().padStart(4, '0')}`
+      );
+    }
+
     setQuote(null);
     setCollectionCode('');
     setShowSuccess(true);

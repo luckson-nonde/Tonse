@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Bell, Home, ClipboardCheck, List, Store, X, ChevronLeft, PlusCircle, MessageSquare, FileText, User, Users, Truck, QrCode, ChevronRight, Archive, Calendar, MapPin } from 'lucide-react';
+import { Menu, Bell, Home, ClipboardCheck, List, Store, X, ChevronLeft, PlusCircle, MessageSquare, FileText, User, Users, Truck, QrCode, ChevronRight, Archive, Calendar, MapPin, History } from 'lucide-react';
 import Logo from './Logo';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -91,6 +91,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       navigate('/schedule');
     } else if (tab === 'venue-spaces') {
       navigate('/provider/venue-spaces');
+    } else if (tab === 'audit-trail') {
+      navigate('/provider/audit-trail');
     } else {
       navigate(basePath);
     }
@@ -123,6 +125,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         if (user?.role === 'EVENTS') return 'RENTAL REQUESTS';
         return isBookingBased ? 'BOOKING REQUESTS' : 'INCOMING LEADS';
       case 'my-quotes': return 'MY QUOTES';
+      case 'schedule': return 'MY SCHEDULE';
       default: return 'HOME';
     }
   };
@@ -261,15 +264,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     {hasPermission(user, PERMISSIONS.MANAGE_TEAM) && (
                       <NavLink tab="team" icon={Users} label="Team Management" isActive={activeTab === 'team'} />
                     )}
+                    <NavLink tab="audit-trail" icon={History} label="Audit Trail" isActive={activeTab === 'audit-trail'} />
                   </>
                 )}
               </>
             )}
+            
+            <div className="pt-6 pb-4 px-4">
+              <LogoutToggle user={user} onLogout={handleLogout} />
+            </div>
           </nav>
-        </div>
-
-        <div className="p-4 border-t border-[#f1f5f9] bg-[#ffffff]">
-          <LogoutToggle user={user} onLogout={handleLogout} />
         </div>
       </div>
 
@@ -446,8 +450,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
               {user?.parentProviderId && hasPermission(user, PERMISSIONS.MANAGE_COLLECTIONS) && (
                 <button 
-                  onClick={() => handleTabClick('collections')}
-                  className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'collections' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
+                  onClick={() => handleTabClick('collection')}
+                  className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'collection' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
                 >
                   <QrCode 
                     className="w-[22px] h-[22px] mb-1" 
@@ -455,7 +459,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     strokeWidth={1.5} 
                     fill="currentColor"
                   />
-                  <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'collections' ? 'font-bold' : 'font-normal'}`}>Collections</span>
+                  <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'collection' ? 'font-bold' : 'font-normal'}`}>Collections</span>
                 </button>
               )}
 
@@ -606,7 +610,7 @@ function LogoutToggle({ user, onLogout }: { user: any, onLogout: () => void }) {
     .substring(0, 2) || 'JD';
 
   return (
-    <div className="mt-auto w-full border-t border-[#f1f5f9] pt-4 pb-4 px-5 flex justify-center">
+    <div className="w-full flex justify-center">
       <div 
         className="relative w-[160px] h-[48px] rounded-full border-2 border-white overflow-hidden cursor-pointer"
         style={{ 

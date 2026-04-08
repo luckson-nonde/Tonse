@@ -1,6 +1,6 @@
 import Dexie, { Table } from 'dexie';
 import { User } from './AuthContext';
-import { Inquiry, Quote, Transaction, Shop, Product, Schedule, CalendarEvent, VenueSpace } from './types';
+import { Inquiry, Quote, Transaction, Shop, Product, Schedule, CalendarEvent, VenueSpace, AuditLog } from './types';
 
 export class AppDatabase extends Dexie {
   users!: Table<User, number>;
@@ -12,10 +12,11 @@ export class AppDatabase extends Dexie {
   schedules!: Table<Schedule, number>;
   calendarEvents!: Table<CalendarEvent, number>;
   venueSpaces!: Table<VenueSpace, number>;
+  auditLogs!: Table<AuditLog, number>;
 
   constructor() {
     super('AppDatabase');
-    this.version(11).stores({
+    this.version(12).stores({
       users: '++id, email, role, phone, parentProviderId',
       inquiries: '++id, buyerId, status, createdAt',
       quotes: '++id, inquiryId, providerId, status, collectionCode, createdAt',
@@ -24,7 +25,8 @@ export class AppDatabase extends Dexie {
       products: '++id, providerId, category, status, createdAt',
       schedules: '++id, providerId, buyerId, inquiryId, quoteId, date, status',
       calendarEvents: '++id, userId, date, status, category',
-      venueSpaces: '++id, providerId, status, createdAt'
+      venueSpaces: '++id, providerId, status, createdAt',
+      auditLogs: '++id, providerId, staffId, actionType, timestamp'
     });
   }
 }

@@ -34,6 +34,7 @@ import {
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { useAuth } from '../AuthContext';
+import { useDashboard } from '../DashboardContext';
 import { CalendarEvent } from '../types';
 import Button from '../components/Button';
 
@@ -46,11 +47,16 @@ const CATEGORIES = [
 
 export default function SchedulePage() {
   const { user } = useAuth();
+  const { setActiveTab } = useDashboard();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+
+  React.useEffect(() => {
+    setActiveTab('schedule');
+  }, [setActiveTab]);
 
   const events = useLiveQuery(
     () => db.calendarEvents.where('userId').equals(user?.id || 0).toArray(),
@@ -94,9 +100,9 @@ export default function SchedulePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5f0] flex flex-col font-sans">
-      {/* Header */}
-      <div className="bg-[#8ba870] text-white p-6 pb-12 rounded-b-[40px] shadow-lg relative z-10">
+    <div className="flex flex-col font-sans">
+      {/* Calendar Header */}
+      <div className="bg-[#C9973A] text-white p-6 pb-12 rounded-b-[40px] shadow-lg relative z-10 -mx-4 sm:-mx-8 -mt-4 sm:-mt-7 mb-6">
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-2">
             <CalendarIcon className="w-6 h-6" />
@@ -149,12 +155,12 @@ export default function SchedulePage() {
       </div>
 
       {/* Events List */}
-      <div className="flex-1 p-6 -mt-6 pt-12 overflow-y-auto">
+      <div className="flex-1 p-0 overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-[#1a1a1a]">
+          <h2 className="text-xl font-bold text-[#1e293b] font-serif">
             {isToday(selectedDate) ? 'Today' : format(selectedDate, 'EEEE, MMM d')}
           </h2>
-          <span className="text-sm text-gray-500 font-medium">
+          <span className="text-sm text-slate-500 font-medium">
             {selectedDateEvents.length} events
           </span>
         </div>
@@ -194,7 +200,7 @@ export default function SchedulePage() {
           setEditingEvent(null);
           setIsAddModalOpen(true);
         }}
-        className="fixed bottom-8 right-8 w-16 h-16 bg-[#f0c05a] text-white rounded-2xl shadow-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-20"
+        className="fixed bottom-24 right-8 w-16 h-16 bg-[#C9973A] text-white rounded-2xl shadow-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-20"
       >
         <Plus className="w-8 h-8" strokeWidth={3} />
       </button>
@@ -244,17 +250,17 @@ function CalendarGrid({ currentMonth, selectedDate, onDateSelect, hasEventsOnDay
             key={i}
             onClick={() => onDateSelect(day)}
             className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-all ${
-              isSelected ? 'bg-white text-[#8ba870] shadow-md scale-110 z-10' : 'hover:bg-white/10'
+              isSelected ? 'bg-white text-[#C9973A] shadow-md scale-110 z-10' : 'hover:bg-white/10'
             }`}
           >
             <span className={`text-sm font-bold ${
               !isCurrentMonth && !isCollapsed ? 'opacity-30' : ''
-            } ${isCurrentDay && !isSelected ? 'text-[#f0c05a]' : ''}`}>
+            } ${isCurrentDay && !isSelected ? 'text-white underline decoration-2 underline-offset-4' : ''}`}>
               {format(day, 'd')}
             </span>
             {hasEvents && (
               <div className={`w-1 h-1 rounded-full mt-1 ${
-                isSelected ? 'bg-[#8ba870]' : 'bg-white'
+                isSelected ? 'bg-[#C9973A]' : 'bg-white'
               }`} />
             )}
           </button>
@@ -372,7 +378,7 @@ function EventCard({ event, onDelete, onEdit, onToggleStatus }: {
             </span>
           </div>
           {event.reminderEnabled && (
-            <Bell className="w-3 h-3 text-[#f0c05a]" />
+            <Bell className="w-3 h-3 text-[#C9973A]" />
           )}
         </div>
       </div>
@@ -434,7 +440,7 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
         exit={{ y: '100%' }}
         className="relative w-full max-w-lg bg-white rounded-t-[40px] sm:rounded-[40px] overflow-hidden shadow-2xl"
       >
-        <div className="bg-[#8ba870] p-8 text-white">
+        <div className="bg-[#C9973A] p-8 text-white">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold font-serif">
               {editingEvent ? 'Edit Event' : 'Add Note'}
@@ -443,32 +449,32 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
               <Plus className="w-6 h-6 rotate-45" />
             </button>
           </div>
-          <p className="opacity-80 text-sm">
+          <p className="opacity-80 text-sm font-sans">
             {format(selectedDate, 'EEEE, MMMM do')}
           </p>
         </div>
 
-        <form onSubmit={handleSave} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto scrollbar-hide">
+        <form onSubmit={handleSave} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto scrollbar-hide bg-[#fffaf5]">
           {/* Time Selection */}
           <div className="space-y-4">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Time Range</label>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Time Range</label>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <span className="text-[10px] text-gray-400">Start Time</span>
+                <span className="text-[10px] text-slate-400">Start Time</span>
                 <input 
                   type="time" 
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:border-[#8ba870] transition-all"
+                  className="w-full p-3 bg-white border border-slate-100 rounded-xl outline-none focus:border-[#C9973A] transition-all"
                 />
               </div>
               <div className="space-y-2">
-                <span className="text-[10px] text-gray-400">End Time</span>
+                <span className="text-[10px] text-slate-400">End Time</span>
                 <input 
                   type="time" 
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:border-[#8ba870] transition-all"
+                  className="w-full p-3 bg-white border border-slate-100 rounded-xl outline-none focus:border-[#C9973A] transition-all"
                 />
               </div>
             </div>
@@ -476,33 +482,33 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
 
           {/* Title */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Title</label>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Title</label>
             <input 
               type="text" 
               placeholder="Write the title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:border-[#8ba870] transition-all text-lg font-medium"
+              className="w-full p-4 bg-white border border-slate-100 rounded-2xl outline-none focus:border-[#C9973A] transition-all text-lg font-medium font-serif"
             />
           </div>
 
           {/* Note */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Note</label>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Note</label>
             <textarea 
               placeholder="Write your important note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={4}
-              className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:border-[#8ba870] transition-all resize-none"
+              className="w-full p-4 bg-white border border-slate-100 rounded-2xl outline-none focus:border-[#C9973A] transition-all resize-none font-sans"
             />
           </div>
 
           {/* Category & Alarm */}
           <div className="grid grid-cols-2 gap-8">
             <div className="space-y-3">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Color</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Color</label>
               <div className="flex gap-3">
                 {CATEGORIES.map(cat => (
                   <button
@@ -510,7 +516,7 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
                     type="button"
                     onClick={() => setCategory(cat.id as any)}
                     className={`w-6 h-6 rounded-full transition-all ${cat.color} ${
-                      category === cat.id ? 'ring-4 ring-gray-100 scale-125' : 'opacity-40 hover:opacity-100'
+                      category === cat.id ? 'ring-4 ring-slate-100 scale-125' : 'opacity-40 hover:opacity-100'
                     }`}
                   />
                 ))}
@@ -518,12 +524,12 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
             </div>
 
             <div className="space-y-3">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Alarm</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Alarm</label>
               <button
                 type="button"
                 onClick={() => setReminderEnabled(!reminderEnabled)}
                 className={`w-12 h-6 rounded-full relative transition-all ${
-                  reminderEnabled ? 'bg-[#8ba870]' : 'bg-gray-200'
+                  reminderEnabled ? 'bg-[#C9973A]' : 'bg-slate-200'
                 }`}
               >
                 <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
@@ -536,7 +542,7 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
           <div className="pt-4">
             <Button 
               type="submit"
-              className="w-full py-5 bg-[#f0c05a] text-white text-xl font-bold rounded-2xl shadow-xl shadow-[#f0c05a]/20"
+              className="w-full py-5 bg-[#1e293b] text-white text-xl font-bold rounded-2xl shadow-xl shadow-slate-200"
             >
               Save
             </Button>

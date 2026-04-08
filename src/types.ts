@@ -47,7 +47,7 @@ export interface Quote {
   price: number;
   condition: string;
   message: string;
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'ARCHIVED' | 'PAID' | 'PENDING_COLLECTION' | 'AWAITING_PICKUP' | 'COMPLETED';
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'ARCHIVED' | 'PAID' | 'PENDING_COLLECTION' | 'AWAITING_PICKUP' | 'COMPLETED' | 'HANDED_OVER';
   createdAt: number;
   expiryDuration?: string;
   isRead?: boolean;
@@ -165,4 +165,18 @@ export interface Schedule {
   status: 'SCHEDULED' | 'RESCHEDULED' | 'COMPLETED' | 'CANCELLED';
   createdAt: number;
   updatedAt: number;
+}
+
+export interface AuditLog {
+  id?: number;
+  providerId: number;
+  staffId: number;
+  staffName: string;
+  actionType: 'QUOTE_SENT' | 'COLLECTION_STARTED' | 'HANDOVER_COMPLETED';
+  targetId: number; // inquiryId or quoteId
+  targetTitle: string;
+  buyerName: string;
+  amount?: number;
+  details?: string;
+  timestamp: number;
 }
