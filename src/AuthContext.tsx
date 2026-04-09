@@ -38,6 +38,7 @@ export interface User {
   permissions?: string[];
   mustChangePassword?: boolean;
   createdAt?: string;
+  virtualAccountNumber?: string;
 }
 
 interface AuthContextType {
@@ -100,8 +101,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let newUser: User | null = null;
 
     await db.transaction('rw', db.users, db.shops, async () => {
+      // Generate a 16-digit virtual account number
+      let virtualAccountNumber = '';
+      for (let i = 0; i < 16; i++) {
+        virtualAccountNumber += Math.floor(Math.random() * 10).toString();
+      }
+
       const userToSave = {
         ...userData,
+        virtualAccountNumber,
         verificationStatus: userData.entityType === 'BUSINESS' ? 'PENDING' as const : undefined
       };
       const id = await db.users.add(userToSave);

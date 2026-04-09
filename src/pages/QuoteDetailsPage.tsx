@@ -143,8 +143,8 @@ export default function QuoteDetailsPage() {
                 <>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Artist Requirements</p>
                   <div className="space-y-2">
-                    {quoteData.requirements.map((req, index) => (
-                      <div key={index} className="flex gap-3 items-start bg-white p-3 rounded-xl border border-slate-200">
+                    {quoteData.requirements.map((req) => (
+                      <div key={req.item} className="flex gap-3 items-start bg-white p-3 rounded-xl border border-slate-200">
                         <div className="w-1.5 h-1.5 rounded-full bg-[#d49b35] mt-2 flex-shrink-0" />
                         <div>
                           <p className="text-sm font-bold text-slate-900">{req.item}</p>
@@ -163,8 +163,8 @@ export default function QuoteDetailsPage() {
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Quoted Items</p>
             
             <div className="space-y-4">
-              {inquiry?.items.map((item, i) => (
-                <div key={i} className="p-4 rounded-2xl border border-slate-100 bg-white hover:border-slate-300 hover:shadow-sm transition-all print:border-slate-200">
+              {inquiry?.items.map((item) => (
+                <div key={item.id || item.title} className="p-4 rounded-2xl border border-slate-100 bg-white hover:border-slate-300 hover:shadow-sm transition-all print:border-slate-200">
                   <div className="flex items-start gap-4">
                     <div className="w-16 h-16 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 overflow-hidden flex-shrink-0 print:hidden">
                       {item.images && item.images.length > 0 ? (

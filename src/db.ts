@@ -1,6 +1,6 @@
 import Dexie, { Table } from 'dexie';
 import { User } from './AuthContext';
-import { Inquiry, Quote, Transaction, Shop, Product, Schedule, CalendarEvent, VenueSpace, AuditLog } from './types';
+import { Inquiry, Quote, Transaction, Shop, Product, Schedule, CalendarEvent, VenueSpace, AuditLog, PurchaseOrder, OrderConfirmation, DeliveryOrder } from './types';
 
 export class AppDatabase extends Dexie {
   users!: Table<User, number>;
@@ -13,12 +13,15 @@ export class AppDatabase extends Dexie {
   calendarEvents!: Table<CalendarEvent, number>;
   venueSpaces!: Table<VenueSpace, number>;
   auditLogs!: Table<AuditLog, number>;
+  purchaseOrders!: Table<PurchaseOrder, number>;
+  orderConfirmations!: Table<OrderConfirmation, number>;
+  deliveryOrders!: Table<DeliveryOrder, number>;
 
   constructor() {
     super('AppDatabase');
-    this.version(12).stores({
+    this.version(16).stores({
       users: '++id, email, role, phone, parentProviderId',
-      inquiries: '++id, buyerId, status, createdAt',
+      inquiries: '++id, buyerId, status, createdAt, archivedBy, deletedBy',
       quotes: '++id, inquiryId, providerId, status, collectionCode, createdAt',
       transactions: '++id, userId, type, category, quoteId, createdAt, status',
       shops: '++id, providerId, name, category, location',
@@ -26,7 +29,10 @@ export class AppDatabase extends Dexie {
       schedules: '++id, providerId, buyerId, inquiryId, quoteId, date, status',
       calendarEvents: '++id, userId, date, status, category',
       venueSpaces: '++id, providerId, status, createdAt',
-      auditLogs: '++id, providerId, staffId, actionType, timestamp'
+      auditLogs: '++id, providerId, staffId, actionType, timestamp',
+      purchaseOrders: '++id, inquiryId, quotationId, buyerId, providerId, status, createdAt',
+      orderConfirmations: '++id, poId, inquiryId, quoteId, buyerId, providerId, createdAt',
+      deliveryOrders: '++id, inquiryId, purchaseOrderId, orderConfirmationId, buyerId, sellerId, status, createdAt'
     });
   }
 }

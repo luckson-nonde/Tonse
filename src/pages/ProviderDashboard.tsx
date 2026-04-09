@@ -24,6 +24,8 @@ import ProductManagement from './ProductManagement';
 import { generateQuoteSchema, QuoteField } from '../services/quoteSchemaGenerator';
 import Notification from '../components/Notification';
 import TeamManagement from './TeamManagement';
+import Button from '../components/Button';
+import ConfirmModal from '../components/ConfirmModal';
 
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -157,8 +159,8 @@ const QuoteSubmissionForm = ({ inquiry, onSubmit, onCancel, venueSpaces, user, i
                         className={`w-full px-4 py-3 rounded-xl border ${errors[field.name] ? 'border-rose-500' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] bg-white`}
                       >
                         {!value && <option value="" disabled>Select {field.label}</option>}
-                        {field.options.map(opt => (
-                          <option key={opt} value={opt}>{opt}</option>
+                        {field.options.map((opt, idx) => (
+                          <option key={`${opt}-${idx}`} value={opt}>{opt}</option>
                         ))}
                       </select>
                     );
@@ -421,6 +423,9 @@ export default function ProviderDashboard() {
   const [quoteSort, setQuoteSort] = useState<'recent' | 'expensive'>('recent');
   const [isUpdating, setIsUpdating] = useState(false);
   const [itemPrices, setItemPrices] = useState<{ [key: string]: string }>({});
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedInquiryIds, setSelectedInquiryIds] = useState<number[]>([]);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   
   // Filter leads by provider categories AND exclude already quoted ones
   const leads = React.useMemo(() => {
@@ -429,6 +434,13 @@ export default function ProviderDashboard() {
     // Exclude already quoted
     const quotedIds = new Set(myQuotes.map(q => q.inquiryId));
     filtered = filtered.filter(lead => !quotedIds.has(lead.id!));
+
+    // Filter by Archive Status
+    const providerId = effectiveProviderId?.toString() || '';
+    filtered = filtered.filter(lead => !lead.archivedBy?.includes(providerId));
+
+    // Filter by Delete Status
+    filtered = filtered.filter(lead => !lead.deletedBy?.includes(providerId));
 
     // Filter by Role/SubRole Nature
     if (user?.role === 'SELLER' && user?.subRole) {
@@ -463,7 +475,7 @@ export default function ProviderDashboard() {
     }
     
     return filtered;
-  }, [user?.categories, user?.role, user?.subRole, allLeads, myQuotes]);
+  }, [user?.categories, user?.role, user?.subRole, allLeads, myQuotes, effectiveProviderId]);
 
   // Collection Handshake State
   const [scanningQuoteId, setScanningQuoteId] = useState<number | null>(null);
@@ -530,6 +542,45 @@ export default function ProviderDashboard() {
     }
   };
 
+  const handleArchiveSelected = async () => {
+    if (selectedInquiryIds.length === 0) return;
+
+    const providerId = effectiveProviderId?.toString() || '';
+    for (const id of selectedInquiryIds) {
+      const inquiry = await db.inquiries.get(id);
+      if (inquiry) {
+        const archivedBy = inquiry.archivedBy || [];
+        if (!archivedBy.includes(providerId)) {
+          await db.inquiries.update(id, { archivedBy: [...archivedBy, providerId] });
+        }
+      }
+    }
+    setSelectedInquiryIds([]);
+    setIsSelectionMode(false);
+    showNotification(`${selectedInquiryIds.length} inquiries archived`);
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedInquiryIds.length === 0) return;
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDeleteSelected = async () => {
+    const providerId = effectiveProviderId?.toString() || '';
+    for (const id of selectedInquiryIds) {
+      const inquiry = await db.inquiries.get(id);
+      if (inquiry) {
+        const deletedBy = inquiry.deletedBy || [];
+        if (!deletedBy.includes(providerId)) {
+          await db.inquiries.update(id, { deletedBy: [...deletedBy, providerId] });
+        }
+      }
+    }
+    setSelectedInquiryIds([]);
+    setIsSelectionMode(false);
+    showNotification(`${selectedInquiryIds.length} inquiries deleted`);
+  };
+
   const handleStartScan = (quoteId: number) => {
     setScanningQuoteId(quoteId);
   };
@@ -594,7 +645,7 @@ export default function ProviderDashboard() {
     
     // Calculate total from item prices if they exist, otherwise use the manual price
     const itemPricesArray = lead?.items.map((item, idx) => ({
-      itemId: item.id || idx,
+      itemId: item.id || `${lead.id}-item-${idx}`,
       price: Number(itemPrices[`${quotingInquiryId}-${idx}`] || 0)
     })).filter(ip => ip.price > 0);
 
@@ -677,7 +728,7 @@ export default function ProviderDashboard() {
       if (!printWindow) return;
 
       const itemsHtml = inquiry.items.map((item, idx) => {
-        const itemPrice = quote.itemPrices?.find(ip => ip.itemId === (item.id || idx))?.price;
+        const itemPrice = quote.itemPrices?.find(ip => ip.itemId === (item.id || `${inquiry.id}-item-${idx}`))?.price;
         return `
           <tr>
             <td style="padding: 12px; border-bottom: 1px solid #eee;">
@@ -837,7 +888,9 @@ export default function ProviderDashboard() {
               onClick={() => navigate('/provider/financial')}
               className="border border-[#C9973A] text-[#C9973A] bg-transparent font-medium font-sans py-2.5 px-6 rounded-[8px] text-[13px] hover:bg-[#C9973A]/10 transition-colors"
             >
-              My Account 425*******12
+              My Account {user?.virtualAccountNumber 
+                ? `${user.virtualAccountNumber.substring(0, 4)}********${user.virtualAccountNumber.substring(12)}`
+                : `**** **** **** ${user?.id?.toString().padStart(4, '0') || '0000'}`}
             </button>
           </div>
         </div>
@@ -979,8 +1032,8 @@ export default function ProviderDashboard() {
               <div className="col-span-full py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                 <p className="text-slate-400 text-xs font-medium italic">No items in inventory.</p>
               </div>
-            ) : products.slice(0, 3).map((product, i) => (
-              <div key={i} className="group cursor-pointer" onClick={() => handleTabClick('products')}>
+            ) : products.slice(0, 3).map((product) => (
+              <div key={product.id} className="group cursor-pointer" onClick={() => handleTabClick('products')}>
                 <div className="aspect-square rounded-2xl overflow-hidden bg-slate-100 mb-2 border border-slate-100">
                   <img 
                     src={product.images[0]} 
@@ -1003,7 +1056,30 @@ export default function ProviderDashboard() {
           <h3 className="text-lg font-serif font-black text-slate-900">
             {user?.role === 'EVENTS' ? 'Incoming Rental Requests' : 'Incoming Booking Requests'}
           </h3>
-          <button onClick={() => handleTabClick('leads')} className="text-[#d49b35] text-xs font-bold hover:underline">View All</button>
+          <div className="flex items-center gap-2">
+            {isSelectionMode && selectedInquiryIds.length > 0 && (
+              <>
+                <button 
+                  onClick={handleArchiveSelected} 
+                  className="px-3 py-1.5 text-xs font-bold text-white bg-[#d49b35] rounded-md hover:bg-[#b8862d] transition-colors"
+                >
+                  Archive {selectedInquiryIds.length}
+                </button>
+                <button 
+                  onClick={handleDeleteSelected} 
+                  className="px-3 py-1.5 text-xs font-bold text-white bg-rose-500 rounded-md hover:bg-rose-600 transition-colors"
+                >
+                  Delete {selectedInquiryIds.length}
+                </button>
+              </>
+            )}
+            <button 
+              onClick={() => { setIsSelectionMode(!isSelectionMode); setSelectedInquiryIds([]); }}
+              className="text-xs font-bold text-[#d49b35]"
+            >
+              {isSelectionMode ? 'Cancel' : 'Select'}
+            </button>
+          </div>
         </div>
         <div className="space-y-3">
           {leads.length === 0 ? (
@@ -1012,13 +1088,24 @@ export default function ProviderDashboard() {
                 No booking requests found.
               </p>
             </div>
-          ) : leads.slice(0, 3).map((lead, i) => {
+          ) : leads.slice(0, 3).map((lead, idx) => {
             const hasQuoted = myQuotes.some(q => q.inquiryId === lead.id);
             const isViewed = (lead.viewCount || 0) > 0;
             
             return (
-              <div key={i} className="bg-white rounded-2xl sm:rounded-[24px] p-4 sm:p-5 shadow-sm border border-slate-100 flex flex-col sm:flex-row items-start gap-4 cursor-pointer hover:border-[#d49b35]/30 transition-colors" onClick={() => handleTabClick('leads')}>
-                <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0 w-full">
+              <div key={lead.id || `lead-booking-1-${idx}`} className={`bg-white rounded-2xl sm:rounded-[24px] p-4 sm:p-5 shadow-sm border ${selectedInquiryIds.includes(lead.id!) ? 'border-[#d49b35] bg-[#fffaf5]' : 'border-slate-100'} flex items-start gap-4 transition-colors`}>
+                {isSelectionMode && (
+                  <input 
+                    type="checkbox"
+                    checked={selectedInquiryIds.includes(lead.id!)}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedInquiryIds([...selectedInquiryIds, lead.id!]);
+                      else setSelectedInquiryIds(selectedInquiryIds.filter(id => id !== lead.id!));
+                    }}
+                    className="w-5 h-5 accent-[#d49b35] mt-1"
+                  />
+                )}
+                <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0 w-full cursor-pointer" onClick={() => !isSelectionMode && handleTabClick('leads')}>
                   <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#fdf6e9] text-[#d49b35] flex items-center justify-center flex-shrink-0 font-black overflow-hidden border border-[#d49b35]/10`}>
                     <img 
                       src={`https://picsum.photos/seed/${lead.buyerId}/100/100`} 
@@ -1036,32 +1123,9 @@ export default function ProviderDashboard() {
                           : `${Math.floor((Date.now() - lead.createdAt) / 3600000)}h ago`}
                       </span>
                     </div>
-                    
-                    <div className="mb-2">
-                      <p className="text-[#d49b35] text-[10px] font-bold uppercase tracking-widest mb-1">{lead.category || 'General Entertainment'}</p>
-                      <p className="text-slate-500 text-xs italic truncate">"{lead.description}"</p>
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-3 mb-3">
-                      <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
-                        <MapPin className="w-3 h-3 text-[#d49b35]" />
-                        {lead.location}
-                      </div>
-                      <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
-                        <Calendar className="w-3 h-3 text-[#d49b35]" />
-                        {new Date(lead.createdAt + 86400000 * 7).toLocaleDateString()}
-                      </div>
-                    </div>
+                    <p className="font-bold text-slate-900 text-sm truncate">{lead.title}</p>
+                    <p className="text-xs text-slate-500">{lead.category}</p>
                   </div>
-                </div>
-                
-                <div className="flex sm:flex-col gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                  <button className="flex-1 sm:w-28 py-2 bg-[#fdf6e9] text-[#d49b35] text-[10px] font-black uppercase tracking-widest rounded-xl border border-[#d49b35]/20 hover:bg-[#d49b35] hover:text-white transition-all">
-                    View Details
-                  </button>
-                  <button className="flex-1 sm:w-28 py-2 bg-[#d49b35] text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-md shadow-[#d49b35]/20 hover:bg-[#a37d35] transition-all">
-                    Send Quote
-                  </button>
                 </div>
               </div>
             );
@@ -1092,7 +1156,9 @@ export default function ProviderDashboard() {
               onClick={() => navigate('/provider/financial')}
               className="border border-[#C9973A] text-[#C9973A] bg-transparent font-medium font-sans py-2.5 px-6 rounded-[8px] text-[13px] hover:bg-[#C9973A]/10 transition-colors"
             >
-              My Account 425*******12
+              My Account {user?.virtualAccountNumber 
+                ? `${user.virtualAccountNumber.substring(0, 4)}********${user.virtualAccountNumber.substring(12)}`
+                : `**** **** **** ${user?.id?.toString().padStart(4, '0') || '0000'}`}
             </button>
           </div>
         </div>
@@ -1239,7 +1305,30 @@ export default function ProviderDashboard() {
           <h3 className="text-lg font-serif font-black text-slate-900">
             {isBookingBased ? 'Incoming Booking Requests' : 'Incoming Leads'}
           </h3>
-          <button onClick={() => handleTabClick('leads')} className="text-[#d49b35] text-xs font-bold hover:underline">View All</button>
+          <div className="flex items-center gap-2">
+            {isSelectionMode && selectedInquiryIds.length > 0 && (
+              <>
+                <button 
+                  onClick={handleArchiveSelected} 
+                  className="px-3 py-1.5 text-xs font-bold text-white bg-[#d49b35] rounded-md hover:bg-[#b8862d] transition-colors"
+                >
+                  Archive {selectedInquiryIds.length}
+                </button>
+                <button 
+                  onClick={handleDeleteSelected} 
+                  className="px-3 py-1.5 text-xs font-bold text-white bg-rose-500 rounded-md hover:bg-rose-600 transition-colors"
+                >
+                  Delete {selectedInquiryIds.length}
+                </button>
+              </>
+            )}
+            <button 
+              onClick={() => { setIsSelectionMode(!isSelectionMode); setSelectedInquiryIds([]); }}
+              className="text-xs font-bold text-[#d49b35]"
+            >
+              {isSelectionMode ? 'Cancel' : 'Select'}
+            </button>
+          </div>
         </div>
         <div className="space-y-3">
           {leads.length === 0 ? (
@@ -1248,13 +1337,24 @@ export default function ProviderDashboard() {
                 No booking requests found.
               </p>
             </div>
-          ) : leads.slice(0, 3).map((lead, i) => {
+          ) : leads.slice(0, 3).map((lead, idx) => {
             const hasQuoted = myQuotes.some(q => q.inquiryId === lead.id);
             const isViewed = (lead.viewCount || 0) > 0;
             
             return (
-              <div key={i} className="bg-white rounded-2xl sm:rounded-[24px] p-4 sm:p-5 shadow-sm border border-slate-100 flex flex-col sm:flex-row items-start gap-4 cursor-pointer hover:border-[#d49b35]/30 transition-colors" onClick={() => handleTabClick('leads')}>
-                <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0 w-full">
+              <div key={lead.id || `lead-booking-2-${idx}`} className={`bg-white rounded-2xl sm:rounded-[24px] p-4 sm:p-5 shadow-sm border ${selectedInquiryIds.includes(lead.id!) ? 'border-[#d49b35] bg-[#fffaf5]' : 'border-slate-100'} flex items-start gap-4 transition-colors`}>
+                {isSelectionMode && (
+                  <input 
+                    type="checkbox"
+                    checked={selectedInquiryIds.includes(lead.id!)}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedInquiryIds([...selectedInquiryIds, lead.id!]);
+                      else setSelectedInquiryIds(selectedInquiryIds.filter(id => id !== lead.id!));
+                    }}
+                    className="w-5 h-5 accent-[#d49b35] mt-1"
+                  />
+                )}
+                <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0 w-full cursor-pointer" onClick={() => !isSelectionMode && handleTabClick('leads')}>
                   <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#fdf6e9] text-[#d49b35] flex items-center justify-center flex-shrink-0 font-black overflow-hidden border border-[#d49b35]/10`}>
                     <img 
                       src={`https://picsum.photos/seed/${lead.buyerId}/100/100`} 
@@ -1272,50 +1372,9 @@ export default function ProviderDashboard() {
                           : `${Math.floor((Date.now() - lead.createdAt) / 3600000)}h ago`}
                       </span>
                     </div>
-                    
-                    <div className="mb-2">
-                      <p className="text-[#d49b35] text-[10px] font-bold uppercase tracking-widest mb-1">{lead.category || 'General Entertainment'}</p>
-                      <p className="text-slate-500 text-xs italic truncate">"{lead.description}"</p>
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-3 mb-3">
-                      <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
-                        <MapPin className="w-3 h-3 text-[#d49b35]" />
-                        {lead.location}
-                      </div>
-                      <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
-                        <Calendar className="w-3 h-3 text-[#d49b35]" />
-                        {new Date(lead.createdAt + 86400000 * 7).toLocaleDateString()}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {!hasQuoted && !isViewed && (
-                        <span className="px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-100">
-                          New
-                        </span>
-                      )}
-                      {isViewed && !hasQuoted && (
-                        <span className="px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-[#fdf6e9] text-[#d49b35] border border-[#d49b35]/20">
-                          Viewed
-                        </span>
-                      )}
-                      {hasQuoted && (
-                        <span className="px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-[#fdf6e9] text-[#d49b35] border border-[#d49b35]/20">
-                          Quote Sent
-                        </span>
-                      )}
-                    </div>
+                    <p className="font-bold text-slate-900 text-sm truncate">{lead.title}</p>
+                    <p className="text-xs text-slate-500">{lead.category}</p>
                   </div>
-                </div>
-                
-                <div className="flex sm:flex-col gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                  <button className="flex-1 sm:w-28 py-2 bg-[#fdf6e9] text-[#d49b35] text-[10px] font-black uppercase tracking-widest rounded-xl border border-[#d49b35]/20 hover:bg-[#d49b35] hover:text-white transition-all">
-                    View Details
-                  </button>
-                  <button className="flex-1 sm:w-28 py-2 bg-[#d49b35] text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-md shadow-[#d49b35]/20 hover:bg-[#a37d35] transition-all">
-                    Send Quote
-                  </button>
                 </div>
               </div>
             );
@@ -1334,8 +1393,8 @@ export default function ProviderDashboard() {
             <div className="bg-white rounded-2xl sm:rounded-[24px] p-6 sm:p-8 text-center border border-slate-100">
               <p className="text-slate-400 text-xs font-medium italic">No quotes sent yet.</p>
             </div>
-          ) : displayQuotes.slice(0, 3).map((quote, i) => (
-            <div key={i} className="bg-white rounded-2xl sm:rounded-[24px] p-4 shadow-sm border border-slate-100 flex items-center justify-between gap-4 cursor-pointer hover:border-[#d49b35]/30 transition-colors" onClick={() => handleTabClick('my-quotes')}>
+          ) : displayQuotes.slice(0, 3).map((quote, idx) => (
+            <div key={quote.id || `quote-1-${idx}`} className="bg-white rounded-2xl sm:rounded-[24px] p-4 shadow-sm border border-slate-100 flex items-center justify-between gap-4 cursor-pointer hover:border-[#d49b35]/30 transition-colors" onClick={() => handleTabClick('my-quotes')}>
               <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 w-full">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#fdf6e9] flex items-center justify-center text-[#d49b35] flex-shrink-0">
                   <FileText className="w-5 h-5" />
@@ -1367,23 +1426,60 @@ export default function ProviderDashboard() {
 
   const renderLeads = () => (
     <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col px-0 sm:px-0">
-        <h2 className="text-2xl font-serif font-bold text-slate-900">Incoming Booking Requests</h2>
-        <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wider mt-1">
-          Based on your categories: <span className="text-[#d49b35]">{user?.categories?.join(', ') || 'All Categories'}</span>
-        </p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-0 sm:px-0">
+        <div>
+          <h2 className="text-2xl font-serif font-bold text-slate-900">Incoming Booking Requests</h2>
+          <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wider mt-1">
+            Based on your categories: <span className="text-[#d49b35]">{user?.categories?.join(', ') || 'All Categories'}</span>
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {isSelectionMode && selectedInquiryIds.length > 0 && (
+            <>
+              <button 
+                onClick={handleArchiveSelected} 
+                className="px-3 py-1.5 text-xs font-bold text-white bg-[#d49b35] rounded-md hover:bg-[#b8862d] transition-colors"
+              >
+                Archive {selectedInquiryIds.length}
+              </button>
+              <button 
+                onClick={handleDeleteSelected} 
+                className="px-3 py-1.5 text-xs font-bold text-white bg-rose-500 rounded-md hover:bg-rose-600 transition-colors"
+              >
+                Delete {selectedInquiryIds.length}
+              </button>
+            </>
+          )}
+          <button 
+            onClick={() => { setIsSelectionMode(!isSelectionMode); setSelectedInquiryIds([]); }}
+            className="px-3 py-1.5 text-xs font-bold text-[#d49b35] bg-[#fdf6e9] rounded-md hover:bg-[#fcecd4] transition-colors"
+          >
+            {isSelectionMode ? 'Cancel' : 'Select'}
+          </button>
+        </div>
       </div>
 
       <div className="space-y-4 sm:space-y-6">
         {leads.length === 0 ? (
           <div className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-12 text-center border border-slate-100">
             <PackageOpen className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-            <p className="text-slate-500 font-medium">No active leads at the moment.</p>
+            <p className="text-slate-500 font-medium">No leads at the moment.</p>
           </div>
-        ) : leads.map(lead => (
-          <div key={lead.id} className="bg-white rounded-2xl sm:rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
+        ) : leads.map((lead, idx) => (
+          <div key={lead.id || `lead-full-${idx}`} className={`bg-white rounded-2xl sm:rounded-[32px] shadow-sm border ${selectedInquiryIds.includes(lead.id!) ? 'border-[#d49b35] bg-[#fffaf5]' : 'border-slate-100'} overflow-hidden transition-colors`}>
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
               <div className="flex items-center gap-3">
+                {isSelectionMode && (
+                  <input 
+                    type="checkbox"
+                    checked={selectedInquiryIds.includes(lead.id!)}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedInquiryIds([...selectedInquiryIds, lead.id!]);
+                      else setSelectedInquiryIds(selectedInquiryIds.filter(id => id !== lead.id!));
+                    }}
+                    className="w-5 h-5 accent-[#d49b35]"
+                  />
+                )}
                 <div className="w-10 h-10 rounded-full bg-[#fdf6e9] flex items-center justify-center text-[#d49b35] font-bold text-sm overflow-hidden border border-[#d49b35]/20">
                   <img 
                     src={`https://picsum.photos/seed/${lead.buyerId}/100/100`} 
@@ -1410,8 +1506,8 @@ export default function ProviderDashboard() {
 
             <div className="p-4 sm:p-6">
               <div className="flex flex-wrap gap-2 mb-4">
-                {lead.category.split(', ').map((cat, i) => (
-                  <span key={i} className="px-2 py-0.5 bg-[#fdf6e9] text-[#d49b35] text-[10px] font-bold rounded uppercase tracking-wider">
+                {lead.category.split(', ').map((cat, catIdx) => (
+                  <span key={`${lead.id}-${cat}-${catIdx}`} className="px-2 py-0.5 bg-[#fdf6e9] text-[#d49b35] text-[10px] font-bold rounded uppercase tracking-wider">
                     {cat}
                   </span>
                 ))}
@@ -1457,7 +1553,7 @@ export default function ProviderDashboard() {
                 <div className="grid grid-cols-1 gap-4">
                   {lead.items.map((item, idx) => (
                     <div 
-                      key={idx} 
+                      key={`${lead.id}-item-${idx}`} 
                       className={`bg-slate-50/50 rounded-2xl p-4 border transition-all ${quotingInquiryId === lead.id ? 'cursor-pointer hover:border-[#d49b35]/30' : 'border-slate-100'}`}
                       onClick={() => {
                         if (quotingInquiryId === lead.id) {
@@ -1490,7 +1586,7 @@ export default function ProviderDashboard() {
                       {item.images && item.images.length > 1 && (
                         <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                           {item.images.slice(1).map((img, imgIdx) => (
-                            <div key={imgIdx} className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0 bg-white">
+                            <div key={`${img}-${imgIdx}`} className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0 bg-white">
                               <img src={img} alt={`Ref ${imgIdx + 2}`} className="w-full h-full object-cover" />
                             </div>
                           ))}
@@ -1564,14 +1660,14 @@ export default function ProviderDashboard() {
             <Truck className="w-12 h-12 text-slate-200 mx-auto mb-4" />
             <p className="text-slate-500 font-medium">No paid orders awaiting collection.</p>
           </div>
-        ) : displayQuotes.filter(q => q.status === 'PAID' || q.status === 'AWAITING_PICKUP').map(quote => {
+        ) : displayQuotes.filter(q => q.status === 'PAID' || q.status === 'AWAITING_PICKUP').map((quote, idx) => {
           const lead = (quote as any).inquiry as Inquiry;
           if (!lead) return null;
           
           const isAwaitingPickup = quote.status === 'AWAITING_PICKUP';
 
           return (
-            <div key={quote.id} className="bg-white rounded-2xl sm:rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
+            <div key={quote.id || `quote-2-${idx}`} className="bg-white rounded-2xl sm:rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
               <div className={`px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between ${isAwaitingPickup ? 'bg-[#fffaf5]' : 'bg-emerald-50/30'}`}>
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden border ${isAwaitingPickup ? 'bg-[#fdf6e9] text-[#d49b35] border-[#d49b35]/20' : 'bg-emerald-100 text-emerald-600 border-emerald-200'}`}>
@@ -1651,13 +1747,13 @@ export default function ProviderDashboard() {
         ) : [...displayQuotes]
             .filter(q => q.status !== 'ARCHIVED')
             .sort((a, b) => quoteSort === 'recent' ? b.createdAt - a.createdAt : b.price - a.price)
-            .map(quote => {
+            .map((quote, idx) => {
               const lead = (quote as any).inquiry as Inquiry;
               if (!lead) return null;
               const isExpanded = expandedInquiryId === lead.id;
               
               return (
-                <div key={quote.id} className="bg-white rounded-2xl sm:rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
+                <div key={quote.id || `quote-3-${idx}`} className="bg-white rounded-2xl sm:rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
                   <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-[#fdf6e9] flex items-center justify-center text-[#d49b35] font-bold text-sm overflow-hidden border border-[#d49b35]/20">
@@ -1750,9 +1846,9 @@ export default function ProviderDashboard() {
                               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Price (ZMW)</span>
                             </div>
                             {lead.items.map((item, idx) => {
-                              const itemPrice = quote.itemPrices?.find(ip => ip.itemId === (item.id || idx))?.price;
+                              const itemPrice = quote.itemPrices?.find(ip => ip.itemId === (item.id || `${lead.id}-item-${idx}`))?.price;
                               return (
-                                <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                <div key={`${lead.id}-item-${idx}`} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                                   <div className="flex items-center gap-3">
                                     <span className="w-6 h-6 rounded-lg bg-white flex items-center justify-center text-[10px] font-bold text-slate-400 border border-slate-200">{idx + 1}</span>
                                     <span className="text-xs font-bold text-slate-700">{item.title}</span>
@@ -1800,7 +1896,7 @@ export default function ProviderDashboard() {
                     {isExpanded && lead.items && (
                       <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
                         {lead.items.map((item, idx) => (
-                          <div key={idx} className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
+                          <div key={`${lead.id}-item-${idx}`} className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
                             <div className="flex justify-between items-start mb-2">
                               <h6 className="font-bold text-slate-900 text-sm">{item.title}</h6>
                               <span className="text-[10px] font-bold text-[#d49b35] bg-[#fdf6e9] px-2 py-0.5 rounded border border-[#d49b35]/10">Qty: {item.quantity}</span>
@@ -2048,6 +2144,16 @@ export default function ProviderDashboard() {
           type={notification.type}
           isVisible={notification.isVisible}
           onClose={() => setNotification(prev => ({ ...prev, isVisible: false }))}
+        />
+
+        <ConfirmModal
+          isOpen={isDeleteModalOpen}
+          onClose={() => setIsDeleteModalOpen(false)}
+          onConfirm={confirmDeleteSelected}
+          title="Delete Inquiries"
+          message={`Are you sure you want to permanently delete ${selectedInquiryIds.length} selected inquiries from your view? You won't be able to see or attend to these inquiries anymore.`}
+          confirmText="Delete Permanently"
+          variant="danger"
         />
 
         {scanningQuoteId && (

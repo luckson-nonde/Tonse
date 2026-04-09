@@ -277,167 +277,44 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
 
   return (
     <div className={isStandalone ? "max-w-[480px] mx-auto w-full bg-[#f5f2ed] min-h-screen relative" : "w-full relative"}>
-      {/* Sticky Header */}
-      {!hideHeader && isStandalone && (
-      <div className="sticky top-0 bg-[#f5f2ed] z-20 px-4 pt-4 pb-5">
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={onBack} 
-            className="w-10 h-10 -ml-2 flex items-center justify-center"
-          >
-            <ChevronLeft className="w-5 h-5 text-[#1a1a2e]" />
-          </button>
-          <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">STEP 1</p>
-        </div>
-        
-        <div className="mt-2">
-          <h1 className="font-serif text-[22px] font-bold text-[#1a1a2e] leading-tight">
-            What are you looking for?
-          </h1>
-        </div>
-      </div>
-      )}
-
-      <div className={isStandalone ? "p-[20px_16px_120px_16px] flex flex-col gap-6" : "flex flex-col gap-6 pb-24"}>
-        {/* Search Bar */}
-        <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-[#C9973A]" />
-          </div>
-          <input
-            type="text"
-            placeholder="Search categories..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-4 py-3.5 bg-white border border-[#f1f5f9] rounded-[12px] text-[15px] focus:border-[#C9973A]/50 focus:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] outline-none transition-all placeholder:text-[#94a3b8] font-sans"
-          />
-        </div>
-
-        {/* Selection Info */}
-        <div className="flex items-center justify-between px-1">
-          <div className="bg-[rgba(201,151,58,0.08)] border border-[rgba(201,151,58,0.2)] rounded-full px-4 py-1.5">
-            <h3 className="text-[10px] font-sans font-bold text-[#C9973A] tracking-[0.1em] uppercase">
-              MASTER SELECTION
-            </h3>
-          </div>
-          {selectedCategories.length > 0 && (
-            <span className="text-[12px] font-semibold text-[#C9973A]">
-              {selectedCategories.length} selected
-            </span>
-          )}
-        </div>
-
-        {/* Selected Tags */}
-        {selectedCategories.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-1">
-            {selectedCategories.map(c => (
-               <span key={c.id} className="bg-white border border-[#f1f5f9] text-[#1a1a2e] px-3 py-1.5 rounded-full text-[12px] font-medium flex items-center gap-2 shadow-sm">
-                 {c.name}
-                 <button onClick={() => removeSelected(c.id)} className="hover:text-[#C9973A] transition-colors">
-                   <X className="w-3.5 h-3.5" />
-                 </button>
-               </span>
-            ))}
-          </div>
-        )}
-
-        {/* Grid */}
-        {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-[#C9973A]" />
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4">
-            {filteredCategories.map((category) => {
-              const hasSelectedSub = selectedCategories.some(c => c.parentId === category.id);
-              const { icon: CategoryIcon } = getCategoryStyles(category.id);
-              
-              return (
-                <div 
-                  key={category.id}
-                  onClick={() => handleGeneralCategoryClick(category)}
-                  className={`relative h-[120px] rounded-[20px] overflow-hidden cursor-pointer group transition-all duration-300 border-[1.5px] ${
-                    hasSelectedSub 
-                      ? 'border-[#C9973A] bg-white shadow-[0_4px_16px_rgba(201,151,58,0.12)]' 
-                      : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30 hover:shadow-[0_4px_16px_rgba(0,0,0,0.04)]'
-                  }`}
-                >
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
-                    <div className={`w-[52px] h-[52px] rounded-full flex items-center justify-center mb-3 transition-all duration-300 ${
-                      hasSelectedSub ? 'bg-[#C9973A] text-white' : 'bg-[#f8fafc] text-[#C9973A] group-hover:bg-[#C9973A] group-hover:text-white'
-                    }`}>
-                      <CategoryIcon className="w-[26px] h-[26px]" />
-                    </div>
-                    
-                    <h4 className="font-sans text-[13px] font-bold text-[#1a1a2e] leading-tight">
-                      {category.name}
-                    </h4>
-                  </div>
-
-                  {hasSelectedSub && (
-                    <div className="absolute top-3 right-3 w-5 h-5 bg-[#C9973A] rounded-full flex items-center justify-center z-20 shadow-sm">
-                      <Check className="w-3 h-3 text-white" strokeWidth={4} />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Submit Button */}
-        {selectedCategories.length > 0 && (
-          <div className="pt-4 pb-8">
-            <button 
-              onClick={handleComplete}
-              disabled={loading}
-              className="w-full h-[54px] bg-[#C9973A] rounded-[50px] flex items-center justify-center gap-[10px] font-sans text-[15px] font-semibold text-white tracking-[0.02em] shadow-[0_4px_16px_rgba(201,151,58,0.35)] disabled:opacity-50 transition-all"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Consolidating...</span>
-                </>
-              ) : (
-                submitLabel
-              )}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Subcategory Modal */}
-      {activeParent && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1a1a2e]/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-[32px] w-full max-w-[400px] max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 border border-[#f1f5f9]">
-            <div className="p-6 border-b border-[#f1f5f9] flex items-center justify-between">
-              <div>
-                <h3 className="font-serif font-bold text-[22px] text-[#1a1a2e]">{activeParent.name}</h3>
-                <div className="flex items-center gap-3 mt-1">
-                  <p className="text-[12px] text-[#94a3b8] font-medium font-sans uppercase tracking-wider">Select specific types</p>
-                </div>
-              </div>
+      {activeParent ? (
+        <div className="flex flex-col min-h-screen bg-white animate-in slide-in-from-right duration-300">
+          {/* Subcategory Header */}
+          <div className="sticky top-0 bg-white z-20 px-6 pt-6 pb-5 border-b border-[#f1f5f9]">
+            <div className="flex items-center gap-3">
               <button 
                 onClick={() => setActiveParent(null)} 
-                className="w-10 h-10 flex items-center justify-center bg-[#f8fafc] rounded-full text-[#1a1a2e] hover:bg-[#f1f5f9] transition-all"
+                className="w-10 h-10 -ml-2 flex items-center justify-center bg-[#f8fafc] rounded-full hover:bg-[#f1f5f9] transition-all"
               >
-                <X className="w-5 h-5" />
+                <ChevronLeft className="w-5 h-5 text-[#1a1a2e]" />
               </button>
+              <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">SELECT SPECIFIC TYPES</p>
             </div>
             
-            <div className="px-6 py-4">
-              <button 
-                onClick={toggleSelectAllFiltered}
-                className="text-[12px] font-bold text-[#C9973A] uppercase tracking-wider hover:opacity-80 transition-opacity"
-              >
-                {isAllFilteredSelected ? 'Deselect All' : 'Select All'}
-              </button>
+            <div className="mt-4">
+              <h1 className="font-serif text-[28px] font-bold text-[#1a1a2e] leading-tight">
+                {activeParent.name}
+              </h1>
             </div>
-            
-            {subcategories.length > 5 && !loadingSub && (
-              <div className="px-6 pb-4">
+          </div>
+
+          {/* Subcategory Content */}
+          <div className="flex-1 overflow-y-auto scrollbar-hide">
+            <div className="p-6 flex flex-col gap-6">
+              {/* Select All */}
+              <div className="flex justify-start">
+                <button 
+                  onClick={toggleSelectAllFiltered}
+                  className="text-[12px] font-bold text-[#C9973A] uppercase tracking-wider hover:opacity-80 transition-opacity bg-[#C9973A]/5 px-4 py-2 rounded-full border border-[#C9973A]/10"
+                >
+                  {isAllFilteredSelected ? 'Deselect All' : 'Select All'}
+                </button>
+              </div>
+
+              {/* Search */}
+              {subcategories.length > 5 && !loadingSub && (
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Search className="h-4 w-4 text-[#C9973A]" />
                   </div>
                   <input
@@ -445,23 +322,26 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                     placeholder="Search subcategories..."
                     value={subSearchQuery}
                     onChange={(e) => setSubSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-[#f8fafc] border border-[#f1f5f9] rounded-xl text-[14px] focus:border-[#C9973A]/50 outline-none transition-all placeholder:text-[#94a3b8] font-sans"
+                    className="w-full pl-11 pr-4 py-3.5 bg-[#f8fafc] border border-[#f1f5f9] rounded-2xl text-[15px] focus:border-[#C9973A]/50 focus:bg-white outline-none transition-all placeholder:text-[#94a3b8] font-sans"
                   />
                 </div>
-              </div>
-            )}
-            
-            <div className="overflow-y-auto flex-1 scrollbar-hide px-2">
+              )}
+
+              {/* List */}
               {loadingSub ? (
-                <div className="flex justify-center items-center py-12">
-                  <Loader2 className="w-8 h-8 animate-spin text-[#C9973A]" />
+                <div className="flex flex-col justify-center items-center py-20 gap-4">
+                  <Loader2 className="w-10 h-10 animate-spin text-[#C9973A]" />
+                  <p className="text-[13px] font-medium text-[#94a3b8] font-sans">Loading options...</p>
                 </div>
               ) : filteredSubcategories.length === 0 ? (
-                <div className="text-center py-8">
+                <div className="text-center py-20">
+                  <div className="w-16 h-16 bg-[#f8fafc] rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Search className="w-8 h-8 text-[#cbd5e1]" />
+                  </div>
                   <p className="text-[#94a3b8] font-medium font-sans">No subcategories found.</p>
                 </div>
               ) : (
-                <div className="flex flex-col gap-1 pb-6">
+                <div className="flex flex-col gap-2 pb-10">
                   {(() => {
                     // Group subcategories by baseName if they have variants
                     const groups: Record<string, Category[]> = {};
@@ -478,15 +358,15 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
 
                     return (
                       <>
-                        {Object.entries(groups).map(([baseName, variants]) => {
+                        {Object.entries(groups).map(([baseName, variants], idx) => {
                           const isExpanded = expandedSubcategory === baseName;
                           const hasSelected = variants.some(v => selectedCategories.some(c => c.id === v.id));
 
                           return (
-                            <div key={baseName} className="flex flex-col">
+                            <div key={`${baseName}-${idx}`} className="flex flex-col">
                               <div 
-                                className={`p-4 flex items-center justify-between hover:bg-[#f8fafc] rounded-2xl transition-colors group cursor-pointer ${
-                                  role && hasSelected ? 'bg-[rgba(201,151,58,0.05)]' : ''
+                                className={`p-5 flex items-center justify-between hover:bg-[#f8fafc] rounded-2xl transition-all group cursor-pointer border ${
+                                  role && hasSelected ? 'bg-[rgba(201,151,58,0.05)] border-[#C9973A]/20' : 'border-transparent'
                                 }`}
                                 onClick={() => {
                                   if (role) {
@@ -497,7 +377,7 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                                 }}
                               >
                                 <div className="flex-1">
-                                  <span className={`font-sans font-bold text-[14px] transition-colors ${
+                                  <span className={`font-sans font-bold text-[15px] transition-colors ${
                                     (role && hasSelected) || (!role && (isExpanded || hasSelected)) 
                                       ? 'text-[#C9973A]' 
                                       : 'text-[#1a1a2e]'
@@ -506,21 +386,21 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                                   </span>
                                 </div>
                                 <div 
-                                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                                  className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
                                     (role && hasSelected) 
                                       ? 'bg-[#C9973A] border-[#C9973A]' 
                                       : 'bg-white border-[#f1f5f9]'
                                   } group-hover:border-[#C9973A]/30`}
                                 >
                                   {role ? (
-                                    hasSelected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={4} />
+                                    hasSelected && <Check className="w-4 h-4 text-white" strokeWidth={4} />
                                   ) : (
-                                    <ChevronDown className={`w-3.5 h-3.5 text-[#94a3b8] transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                    <ChevronDown className={`w-4 h-4 text-[#94a3b8] transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                   )}
                                 </div>
                               </div>
                               {!role && isExpanded && (
-                                <div className="px-4 py-2 flex flex-col gap-2 bg-[#f8fafc]/50 rounded-2xl mb-2">
+                                <div className="px-4 py-3 flex flex-col gap-3 bg-[#f8fafc]/50 rounded-2xl mt-2 mb-4 border border-[#f1f5f9]">
                                   {variants.map(variant => {
                                     const isSelected = selectedCategories.some(c => c.id === variant.id);
                                     let label = '';
@@ -528,7 +408,6 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                                     else if (variant.type === 'repair') label = 'Repair / Service';
                                     else if (variant.type === 'restore') label = 'Repair / Restore';
                                     
-                                    // Fallback to name if type labels aren't specific enough
                                     if (activeParent.id === 'electronics') {
                                       if (variant.type === 'buy') label = 'Buy New';
                                       else if (variant.type === 'repair') label = 'Repair';
@@ -538,17 +417,17 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                                       <button 
                                         key={variant.id}
                                         onClick={() => handleVariantSelect(variant)}
-                                        className={`text-left px-4 py-3 rounded-xl transition-all flex items-center justify-between ${
-                                          isSelected ? 'bg-[#C9973A]/10 border-[#C9973A]/20' : 'bg-white hover:bg-[#f1f5f9] border-[#f1f5f9]'
-                                        } border`}
+                                        className={`text-left px-5 py-4 rounded-xl transition-all flex items-center justify-between ${
+                                          isSelected ? 'bg-white border-[#C9973A] shadow-sm' : 'bg-white hover:bg-[#f1f5f9] border-[#f1f5f9]'
+                                        } border-[1.5px]`}
                                       >
-                                        <span className={`text-[13px] font-bold ${isSelected ? 'text-[#C9973A]' : 'text-[#1a1a2e]'}`}>
+                                        <span className={`text-[14px] font-bold ${isSelected ? 'text-[#C9973A]' : 'text-[#1a1a2e]'}`}>
                                           {label}
                                         </span>
-                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
                                           isSelected ? 'bg-[#C9973A] border-[#C9973A]' : 'border-[#f1f5f9]'
                                         }`}>
-                                          {isSelected && <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />}
+                                          {isSelected && <Check className="w-3 h-3 text-white" strokeWidth={4} />}
                                         </div>
                                       </button>
                                     );
@@ -564,19 +443,19 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                             <div 
                               key={sub.id}
                               onClick={() => toggleSubcategory(sub)}
-                              className={`p-4 flex items-center justify-between cursor-pointer rounded-2xl transition-all ${
-                                isSelected ? 'bg-[rgba(201,151,58,0.05)]' : 'hover:bg-[#f8fafc]'
+                              className={`p-5 flex items-center justify-between cursor-pointer rounded-2xl transition-all border ${
+                                isSelected ? 'bg-[rgba(201,151,58,0.05)] border-[#C9973A]/20' : 'hover:bg-[#f8fafc] border-transparent'
                               }`}
                             >
-                              <span className={`font-sans font-bold text-[14px] transition-colors ${isSelected ? 'text-[#C9973A]' : 'text-[#1a1a2e]'}`}>
+                              <span className={`font-sans font-bold text-[15px] transition-colors ${isSelected ? 'text-[#C9973A]' : 'text-[#1a1a2e]'}`}>
                                 {sub.name}
                               </span>
-                              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                              <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
                                 isSelected 
                                   ? 'bg-[#C9973A] border-[#C9973A]' 
                                   : 'bg-white border-[#f1f5f9]'
                               }`}>
-                                {isSelected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={4} />}
+                                {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={4} />}
                               </div>
                             </div>
                           );
@@ -587,17 +466,149 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                 </div>
               )}
             </div>
-            
-            <div className="p-6 border-t border-[#f1f5f9]">
-              <button 
-                onClick={() => setActiveParent(null)} 
-                className="w-full h-[50px] bg-[#C9973A] text-white text-[15px] font-bold rounded-[50px] shadow-lg shadow-[rgba(201,151,58,0.2)] transition-all"
-              >
-                Done {currentParentSelectedCount > 0 ? `(${currentParentSelectedCount})` : ''}
-              </button>
-            </div>
+          </div>
+
+          {/* Sticky Footer */}
+          <div className="sticky bottom-0 p-6 bg-white border-t border-[#f1f5f9] shadow-[0_-8px_30px_rgba(0,0,0,0.04)]">
+            <button 
+              onClick={() => setActiveParent(null)} 
+              className="w-full h-[58px] bg-[#C9973A] text-white text-[16px] font-bold rounded-[50px] shadow-xl shadow-[rgba(201,151,58,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            >
+              Done {currentParentSelectedCount > 0 ? `(${currentParentSelectedCount})` : ''}
+            </button>
           </div>
         </div>
+      ) : (
+        <>
+          {/* Sticky Header */}
+          {!hideHeader && isStandalone && (
+          <div className="sticky top-0 bg-[#f5f2ed] z-20 px-4 pt-4 pb-5">
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={onBack} 
+                className="w-10 h-10 -ml-2 flex items-center justify-center"
+              >
+                <ChevronLeft className="w-5 h-5 text-[#1a1a2e]" />
+              </button>
+              <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">STEP 1</p>
+            </div>
+            
+            <div className="mt-2">
+              <h1 className="font-serif text-[22px] font-bold text-[#1a1a2e] leading-tight">
+                What are you looking for?
+              </h1>
+            </div>
+          </div>
+          )}
+
+          <div className={isStandalone ? "p-[20px_16px_120px_16px] flex flex-col gap-6" : "flex flex-col gap-6 pb-24"}>
+            {/* Search Bar */}
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-[#C9973A]" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search categories..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-11 pr-4 py-3.5 bg-white border border-[#f1f5f9] rounded-[12px] text-[15px] focus:border-[#C9973A]/50 focus:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] outline-none transition-all placeholder:text-[#94a3b8] font-sans"
+              />
+            </div>
+
+            {/* Selection Info */}
+            <div className="flex items-center justify-between px-1">
+              <div className="bg-[rgba(201,151,58,0.08)] border border-[rgba(201,151,58,0.2)] rounded-full px-4 py-1.5">
+                <h3 className="text-[10px] font-sans font-bold text-[#C9973A] tracking-[0.1em] uppercase">
+                  MASTER SELECTION
+                </h3>
+              </div>
+              {selectedCategories.length > 0 && (
+                <span className="text-[12px] font-semibold text-[#C9973A]">
+                  {selectedCategories.length} selected
+                </span>
+              )}
+            </div>
+
+            {/* Selected Tags */}
+            {selectedCategories.length > 0 && (
+              <div className="flex flex-wrap gap-2 px-1">
+                {selectedCategories.map(c => (
+                   <span key={c.id} className="bg-white border border-[#f1f5f9] text-[#1a1a2e] px-3 py-1.5 rounded-full text-[12px] font-medium flex items-center gap-2 shadow-sm">
+                     {c.name}
+                     <button onClick={() => removeSelected(c.id)} className="hover:text-[#C9973A] transition-colors">
+                       <X className="w-3.5 h-3.5" />
+                     </button>
+                   </span>
+                ))}
+              </div>
+            )}
+
+            {/* Grid */}
+            {loading ? (
+              <div className="flex justify-center items-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-[#C9973A]" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                {filteredCategories.map((category) => {
+                  const hasSelectedSub = selectedCategories.some(c => c.parentId === category.id);
+                  const { icon: CategoryIcon } = getCategoryStyles(category.id);
+                  
+                  return (
+                    <div 
+                      key={category.id}
+                      onClick={() => handleGeneralCategoryClick(category)}
+                      className={`relative h-[120px] rounded-[20px] overflow-hidden cursor-pointer group transition-all duration-300 border-[1.5px] ${
+                        hasSelectedSub 
+                          ? 'border-[#C9973A] bg-white shadow-[0_4px_16px_rgba(201,151,58,0.12)]' 
+                          : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30 hover:shadow-[0_4px_16px_rgba(0,0,0,0.04)]'
+                      }`}
+                    >
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
+                        <div className={`w-[52px] h-[52px] rounded-full flex items-center justify-center mb-3 transition-all duration-300 ${
+                          hasSelectedSub ? 'bg-[#C9973A] text-white' : 'bg-[#f8fafc] text-[#C9973A] group-hover:bg-[#C9973A] group-hover:text-white'
+                        }`}>
+                          <CategoryIcon className="w-[26px] h-[26px]" />
+                        </div>
+                        
+                        <h4 className="font-sans text-[13px] font-bold text-[#1a1a2e] leading-tight">
+                          {category.name}
+                        </h4>
+                      </div>
+
+                      {hasSelectedSub && (
+                        <div className="absolute top-3 right-3 w-5 h-5 bg-[#C9973A] rounded-full flex items-center justify-center z-20 shadow-sm">
+                          <Check className="w-3 h-3 text-white" strokeWidth={4} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Submit Button */}
+            {selectedCategories.length > 0 && (
+              <div className="pt-4 pb-8">
+                <button 
+                  onClick={handleComplete}
+                  disabled={loading}
+                  className="w-full h-[54px] bg-[#C9973A] rounded-[50px] flex items-center justify-center gap-[10px] font-sans text-[15px] font-semibold text-white tracking-[0.02em] shadow-[0_4px_16px_rgba(201,151,58,0.35)] disabled:opacity-50 transition-all"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Consolidating...</span>
+                    </>
+                  ) : (
+                    submitLabel
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );

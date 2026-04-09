@@ -275,7 +275,7 @@ export default function BusinessVerification() {
               {identityFiles.length > 0 && (
                 <div className="space-y-2">
                   {identityFiles.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                    <div key={file.name} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
                       <div className="flex items-center gap-3 min-w-0">
                         <FileText className="w-5 h-5 text-brand-yellow flex-shrink-0" />
                         <span className="text-sm text-slate-700 truncate">{file.name}</span>
@@ -324,7 +324,7 @@ export default function BusinessVerification() {
               {businessFiles.length > 0 && (
                 <div className="space-y-2">
                   {businessFiles.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                    <div key={file.name} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
                       <div className="flex items-center gap-3 min-w-0">
                         <FileText className="w-5 h-5 text-brand-yellow flex-shrink-0" />
                         <span className="text-sm text-slate-700 truncate">{file.name}</span>
@@ -377,7 +377,7 @@ export default function BusinessVerification() {
               {files.length > 0 ? (
                 <div className="space-y-2">
                   {files.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                    <div key={file.name} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
                       <div className="flex items-center gap-3 min-w-0">
                         <FileText className="w-5 h-5 text-brand-yellow flex-shrink-0" />
                         <span className="text-sm text-slate-700 truncate">{file.name}</span>

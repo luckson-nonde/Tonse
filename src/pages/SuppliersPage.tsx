@@ -9,17 +9,7 @@ export default function SuppliersPage() {
   const shops = useLiveQuery(() => db.shops.toArray()) || [];
 
   return (
-    <div className="flex flex-col space-y-8 max-w-3xl mx-auto pb-24 px-4 pt-6">
-      <div className="flex items-center gap-4 mb-2">
-        <button 
-          onClick={() => navigate(-1)}
-          className="w-12 h-12 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 shadow-sm hover:bg-slate-50 hover:text-[#1a1612] transition-all"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h2 className="text-3xl font-serif font-bold text-[#1a1612]">Verified Suppliers</h2>
-      </div>
-
+    <div className="flex flex-col space-y-8 max-w-3xl mx-auto pb-24 px-4 pt-2">
       {/* Search Bar */}
       <div className="flex gap-3">
         <div className="relative flex-1 group">

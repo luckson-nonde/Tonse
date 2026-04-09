@@ -37,9 +37,7 @@ export default function ArchivedQuotesPage() {
   ) || [];
 
   return (
-    <div className="flex flex-col space-y-6 max-w-3xl mx-auto pb-6">
-      <h2 className="text-2xl font-bold text-slate-900 px-1">Archived Quotations</h2>
-
+    <div className="flex flex-col space-y-6 max-w-3xl mx-auto pb-6 pt-2">
       <div className="space-y-4">
         {archivedQuotes.length === 0 ? (
           <div className="bg-white rounded-[32px] p-12 text-center border border-slate-100">

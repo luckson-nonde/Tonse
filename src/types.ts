@@ -1,4 +1,13 @@
-export type SubRole = 'INDIVIDUAL_BUYER' | 'COMPANY_BUYER' | 'PRODUCT_SELLER' | 'SERVICE_SELLER' | 'HYBRID_SELLER';
+export type SubRole = 
+  | 'INDIVIDUAL_BUYER' 
+  | 'COMPANY_BUYER' 
+  | 'COMPANY_PROCUREMENT_OFFICER'
+  | 'COMPANY_SECRETARY'
+  | 'COMPANY_RECEPTIONIST'
+  | 'COMPANY_MANAGER'
+  | 'PRODUCT_SELLER' 
+  | 'SERVICE_SELLER' 
+  | 'HYBRID_SELLER';
 export type EntityType = 'INDIVIDUAL' | 'BUSINESS';
 
 export interface InquiryItem {
@@ -36,6 +45,10 @@ export interface Inquiry {
     urgency?: string;
   };
   attributes?: Record<string, any>;
+  processType?: 'EXPRESS' | 'STANDARD';
+  currentStage?: 'quotation' | 'purchase_order' | 'order_confirmation' | 'delivery_order' | 'completed';
+  archivedBy?: string[];
+  deletedBy?: string[];
   // Legacy fields for backward compatibility
   entertainmentData?: any;
   repairData?: any;
@@ -186,4 +199,59 @@ export interface AuditLog {
   amount?: number;
   details?: string;
   timestamp: number;
+}
+
+export interface PurchaseOrder {
+  id?: number;
+  inquiryId: number;
+  quotationId: number;
+  buyerId: number;
+  providerId: number;
+  lineItems: {
+    itemId: string;
+    name: string;
+    quotedPrice: number;
+    quantity: number;
+    minQuantity?: number;
+    maxQuantity?: number;
+  }[];
+  removedItems: string[];
+  paymentMethod: 'pay_now' | 'pay_later';
+  paymentDueDate?: string;
+  status: 'pending_seller_action' | 'accepted' | 'rejected';
+  rejectionReason?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface OrderConfirmation {
+  id?: number;
+  poId: number;
+  inquiryId: number;
+  quoteId: number;
+  buyerId: number;
+  providerId: number;
+  items: InquiryItem[];
+  notes?: string;
+  processingTime?: string;
+  expectedDeliveryDate?: string;
+  paymentStatus: 'PAID' | 'SCHEDULED';
+  confirmationReference: string;
+  createdAt: number;
+}
+
+export interface DeliveryOrder {
+  id?: number;
+  inquiryId: number;
+  quotationId: number;
+  purchaseOrderId: number;
+  orderConfirmationId: number;
+  buyerId: number;
+  sellerId: number;
+  qrCode: string;
+  status: 'pending_pickup' | 'collection_started' | 'collected' | 'completed';
+  sellerNotes?: string;
+  collectionTimestamp?: string;
+  createdAt: string;
+  updatedAt: string;
 }

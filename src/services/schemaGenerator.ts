@@ -38,6 +38,13 @@ export function generateZodSchema(fields: FieldSchema[]) {
         fieldSchema = z.any();
         break;
 
+      case 'gps':
+        fieldSchema = z.object({
+          latitude: z.number(),
+          longitude: z.number()
+        }).optional();
+        break;
+
       case 'textarea':
       case 'text':
       default:

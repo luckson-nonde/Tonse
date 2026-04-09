@@ -1,7 +1,7 @@
 export interface FieldSchema {
   name: string;
   label: string;
-  type: 'text' | 'textarea' | 'number' | 'select' | 'date' | 'daterange' | 'currency' | 'image_upload' | 'toggle' | 'counter';
+  type: 'text' | 'textarea' | 'number' | 'select' | 'date' | 'daterange' | 'currency' | 'image_upload' | 'toggle' | 'counter' | 'gps';
   placeholder?: string;
   required: boolean;
   options?: string[];

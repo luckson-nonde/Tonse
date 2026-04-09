@@ -76,7 +76,7 @@ export default function PinModal({ isOpen, onClose, onSuccess }: PinModalProps) 
           <div className="flex justify-center gap-3 mb-8">
             {[0, 1, 2, 3].map((i) => (
               <div 
-                key={i} 
+                key={`pin-dot-${i}`} 
                 className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center text-2xl font-black transition-all ${
                   pin.length > i ? 'border-[#d49b35] bg-[#fdf6e9] text-[#d49b35]' : 'border-slate-100 bg-slate-50 text-slate-300'
                 }`}
@@ -92,7 +92,7 @@ export default function PinModal({ isOpen, onClose, onSuccess }: PinModalProps) 
           <div className="grid grid-cols-3 gap-3 mb-8">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, '', 0, 'delete'].map((val, i) => (
               <button
-                key={i}
+                key={val === '' ? `empty-${i}` : val}
                 onClick={() => {
                   if (typeof val === 'number') handleNumberClick(val);
                   if (val === 'delete') handleDelete();

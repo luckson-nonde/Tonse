@@ -137,7 +137,7 @@ export default function FinancialPage() {
           <div className="flex justify-center gap-3 mb-6">
             {[0, 1, 2, 3].map((i) => (
               <div 
-                key={i} 
+                key={`pin-dot-${i}`} 
                 className={`w-12 h-14 rounded-[12px] border-2 flex items-center justify-center text-xl font-bold transition-all ${
                   pinInput.length > i ? 'border-[#d49b35] bg-[#fdf6e9] text-[#d49b35]' : 'border-[#f1f5f9] bg-transparent text-slate-300'
                 }`}
@@ -150,7 +150,7 @@ export default function FinancialPage() {
           <div className="grid grid-cols-3 gap-3 mb-6">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, '', 0, 'delete'].map((num, i) => (
               <button
-                key={i}
+                key={num === '' ? `empty-${i}` : num}
                 onClick={() => {
                   if (num === 'delete') {
                     setPinInput(prev => prev.slice(0, -1));
@@ -223,7 +223,11 @@ export default function FinancialPage() {
             </button>
           </div>
           <div className="flex justify-between items-end">
-            <p className="text-slate-400 font-mono tracking-widest text-sm">**** **** **** {user?.id?.toString().padStart(4, '0') || '0000'}</p>
+            <p className="text-slate-400 font-mono tracking-widest text-sm">
+              {user?.virtualAccountNumber 
+                ? user.virtualAccountNumber.match(/.{1,4}/g)?.join(' ') 
+                : `**** **** **** ${user?.id?.toString().padStart(4, '0') || '0000'}`}
+            </p>
             <div className="flex -space-x-2">
               <div className="w-6 h-6 rounded-full bg-red-500/80 border border-white/20"></div>
               <div className="w-6 h-6 rounded-full bg-[#d49b35]/80 border border-white/20"></div>
@@ -270,8 +274,8 @@ export default function FinancialPage() {
           { icon: Receipt, label: 'Bills' },
           { icon: Wifi, label: 'Airtime' },
           { icon: Zap, label: 'Electricity' },
-        ].map((item, i) => (
-          <div key={i} className="flex flex-col items-center gap-2">
+        ].map((item) => (
+          <div key={item.label} className="flex flex-col items-center gap-2">
             <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-[#d49b35] border border-slate-50">
               <item.icon className="w-6 h-6" />
             </div>
@@ -292,8 +296,8 @@ export default function FinancialPage() {
               <p className="text-slate-400 text-sm font-medium">No transactions yet.</p>
             </div>
           ) : (
-            transactions.map((activity) => (
-              <div key={activity.id} className="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm border border-slate-100">
+            transactions.map((activity, idx) => (
+              <div key={activity.id || `tx-${idx}`} className="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm border border-slate-100">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${activity.type === 'OUT' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
                     {activity.type === 'OUT' ? <Send className="w-5 h-5 rotate-45" /> : <Send className="w-5 h-5 -rotate-135" />}

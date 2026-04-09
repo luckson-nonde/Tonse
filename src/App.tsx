@@ -28,6 +28,7 @@ import BuyerProfilePage from './pages/BuyerProfilePage';
 import VenueSpacesManager from './pages/VenueSpacesManager';
 import ForcePasswordChange from './pages/ForcePasswordChange';
 import AuditTrailPage from './pages/AuditTrailPage';
+import ArchivedLeadsPage from './pages/ArchivedLeadsPage';
 
 function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode, allowedRoles?: string[] }) {
   const { user, isLoading } = useAuth();
@@ -48,145 +49,155 @@ function RootRedirect() {
 }
 
 import { DashboardProvider } from './DashboardContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
   return (
-    <AuthProvider>
-      <DashboardProvider>
-        <Router>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/role-selection" element={<RoleSelection />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/register/company-documents" element={<CompanyDocuments />} />
-            <Route path="/business-verification" element={<BusinessVerification />} />
-            <Route path="/seller/categories" element={<SellerCategorySelection />} />
-            <Route path="/seller/location" element={<SellerLocationDetails />} />
-            <Route path="/store-verification" element={<StoreVerification />} />
-            <Route path="/verification-pending" element={<VerificationPending />} />
-            <Route path="/force-password-change" element={
-              <ProtectedRoute>
-                <ForcePasswordChange />
-              </ProtectedRoute>
-            } />
-            <Route path="/" element={<RootRedirect />} />
-            <Route path="/buyer" element={
-              <ProtectedRoute allowedRoles={['BUYER']}>
-                <DashboardLayout>
-                  <BuyerDashboard />
-                </DashboardLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/buyer/financial" element={
-              <ProtectedRoute allowedRoles={['BUYER']}>
-                <FinancialPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/buyer/quote-details" element={
-              <ProtectedRoute allowedRoles={['BUYER']}>
-                <QuoteDetailsPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/buyer/collection-code/:id" element={
-              <ProtectedRoute allowedRoles={['BUYER']}>
-                <CollectionCodePage />
-              </ProtectedRoute>
-            } />
-            <Route path="/buyer/payment" element={
-              <ProtectedRoute allowedRoles={['BUYER']}>
-                <PaymentPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/buyer/payment-success" element={
-              <ProtectedRoute allowedRoles={['BUYER']}>
-                <PaymentSuccessPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/buyer/archived" element={
-              <ProtectedRoute allowedRoles={['BUYER']}>
-                <DashboardLayout>
-                  <ArchivedQuotesPage />
-                </DashboardLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/buyer/shop-details" element={
-              <ProtectedRoute allowedRoles={['BUYER']}>
-                <DashboardLayout>
-                  <ShopDetailsPage />
-                </DashboardLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/buyer/shop-products" element={
-              <ProtectedRoute allowedRoles={['BUYER']}>
-                <DashboardLayout>
-                  <ShopProductsPage />
-                </DashboardLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/buyer/suppliers" element={
-              <ProtectedRoute allowedRoles={['BUYER']}>
-                <DashboardLayout>
-                  <SuppliersPage />
-                </DashboardLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/buyer/profile" element={
-              <ProtectedRoute allowedRoles={['BUYER']}>
-                <DashboardLayout>
-                  <BuyerProfilePage />
-                </DashboardLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/schedule" element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <SchedulePage />
-                </DashboardLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/provider" element={
-              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS', 'PROVIDER_STAFF']}>
-                <DashboardLayout>
-                  <ProviderDashboard />
-                </DashboardLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/provider/suppliers" element={
-              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS', 'PROVIDER_STAFF']}>
-                <DashboardLayout>
-                  <SuppliersPage />
-                </DashboardLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/provider/financial" element={
-              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS']}>
-                <FinancialPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/provider/profile" element={
-              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS', 'PROVIDER_STAFF']}>
-                <DashboardLayout>
-                  <ShopProfilePage />
-                </DashboardLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/provider/venue-spaces" element={
-              <ProtectedRoute allowedRoles={['EVENTS', 'PROVIDER_STAFF']}>
-                <DashboardLayout>
-                  <VenueSpacesManager />
-                </DashboardLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/provider/audit-trail" element={
-              <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS', 'PROVIDER_STAFF']}>
-                <DashboardLayout>
-                  <AuditTrailPage />
-                </DashboardLayout>
-              </ProtectedRoute>
-            } />
-          </Routes>
-        </Router>
-      </DashboardProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <DashboardProvider>
+          <Router>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/role-selection" element={<RoleSelection />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/register/company-documents" element={<CompanyDocuments />} />
+              <Route path="/business-verification" element={<BusinessVerification />} />
+              <Route path="/seller/categories" element={<SellerCategorySelection />} />
+              <Route path="/seller/location" element={<SellerLocationDetails />} />
+              <Route path="/store-verification" element={<StoreVerification />} />
+              <Route path="/verification-pending" element={<VerificationPending />} />
+              <Route path="/force-password-change" element={
+                <ProtectedRoute>
+                  <ForcePasswordChange />
+                </ProtectedRoute>
+              } />
+              <Route path="/" element={<RootRedirect />} />
+              <Route path="/buyer" element={
+                <ProtectedRoute allowedRoles={['BUYER']}>
+                  <DashboardLayout>
+                    <BuyerDashboard />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/buyer/financial" element={
+                <ProtectedRoute allowedRoles={['BUYER']}>
+                  <FinancialPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/buyer/quote-details" element={
+                <ProtectedRoute allowedRoles={['BUYER']}>
+                  <QuoteDetailsPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/buyer/collection-code/:id" element={
+                <ProtectedRoute allowedRoles={['BUYER']}>
+                  <CollectionCodePage />
+                </ProtectedRoute>
+              } />
+              <Route path="/buyer/payment" element={
+                <ProtectedRoute allowedRoles={['BUYER']}>
+                  <PaymentPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/buyer/payment-success" element={
+                <ProtectedRoute allowedRoles={['BUYER']}>
+                  <PaymentSuccessPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/buyer/archived" element={
+                <ProtectedRoute allowedRoles={['BUYER']}>
+                  <DashboardLayout>
+                    <ArchivedQuotesPage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/buyer/shop-details" element={
+                <ProtectedRoute allowedRoles={['BUYER']}>
+                  <DashboardLayout>
+                    <ShopDetailsPage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/buyer/shop-products" element={
+                <ProtectedRoute allowedRoles={['BUYER']}>
+                  <DashboardLayout>
+                    <ShopProductsPage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/buyer/suppliers" element={
+                <ProtectedRoute allowedRoles={['BUYER']}>
+                  <DashboardLayout>
+                    <SuppliersPage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/buyer/profile" element={
+                <ProtectedRoute allowedRoles={['BUYER']}>
+                  <DashboardLayout>
+                    <BuyerProfilePage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/schedule" element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <SchedulePage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/provider" element={
+                <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS', 'PROVIDER_STAFF']}>
+                  <DashboardLayout>
+                    <ProviderDashboard />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/provider/suppliers" element={
+                <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS', 'PROVIDER_STAFF']}>
+                  <DashboardLayout>
+                    <SuppliersPage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/provider/financial" element={
+                <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS']}>
+                  <FinancialPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/provider/profile" element={
+                <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS', 'PROVIDER_STAFF']}>
+                  <DashboardLayout>
+                    <ShopProfilePage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/provider/venue-spaces" element={
+                <ProtectedRoute allowedRoles={['EVENTS', 'PROVIDER_STAFF']}>
+                  <DashboardLayout>
+                    <VenueSpacesManager />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/provider/audit-trail" element={
+                <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS', 'PROVIDER_STAFF']}>
+                  <DashboardLayout>
+                    <AuditTrailPage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/provider/archived-leads" element={
+                <ProtectedRoute allowedRoles={['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS', 'PROVIDER_STAFF']}>
+                  <DashboardLayout>
+                    <ArchivedLeadsPage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              } />
+            </Routes>
+          </Router>
+        </DashboardProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

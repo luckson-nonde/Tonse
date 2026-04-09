@@ -151,7 +151,7 @@ export default function ShopDetailsPage() {
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {shop.proofPhotos.map((photo, i) => (
-                    <div key={i} className="aspect-square rounded-2xl overflow-hidden border border-slate-100 shadow-sm">
+                    <div key={photo} className="aspect-square rounded-2xl overflow-hidden border border-slate-100 shadow-sm">
                       <img 
                         src={photo} 
                         alt={`Proof ${i + 1}`} 
@@ -179,8 +179,8 @@ export default function ShopDetailsPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {trendingItems.length > 0 ? (
-                    trendingItems.map((item, i) => (
-                      <div key={i} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+                    trendingItems.map((item) => (
+                      <div key={item.title} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
                         <div className="flex items-start justify-between mb-2">
                           <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-brand-blue/10 group-hover:text-brand-blue transition-colors">
                             <ShoppingBag className="w-4 h-4" />
@@ -252,9 +252,9 @@ export default function ShopDetailsPage() {
                   <h3 className="text-[18px] font-serif font-bold text-[#1e293b]">Documents</h3>
                 </div>
                 <div className="space-y-3">
-                  {shop.registrationDocuments.map((doc, i) => (
+                  {shop.registrationDocuments.map((doc) => (
                     <a 
-                      key={i} 
+                      key={doc} 
                       href={doc} 
                       target="_blank" 
                       rel="noopener noreferrer"

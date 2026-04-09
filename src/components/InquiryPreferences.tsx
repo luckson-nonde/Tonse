@@ -13,7 +13,7 @@ interface InquiryPreferencesProps {
 }
 
 export default function InquiryPreferences({ onBack, onNext }: InquiryPreferencesProps) {
-  const [destination, setDestination] = useState<'chain' | 'local'>('chain');
+  const [destination, setDestination] = useState<'chain' | 'local' | 'service'>('chain');
   const [validity, setValidity] = useState<'7' | '15' | '30'>('7');
   const [maxQuotes, setMaxQuotes] = useState('10');
   const [isConfidential, setIsConfidential] = useState(false);
@@ -61,33 +61,45 @@ export default function InquiryPreferences({ onBack, onNext }: InquiryPreference
             </div>
             Target Destination
           </h3>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div 
               onClick={() => setDestination('chain')}
-              className={`p-5 rounded-2xl border-[1.5px] cursor-pointer transition-all relative flex flex-col items-center gap-3 ${destination === 'chain' ? 'border-[#C9973A] bg-[rgba(201,151,58,0.03)]' : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'}`}
+              className={`p-4 rounded-2xl border-[1.5px] cursor-pointer transition-all relative flex flex-col items-center gap-2 text-center ${destination === 'chain' ? 'border-[#C9973A] bg-[rgba(201,151,58,0.03)]' : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'}`}
             >
               {destination === 'chain' && (
-                <div className="absolute top-2 right-2 w-5 h-5 bg-[#C9973A] rounded-full flex items-center justify-center shadow-sm">
-                  <Check className="w-3 h-3 text-white" strokeWidth={4} />
+                <div className="absolute top-2 right-2 w-4 h-4 bg-[#C9973A] rounded-full flex items-center justify-center shadow-sm">
+                  <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
                 </div>
               )}
-              <Building2 className={`w-8 h-8 transition-colors ${destination === 'chain' ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`} />
-              <p className={`font-sans font-bold text-[13px] transition-colors ${destination === 'chain' ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}>Chain Stores</p>
+              <Building2 className={`w-6 h-6 transition-colors ${destination === 'chain' ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`} />
+              <p className={`font-sans font-bold text-[11px] leading-tight transition-colors ${destination === 'chain' ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}>Chain Stores</p>
             </div>
             <div 
               onClick={() => setDestination('local')}
-              className={`p-5 rounded-2xl border-[1.5px] cursor-pointer transition-all relative flex flex-col items-center gap-3 ${destination === 'local' ? 'border-[#C9973A] bg-[rgba(201,151,58,0.03)]' : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'}`}
+              className={`p-4 rounded-2xl border-[1.5px] cursor-pointer transition-all relative flex flex-col items-center gap-2 text-center ${destination === 'local' ? 'border-[#C9973A] bg-[rgba(201,151,58,0.03)]' : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'}`}
             >
               {destination === 'local' && (
-                <div className="absolute top-2 right-2 w-5 h-5 bg-[#C9973A] rounded-full flex items-center justify-center shadow-sm">
-                  <Check className="w-3 h-3 text-white" strokeWidth={4} />
+                <div className="absolute top-2 right-2 w-4 h-4 bg-[#C9973A] rounded-full flex items-center justify-center shadow-sm">
+                  <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
                 </div>
               )}
-              <Store className={`w-8 h-8 transition-colors ${destination === 'local' ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`} />
-              <p className={`font-sans font-bold text-[13px] transition-colors ${destination === 'local' ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}>Local Shops</p>
+              <Store className={`w-6 h-6 transition-colors ${destination === 'local' ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`} />
+              <p className={`font-sans font-bold text-[11px] leading-tight transition-colors ${destination === 'local' ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}>Local Shops</p>
+            </div>
+            <div 
+              onClick={() => setDestination('service')}
+              className={`p-4 rounded-2xl border-[1.5px] cursor-pointer transition-all relative flex flex-col items-center gap-2 text-center ${destination === 'service' ? 'border-[#C9973A] bg-[rgba(201,151,58,0.03)]' : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'}`}
+            >
+              {destination === 'service' && (
+                <div className="absolute top-2 right-2 w-4 h-4 bg-[#C9973A] rounded-full flex items-center justify-center shadow-sm">
+                  <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
+                </div>
+              )}
+              <Settings className={`w-6 h-6 transition-colors ${destination === 'service' ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`} />
+              <p className={`font-sans font-bold text-[11px] leading-tight transition-colors ${destination === 'service' ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}>Service Providers</p>
             </div>
           </div>
-          <p className="text-[11px] font-medium text-[#94a3b8] ml-1 leading-relaxed font-sans">Choose between major retailers or include independent local businesses in your search.</p>
+          <p className="text-[11px] font-medium text-[#94a3b8] ml-1 leading-relaxed font-sans">Choose between major retailers, independent local businesses, or specialized service providers.</p>
         </div>
 
         {/* Quote Settings */}

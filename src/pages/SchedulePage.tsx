@@ -126,7 +126,7 @@ export default function SchedulePage() {
         {/* Calendar Grid */}
         <div className="grid grid-cols-7 gap-1 mb-4">
           {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => (
-            <div key={i} className="text-center text-xs font-bold opacity-60 py-2">
+            <div key={`${day}-${i}`} className="text-center text-xs font-bold opacity-60 py-2">
               {day}
             </div>
           ))}
@@ -239,7 +239,7 @@ function CalendarGrid({ currentMonth, selectedDate, onDateSelect, hasEventsOnDay
 
   return (
     <>
-      {displayDays.map((day, i) => {
+      {displayDays.map((day) => {
         const isSelected = isSameDay(day, selectedDate);
         const isCurrentMonth = isSameMonth(day, monthStart);
         const hasEvents = hasEventsOnDay(day);
@@ -247,7 +247,7 @@ function CalendarGrid({ currentMonth, selectedDate, onDateSelect, hasEventsOnDay
 
         return (
           <button
-            key={i}
+            key={day.toISOString()}
             onClick={() => onDateSelect(day)}
             className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-all ${
               isSelected ? 'bg-white text-[#C9973A] shadow-md scale-110 z-10' : 'hover:bg-white/10'

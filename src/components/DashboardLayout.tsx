@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Bell, Home, ClipboardCheck, List, Store, X, ChevronLeft, PlusCircle, MessageSquare, FileText, User, Users, Truck, QrCode, ChevronRight, Archive, Calendar, MapPin, History } from 'lucide-react';
+import { Menu, Bell, Home, ClipboardCheck, List, Store, X, ChevronLeft, PlusCircle, MessageSquare, FileText, User, Users, Truck, QrCode, ChevronRight, Archive, Calendar, MapPin, History, ChevronDown } from 'lucide-react';
 import Logo from './Logo';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -16,16 +16,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { activeTab, setActiveTab } = useDashboard();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const notificationCounts = useLiveQuery(async () => {
-    if (!user) return { inquiries: 0, quotes: 0 };
+    if (!user) return { inquiries: 0, quotes: 0, activeInquiry: null };
     
     if (user.role === 'BUYER') {
-      if (!user.id) return { inquiries: 0, quotes: 0 };
+      if (!user.id) return { inquiries: 0, quotes: 0, activeInquiry: null };
       const userInquiries = await db.inquiries.where('buyerId').equals(user.id).toArray();
+      const activeInquiry = userInquiries.find(i => i.status === 'OPEN') || null;
       const allInquiryIds = userInquiries.map(i => i.id!).filter(id => id !== undefined);
       
-      if (allInquiryIds.length === 0) return { inquiries: 0, quotes: 0 };
+      if (allInquiryIds.length === 0) return { inquiries: 0, quotes: 0, activeInquiry };
       
       // Quotes tab badge: Total number of unread PENDING quotes across all inquiries
       const pendingQuotes = await db.quotes
@@ -46,19 +48,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         unquotedInquiriesCount = openInquiryIds.filter(id => !inquiriesWithQuotes.has(id)).length;
       }
       
-      return { inquiries: unquotedInquiriesCount, quotes: pendingQuotes.length };
+      return { inquiries: unquotedInquiriesCount, quotes: pendingQuotes.length, activeInquiry };
     } else {
       const inquiries = await db.inquiries.where('status').equals('OPEN').toArray();
       const relevantInquiries = user.categories && user.categories.length > 0
         ? inquiries.filter(i => user.categories!.includes(i.category))
         : inquiries;
         
-      if (relevantInquiries.length === 0) return { inquiries: 0, quotes: 0 };
+      if (relevantInquiries.length === 0) return { inquiries: 0, quotes: 0, activeInquiry: null };
       
       const relevantInquiryIds = relevantInquiries.map(i => i.id!).filter(id => id !== undefined);
       
       const effectiveProviderId = user.parentProviderId || user.id;
-      if (!effectiveProviderId) return { inquiries: 0, quotes: 0 };
+      if (!effectiveProviderId) return { inquiries: 0, quotes: 0, activeInquiry: null };
       
       // Find quotes submitted by THIS seller
       const sellerQuotes = await db.quotes
@@ -70,7 +72,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       // Seller Inquiries badge: Relevant open inquiries that the seller HAS NOT quoted yet
       const unquotedRelevantInquiriesCount = relevantInquiryIds.filter(id => !inquiriesQuotedBySeller.has(id)).length;
       
-      return { inquiries: unquotedRelevantInquiriesCount, quotes: 0 };
+      return { inquiries: unquotedRelevantInquiriesCount, quotes: 0, activeInquiry: null };
     }
   }, [user]);
 
@@ -80,11 +82,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     
     const isBuyer = user?.role === 'BUYER';
     const basePath = isBuyer ? '/buyer' : '/provider';
+    const activeInquiry = notificationCounts?.activeInquiry;
 
-    if (tab === 'suppliers') {
+    if (['quotation', 'purchase_order', 'order_confirmation', 'delivery_order'].includes(tab)) {
+      if (activeInquiry) {
+        navigate(`${basePath}/inquiries/${activeInquiry.id}/${tab}`);
+      } else {
+        navigate(`${basePath}/inquiries`);
+      }
+    } else if (tab === 'collection') {
+      if (activeInquiry) {
+        navigate(`${basePath}/inquiries/${activeInquiry.id}/collection`);
+      } else {
+        navigate(`${basePath}/inquiries`);
+      }
+    } else if (tab === 'suppliers') {
       navigate(`${basePath}/suppliers`);
     } else if (tab === 'archived') {
       navigate(`${basePath}/archived`);
+    } else if (tab === 'archived-leads') {
+      navigate(`${basePath}/archived-leads`);
     } else if (tab === 'profile') {
       navigate(`${basePath}/profile`);
     } else if (tab === 'schedule') {
@@ -96,7 +113,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     } else {
       navigate(basePath);
     }
-  }, [setActiveTab, navigate, user?.role]);
+  }, [setActiveTab, navigate, user?.role, notificationCounts?.activeInquiry]);
 
   React.useEffect(() => {
     console.log('DashboardLayout activeTab state:', activeTab);
@@ -105,7 +122,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const getPageTitle = () => {
     const isBookingBased = user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS';
     switch(activeTab) {
-      case 'home': return 'HOME';
+      case 'home':
+      case 'dashboard': return 'MARKETPLACE OVERVIEW';
       case 'quotes': return 'RECEIVED QUOTATIONS';
       case 'inquiries': return 'MY INQUIRIES';
       case 'create-inquiry': return 'EVENT BOOKING REQUEST';
@@ -221,7 +239,54 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             
             {user?.role === 'BUYER' ? (
               <>
-                <NavLink tab="inquiries" icon={FileText} label="My Inquiries" isActive={['inquiries', 'create-inquiry', 'inquiry-items', 'category-selection', 'inquiry-preferences', 'location-details'].includes(activeTab)} badgeCount={notificationCounts?.inquiries} />
+                {notificationCounts?.activeInquiry?.processType === 'STANDARD' ? (
+                  <div className="w-full">
+                    <button 
+                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                      className="flex items-center justify-between w-full px-4 py-3 text-[14px] font-medium font-sans text-[#1e293b] hover:bg-slate-50 border-l-[3px] border-transparent"
+                    >
+                      <div className="flex items-center">
+                        <FileText className="w-[18px] h-[18px] mr-4 stroke-[1.8]" /> My Inquiries
+                      </div>
+                      {isDropdownOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                    </button>
+                    {isDropdownOpen && (
+                      <div className="pl-8 space-y-1 pb-2">
+                        {['quotation', 'purchase_order', 'order_confirmation', 'delivery_order'].map((stage) => {
+                          const stages = ['quotation', 'purchase_order', 'order_confirmation', 'delivery_order'];
+                          const currentStage = notificationCounts.activeInquiry?.currentStage || 'quotation';
+                          
+                          // Check if order confirmation exists to unlock delivery order
+                          const hasOrderConfirmation = notificationCounts.activeInquiry?.currentStage === 'delivery_order' || 
+                                                       (notificationCounts.activeInquiry?.currentStage === 'order_confirmation' && stage === 'delivery_order');
+                          
+                          const isUnlocked = stages.indexOf(stage) <= stages.indexOf(currentStage) || (stage === 'delivery_order' && currentStage === 'order_confirmation');
+                          
+                          const stageLabels: Record<string, string> = {
+                            quotation: 'Quotations',
+                            purchase_order: 'Purchase Order',
+                            order_confirmation: 'Order Confirmation',
+                            delivery_order: 'Delivery Order'
+                          };
+                          return (
+                            <button 
+                              key={stage}
+                              disabled={!isUnlocked}
+                              onClick={() => handleTabClick(stage)}
+                              className={`flex items-center w-full px-4 py-2 text-[13px] font-medium font-sans transition-all duration-200 ${
+                                activeTab === stage ? 'text-[#C9973A]' : isUnlocked ? 'text-[#64748b]' : 'text-slate-300 cursor-not-allowed'
+                              }`}
+                            >
+                              {stageLabels[stage]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <NavLink tab="inquiries" icon={FileText} label="My Inquiries" isActive={['inquiries', 'create-inquiry', 'inquiry-items', 'category-selection', 'inquiry-preferences', 'location-details'].includes(activeTab)} badgeCount={notificationCounts?.inquiries} />
+                )}
                 <NavLink tab="quotes" icon={MessageSquare} label="Quotes Received" isActive={activeTab === 'quotes'} badgeCount={notificationCounts?.quotes} />
                 <NavLink tab="shops" icon={Store} label="Saved Shops" isActive={activeTab === 'shops'} />
                 <NavLink tab="suppliers" icon={Users} label="Suppliers" isActive={activeTab === 'suppliers'} />
@@ -235,6 +300,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <>
                     <NavLink tab="leads" icon={FileText} label={(user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS') ? 'Incoming Booking Requests' : 'Incoming Leads'} isActive={activeTab === 'leads'} badgeCount={notificationCounts?.inquiries} />
                     <NavLink tab="my-quotes" icon={MessageSquare} label="My Quotes" isActive={activeTab === 'my-quotes'} badgeCount={notificationCounts?.quotes} />
+                    <NavLink tab="archived-leads" icon={Archive} label="Archived Leads" isActive={activeTab === 'archived-leads'} />
                   </>
                 )}
                 
@@ -299,16 +365,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <span className="text-[#1e293b]">TON</span>
                   <span className="text-[#C9973A] -ml-[0.04em]">SE</span>
                 </span>
-                <span className="text-[11px] font-normal text-[#9ca3af] mt-1 font-sans">
-                  Good morning, {user?.name?.split(' ')[0] || 'Luckson'}
+                <span className="text-[11px] font-bold text-[#C9973A] mt-1 font-sans uppercase tracking-widest">
+                  {getPageTitle()}
                 </span>
+              </div>
+
+              {/* Desktop Title Section */}
+              <div className="hidden md:flex flex-col ml-4">
+                <h2 className="text-lg font-serif font-black text-[#1e293b] leading-tight uppercase tracking-tight">
+                  {getPageTitle()}
+                </h2>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                </p>
               </div>
 
               {/* Right Section: User Info & Notifications */}
               <div className="flex items-center space-x-4 ml-auto">
                 <div className="hidden sm:flex flex-col items-end mr-2">
-                  <span className="text-[11px] font-normal font-sans text-[#9ca3af] leading-none mb-1">Good morning,</span>
-                  <span className="text-sm font-medium font-sans text-[#1e293b] leading-none">{user?.name}</span>
+                  <span className="text-[11px] font-bold text-[#C9973A] uppercase tracking-widest leading-none mb-1">Welcome back,</span>
+                  <span className="text-sm font-black font-sans text-[#1e293b] leading-none">{user?.name?.split(' ')[0]}</span>
                 </div>
                 
                 <div className="relative flex items-center gap-3">

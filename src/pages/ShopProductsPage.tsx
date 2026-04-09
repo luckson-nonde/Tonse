@@ -153,9 +153,9 @@ export default function ShopProductsPage() {
 
           <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
             {trendingPosts.length > 0 ? (
-              trendingPosts.map((post, i) => (
+              trendingPosts.map((post) => (
                 <div 
-                  key={i} 
+                  key={post.title} 
                   className="flex-shrink-0 w-64 bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-100 hover:shadow-md transition-all group cursor-pointer"
                   onClick={() => navigate(`/buyer/create-inquiry?prefill=${encodeURIComponent(post.title)}`)}
                 >

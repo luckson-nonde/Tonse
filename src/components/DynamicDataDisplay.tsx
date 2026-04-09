@@ -36,7 +36,7 @@ export default function DynamicDataDisplay({ schema, attributes }: DynamicDataDi
       return (
         <div className="grid grid-cols-3 gap-2 mt-2">
           {item.value.map((url, idx) => (
-            <div key={idx} className="aspect-square rounded-lg overflow-hidden border border-slate-100 shadow-sm">
+            <div key={`${url}-${idx}`} className="aspect-square rounded-lg overflow-hidden border border-slate-100 shadow-sm">
               <img src={url} alt={`${item.label} ${idx}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             </div>
           ))}
@@ -64,7 +64,7 @@ export default function DynamicDataDisplay({ schema, attributes }: DynamicDataDi
       {ungroupedData.length > 0 && (
         <div className="grid grid-cols-1 gap-4">
           {ungroupedData.map((item, idx) => (
-            <div key={idx} className="flex flex-col gap-1">
+            <div key={`ungrouped-${item.label}-${idx}`} className="flex flex-col gap-1">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">{item.label}</span>
               <div className="text-sm">{renderValue(item)}</div>
             </div>
@@ -79,7 +79,7 @@ export default function DynamicDataDisplay({ schema, attributes }: DynamicDataDi
           </h4>
           <div className="grid grid-cols-1 gap-4">
             {items.map((item, idx) => (
-              <div key={idx} className="flex flex-col gap-1">
+              <div key={`grouped-${groupName}-${item.label}-${idx}`} className="flex flex-col gap-1">
                 <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">{item.label}</span>
                 <div className="text-sm">{renderValue(item)}</div>
               </div>

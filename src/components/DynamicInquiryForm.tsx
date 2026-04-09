@@ -13,6 +13,7 @@ interface DynamicInquiryFormProps {
   onSubmit: (data: Record<string, any>) => void;
   onBack: () => void;
   isLoading?: boolean;
+  processType?: 'EXPRESS' | 'STANDARD';
 }
 
 export default function DynamicInquiryForm({
@@ -20,7 +21,8 @@ export default function DynamicInquiryForm({
   categoryName,
   onSubmit,
   onBack,
-  isLoading
+  isLoading,
+  processType
 }: DynamicInquiryFormProps) {
   const [view, setView] = useState<'form' | 'catalog'>('form');
   const [selectedItems, setSelectedItems] = useState<Record<string, any>>({});
@@ -29,10 +31,14 @@ export default function DynamicInquiryForm({
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const zodSchema = generateZodSchema(schema);
+  const activeSchema = processType === 'EXPRESS' 
+    ? schema.filter(f => f.required || f.name === 'images' || f.name === 'budget_limit' || f.name === 'description')
+    : schema;
+
+  const zodSchema = generateZodSchema(activeSchema);
   const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(zodSchema),
-    defaultValues: schema.reduce((acc, field) => ({
+    defaultValues: activeSchema.reduce((acc, field) => ({
       ...acc,
       [field.name]: field.type === 'counter' ? (field.min || 1) : (field.type === 'toggle' ? false : '')
     }), {})
@@ -65,7 +71,7 @@ export default function DynamicInquiryForm({
     setValue(name, updatedImages);
   };
 
-  const requiredFields = schema.filter(f => f.required);
+  const requiredFields = activeSchema.filter(f => f.required);
   const filledRequiredFields = requiredFields.filter(f => {
     const val = formValues[f.name];
     return val !== undefined && val !== null && val !== '' && !(Array.isArray(val) && val.length === 0);
@@ -171,9 +177,9 @@ export default function DynamicInquiryForm({
               }
               return (
                 <div className="flex flex-wrap gap-x-[10px] gap-y-[12px]">
-                  {field.options?.map(option => (
+                  {field.options?.map((option, idx) => (
                     <motion.button
-                      key={option}
+                      key={`${option}-${idx}`}
                       whileTap={{ scale: 0.95 }}
                       type="button"
                       onClick={() => onChange(option)}
@@ -247,7 +253,7 @@ export default function DynamicInquiryForm({
                   {value && Array.isArray(value) && value.length > 0 && (
                     <div className="grid grid-cols-3 gap-2 mt-3">
                       {value.map((url: string, idx: number) => (
-                        <div key={idx} className="relative aspect-square rounded-[10px] overflow-hidden">
+                        <div key={`${url}-${idx}`} className="relative aspect-square rounded-[10px] overflow-hidden">
                           <img src={url} alt={`Upload ${idx}`} className="w-full h-full object-cover" />
                           <button
                             type="button"
@@ -485,7 +491,7 @@ export default function DynamicInquiryForm({
   const groupedFields: Record<string, FieldSchema[]> = {};
   const ungroupedFields: FieldSchema[] = [];
 
-  schema.forEach(field => {
+  activeSchema.forEach(field => {
     if (field.group) {
       if (!groupedFields[field.group]) {
         groupedFields[field.group] = [];

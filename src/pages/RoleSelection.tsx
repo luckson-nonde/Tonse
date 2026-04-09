@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingBag, Store, Truck, Wrench, Check, Music, Calendar, Smartphone, Armchair, Shirt, Home, Car, Hammer, Tractor, Laptop, User, Building2, Package, Settings, Layers } from 'lucide-react';
+import { ShoppingBag, Store, Truck, Wrench, Check, Music, Calendar, Smartphone, Armchair, Shirt, Home, Car, Hammer, Tractor, Laptop, User, Building2, Package, Settings, Layers, FileText, Users } from 'lucide-react';
 import AuthLayout from '../components/AuthLayout';
 import Button from '../components/Button';
 import { motion, AnimatePresence } from 'motion/react';
@@ -29,6 +29,37 @@ const buyerSubRoles: RoleOption[] = [
     description: 'Procure materials and services for your business.',
     icon: Building2,
     subRole: 'COMPANY_BUYER'
+  }
+];
+
+const companySubRoles: RoleOption[] = [
+  {
+    id: 'COMPANY_PROCUREMENT_OFFICER',
+    title: 'Procurement Officer',
+    description: 'Manage purchasing and supplier relationships.',
+    icon: ShoppingBag,
+    subRole: 'COMPANY_PROCUREMENT_OFFICER'
+  },
+  {
+    id: 'COMPANY_SECRETARY',
+    title: 'Secretary',
+    description: 'Handle administrative tasks and communications.',
+    icon: FileText,
+    subRole: 'COMPANY_SECRETARY'
+  },
+  {
+    id: 'COMPANY_RECEPTIONIST',
+    title: 'Receptionist',
+    description: 'Manage front desk and initial inquiries.',
+    icon: Users,
+    subRole: 'COMPANY_RECEPTIONIST'
+  },
+  {
+    id: 'COMPANY_MANAGER',
+    title: 'Manager/Owner',
+    description: 'Full access to company account and settings.',
+    icon: Building2,
+    subRole: 'COMPANY_MANAGER'
   }
 ];
 
@@ -61,11 +92,21 @@ export default function RoleSelection() {
   const [masterRole, setMasterRole] = useState<'BUYER' | 'SELLER' | null>(null);
   const [selectedSubRole, setSelectedSubRole] = useState<SubRole | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [isCompanyExpanded, setIsCompanyExpanded] = useState(false);
   const navigate = useNavigate();
 
   const handleMasterSelect = (role: 'BUYER' | 'SELLER') => {
     setMasterRole(role);
     setTier(2);
+  };
+
+  const handleSubRoleSelect = (subRole: SubRole) => {
+    if (subRole === 'COMPANY_BUYER') {
+      setIsCompanyExpanded(true);
+      setSelectedSubRole(null);
+    } else {
+      setSelectedSubRole(subRole);
+    }
   };
 
   const filteredCategories = React.useMemo(() => {
@@ -114,8 +155,13 @@ export default function RoleSelection() {
 
   const handleBack = () => {
     if (tier === 2) {
-      setTier(1);
-      setSelectedSubRole(null);
+      if (isCompanyExpanded) {
+        setIsCompanyExpanded(false);
+        setSelectedSubRole(null);
+      } else {
+        setTier(1);
+        setSelectedSubRole(null);
+      }
     } else if (tier === 3) {
       setTier(2);
     }
@@ -193,38 +239,65 @@ export default function RoleSelection() {
               exit={{ x: 20, opacity: 0 }}
               className="space-y-4"
             >
+              <AnimatePresence mode="popLayout">
+                {isCompanyExpanded && (
+                  <motion.div
+                    key="company-header"
+                    layoutId="COMPANY_BUYER"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    className="group p-5 rounded-2xl border border-brand-yellow bg-brand-yellow/5 shadow-md text-left flex items-center gap-4 mb-4"
+                  >
+                    <div className="p-3 rounded-xl shrink-0 bg-brand-yellow text-white">
+                      <Building2 className="w-5 h-5" strokeWidth={1.5} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-[15px] font-bold text-[#1a1612]">Company Account</h3>
+                      <p className="text-[13px] text-[#1a1612]/50 leading-snug mt-0.5">Select your role within the company.</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <div className="grid grid-cols-1 gap-3">
-                {(masterRole === 'BUYER' ? buyerSubRoles : sellerSubRoles).map((option) => {
-                  const isSelected = selectedSubRole === option.subRole;
-                  const Icon = option.icon;
-                  
-                  return (
-                    <button 
-                      key={option.id}
-                      onClick={() => setSelectedSubRole(option.subRole)}
-                      className={`group p-5 rounded-2xl border text-left transition-all flex items-center gap-4 ${
-                        isSelected 
-                          ? 'border-brand-yellow bg-brand-yellow/5 shadow-md' 
-                          : 'border-[#e8e4dc] bg-white hover:border-brand-yellow/30'
-                      }`}
-                    >
-                      <div className={`p-3 rounded-xl transition-colors shrink-0 ${isSelected ? 'bg-brand-yellow text-white' : 'bg-[#f5f2ee] text-[#1e293b]'}`}>
-                        <Icon className="w-5 h-5" strokeWidth={1.5} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className={`text-[15px] font-bold transition-colors ${isSelected ? 'text-[#1a1612]' : 'text-[#1a1612]/80'}`}>
-                          {option.title}
-                        </h3>
-                        <p className="text-[13px] text-[#1a1612]/50 leading-snug mt-0.5">{option.description}</p>
-                      </div>
-                      {isSelected && (
-                        <div className="w-6 h-6 rounded-full bg-brand-yellow flex items-center justify-center">
-                          <Check className="w-4 h-4 text-[#1a1612]" strokeWidth={3} />
+                <AnimatePresence mode="popLayout">
+                  {(isCompanyExpanded ? companySubRoles : (masterRole === 'BUYER' ? buyerSubRoles : sellerSubRoles)).map((option) => {
+                    const isSelected = selectedSubRole === option.subRole;
+                    const Icon = option.icon;
+                    
+                    return (
+                      <motion.button 
+                        layoutId={option.id}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        key={option.id}
+                        onClick={() => handleSubRoleSelect(option.subRole)}
+                        className={`group p-5 rounded-2xl border text-left transition-all flex items-center gap-4 ${
+                          isSelected 
+                            ? 'border-brand-yellow bg-brand-yellow/5 shadow-md' 
+                            : 'border-[#e8e4dc] bg-white hover:border-brand-yellow/30'
+                        }`}
+                      >
+                        <div className={`p-3 rounded-xl transition-colors shrink-0 ${isSelected ? 'bg-brand-yellow text-white' : 'bg-[#f5f2ee] text-[#1e293b]'}`}>
+                          <Icon className="w-5 h-5" strokeWidth={1.5} />
                         </div>
-                      )}
-                    </button>
-                  );
-                })}
+                        <div className="flex-1 min-w-0">
+                          <h3 className={`text-[15px] font-bold transition-colors ${isSelected ? 'text-[#1a1612]' : 'text-[#1a1612]/80'}`}>
+                            {option.title}
+                          </h3>
+                          <p className="text-[13px] text-[#1a1612]/50 leading-snug mt-0.5">{option.description}</p>
+                        </div>
+                        {isSelected && (
+                          <div className="w-6 h-6 rounded-full bg-brand-yellow flex items-center justify-center">
+                            <Check className="w-4 h-4 text-[#1a1612]" strokeWidth={3} />
+                          </div>
+                        )}
+                      </motion.button>
+                    );
+                  })}
+                </AnimatePresence>
               </div>
             </motion.div>
           ) : (
