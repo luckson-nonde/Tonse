@@ -43,8 +43,8 @@ export default function BuyerCollectionScreen({ deliveryOrderId, onComplete }: B
 
       <div className="space-y-4 mb-8">
         <h3 className="font-semibold">Items to Collect:</h3>
-        {po.lineItems.map((item) => (
-          <div key={item.name} className="flex justify-between py-2 border-b">
+        {po.lineItems.map((item, idx) => (
+          <div key={`${item.name}-${idx}`} className="flex justify-between py-2 border-b">
             <span>{item.name} x {item.quantity}</span>
           </div>
         ))}

@@ -35,6 +35,21 @@ export class AppDatabase extends Dexie {
       deliveryOrders: '++id, inquiryId, purchaseOrderId, orderConfirmationId, buyerId, sellerId, status, createdAt'
     });
   }
+
+  async clearAllTables() {
+    console.log('Clearing all tables...');
+    try {
+      await this.transaction('rw', this.tables, async () => {
+        for (const table of this.tables) {
+          console.log(`Clearing table: ${table.name}`);
+          await table.clear();
+        }
+      });
+      console.log('All tables cleared successfully.');
+    } catch (error) {
+      console.error('Error clearing tables:', error);
+    }
+  }
 }
 
 export const db = new AppDatabase();

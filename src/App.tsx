@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './AuthContext';
+import { DashboardProvider } from './DashboardContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import Login from './pages/Login';
+import Onboarding from './pages/Onboarding';
 import RoleSelection from './pages/RoleSelection';
 import Register from './pages/Register';
+import LabourRegister from './pages/LabourRegister';
+import LabourDashboard from './pages/LabourDashboard';
 import BusinessVerification from './pages/BusinessVerification';
 import SellerCategorySelection from './pages/SellerCategorySelection';
 import SellerLocationDetails from './pages/SellerLocationDetails';
@@ -41,15 +46,36 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode,
 
 function RootRedirect() {
   const { user, isLoading } = useAuth();
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 1024 : false);
+  
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 1024);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div></div>;
+  
+  let onboarded = false;
+  try {
+    if (typeof window !== 'undefined') {
+      onboarded = localStorage.getItem('tonse_onboarded') === 'true';
+    }
+  } catch (e) {
+    console.error('LocalStorage access failed', e);
+  }
+  
+  // Mobile-first check: if mobile AND not onboarded → onboarding
+  if (isMobile && !onboarded) {
+    return <Navigate to="/onboarding" replace />;
+  }
+  
   if (!user) return <Navigate to="/login" replace />;
   if (user.mustChangePassword) return <Navigate to="/force-password-change" replace />;
   if (user.role === 'BUYER') return <Navigate to="/buyer" replace />;
+  if (user.role === 'LABOUR') return <Navigate to="/labour" replace />;
   return <Navigate to="/provider" replace />;
 }
-
-import { DashboardProvider } from './DashboardContext';
-import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
   return (
@@ -58,9 +84,11 @@ export default function App() {
         <DashboardProvider>
           <Router>
             <Routes>
+              <Route path="/onboarding" element={<Onboarding />} />
               <Route path="/login" element={<Login />} />
               <Route path="/role-selection" element={<RoleSelection />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/register/labour" element={<LabourRegister />} />
               <Route path="/register/company-documents" element={<CompanyDocuments />} />
               <Route path="/business-verification" element={<BusinessVerification />} />
               <Route path="/seller/categories" element={<SellerCategorySelection />} />
@@ -192,6 +220,11 @@ export default function App() {
                   <DashboardLayout>
                     <ArchivedLeadsPage />
                   </DashboardLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/labour" element={
+                <ProtectedRoute allowedRoles={['LABOUR']}>
+                  <LabourDashboard />
                 </ProtectedRoute>
               } />
             </Routes>

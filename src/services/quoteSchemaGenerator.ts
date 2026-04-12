@@ -16,7 +16,8 @@ export interface QuoteField {
 
 export const generateQuoteSchema = (
   inquiryCategory: string, 
-  inquiryAttributes: Record<string, any>
+  inquiryAttributes: Record<string, any>,
+  processType: 'EXPRESS' | 'STANDARD' = 'STANDARD'
 ): { fields: QuoteField[], zodSchema: z.ZodObject<any> } => {
   const category = CATEGORIES_DB.find(c => c.name === inquiryCategory || c.id === inquiryCategory);
   
@@ -79,9 +80,15 @@ export const generateQuoteSchema = (
 
   // 3. Always add universal fields
   schema.push(
-    { name: 'message', label: 'Detailed Quote Description', type: 'textarea', required: false, placeholder: 'Describe your offer, delivery time, and any other important details...' },
-    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true, options: ['1 Week', '2 Weeks', '1 Month', '2 Months', '3 Months', '6 Months'] }
+    { name: 'message', label: 'Detailed Quote Description', type: 'textarea', required: false, placeholder: 'Describe your offer, delivery time, and any other important details...' }
   );
+
+  if (processType === 'STANDARD') {
+    schema.push({ name: 'proformaInvoice', label: 'Upload Proforma Invoice', type: 'textarea', required: true, placeholder: 'Link or description of proforma invoice' });
+    schema.push({ name: 'validityPeriod', label: 'Validity Period (Days)', type: 'number', required: true, placeholder: 'e.g. 30' });
+  } else {
+    schema.push({ name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true, options: ['1 Week', '2 Weeks', '1 Month', '2 Months', '3 Months', '6 Months'] });
+  }
 
   return { fields: schema, zodSchema: generateZodSchema(schema) };
 };

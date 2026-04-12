@@ -6,10 +6,12 @@ interface LogoProps {
 }
 
 export default function Logo({ variant = 'dashboard', className = '' }: LogoProps) {
+  const isLight = variant === 'light';
+  
   return (
-    <span className={`font-serif leading-none tracking-[-0.06em] ${className}`}>
-      <span className="text-brand-dark">TON</span>
-      <span className="text-brand-yellow -ml-[0.04em]">SE</span>
+    <span className={`font-serif font-black leading-none tracking-[-0.04em] ${className}`}>
+      <span className={isLight ? "text-white" : "text-[#1e293b]"}>TON</span>
+      <span className="text-[#C9973A] -ml-[0.02em]">SE</span>
     </span>
   );
 }

@@ -32,8 +32,8 @@ export default function BuyerOrderConfirmation({ orderConfirmation }: BuyerOrder
       </div>
 
       <h3 className="font-semibold mb-3">Items:</h3>
-      {orderConfirmation.items.map((item) => (
-        <div key={item.title} className="flex justify-between py-2 border-b">
+      {orderConfirmation.items.map((item, idx) => (
+        <div key={`${item.title}-${idx}`} className="flex justify-between py-2 border-b">
           <span>{item.title} x {item.quantity}</span>
         </div>
       ))}

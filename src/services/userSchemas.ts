@@ -4,6 +4,7 @@ export type SectionType = 'fields' | 'security' | 'notifications' | 'identity';
 
 export interface ProfileSection {
   title: string;
+  sectionHeader?: string;
   type: SectionType;
   fields?: FieldSchema[];
   description?: string;

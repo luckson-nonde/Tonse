@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../AuthContext';
 import { useDashboard } from '../DashboardContext';
 import { db } from '../db';
-import { ViewType } from '../services/buyerAccountSchema';
+import { ViewType, MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
 import CategorySelection from '../components/CategorySelection';
 import ProcessSelection from '../components/ProcessSelection';
@@ -13,6 +13,7 @@ import DynamicInquiryForm from '../components/DynamicInquiryForm';
 import InquiryPreferences from '../components/InquiryPreferences';
 import LocationDetails from '../components/LocationDetails';
 import InquirySuccess from '../components/InquirySuccess';
+import ConfirmationModal from '../components/ConfirmationModal';
 import { CATEGORIES_DB, GENERIC_FALLBACK_SCHEMA } from '../services/categories';
 import { Inquiry, InquiryItem } from '../types';
 
@@ -23,6 +24,7 @@ export default function BuyerDashboard() {
   const [selectedInquiryId, setSelectedInquiryId] = useState<number | null>(null);
   const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+  const [inquiryToDelete, setInquiryToDelete] = useState<any | null>(null);
 
   // Data Fetching
   const inquiries = useLiveQuery(
@@ -67,6 +69,8 @@ export default function BuyerDashboard() {
       .reduce((sum, t) => sum + t.amount, 0);
   }, [transactions]);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Inquiry Flow State
   const [pendingInquiry, setPendingInquiry] = useState<{ 
     items: InquiryItem[]; 
@@ -96,6 +100,9 @@ export default function BuyerDashboard() {
     switch (actionId) {
       case 'new_inquiry':
         setActiveTab('process-selection');
+        break;
+      case 'delete_inquiry':
+        setInquiryToDelete(payload);
         break;
       case 'view_financial':
         navigate('/buyer/financial');
@@ -147,34 +154,54 @@ export default function BuyerDashboard() {
 
   const handleLocationComplete = async (locationData: any) => {
     if (!user) return;
+    setIsSubmitting(true);
     
-    const categoryName = pendingInquiry.categories?.[pendingInquiry.categories.length - 1] || 'Inquiry';
-    const title = pendingInquiry.attributes?.brand 
-      ? `${pendingInquiry.attributes.brand} ${pendingInquiry.attributes.model || ''} Request`
-      : `${categoryName} Request`;
+    try {
+      const categoryName = pendingInquiry.categories?.[pendingInquiry.categories.length - 1] || 'Inquiry';
+      const title = pendingInquiry.attributes?.brand 
+        ? `${pendingInquiry.attributes.brand} ${pendingInquiry.attributes.model || ''} Request`
+        : `${categoryName} Request`;
 
-    const newInquiry: Inquiry = {
-      title,
-      description: pendingInquiry.attributes?.description || 'No description provided.',
-      items: [],
-      category: pendingInquiry.categories?.join(', ') || '',
-      location: `${locationData.city}, ${locationData.province}`,
-      latitude: locationData.latitude,
-      longitude: locationData.longitude,
-      radius: locationData.radius,
-      buyerName: user.name,
-      buyerId: user.id!,
-      createdAt: Date.now(),
-      status: 'OPEN',
-      viewCount: 0,
-      preferences: pendingInquiry.preferences,
-      attributes: pendingInquiry.attributes,
-      processType: pendingInquiry.processType
-    };
+      // Check for duplicate inquiry for the same product
+      const existingInquiry = await db.inquiries
+        .where('buyerId').equals(user.id)
+        .and(i => i.title === title)
+        .first();
 
-    await db.inquiries.add(newInquiry);
-    setPendingInquiry({ items: [] });
-    setActiveTab('inquiry-success');
+      if (existingInquiry) {
+        alert('You already have an active inquiry for this product.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const newInquiry: Inquiry = {
+        title,
+        description: pendingInquiry.attributes?.description || 'No description provided.',
+        items: [],
+        category: pendingInquiry.categories?.join(', ') || '',
+        location: `${locationData.city}, ${locationData.province}`,
+        latitude: locationData.latitude,
+        longitude: locationData.longitude,
+        radius: locationData.radius,
+        buyerName: user.name,
+        buyerId: user.id!,
+        createdAt: Date.now(),
+        status: 'OPEN',
+        viewCount: 0,
+        preferences: pendingInquiry.preferences,
+        attributes: pendingInquiry.attributes,
+        processType: pendingInquiry.processType
+      };
+
+      await db.inquiries.add(newInquiry);
+      setPendingInquiry({ items: [] });
+      setActiveTab('inquiry-success');
+    } catch (error) {
+      console.error('Error creating inquiry:', error);
+      alert('Failed to create inquiry. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderInquiryFlow = () => {
@@ -193,7 +220,7 @@ export default function BuyerDashboard() {
         return <CategorySelection onBack={() => setActiveTab('process-selection')} onComplete={handleInquiryComplete} />;
       case 'create-inquiry':
         const rawCategoryName = pendingInquiry.categories?.[0] || 'Inquiry';
-        const selectedCategory = CATEGORIES_DB.find(cat => cat.name === rawCategoryName.split(' (')[0]);
+        const selectedCategory = CATEGORIES_DB.find(cat => cat.name === rawCategoryName);
         let schema = selectedCategory?.formSchema ?? GENERIC_FALLBACK_SCHEMA;
         
         // If express, filter to core fields only to make it faster
@@ -207,6 +234,7 @@ export default function BuyerDashboard() {
             schema={schema}
             categoryName={rawCategoryName}
             processType={pendingInquiry.processType}
+            isLoading={isSubmitting}
             onSubmit={(data) => {
               setPendingInquiry(prev => ({ ...prev, attributes: data }));
               if (pendingInquiry.processType === 'EXPRESS') {
@@ -236,6 +264,18 @@ export default function BuyerDashboard() {
 
   return (
     <div className="w-full max-w-7xl mx-auto">
+      <ConfirmationModal
+        isOpen={!!inquiryToDelete}
+        title="Delete Inquiry"
+        message="Are you sure you want to delete this inquiry? This action cannot be undone."
+        onConfirm={async () => {
+          if (inquiryToDelete?.id) {
+            await db.inquiries.delete(inquiryToDelete.id);
+          }
+          setInquiryToDelete(null);
+        }}
+        onCancel={() => setInquiryToDelete(null)}
+      />
       <AnimatePresence mode="wait">
         {isFlowTab ? (
           <motion.div
@@ -249,7 +289,8 @@ export default function BuyerDashboard() {
         ) : (
           <DynamicAccountRenderer
             key={activeTab}
-            view={(activeTab === 'home' ? 'dashboard' : activeTab) as ViewType}
+            schema={MASTER_BUYER_ACCOUNT_SCHEMA}
+            view={(activeTab === 'home' ? 'dashboard' : activeTab)}
             data={dashboardData}
             onAction={handleAction}
             onNavigate={(viewId) => setActiveTab(viewId)}

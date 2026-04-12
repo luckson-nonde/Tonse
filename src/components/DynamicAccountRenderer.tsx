@@ -26,7 +26,8 @@ import {
   Archive,
   ChevronLeft
 } from 'lucide-react';
-import { ViewType, MASTER_BUYER_ACCOUNT_SCHEMA, INQUIRY_STATUS_SCHEMA } from '../services/buyerAccountSchema';
+import { INQUIRY_STATUS_SCHEMA } from '../services/buyerAccountSchema';
+import { MasterAccountSchema } from '../services/accountSchemaTypes';
 import Button from './Button';
 import InquiryCard from './InquiryCard';
 import QuoteCard from './QuoteCard';
@@ -34,8 +35,17 @@ import DynamicProfileForm from './DynamicProfileForm';
 import InquiryDetails from './InquiryDetails';
 import QuoteDetails from './QuoteDetails';
 import OrderDetails from './OrderDetails';
+import ProviderHomeView from './provider/ProviderHomeView';
+import ProviderLeadsView from './provider/ProviderLeadsView';
+import ProviderQuotesView from './provider/ProviderQuotesView';
+import ProviderOrdersView from './provider/ProviderOrdersView';
+import ProviderProductsView from './provider/ProviderProductsView';
+import ProviderScheduleView from './provider/ProviderScheduleView';
+import ProviderTeamView from './provider/ProviderTeamView';
+import CollectionPage from '../pages/CollectionPage';
 import { Inquiry, Quote } from '../types';
 import { getProfileSchema } from '../services/userSchemas';
+import { uniqueKey } from '../utils/keyUtils';
 
 const ICON_MAP: Record<string, any> = {
   LayoutDashboard,
@@ -57,22 +67,29 @@ const ICON_MAP: Record<string, any> = {
   Calendar
 };
 
+import LabourHomeView from './labour/LabourHomeView';
+import LabourJobsView from './labour/LabourJobsView';
+import LabourQuotesView from './labour/LabourQuotesView';
+import LabourScheduleView from './labour/LabourScheduleView';
+
 interface DynamicAccountRendererProps {
-  view: ViewType;
+  schema: MasterAccountSchema;
+  view: string;
   data?: any;
   onAction: (actionId: string, payload?: any) => void;
-  onNavigate: (viewId: ViewType) => void;
+  onNavigate: (viewId: string) => void;
   user?: any;
 }
 
 export default function DynamicAccountRenderer({ 
+  schema,
   view, 
   data, 
   onAction, 
   onNavigate,
   user 
 }: DynamicAccountRendererProps) {
-  const viewSchema = MASTER_BUYER_ACCOUNT_SCHEMA.views[view];
+  const viewSchema = schema.views[view];
 
   if (!viewSchema) {
     return (
@@ -83,6 +100,11 @@ export default function DynamicAccountRenderer({
       </div>
     );
   }
+
+  const resolveValue = (val: any) => {
+    if (typeof val === 'function') return val(user?.role || 'BUYER');
+    return val;
+  };
 
   const renderIcon = (iconName: string, className?: string) => {
     const Icon = ICON_MAP[iconName] || LayoutDashboard;
@@ -142,7 +164,7 @@ export default function DynamicAccountRenderer({
 
         {/* Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {viewSchema.metrics?.map((metric) => {
+          {viewSchema.metrics?.map((metric, idx) => {
             let metricValue = metric.value;
             if (metric.id === 'active_inquiries') {
               metricValue = data?.inquiries?.filter((i: any) => i.status !== 'CLOSED' && i.status !== 'CANCELLED').length || 0;
@@ -154,7 +176,7 @@ export default function DynamicAccountRenderer({
 
             return (
               <motion.div
-                key={metric.id}
+                key={uniqueKey('metric', metric.id, idx)}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm hover:shadow-md transition-all"
@@ -183,9 +205,9 @@ export default function DynamicAccountRenderer({
             <h3 className="text-xl font-serif font-bold text-[#1e293b] mb-2">Ready to start something new?</h3>
             <p className="text-slate-500 mb-6 max-w-md">Create a new inquiry to receive tailored quotes from our network of verified providers.</p>
             <div className="flex flex-wrap gap-4">
-              {viewSchema.actions?.map((action) => (
+              {viewSchema.actions?.map((action, idx) => (
                 <Button
-                  key={action.id}
+                  key={uniqueKey('action', action.id, idx)}
                   variant={action.variant}
                   onClick={() => onAction(action.id)}
                   className="px-8 py-4 flex items-center gap-2"
@@ -208,8 +230,8 @@ export default function DynamicAccountRenderer({
           </div>
           <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm divide-y divide-slate-100">
             {data?.recentActivity?.length > 0 ? (
-              data.recentActivity.map((activity: any) => (
-                <div key={activity.id} className="p-6 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer">
+              data.recentActivity.map((activity: any, idx: number) => (
+                <div key={uniqueKey('activity', activity.id, idx)} className="p-6 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center">
                       {renderIcon(activity.icon || 'MessageSquare', "w-6 h-6 text-slate-400")}
@@ -240,13 +262,13 @@ export default function DynamicAccountRenderer({
       <div className="space-y-6">
         <div className="flex items-center justify-between px-2">
           <div>
-            <h2 className="text-3xl font-serif font-black text-[#1e293b]">{viewSchema.title}</h2>
-            <p className="text-slate-500">{viewSchema.subtitle}</p>
+            <h2 className="text-3xl font-serif font-black text-[#1e293b]">{resolveValue(viewSchema.title)}</h2>
+            <p className="text-slate-500">{resolveValue(viewSchema.subtitle)}</p>
           </div>
           <div className="flex gap-2">
-            {viewSchema.actions?.map((action) => (
+          {viewSchema.actions?.map((action, idx) => (
               <Button
-                key={action.id}
+                key={uniqueKey('action-top', action.id, idx)}
                 variant={action.variant}
                 onClick={() => onAction(action.id)}
                 className="flex items-center gap-2"
@@ -260,21 +282,22 @@ export default function DynamicAccountRenderer({
 
         <div className="space-y-4">
           {items.length > 0 ? (
-            items.map((item: any) => {
+            items.map((item: any, idx: number) => {
               if (view === 'inquiries') {
                 return (
                   <InquiryCard
-                    key={item.id}
+                    key={uniqueKey('inquiry', item.id, idx)}
                     inquiry={item}
                     state={item.status?.toLowerCase() || 'open'}
                     onAction={() => onAction('view_details', item)}
+                    onDelete={() => onAction('delete_inquiry', item)}
                   />
                 );
               }
               if (view === 'quotes') {
                 return (
                   <QuoteCard
-                    key={item.id}
+                    key={uniqueKey('quote', item.id, idx)}
                     quote={item}
                     onView={() => onAction('view_quote', item)}
                     onPrint={() => onAction('print_quote', item)}
@@ -285,16 +308,17 @@ export default function DynamicAccountRenderer({
               if (view === 'orders') {
                 return (
                   <InquiryCard
-                    key={item.id}
+                    key={uniqueKey('order', item.id, idx)}
                     inquiry={item}
                     state="paid"
                     paidQuote={item.paidQuote}
                     onAction={() => onAction('view_order', item)}
+                    onDelete={() => onAction('delete_inquiry', item)}
                   />
                 );
               }
               return (
-                <div key={item.id} className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
+                <div key={uniqueKey('item', item.id, idx)} className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
                   <p>{item.title || item.name || 'Untitled Item'}</p>
                 </div>
               );
@@ -325,7 +349,7 @@ export default function DynamicAccountRenderer({
     return (
       <div className="space-y-8">
         <button 
-          onClick={() => onNavigate(view.replace('_details', 's') as ViewType)}
+          onClick={() => onNavigate(view.replace('_details', 's'))}
           className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-[#C9973A] transition-colors"
         >
           <ChevronLeft className="w-4 h-4" /> Back to {view.replace('_details', 's')}
@@ -376,8 +400,8 @@ export default function DynamicAccountRenderer({
         return (
           <div className="space-y-8">
             <div className="px-2">
-              <h2 className="text-3xl font-serif font-black text-[#1e293b]">{viewSchema.title}</h2>
-              <p className="text-slate-500">{viewSchema.subtitle}</p>
+              <h2 className="text-3xl font-serif font-black text-[#1e293b]">{resolveValue(viewSchema.title)}</h2>
+              <p className="text-slate-500">{resolveValue(viewSchema.subtitle)}</p>
             </div>
             <DynamicProfileForm 
               schema={profileSchema} 
@@ -392,6 +416,38 @@ export default function DynamicAccountRenderer({
             </DynamicProfileForm>
           </div>
         );
+      case 'provider_placeholder':
+        return (
+          <div className="p-12 text-center bg-white rounded-[32px] border border-dashed border-slate-200">
+            <p className="text-slate-400 font-mono text-sm">
+              [{resolveValue(viewSchema.title)} — Provider component to be connected in Step 3]
+            </p>
+          </div>
+        );
+      case 'provider_home':
+        return <ProviderHomeView {...data?.homeProps} />;
+      case 'provider_leads':
+        return <ProviderLeadsView {...data?.leadsProps} />;
+      case 'provider_quotes':
+        return <ProviderQuotesView {...data?.quotesProps} />;
+      case 'provider_orders':
+        return <ProviderOrdersView {...data?.ordersProps} />;
+      case 'provider_products':
+        return <ProviderProductsView {...data?.productsProps} />;
+      case 'provider_schedule':
+        return <ProviderScheduleView {...data?.scheduleProps} />;
+      case 'provider_team':
+        return <ProviderTeamView {...data?.teamProps} />;
+      case 'provider_collection':
+        return <CollectionPage />;
+      case 'labour_home':
+        return <LabourHomeView {...data?.homeProps} />;
+      case 'labour_jobs':
+        return <LabourJobsView {...data?.jobsProps} />;
+      case 'labour_quotes':
+        return <LabourQuotesView {...data?.quotesProps} />;
+      case 'labour_schedule':
+        return <LabourScheduleView {...data?.scheduleProps} />;
       default:
         return <div>Unknown View Type</div>;
     }

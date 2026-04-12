@@ -108,17 +108,51 @@ export default function QuoteDetails({ quote, inquiry, onAction }: QuoteDetailsP
 
         {/* Sidebar: Actions */}
         <div className="space-y-6">
+          {/* Process-Aware Action Bar */}
           <div className="bg-[#1e293b] p-8 rounded-[32px] text-white shadow-xl shadow-slate-200">
-            <h3 className="text-xl font-serif font-bold mb-4">Accept this offer?</h3>
+            <h3 className="text-xl font-serif font-bold mb-4">
+              {quote.processType === 'EXPRESS' ? 'Ready to pay?' : 'Ready to proceed?'}
+            </h3>
+            
+            {/* Progress Indicator for Standard */}
+            {quote.processType === 'STANDARD' && (
+              <div className="mb-6">
+                <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+                  <span>Inquiry</span>
+                  <span>PO Pending</span>
+                  <span>Payment</span>
+                </div>
+                <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#C9973A] w-1/3"></div>
+                </div>
+              </div>
+            )}
+
             <p className="text-slate-400 text-sm mb-8 leading-relaxed">
-              Accepting this quote will notify the provider and move the transaction to the next stage.
+              {quote.processType === 'EXPRESS' 
+                ? 'Pay now to start the service immediately.' 
+                : 'Generate a Purchase Order to formalize this transaction.'}
             </p>
+
+            {/* Document Section */}
+            {quote.dynamicFields?.proformaInvoice && (
+              <div className="mb-6">
+                <Button 
+                  variant="outline"
+                  onClick={() => window.open(quote.dynamicFields?.proformaInvoice, '_blank')}
+                  className="w-full py-3 border-white/10 text-white hover:bg-white/5 text-xs"
+                >
+                  View Proforma Invoice
+                </Button>
+              </div>
+            )}
+
             <div className="space-y-3">
               <Button 
-                onClick={() => onAction('accept_quote', quote)}
-                className="w-full py-4 bg-[#C9973A] hover:bg-[#b08432] text-white border-none shadow-lg shadow-[#C9973A]/20"
+                onClick={() => onAction(quote.processType === 'EXPRESS' ? 'accept_quote' : 'generate_po', quote)}
+                className={`w-full py-4 ${quote.processType === 'EXPRESS' ? 'bg-[#C9973A] hover:bg-[#b08432]' : 'bg-white text-[#1e293b] hover:bg-slate-200'} border-none shadow-lg shadow-[#C9973A]/20`}
               >
-                Accept & Proceed
+                {quote.processType === 'EXPRESS' ? 'Pay & Start Service' : 'Generate Purchase Order (PO)'}
               </Button>
               <Button 
                 variant="outline"

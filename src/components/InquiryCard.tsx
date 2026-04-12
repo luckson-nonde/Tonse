@@ -10,9 +10,11 @@ interface InquiryCardProps {
   quoteCount?: number;
   paidQuote?: any;
   onAction: () => void;
+  onDelete: () => void;
 }
 
-export default function InquiryCard({ inquiry, state, quoteCount = 0, paidQuote, onAction }: InquiryCardProps) {
+export default function InquiryCard({ inquiry, state, quoteCount = 0, paidQuote, onAction, onDelete }: InquiryCardProps) {
+  console.log('InquiryCard rendering, inquiry:', inquiry);
   const schema = getCategorySchema(inquiry.category);
   const archetypeConfig = ARCHETYPE_CONFIG[inquiry.category] || { archetype: 'PRODUCT', categoryName: inquiry.category };
   
@@ -59,9 +61,21 @@ export default function InquiryCard({ inquiry, state, quoteCount = 0, paidQuote,
           <p className="text-[11px] font-bold text-[#d49b35] tracking-widest uppercase font-sans">
             {archetypeConfig.categoryName}
           </p>
-          <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${badgeColors[state]}`}>
-            {statusText[state]}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${badgeColors[state]}`}>
+              {statusText[state]}
+            </span>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('Delete button clicked for inquiry:', inquiry.id);
+                onDelete();
+              }}
+              className="px-2 py-1 text-[9px] font-bold bg-rose-500 text-white rounded-full hover:bg-rose-600"
+            >
+              Delete
+            </button>
+          </div>
         </div>
 
         <h3 className="text-2xl font-bold text-[#1e293b] font-serif mb-2 leading-tight">

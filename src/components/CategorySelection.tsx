@@ -276,15 +276,15 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
   };
 
   return (
-    <div className={isStandalone ? "max-w-[480px] mx-auto w-full bg-[#f5f2ed] min-h-screen relative" : "w-full relative"}>
+    <div className={isStandalone ? "max-w-[480px] md:max-w-4xl mx-auto w-full bg-[#f5f2ed] min-h-screen relative" : "w-full relative"}>
       {activeParent ? (
-        <div className="flex flex-col min-h-screen bg-white animate-in slide-in-from-right duration-300">
+        <div className="flex flex-col min-h-screen bg-[#f5f2ed] animate-in slide-in-from-right duration-300">
           {/* Subcategory Header */}
-          <div className="sticky top-0 bg-white z-20 px-6 pt-6 pb-5 border-b border-[#f1f5f9]">
+          <div className="sticky top-0 bg-[#f5f2ed] z-20 px-6 pt-6 pb-5">
             <div className="flex items-center gap-3">
               <button 
                 onClick={() => setActiveParent(null)} 
-                className="w-10 h-10 -ml-2 flex items-center justify-center bg-[#f8fafc] rounded-full hover:bg-[#f1f5f9] transition-all"
+                className="w-10 h-10 -ml-2 flex items-center justify-center bg-white/50 rounded-full hover:bg-white transition-all"
               >
                 <ChevronLeft className="w-5 h-5 text-[#1a1a2e]" />
               </button>
@@ -322,7 +322,7 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                     placeholder="Search subcategories..."
                     value={subSearchQuery}
                     onChange={(e) => setSubSearchQuery(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3.5 bg-[#f8fafc] border border-[#f1f5f9] rounded-2xl text-[15px] focus:border-[#C9973A]/50 focus:bg-white outline-none transition-all placeholder:text-[#94a3b8] font-sans"
+                    className="w-full pl-11 pr-4 py-3.5 bg-white border border-[#f1f5f9] rounded-2xl text-[15px] focus:border-[#C9973A]/50 focus:bg-white outline-none transition-all placeholder:text-[#94a3b8] font-sans"
                   />
                 </div>
               )}
@@ -335,13 +335,13 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                 </div>
               ) : filteredSubcategories.length === 0 ? (
                 <div className="text-center py-20">
-                  <div className="w-16 h-16 bg-[#f8fafc] rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 border border-[#f1f5f9]">
                     <Search className="w-8 h-8 text-[#cbd5e1]" />
                   </div>
                   <p className="text-[#94a3b8] font-medium font-sans">No subcategories found.</p>
                 </div>
               ) : (
-                <div className="flex flex-col gap-2 pb-10">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
                   {(() => {
                     // Group subcategories by baseName if they have variants
                     const groups: Record<string, Category[]> = {};
@@ -365,8 +365,8 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                           return (
                             <div key={`${baseName}-${idx}`} className="flex flex-col">
                               <div 
-                                className={`p-5 flex items-center justify-between hover:bg-[#f8fafc] rounded-2xl transition-all group cursor-pointer border ${
-                                  role && hasSelected ? 'bg-[rgba(201,151,58,0.05)] border-[#C9973A]/20' : 'border-transparent'
+                                className={`p-5 flex items-center justify-between hover:bg-white rounded-2xl transition-all group cursor-pointer border ${
+                                  role && hasSelected ? 'bg-white border-[#C9973A]/20' : 'border-transparent bg-white/50'
                                 }`}
                                 onClick={() => {
                                   if (role) {
@@ -400,7 +400,7 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                                 </div>
                               </div>
                               {!role && isExpanded && (
-                                <div className="px-4 py-3 flex flex-col gap-3 bg-[#f8fafc]/50 rounded-2xl mt-2 mb-4 border border-[#f1f5f9]">
+                                <div className="px-4 py-3 flex flex-col gap-3 bg-white/50 rounded-2xl mt-2 mb-4 border border-[#f1f5f9]">
                                   {variants.map(variant => {
                                     const isSelected = selectedCategories.some(c => c.id === variant.id);
                                     let label = '';
@@ -444,7 +444,7 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                               key={sub.id}
                               onClick={() => toggleSubcategory(sub)}
                               className={`p-5 flex items-center justify-between cursor-pointer rounded-2xl transition-all border ${
-                                isSelected ? 'bg-[rgba(201,151,58,0.05)] border-[#C9973A]/20' : 'hover:bg-[#f8fafc] border-transparent'
+                                isSelected ? 'bg-white border-[#C9973A]/20 shadow-sm' : 'hover:bg-white border-transparent bg-white/50'
                               }`}
                             >
                               <span className={`font-sans font-bold text-[15px] transition-colors ${isSelected ? 'text-[#C9973A]' : 'text-[#1a1a2e]'}`}>
@@ -469,7 +469,7 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
           </div>
 
           {/* Sticky Footer */}
-          <div className="sticky bottom-0 p-6 bg-white border-t border-[#f1f5f9] shadow-[0_-8px_30px_rgba(0,0,0,0.04)]">
+          <div className="sticky bottom-0 p-6 bg-[#f5f2ed] border-t border-[#e2e8f0]">
             <button 
               onClick={() => setActiveParent(null)} 
               className="w-full h-[58px] bg-[#C9973A] text-white text-[16px] font-bold rounded-[50px] shadow-xl shadow-[rgba(201,151,58,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
@@ -550,7 +550,7 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                 <Loader2 className="w-8 h-8 animate-spin text-[#C9973A]" />
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {filteredCategories.map((category) => {
                   const hasSelectedSub = selectedCategories.some(c => c.parentId === category.id);
                   const { icon: CategoryIcon } = getCategoryStyles(category.id);

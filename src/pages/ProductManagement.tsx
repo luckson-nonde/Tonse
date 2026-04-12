@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { Product } from '../types';
 import { Plus, Trash2, Edit2, Package, Image as ImageIcon, Loader2, X } from 'lucide-react';
+import { uniqueKey } from '../utils/keyUtils';
 
 export default function ProductManagement() {
   const { user } = useAuth();
@@ -235,8 +236,8 @@ export default function ProductManagement() {
             <p className="text-slate-500 font-medium">{user?.role === 'EVENTS' ? 'No equipment listed yet.' : 'No products listed yet.'}</p>
             <button onClick={() => setIsAdding(true)} className="text-[#d49b35] font-bold mt-2 hover:underline">{user?.role === 'EVENTS' ? 'Add your first item' : 'Add your first product'}</button>
           </div>
-        ) : products.map(product => (
-          <div key={product.id} className="bg-white rounded-[24px] p-4 flex items-center gap-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-[#f1f5f9] group hover:shadow-md transition-all">
+        ) : products.map((product, idx) => (
+          <div key={uniqueKey('product', product.id, idx)} className="bg-white rounded-[24px] p-4 flex items-center gap-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-[#f1f5f9] group hover:shadow-md transition-all">
             {/* Thumbnail */}
             <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-[16px] overflow-hidden bg-slate-100 shrink-0 relative">
               <img 

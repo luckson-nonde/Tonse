@@ -1,3 +1,9 @@
+export interface HeroContent {
+  title: string;
+  image: string;
+  bullets: string[];
+}
+
 export type SubRole = 
   | 'INDIVIDUAL_BUYER' 
   | 'COMPANY_BUYER' 
@@ -81,6 +87,7 @@ export interface Quote {
   damageDeposit?: number;
   cleaningFee?: number;
   dynamicFields?: Record<string, any>;
+  processType?: 'EXPRESS' | 'STANDARD';
   delivery?: {
     offered: boolean;
     fee: number;

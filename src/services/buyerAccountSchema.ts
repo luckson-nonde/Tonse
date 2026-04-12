@@ -1,4 +1,4 @@
-import { ProfileSchema } from './userSchemas';
+import { MasterAccountSchema } from './accountSchemaTypes';
 
 export type ViewType = 
   | 'dashboard' 
@@ -12,46 +12,8 @@ export type ViewType =
   | 'order_details'
   | 'shops';
 
-export interface DashboardAction {
-  id: string;
-  label: string;
-  icon: string;
-  type: 'navigate' | 'modal' | 'action';
-  target?: string;
-  variant?: 'primary' | 'secondary' | 'outline';
-}
-
-export interface DashboardMetric {
-  id: string;
-  label: string;
-  value: string | number;
-  trend?: {
-    value: number;
-    isPositive: boolean;
-  };
-  icon: string;
-}
-
-export interface BuyerAccountSchema {
-  navigation: {
-    id: ViewType;
-    label: string;
-    icon: string;
-  }[];
-  views: {
-    [key in ViewType]: {
-      title: string;
-      subtitle: string;
-      actions?: DashboardAction[];
-      metrics?: DashboardMetric[];
-      showWalletCard?: boolean;
-      componentType: 'dashboard_grid' | 'profile_renderer' | 'list_renderer' | 'details_renderer';
-      dataKey?: string; // Key in the state to fetch data from
-    };
-  };
-}
-
-export const MASTER_BUYER_ACCOUNT_SCHEMA: BuyerAccountSchema = {
+export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
+  schemaType: 'BUYER',
   navigation: [
     { id: 'dashboard', label: 'Overview', icon: 'LayoutDashboard' },
     { id: 'inquiries', label: 'My Inquiries', icon: 'MessageSquare' },

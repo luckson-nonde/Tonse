@@ -1,7 +1,7 @@
 export interface FieldSchema {
   name: string;
   label: string;
-  type: 'text' | 'textarea' | 'number' | 'select' | 'date' | 'daterange' | 'currency' | 'image_upload' | 'toggle' | 'counter' | 'gps';
+  type: 'text' | 'textarea' | 'number' | 'select' | 'multiselect' | 'date' | 'daterange' | 'currency' | 'image_upload' | 'toggle' | 'counter' | 'gps';
   placeholder?: string;
   required: boolean;
   options?: string[];
@@ -52,14 +52,16 @@ const mobilePhonesBuySchema: FieldSchema[] = [
 const mobilePhonesRepairSchema: FieldSchema[] = [
   { name: "images", label: "Device Photos", type: "image_upload", required: false, helpText: "Photos help technicians diagnose the issue faster" },
   { name: "deviceType", label: "Device Type", type: "select", required: true, options: ["Smartphone", "Tablet", "Smartwatch", "Feature Phone", "Accessory"] },
-  { name: "brand", label: "Device Brand", type: "text", required: true, placeholder: "e.g. Samsung, Apple, Huawei" },
-  { name: "model", label: "Model", type: "text", required: false, placeholder: "e.g. iPhone 13, Galaxy A54" },
-  { name: "problemCategory", label: "Problem Category", type: "select", required: true, options: ["Hardware issue", "Software issue", "Physical damage", "Battery / Charging", "Screen", "Water damage", "Sound / Speaker", "Other"] },
-  { name: "symptoms", label: "Specific Symptoms", type: "textarea", required: true, placeholder: "e.g. Won't turn on, screen cracked, battery drains fast, phone gets hot, no sound" },
+  { name: "brand", label: "Device Model & Specifications", type: "text", required: true, placeholder: "e.g. Samsung Galaxy S24 Ultra, iPhone 15 Pro" },
+  { name: "primarySymptom", label: "Primary Symptom", type: "select", required: true, options: ["Power Issue", "Screen/Display", "Audio/Sound", "Physical Damage", "Software/Update", "Other"], group: "Diagnostic Suite" },
+  { name: "deviceState", label: "Current Device State", type: "select", required: true, options: ["Powers on fully", "Powers on (No display)", "Stuck on Logo", "Completely Dead"], group: "Diagnostic Suite" },
+  { name: "incidentReport", label: "What happened?", type: "textarea", required: true, placeholder: "e.g., dropped in water, stopped charging after a power surge, screen went black during use...", group: "Diagnostic Suite" },
+  { name: "repairHistory", label: "Has this device been opened or repaired before?", type: "toggle", required: false, group: "Diagnostic Suite" },
+  { name: "symptoms", label: "Technical Symptoms & Observations", type: "textarea", required: true, placeholder: "e.g. Won't turn on, screen cracked, battery drains fast, phone gets hot, no sound" },
+  { name: "quantity", label: "Number of Devices", type: "counter", required: true, min: 1, helpText: "Please specify if all items share the same fault in the description." },
   { name: "warrantyStatus", label: "Still Under Warranty?", type: "toggle", required: false },
   { name: "dataCritical", label: "Is Data on Device Critical?", type: "toggle", required: false, helpText: "Toggle if you have important files that must be saved" },
-  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"] },
-  { name: "budget_limit", label: "Maximum Repair Budget (ZMW)", type: "currency", required: false, helpText: "Optional - helps shops decide if repair is viable for you" }
+  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"] }
 ];
 
 const laptopsBuySchema: FieldSchema[] = [
@@ -82,14 +84,16 @@ const laptopsBuySchema: FieldSchema[] = [
 const laptopsRepairSchema: FieldSchema[] = [
   { name: "images", label: "Device Photos", type: "image_upload", required: false, helpText: "Clear photos help technicians assess the damage" },
   { name: "deviceType", label: "Device Type", type: "select", required: true, options: ["Laptop", "Desktop PC", "All-in-One PC", "Monitor"] },
-  { name: "brand", label: "Brand", type: "text", required: true, placeholder: "e.g. HP, Dell, Lenovo, Apple" },
-  { name: "model", label: "Model", type: "text", required: false, placeholder: "e.g. HP Pavilion 15, MacBook Pro 2021" },
-  { name: "problemCategory", label: "Problem Category", type: "select", required: true, options: ["Software issue", "Hardware failure", "Physical damage", "Both", "Not sure"] },
-  { name: "symptoms", label: "Specific Symptoms", type: "textarea", required: true, placeholder: "e.g. Won't turn on, very slow, screen cracked, keyboard not working, overheating" },
+  { name: "brand", label: "Device Model & Specifications", type: "text", required: true, placeholder: "e.g. HP Pavilion 15, MacBook Pro 2021" },
+  { name: "primarySymptom", label: "Primary Symptom", type: "select", required: true, options: ["Power Issue", "Screen/Display", "Audio/Sound", "Physical Damage", "Software/Update", "Other"], group: "Diagnostic Suite" },
+  { name: "deviceState", label: "Current Device State", type: "select", required: true, options: ["Powers on fully", "Powers on (No display)", "Stuck on Logo", "Completely Dead"], group: "Diagnostic Suite" },
+  { name: "incidentReport", label: "What happened?", type: "textarea", required: true, placeholder: "e.g., dropped in water, stopped charging after a power surge, screen went black during use...", group: "Diagnostic Suite" },
+  { name: "repairHistory", label: "Has this device been opened or repaired before?", type: "toggle", required: false, group: "Diagnostic Suite" },
+  { name: "symptoms", label: "Technical Symptoms & Observations", type: "textarea", required: true, placeholder: "e.g. Won't turn on, very slow, screen cracked, keyboard not working, overheating" },
+  { name: "quantity", label: "Number of Devices", type: "counter", required: true, min: 1, helpText: "Please specify if all items share the same fault in the description." },
   { name: "warrantyStatus", label: "Still Under Warranty?", type: "toggle", required: false },
   { name: "dataRecoveryNeeded", label: "Data Recovery Needed?", type: "toggle", required: false, helpText: "Toggle if you need files recovered from the device" },
-  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"] },
-  { name: "budget_limit", label: "Maximum Repair Budget (ZMW)", type: "currency", required: false, helpText: "Optional - helps shops decide if repair is viable for you" }
+  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"] }
 ];
 
 const homeAppliancesBuySchema: FieldSchema[] = [
@@ -109,14 +113,16 @@ const homeAppliancesBuySchema: FieldSchema[] = [
 const homeAppliancesRepairSchema: FieldSchema[] = [
   { name: "images", label: "Appliance Photos", type: "image_upload", required: false, helpText: "Photos help technicians diagnose the issue faster" },
   { name: "applianceType", label: "Appliance Type", type: "select", required: true, options: ["Refrigerator", "Washing Machine", "Microwave", "Electric Stove", "Air Conditioner", "Water Heater", "Dishwasher", "Vacuum Cleaner", "Iron", "Blender / Mixer", "Other"] },
-  { name: "brand", label: "Brand", type: "text", required: true, placeholder: "e.g. LG, Samsung, Hisense" },
-  { name: "model", label: "Model", type: "text", required: false, placeholder: "e.g. GR-B247SLUV" },
-  { name: "problemType", label: "Problem Type", type: "select", required: true, options: ["Won't turn on", "Not heating / cooling", "Leaking / Water issue", "Strange noise / Vibration", "Electrical fault / Sparks", "Performance degraded", "Other"] },
-  { name: "symptoms", label: "Describe Symptoms", type: "textarea", required: true, placeholder: "e.g. Fridge is making a loud buzzing sound and not cooling" },
+  { name: "brand", label: "Device Model & Specifications", type: "text", required: true, placeholder: "e.g. LG, Samsung, Hisense, GR-B247SLUV" },
+  { name: "primarySymptom", label: "Primary Symptom", type: "select", required: true, options: ["Power Issue", "Screen/Display", "Audio/Sound", "Physical Damage", "Software/Update", "Other"], group: "Diagnostic Suite" },
+  { name: "deviceState", label: "Current Device State", type: "select", required: true, options: ["Powers on fully", "Powers on (No display)", "Stuck on Logo", "Completely Dead"], group: "Diagnostic Suite" },
+  { name: "incidentReport", label: "What happened?", type: "textarea", required: true, placeholder: "e.g., dropped in water, stopped charging after a power surge, screen went black during use...", group: "Diagnostic Suite" },
+  { name: "repairHistory", label: "Has this device been opened or repaired before?", type: "toggle", required: false, group: "Diagnostic Suite" },
+  { name: "symptoms", label: "Technical Symptoms & Observations", type: "textarea", required: true, placeholder: "e.g. Fridge is making a loud buzzing sound and not cooling" },
+  { name: "quantity", label: "Number of Devices", type: "counter", required: true, min: 1, helpText: "Please specify if all items share the same fault in the description." },
   { name: "applianceAge", label: "How Old is the Appliance?", type: "select", required: false, options: ["Less than 1 year", "1-3 years", "3-5 years", "More than 5 years", "Not sure"] },
   { name: "warrantyStatus", label: "Still Under Warranty?", type: "toggle", required: false },
-  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"] },
-  { name: "budget_limit", label: "Maximum Repair Budget (ZMW)", type: "currency", required: false, helpText: "Optional - helps shops decide if repair is viable for you" }
+  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"] }
 ];
 
 const audioVideoBuySchema: FieldSchema[] = [
@@ -135,12 +141,14 @@ const audioVideoBuySchema: FieldSchema[] = [
 const audioVideoRepairSchema: FieldSchema[] = [
   { name: "images", label: "Equipment Photos", type: "image_upload", required: false },
   { name: "equipmentType", label: "Equipment Type", type: "select", required: true, options: ["Television", "Sound System", "Home Theatre", "Projector", "Camera", "Microphone", "Amplifier", "Other"] },
-  { name: "brand", label: "Brand", type: "text", required: true, placeholder: "e.g. Sony, Samsung, LG" },
-  { name: "model", label: "Model", type: "text", required: false, placeholder: "Model number if known" },
-  { name: "problemType", label: "Problem Type", type: "select", required: true, options: ["No power / Won't turn on", "No sound", "No picture / Video", "Intermittent signal", "Physical damage", "Connection issue", "Other"] },
-  { name: "symptoms", label: "Describe Symptoms", type: "textarea", required: true, placeholder: "e.g. TV screen is black but sound is working" },
-  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"] },
-  { name: "budget_limit", label: "Maximum Repair Budget (ZMW)", type: "currency", required: false, helpText: "Optional - helps shops decide if repair is viable for you" }
+  { name: "brand", label: "Device Model & Specifications", type: "text", required: true, placeholder: "e.g. Sony, Samsung, LG, Model number" },
+  { name: "primarySymptom", label: "Primary Symptom", type: "select", required: true, options: ["Power Issue", "Screen/Display", "Audio/Sound", "Physical Damage", "Software/Update", "Other"], group: "Diagnostic Suite" },
+  { name: "deviceState", label: "Current Device State", type: "select", required: true, options: ["Powers on fully", "Powers on (No display)", "Stuck on Logo", "Completely Dead"], group: "Diagnostic Suite" },
+  { name: "incidentReport", label: "What happened?", type: "textarea", required: true, placeholder: "e.g., dropped in water, stopped charging after a power surge, screen went black during use...", group: "Diagnostic Suite" },
+  { name: "repairHistory", label: "Has this device been opened or repaired before?", type: "toggle", required: false, group: "Diagnostic Suite" },
+  { name: "symptoms", label: "Technical Symptoms & Observations", type: "textarea", required: true, placeholder: "e.g. TV screen is black but sound is working" },
+  { name: "quantity", label: "Number of Devices", type: "counter", required: true, min: 1, helpText: "Please specify if all items share the same fault in the description." },
+  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"] }
 ];
 
 const gamingBuySchema: FieldSchema[] = [
@@ -361,10 +369,14 @@ const livingRoomBuySchema: FieldSchema[] = [
 const livingRoomRepairSchema: FieldSchema[] = [
   { name: "images", label: "Item Photos", type: "image_upload", required: false, helpText: "Photos help technicians assess the repair needed" },
   { name: "itemType", label: "Item Type", type: "select", required: true, options: ["Sofa", "Armchair", "Dining Chair", "Ottoman", "Other"] },
-  { name: "damageType", label: "Damage Type", type: "select", required: true, options: ["Torn / Ripped upholstery", "Broken frame or legs", "Springs visible / Poking", "Stain or discoloration", "General wear / Fading", "Saggy cushions", "Other"] },
-  { name: "symptoms", label: "Describe the Problem", type: "textarea", required: true, placeholder: "e.g. Fabric is torn on the left armrest, frame is wobbly" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] },
-  { name: "budget_limit", label: "Maximum Repair Budget (ZMW)", type: "currency", required: false, helpText: "Optional - helps shops decide if repair is viable for you" }
+  { name: "brand", label: "Device Model & Specifications", type: "text", required: true, placeholder: "e.g. Brand, Model, Material" },
+  { name: "primarySymptom", label: "Primary Symptom", type: "select", required: true, options: ["Power Issue", "Screen/Display", "Audio/Sound", "Physical Damage", "Software/Update", "Other"], group: "Diagnostic Suite" },
+  { name: "deviceState", label: "Current Device State", type: "select", required: true, options: ["Powers on fully", "Powers on (No display)", "Stuck on Logo", "Completely Dead"], group: "Diagnostic Suite" },
+  { name: "incidentReport", label: "What happened?", type: "textarea", required: true, placeholder: "e.g., dropped in water, stopped charging after a power surge, screen went black during use...", group: "Diagnostic Suite" },
+  { name: "repairHistory", label: "Has this device been opened or repaired before?", type: "toggle", required: false, group: "Diagnostic Suite" },
+  { name: "symptoms", label: "Technical Symptoms & Observations", type: "textarea", required: true, placeholder: "e.g. Fabric is torn on the left armrest, frame is wobbly" },
+  { name: "quantity", label: "Number of Devices", type: "counter", required: true, min: 1, helpText: "Please specify if all items share the same fault in the description." },
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] }
 ];
 
 const bedroomBuySchema: FieldSchema[] = [
@@ -385,10 +397,14 @@ const bedroomBuySchema: FieldSchema[] = [
 const bedroomRepairSchema: FieldSchema[] = [
   { name: "images", label: "Item Photos", type: "image_upload", required: false },
   { name: "itemType", label: "Item Type", type: "select", required: true, options: ["Bed Frame", "Wardrobe", "Chest of Drawers", "Nightstand", "Other"] },
-  { name: "damageType", label: "Damage Type", type: "select", required: true, options: ["Broken slats (bed)", "Wobbling / Unstable", "Drawer stuck / Broken", "Wood damage (cracks, splitting)", "Stain / Discoloration", "Hardware missing / Broken", "Other"] },
-  { name: "symptoms", label: "Describe the Problem", type: "textarea", required: true, placeholder: "e.g. Wardrobe door broken, bed frame creaking, drawer stuck" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] },
-  { name: "budget_limit", label: "Maximum Repair Budget (ZMW)", type: "currency", required: false, helpText: "Optional - helps shops decide if repair is viable for you" }
+  { name: "brand", label: "Device Model & Specifications", type: "text", required: true, placeholder: "e.g. Brand, Model, Material" },
+  { name: "primarySymptom", label: "Primary Symptom", type: "select", required: true, options: ["Power Issue", "Screen/Display", "Audio/Sound", "Physical Damage", "Software/Update", "Other"], group: "Diagnostic Suite" },
+  { name: "deviceState", label: "Current Device State", type: "select", required: true, options: ["Powers on fully", "Powers on (No display)", "Stuck on Logo", "Completely Dead"], group: "Diagnostic Suite" },
+  { name: "incidentReport", label: "What happened?", type: "textarea", required: true, placeholder: "e.g., dropped in water, stopped charging after a power surge, screen went black during use...", group: "Diagnostic Suite" },
+  { name: "repairHistory", label: "Has this device been opened or repaired before?", type: "toggle", required: false, group: "Diagnostic Suite" },
+  { name: "symptoms", label: "Technical Symptoms & Observations", type: "textarea", required: true, placeholder: "e.g. Wardrobe door broken, bed frame creaking, drawer stuck" },
+  { name: "quantity", label: "Number of Devices", type: "counter", required: true, min: 1, helpText: "Please specify if all items share the same fault in the description." },
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] }
 ];
 
 const officeBuySchema: FieldSchema[] = [
@@ -408,10 +424,14 @@ const officeBuySchema: FieldSchema[] = [
 const officeRepairSchema: FieldSchema[] = [
   { name: "images", label: "Item Photos", type: "image_upload", required: false },
   { name: "itemType", label: "Item Type", type: "select", required: true, options: ["Office Chair", "Desk", "Cabinet", "Other"] },
-  { name: "damageType", label: "Damage Type", type: "select", required: true, options: ["Chair wheels broken", "Desk surface scratched", "Lock broken", "Wobbling / Unstable", "Hardware missing / Broken", "Other"] },
-  { name: "symptoms", label: "Describe the Problem", type: "textarea", required: true, placeholder: "e.g. Chair wheels broken, desk surface scratched, lock broken" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] },
-  { name: "budget_limit", label: "Maximum Repair Budget (ZMW)", type: "currency", required: false, helpText: "Optional - helps shops decide if repair is viable for you" }
+  { name: "brand", label: "Device Model & Specifications", type: "text", required: true, placeholder: "e.g. Brand, Model, Material" },
+  { name: "primarySymptom", label: "Primary Symptom", type: "select", required: true, options: ["Power Issue", "Screen/Display", "Audio/Sound", "Physical Damage", "Software/Update", "Other"], group: "Diagnostic Suite" },
+  { name: "deviceState", label: "Current Device State", type: "select", required: true, options: ["Powers on fully", "Powers on (No display)", "Stuck on Logo", "Completely Dead"], group: "Diagnostic Suite" },
+  { name: "incidentReport", label: "What happened?", type: "textarea", required: true, placeholder: "e.g., dropped in water, stopped charging after a power surge, screen went black during use...", group: "Diagnostic Suite" },
+  { name: "repairHistory", label: "Has this device been opened or repaired before?", type: "toggle", required: false, group: "Diagnostic Suite" },
+  { name: "symptoms", label: "Technical Symptoms & Observations", type: "textarea", required: true, placeholder: "e.g. Chair wheels broken, desk surface scratched, lock broken" },
+  { name: "quantity", label: "Number of Devices", type: "counter", required: true, min: 1, helpText: "Please specify if all items share the same fault in the description." },
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] }
 ];
 
 const outdoorBuySchema: FieldSchema[] = [
@@ -430,10 +450,14 @@ const outdoorBuySchema: FieldSchema[] = [
 const outdoorRepairSchema: FieldSchema[] = [
   { name: "images", label: "Item Photos", type: "image_upload", required: false },
   { name: "itemType", label: "Item Type", type: "select", required: true, options: ["Rattan Furniture", "Garden Bench", "Umbrella", "Other"] },
-  { name: "damageType", label: "Damage Type", type: "select", required: true, options: ["Rattan unraveling", "Wood rot", "Umbrella mechanism broken", "Wobbling / Unstable", "Hardware missing / Broken", "Other"] },
-  { name: "symptoms", label: "Describe the Problem", type: "textarea", required: true, placeholder: "e.g. Rattan unraveling, wood rot, umbrella mechanism broken" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] },
-  { name: "budget_limit", label: "Maximum Repair Budget (ZMW)", type: "currency", required: false, helpText: "Optional - helps shops decide if repair is viable for you" }
+  { name: "brand", label: "Device Model & Specifications", type: "text", required: true, placeholder: "e.g. Brand, Model, Material" },
+  { name: "primarySymptom", label: "Primary Symptom", type: "select", required: true, options: ["Power Issue", "Screen/Display", "Audio/Sound", "Physical Damage", "Software/Update", "Other"], group: "Diagnostic Suite" },
+  { name: "deviceState", label: "Current Device State", type: "select", required: true, options: ["Powers on fully", "Powers on (No display)", "Stuck on Logo", "Completely Dead"], group: "Diagnostic Suite" },
+  { name: "incidentReport", label: "What happened?", type: "textarea", required: true, placeholder: "e.g., dropped in water, stopped charging after a power surge, screen went black during use...", group: "Diagnostic Suite" },
+  { name: "repairHistory", label: "Has this device been opened or repaired before?", type: "toggle", required: false, group: "Diagnostic Suite" },
+  { name: "symptoms", label: "Technical Symptoms & Observations", type: "textarea", required: true, placeholder: "e.g. Rattan unraveling, wood rot, umbrella mechanism broken" },
+  { name: "quantity", label: "Number of Devices", type: "counter", required: true, min: 1, helpText: "Please specify if all items share the same fault in the description." },
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] }
 ];
 
 const carPartsNewSchema: FieldSchema[] = [

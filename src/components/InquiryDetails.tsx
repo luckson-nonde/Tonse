@@ -23,6 +23,7 @@ interface InquiryDetailsProps {
 }
 
 export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDetailsProps) {
+  console.log('InquiryDetails rendering, inquiry:', inquiry);
   const statusInfo = INQUIRY_STATUS_SCHEMA.states[inquiry.status] || INQUIRY_STATUS_SCHEMA.states['PENDING'];
 
   return (
@@ -45,6 +46,13 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
           </div>
         </div>
         <div className="flex gap-2">
+          <Button 
+            variant="danger"
+            onClick={() => onAction('delete_inquiry', inquiry)}
+            className="px-6 py-2.5 text-xs font-bold bg-rose-500 text-white hover:bg-rose-600 border-none"
+          >
+            Delete Inquiry
+          </Button>
           {statusInfo.nextActions.map(action => (
             <Button 
               key={action}

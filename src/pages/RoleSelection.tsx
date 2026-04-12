@@ -1,11 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingBag, Store, Truck, Wrench, Check, Music, Calendar, Smartphone, Armchair, Shirt, Home, Car, Hammer, Tractor, Laptop, User, Building2, Package, Settings, Layers, FileText, Users } from 'lucide-react';
-import AuthLayout from '../components/AuthLayout';
+import AuthSplitLayout from '../components/AuthSplitLayout';
 import Button from '../components/Button';
 import { motion, AnimatePresence } from 'motion/react';
-import { SubRole } from '../types';
+import { SubRole, HeroContent } from '../types';
 import { CATEGORIES_DB, getCategoryNature } from '../services/categories';
+
+const HERO_CONTENT: Record<string, HeroContent> = {
+  tier1: {
+    title: "Join the Gold Standard of Trade.",
+    image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=1920&h=1080",
+    bullets: ["Efficient Procurement", "Direct Messaging", "Verified Suppliers"]
+  },
+  buyer: {
+    title: "Procure with Confidence.",
+    image: "https://images.unsplash.com/photo-1556740734-7f95834d0ff9?auto=format&fit=crop&q=80&w=1920&h=1080",
+    bullets: ["Access Global Markets", "Secure Transactions", "Quality Assurance"]
+  },
+  seller: {
+    title: "Scale Your Business Globally.",
+    image: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=1920&h=1080",
+    bullets: ["Reach Verified Buyers", "Streamlined Logistics", "Market Insights"]
+  },
+  categories: {
+    title: "Tailored to Your Industry.",
+    image: "https://images.unsplash.com/photo-1513828583688-c52646db42da?auto=format&fit=crop&q=80&w=1920&h=1080",
+    bullets: ["Niche Specialization", "Relevant Connections", "Industry Standards"]
+  }
+};
 
 interface RoleOption {
   id: string;
@@ -167,14 +190,21 @@ export default function RoleSelection() {
     }
   };
 
+  const currentHero = useMemo(() => {
+    if (tier === 1) return HERO_CONTENT.tier1;
+    if (tier === 3) return HERO_CONTENT.categories;
+    if (masterRole === 'BUYER') return HERO_CONTENT.buyer;
+    if (masterRole === 'SELLER') return HERO_CONTENT.seller;
+    return HERO_CONTENT.tier1;
+  }, [tier, masterRole]);
+
   return (
-    <AuthLayout 
+    <AuthSplitLayout 
       title={
         tier === 1 ? "Select Your Role" : 
         tier === 2 ? `Configure your ${masterRole === 'BUYER' ? 'Buyer' : 'Seller'} Account` :
         "Business Categories"
       }
-      titleClassName={tier === 3 ? "text-2xl sm:text-3xl" : "text-3xl"}
       subtitle={
         <span className="text-[#1a1612]/60">
           {tier === 1 
@@ -186,6 +216,7 @@ export default function RoleSelection() {
         </span>
       }
       onBack={tier > 1 ? handleBack : () => navigate('/login')}
+      hero={currentHero}
     >
       <div className="relative overflow-hidden min-h-[400px]">
         <AnimatePresence mode="wait">
@@ -195,39 +226,52 @@ export default function RoleSelection() {
               initial={{ x: -20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -20, opacity: 0 }}
-              className="grid grid-cols-1 gap-4"
+              className="grid grid-cols-1 gap-4 lg:gap-6"
             >
               <button 
                 onClick={() => handleMasterSelect('BUYER')}
-                className={`group p-8 rounded-3xl border text-left transition-all flex items-center gap-6 ${
+                className={`group p-6 lg:p-8 rounded-[24px] lg:rounded-[32px] border text-left transition-all flex items-center gap-4 lg:gap-6 ${
                   masterRole === 'BUYER' 
-                    ? 'border-brand-yellow bg-brand-yellow/5 shadow-lg' 
-                    : 'border-[#e8e4dc] bg-white hover:border-brand-yellow/30'
+                    ? 'border-[#C9973A] bg-[#C9973A]/5 shadow-lg' 
+                    : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/30'
                 }`}
               >
-                <div className={`p-4 rounded-2xl transition-colors shrink-0 ${masterRole === 'BUYER' ? 'bg-brand-yellow text-white' : 'bg-[#f5f2ee] text-[#1e293b]'}`}>
-                  <ShoppingBag className="w-8 h-8" strokeWidth={1.5} />
+                <div className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl transition-colors shrink-0 ${masterRole === 'BUYER' ? 'bg-[#C9973A] text-white' : 'bg-[#f5f2ee] text-[#1e293b]'}`}>
+                  <ShoppingBag className="w-6 h-6 lg:w-8 lg:h-8" strokeWidth={1.5} />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-xl font-serif font-bold text-[#1a1612]">I want to Buy</h3>
-                  <p className="text-sm text-[#1a1612]/50 mt-1">Discover products and request specialized services.</p>
+                  <h3 className="text-lg lg:text-xl font-serif font-bold text-[#1a1612]">I'm Looking For...</h3>
+                  <p className="text-[13px] lg:text-sm text-[#1a1612]/50 mt-1">Request products, services and skilled labour.</p>
                 </div>
               </button>
 
               <button 
                 onClick={() => handleMasterSelect('SELLER')}
-                className={`group p-8 rounded-3xl border text-left transition-all flex items-center gap-6 ${
+                className={`group p-6 lg:p-8 rounded-[24px] lg:rounded-[32px] border text-left transition-all flex items-center gap-4 lg:gap-6 ${
                   masterRole === 'SELLER' 
-                    ? 'border-brand-yellow bg-brand-yellow/5 shadow-lg' 
-                    : 'border-[#e8e4dc] bg-white hover:border-brand-yellow/30'
+                    ? 'border-[#C9973A] bg-[#C9973A]/5 shadow-lg' 
+                    : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/30'
                 }`}
               >
-                <div className={`p-4 rounded-2xl transition-colors shrink-0 ${masterRole === 'SELLER' ? 'bg-brand-yellow text-white' : 'bg-[#f5f2ee] text-[#1e293b]'}`}>
-                  <Store className="w-8 h-8" strokeWidth={1.5} />
+                <div className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl transition-colors shrink-0 ${masterRole === 'SELLER' ? 'bg-[#C9973A] text-white' : 'bg-[#f5f2ee] text-[#1e293b]'}`}>
+                  <Store className="w-6 h-6 lg:w-8 lg:h-8" strokeWidth={1.5} />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-xl font-serif font-bold text-[#1a1612]">I want to Sell</h3>
-                  <p className="text-sm text-[#1a1612]/50 mt-1">Grow your business by reaching local customers.</p>
+                  <h3 className="text-lg lg:text-xl font-serif font-bold text-[#1a1612]">We're Offering...</h3>
+                  <p className="text-[13px] lg:text-sm text-[#1a1612]/50 mt-1">Offer your products or business services.</p>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => navigate('/register/labour')}
+                className={`group p-6 lg:p-8 rounded-[24px] lg:rounded-[32px] border text-left transition-all flex items-center gap-4 lg:gap-6 border-[#e8e4dc] bg-white hover:border-[#C9973A]/30`}
+              >
+                <div className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl transition-colors shrink-0 bg-[#f5f2ee] text-[#1e293b]`}>
+                  <Wrench className="w-6 h-6 lg:w-8 lg:h-8" strokeWidth={1.5} />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg lg:text-xl font-serif font-bold text-[#1a1612]">I Offer My Skills</h3>
+                  <p className="text-[13px] lg:text-sm text-[#1a1612]/50 mt-1">Offer your labour and expertise to employers.</p>
                 </div>
               </button>
             </motion.div>
@@ -274,7 +318,7 @@ export default function RoleSelection() {
                         exit={{ opacity: 0, scale: 0.95 }}
                         key={option.id}
                         onClick={() => handleSubRoleSelect(option.subRole)}
-                        className={`group p-5 rounded-2xl border text-left transition-all flex items-center gap-4 ${
+                        className={`group p-5 rounded-[32px] border text-left transition-all flex items-center gap-4 ${
                           isSelected 
                             ? 'border-brand-yellow bg-brand-yellow/5 shadow-md' 
                             : 'border-[#e8e4dc] bg-white hover:border-brand-yellow/30'
@@ -315,7 +359,7 @@ export default function RoleSelection() {
                     <button 
                       key={cat.id}
                       onClick={() => toggleCategory(cat.id)}
-                      className={`group p-4 rounded-2xl border text-center transition-all flex flex-col items-center gap-3 relative ${
+                      className={`group p-4 rounded-[32px] border text-center transition-all flex flex-col items-center gap-3 relative ${
                         isSelected 
                           ? 'border-brand-yellow bg-brand-yellow/5 shadow-md' 
                           : 'border-[#e8e4dc] bg-white hover:border-brand-yellow/30 shadow-sm'
@@ -349,12 +393,12 @@ export default function RoleSelection() {
             tier === 2 ? !selectedSubRole :
             selectedCategories.length === 0
           }
-          className="w-full py-5 px-4 shadow-lg flex justify-center items-center gap-3 text-[18px] font-serif font-bold disabled:opacity-50"
+          className="w-full py-5 px-4 shadow-lg flex justify-center items-center gap-3 text-[18px] font-serif font-bold disabled:opacity-50 rounded-[32px]"
         >
           {tier === 1 ? 'Next Step' : tier === 2 ? 'Continue' : 'Initialize Membership'}
           <span className="text-xl leading-none">→</span>
         </Button>
       </div>
-    </AuthLayout>
+    </AuthSplitLayout>
   );
 }

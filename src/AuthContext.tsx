@@ -2,12 +2,14 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from './db';
 import { SubRole, EntityType } from './types';
 
-export type Role = 'BUYER' | 'SELLER' | 'SUPPLIER' | 'SERVICE_PROVIDER' | 'ENTERTAINMENT' | 'EVENTS' | 'PROVIDER_STAFF';
+export type Role = 'BUYER' | 'SELLER' | 'SUPPLIER' | 'SERVICE_PROVIDER' | 'ENTERTAINMENT' | 'EVENTS' | 'PROVIDER_STAFF' | 'LABOUR';
 
 export interface User {
   id?: number;
   role: Role;
   subRole?: SubRole;
+  labourCategory?: string;
+  labourSubTypes?: string[];
   entityType?: EntityType;
   name: string;
   companyName?: string;
@@ -39,6 +41,8 @@ export interface User {
   mustChangePassword?: boolean;
   createdAt?: string;
   virtualAccountNumber?: string;
+  virtualAccountBalance?: number;
+  availabilityStatus?: 'AVAILABLE' | 'NOT_AVAILABLE';
 }
 
 interface AuthContextType {

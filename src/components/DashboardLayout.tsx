@@ -1,19 +1,52 @@
-import React, { useState, useMemo } from 'react';
-import { useAuth } from '../AuthContext';
-import { useNavigate } from 'react-router-dom';
-import { Menu, Bell, Home, ClipboardCheck, List, Store, X, ChevronLeft, PlusCircle, MessageSquare, FileText, User, Users, Truck, QrCode, ChevronRight, Archive, Calendar, MapPin, History, ChevronDown } from 'lucide-react';
+import { MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
+import { MASTER_LABOUR_ACCOUNT_SCHEMA } from '../services/labourAccountSchema';
+import { MASTER_PROVIDER_ACCOUNT_SCHEMA } from '../services/providerAccountSchema';
+import { NavigationItem } from '../services/accountSchemaTypes';
+import { Menu, Bell, Home, ClipboardCheck, List, Store, X, ChevronLeft, PlusCircle, MessageSquare, FileText, User, Users, Truck, QrCode, ChevronRight, Archive, Calendar, MapPin, History, ChevronDown, LayoutDashboard } from 'lucide-react';
 import Logo from './Logo';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
-
 import { useDashboard } from '../DashboardContext';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';
+import { useAuth } from '../AuthContext';
+import { useNavigate } from 'react-router-dom';
+import React, { useState, useMemo } from 'react';
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+// Map icon names to components
+const iconMap: Record<string, any> = {
+  Home,
+  LayoutDashboard,
+  MessageSquare,
+  FileText,
+  ShoppingBag: Truck, // Placeholder for ShoppingBag
+  Store,
+  User,
+  Users,
+  Truck,
+  QrCode,
+  Archive,
+  Calendar,
+  MapPin,
+  History,
+  ChevronDown,
+  ChevronRight,
+  PlusCircle,
+  ClipboardCheck,
+  List,
+};
+
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+  onTabChange?: (tab: string) => void;
+  externalActiveTab?: string;
+}
+
+export default function DashboardLayout({ children, onTabChange, externalActiveTab }: DashboardLayoutProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { activeTab, setActiveTab } = useDashboard();
+  const { activeTab: internalActiveTab, setActiveTab } = useDashboard();
+  const activeTab = externalActiveTab ?? internalActiveTab;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -76,12 +109,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [user]);
 
+  const navItems = useMemo(() => {
+    if (!user) return [];
+    let schema;
+    if (user.role === 'BUYER') schema = MASTER_BUYER_ACCOUNT_SCHEMA;
+    else if (user.role === 'LABOUR') schema = MASTER_LABOUR_ACCOUNT_SCHEMA;
+    else schema = MASTER_PROVIDER_ACCOUNT_SCHEMA;
+    
+    return schema.navigation.filter(item => {
+      if (item.permissions && !hasPermission(user, item.permissions)) return false;
+      if (item.roleFilter && !item.roleFilter.includes(user.role)) return false;
+      if (item.excludeRoles && item.excludeRoles.includes(user.role)) return false;
+      return true;
+    });
+  }, [user]);
+
+  const getLabel = (label: string | ((role: string) => string)) => {
+    if (typeof label === 'function') return label(user?.role || '');
+    return label;
+  };
+
   const handleTabClick = React.useCallback((tab: string) => {
+    if (user?.role === 'LABOUR' && onTabChange) {
+      onTabChange(tab);
+      setIsMobileMenuOpen(false);
+      return;
+    }
+
     setActiveTab(tab);
     setIsMobileMenuOpen(false);
     
     const isBuyer = user?.role === 'BUYER';
-    const basePath = isBuyer ? '/buyer' : '/provider';
+    const isLabour = user?.role === 'LABOUR';
+    const basePath = isBuyer ? '/buyer' : isLabour ? '/labour' : '/provider';
     const activeInquiry = notificationCounts?.activeInquiry;
 
     if (['quotation', 'purchase_order', 'order_confirmation', 'delivery_order'].includes(tab)) {
@@ -105,15 +165,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     } else if (tab === 'profile') {
       navigate(`${basePath}/profile`);
     } else if (tab === 'schedule') {
-      navigate('/schedule');
+      navigate(isLabour ? '/labour/schedule' : '/schedule');
     } else if (tab === 'venue-spaces') {
       navigate('/provider/venue-spaces');
     } else if (tab === 'audit-trail') {
       navigate('/provider/audit-trail');
     } else {
-      navigate(basePath);
+      navigate(tab === 'home' ? basePath : `${basePath}/${tab}`);
     }
-  }, [setActiveTab, navigate, user?.role, notificationCounts?.activeInquiry]);
+  }, [setActiveTab, navigate, user?.role, notificationCounts?.activeInquiry, onTabChange]);
 
   React.useEffect(() => {
     console.log('DashboardLayout activeTab state:', activeTab);
@@ -191,10 +251,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         >
           <div className="flex items-center space-x-3 hidden md:flex">
             <div className="flex flex-col">
-              <span className="font-serif font-bold text-2xl leading-none tracking-[-0.06em]">
-                <span className="text-[#1e293b]">TON</span>
-                <span className="text-[#C9973A] -ml-[0.04em]">SE</span>
-              </span>
+              <Logo className="text-2xl" />
               <span className="text-[10px] font-sans text-[#9ca3af] tracking-wider uppercase mt-1">
                 {getPageTitle()}
               </span>
@@ -233,20 +290,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               Profile
             </button>
             
-            {(user?.role === 'BUYER' || hasPermission(user, PERMISSIONS.VIEW_ANALYTICS)) && (
-              <NavLink tab="home" icon={Home} label="Home" isActive={activeTab === 'home'} />
-            )}
-            
-            {user?.role === 'BUYER' ? (
-              <>
-                {notificationCounts?.activeInquiry?.processType === 'STANDARD' ? (
-                  <div className="w-full">
+            {navItems.map(item => {
+              if (item.id === 'inquiries' && user?.role === 'BUYER' && notificationCounts?.activeInquiry?.processType === 'STANDARD') {
+                return (
+                  <div key={item.id} className="w-full">
                     <button 
                       onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                       className="flex items-center justify-between w-full px-4 py-3 text-[14px] font-medium font-sans text-[#1e293b] hover:bg-slate-50 border-l-[3px] border-transparent"
                     >
                       <div className="flex items-center">
-                        <FileText className="w-[18px] h-[18px] mr-4 stroke-[1.8]" /> My Inquiries
+                        <FileText className="w-[18px] h-[18px] mr-4 stroke-[1.8]" /> {getLabel(item.label)}
                       </div>
                       {isDropdownOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     </button>
@@ -255,11 +308,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         {['quotation', 'purchase_order', 'order_confirmation', 'delivery_order'].map((stage) => {
                           const stages = ['quotation', 'purchase_order', 'order_confirmation', 'delivery_order'];
                           const currentStage = notificationCounts.activeInquiry?.currentStage || 'quotation';
-                          
-                          // Check if order confirmation exists to unlock delivery order
-                          const hasOrderConfirmation = notificationCounts.activeInquiry?.currentStage === 'delivery_order' || 
-                                                       (notificationCounts.activeInquiry?.currentStage === 'order_confirmation' && stage === 'delivery_order');
-                          
                           const isUnlocked = stages.indexOf(stage) <= stages.indexOf(currentStage) || (stage === 'delivery_order' && currentStage === 'order_confirmation');
                           
                           const stageLabels: Record<string, string> = {
@@ -284,63 +332,40 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       </div>
                     )}
                   </div>
-                ) : (
-                  <NavLink tab="inquiries" icon={FileText} label="My Inquiries" isActive={['inquiries', 'create-inquiry', 'inquiry-items', 'category-selection', 'inquiry-preferences', 'location-details'].includes(activeTab)} badgeCount={notificationCounts?.inquiries} />
-                )}
-                <NavLink tab="quotes" icon={MessageSquare} label="Quotes Received" isActive={activeTab === 'quotes'} badgeCount={notificationCounts?.quotes} />
-                <NavLink tab="shops" icon={Store} label="Saved Shops" isActive={activeTab === 'shops'} />
-                <NavLink tab="suppliers" icon={Users} label="Suppliers" isActive={activeTab === 'suppliers'} />
-                <NavLink tab="paid-orders" icon={Truck} label="Paid Orders" isActive={activeTab === 'paid-orders'} />
-                <NavLink tab="schedule" icon={Calendar} label="My Schedule" isActive={activeTab === 'schedule'} />
-                <NavLink tab="archived" icon={Archive} label="Archived Quotes" isActive={window.location.pathname === '/buyer/archived'} />
-              </>
-            ) : (
-              <>
-                {hasPermission(user, PERMISSIONS.MANAGE_QUOTES) && (
-                  <>
-                    <NavLink tab="leads" icon={FileText} label={(user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS') ? 'Incoming Booking Requests' : 'Incoming Leads'} isActive={activeTab === 'leads'} badgeCount={notificationCounts?.inquiries} />
-                    <NavLink tab="my-quotes" icon={MessageSquare} label="My Quotes" isActive={activeTab === 'my-quotes'} badgeCount={notificationCounts?.quotes} />
-                    <NavLink tab="archived-leads" icon={Archive} label="Archived Leads" isActive={activeTab === 'archived-leads'} />
-                  </>
-                )}
-                
-                {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && (
-                  <>
-                    <NavLink tab="schedule" icon={Calendar} label="My Schedule" isActive={activeTab === 'schedule'} />
-                    {user?.role === 'EVENTS' && (
-                      <NavLink tab="venue-spaces" icon={MapPin} label="Venue Spaces" isActive={activeTab === 'venue-spaces'} />
-                    )}
-                    <NavLink tab="paid-orders" icon={Truck} label={(user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS') ? 'Paid Bookings' : 'Paid Orders'} isActive={activeTab === 'paid-orders'} />
-                  </>
-                )}
-                
-                {hasPermission(user, PERMISSIONS.MANAGE_COLLECTIONS) && (
-                  <NavLink tab="collection" icon={QrCode} label="Collection" isActive={activeTab === 'collection'} />
-                )}
+                );
+              }
+              
+              const Icon = iconMap[item.icon] || Home;
+              let badgeCount;
+              if (item.id === 'inquiries') badgeCount = notificationCounts?.inquiries;
+              else if (item.id === 'my-quotes' || item.id === 'quotes') badgeCount = notificationCounts?.quotes;
 
-                {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && (
-                  <>
-                    {user?.role === 'EVENTS' && user?.categories?.some(c => c.toLowerCase().includes('equipment rental')) ? (
-                      <NavLink tab="products" icon={Store} label="Inventory" isActive={activeTab === 'products'} />
-                    ) : user?.role === 'EVENTS' ? (
-                      null 
-                    ) : user?.role !== 'ENTERTAINMENT' && (
-                      <NavLink tab="products" icon={Store} label="My Products" isActive={activeTab === 'products'} />
-                    )}
-                    {hasPermission(user, PERMISSIONS.MANAGE_TEAM) && (
-                      <NavLink tab="team" icon={Users} label="Team Management" isActive={activeTab === 'team'} />
-                    )}
-                    <NavLink tab="audit-trail" icon={History} label="Audit Trail" isActive={activeTab === 'audit-trail'} />
-                  </>
-                )}
-              </>
-            )}
-            
+              return (
+                <NavLink 
+                  key={item.id}
+                  tab={item.id} 
+                  icon={Icon} 
+                  label={getLabel(item.label)} 
+                  isActive={activeTab === item.id || (item.id === 'inquiries' && ['inquiries', 'create-inquiry', 'inquiry-items', 'category-selection', 'inquiry-preferences', 'location-details'].includes(activeTab))} 
+                  badgeCount={badgeCount} 
+                />
+              );
+            })}
           </nav>
         </div>
 
-        <div className="p-4 border-t border-[#f1f5f9] mt-auto h-[70px] flex items-center justify-center bg-white">
+        <div className="p-4 border-t border-[#f1f5f9] mt-auto h-[120px] flex flex-col items-center justify-center bg-white">
           <LogoutToggle user={user} onLogout={handleLogout} />
+          <button
+            onClick={async () => {
+              console.log('Clear Database button clicked');
+              await db.clearAllTables();
+              window.location.reload();
+            }}
+            className="mt-4 text-[10px] font-bold text-rose-500 uppercase tracking-wider hover:text-rose-700 transition-all"
+          >
+            Clear Database
+          </button>
         </div>
       </div>
 
@@ -361,11 +386,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               
               {/* Center Section: Mobile Logo & Title */}
               <div className="flex flex-col items-center justify-center flex-1 md:hidden">
-                <span className="font-serif font-bold text-2xl leading-none tracking-[-0.06em]">
-                  <span className="text-[#1e293b]">TON</span>
-                  <span className="text-[#C9973A] -ml-[0.04em]">SE</span>
-                </span>
-                <span className="text-[11px] font-bold text-[#C9973A] mt-1 font-sans uppercase tracking-widest">
+                <Logo className="text-2xl" />
+                <span className="text-[10px] font-bold text-[#C9973A] mt-1 font-sans uppercase tracking-widest">
                   {getPageTitle()}
                 </span>
               </div>

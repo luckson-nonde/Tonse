@@ -26,6 +26,13 @@ export function generateZodSchema(fields: FieldSchema[]) {
         }
         break;
 
+      case 'multiselect':
+        fieldSchema = z.string();
+        if (field.required) {
+          fieldSchema = fieldSchema.min(1, `${field.label} is required`);
+        }
+        break;
+
       case 'toggle':
         fieldSchema = z.boolean();
         break;
@@ -59,7 +66,8 @@ export function generateZodSchema(fields: FieldSchema[]) {
       fieldSchema = fieldSchema.optional().or(z.literal(''));
     }
 
-    schemaShape[field.name] = fieldSchema;
+    const fieldName = field.name || (field as any).id;
+    schemaShape[fieldName] = fieldSchema;
   });
 
   return z.object(schemaShape);

@@ -2,11 +2,25 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth, type Role } from '../AuthContext';
 import { Key, Eye, EyeOff } from 'lucide-react';
-import AuthLayout from '../components/AuthLayout';
+import AuthSplitLayout from '../components/AuthSplitLayout';
 import Button from '../components/Button';
 import { SubRole, EntityType } from '../types';
 import { getRegistrationSchema } from '../services/userSchemas';
 import DynamicProfileForm from '../components/DynamicProfileForm';
+import { HeroContent } from '../types';
+
+const REGISTER_HERO: Record<string, HeroContent> = {
+  individual: {
+    title: "Join the Luxury Community.",
+    image: "https://images.unsplash.com/photo-1556740734-7f95834d0ff9?auto=format&fit=crop&q=80&w=1920&h=1080",
+    bullets: ["Personalized Experience", "Exclusive Access", "Seamless Trading"]
+  },
+  business: {
+    title: "Professional Network Registration.",
+    image: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=1920&h=1080",
+    bullets: ["B2B Opportunities", "Verified Business Status", "Enterprise Tools"]
+  }
+};
 
 export default function Register() {
   const { register, user, updateUser } = useAuth();
@@ -25,7 +39,7 @@ export default function Register() {
   const [isLoading, setIsLoading] = useState(false);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
 
-  const isCompany = subRole?.startsWith('COMPANY_');
+  const isCompany = subRole?.startsWith('COMPANY_') || subRole?.includes('SELLER');
 
   const registrationSchema = useMemo(() => {
     return getRegistrationSchema(role, subRole);
@@ -36,6 +50,10 @@ export default function Register() {
     email: user?.email || '',
     phone: user?.phone || ''
   }), [user]);
+
+  const currentHero = useMemo(() => {
+    return isCompany ? REGISTER_HERO.business : REGISTER_HERO.individual;
+  }, [isCompany]);
 
   const handleRegister = async (data: Record<string, any>) => {
     setError('');
@@ -86,11 +104,10 @@ export default function Register() {
   };
 
   return (
-    <AuthLayout 
+    <AuthSplitLayout 
       title={isCompany ? "Business Registration" : "Create Account"} 
-      align="left"
       subtitle={
-        <span className="text-[#1a1612]/60 whitespace-nowrap">
+        <span className="text-[#1a1612]/60">
           {isCompany 
             ? "Register your company on the TONSE professional network."
             : "Join the TONSE luxury trade community."
@@ -98,6 +115,8 @@ export default function Register() {
         </span>
       }
       onBack={() => navigate('/role-selection')}
+      stepper={isCompany ? { current: 1, total: 2, labels: ['Account Details', 'Documents'] } : undefined}
+      hero={currentHero}
     >
       <div className="space-y-5">
         {error && (
@@ -126,7 +145,7 @@ export default function Register() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••" 
                   required
-                  className="block w-full pl-14 pr-14 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-2xl text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20 tracking-widest" 
+                  className="block w-full pl-14 pr-14 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-[32px] text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20 tracking-widest" 
                 />
                 <button
                   type="button"
@@ -155,7 +174,7 @@ export default function Register() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••" 
                   required
-                  className="block w-full pl-14 pr-14 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-2xl text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20 tracking-widest" 
+                  className="block w-full pl-14 pr-14 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-[32px] text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20 tracking-widest" 
                 />
                 <button
                   type="button"
@@ -206,9 +225,16 @@ export default function Register() {
               <Button 
                 type="submit" 
                 disabled={isLoading}
-                className="w-full py-5 px-4 shadow-md disabled:opacity-50 text-[18px] font-serif font-normal"
+                className="w-full py-5 px-4 shadow-md disabled:opacity-50 text-[18px] font-serif font-normal rounded-[32px]"
               >
-                {isLoading ? 'Creating Account...' : (isCompany ? 'Next: Documents →' : 'Initialize Membership')}
+                {isLoading 
+                  ? 'Creating Account...' 
+                  : isCompany 
+                    ? 'Next: Documents →' 
+                    : role === 'BUYER' 
+                      ? 'Complete Registration' 
+                      : 'Initialize Business Profile'
+                }
               </Button>
             </div>
           </div>
@@ -227,6 +253,6 @@ export default function Register() {
           </button>
         </p>
       </div>
-    </AuthLayout>
+    </AuthSplitLayout>
   );
 }

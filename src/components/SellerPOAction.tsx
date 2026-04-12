@@ -31,8 +31,8 @@ export default function SellerPOAction({ po, onActionComplete }: SellerPOActionP
       <h2 className="text-xl font-bold mb-4">Review Purchase Order #{po.id}</h2>
       <div className="mb-6">
         <h3 className="font-semibold mb-2">Items:</h3>
-        {po.lineItems.map((item) => (
-          <div key={item.name} className="flex justify-between py-2 border-b">
+        {po.lineItems.map((item, idx) => (
+          <div key={`${item.name}-${idx}`} className="flex justify-between py-2 border-b">
             <span>{item.name} x {item.quantity}</span>
           </div>
         ))}

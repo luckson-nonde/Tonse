@@ -61,26 +61,32 @@ export default function DynamicProfileForm({
   };
 
   const renderField = (field: any) => {
-    const error = errors[field.name]?.message as string | undefined;
+    if (!field || !field.type) {
+      console.warn('Skipping invalid field:', field);
+      return null;
+    }
+    const fieldName = field.name || field.id;
+    const error = errors[fieldName]?.message as string | undefined;
 
     return (
-      <div key={field.name} className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 w-full">
         <label className="text-[10px] font-sans font-bold text-[#9ca3af] uppercase tracking-widest flex items-center gap-1">
           {field.label}
           {field.required && <span className="text-[#C9973A]">✦</span>}
         </label>
 
         <Controller
-          name={field.name}
+          name={fieldName}
           control={control}
-          render={({ field: { onChange, value } }) => {
+          render={({ field: rhfField }) => {
+            const { onChange, value } = rhfField;
             switch (field.type) {
               case 'text':
               case 'email':
               case 'tel':
               case 'number':
                 return (
-                  <div className={`flex items-center bg-[#fffef9] border-[1.5px] rounded-[12px] px-4 py-3 transition-all duration-200 focus-within:border-[#C9973A]/50 ${error ? 'border-[#ef4444]' : 'border-[#e8e0d0]'}`}>
+                  <div className={`flex items-center bg-[#fffef9] border-[1.5px] rounded-[16px] px-4 py-3 transition-all duration-200 focus-within:border-[#C9973A]/50 ${error ? 'border-[#ef4444]' : 'border-[#e8e0d0]'}`}>
                     <input
                       type={field.type}
                       value={(value as string | number) || ''}
@@ -99,9 +105,56 @@ export default function DynamicProfileForm({
                     placeholder={field.placeholder || `Select ${field.label}`}
                   />
                 );
+              case 'multiselect': {
+                const safeValue = typeof value === 'string' ? value : '';
+                const selectedValues = safeValue ? safeValue.split(',') : [];
+                return (
+                  <div className="flex flex-wrap gap-2">
+                    {field.options?.map((opt: string) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          const newValues = selectedValues.includes(opt)
+                            ? selectedValues.filter(v => v !== opt)
+                            : [...selectedValues, opt];
+                          onChange(newValues.join(','));
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
+                          selectedValues.includes(opt)
+                            ? 'bg-[#C9973A] text-white'
+                            : 'bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]'
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                );
+              }
+              case 'boolean':
+              case 'toggle':
+                return (
+                  <div className="flex items-center gap-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => onChange(!value)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#C9973A] focus:ring-offset-2 ${
+                        value ? 'bg-[#C9973A]' : 'bg-slate-200'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          value ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                    <span className="text-[14px] font-sans text-[#1e293b]">{value ? 'Yes' : 'No'}</span>
+                  </div>
+                );
               case 'date':
                 return (
-                  <div className={`flex items-center bg-[#fffef9] border-[1.5px] rounded-[12px] px-4 py-3 transition-all duration-200 focus-within:border-[#C9973A]/50 ${error ? 'border-[#ef4444]' : 'border-[#e8e0d0]'}`}>
+                  <div className={`flex items-center bg-[#fffef9] border-[1.5px] rounded-[16px] px-4 py-3 transition-all duration-200 focus-within:border-[#C9973A]/50 ${error ? 'border-[#ef4444]' : 'border-[#e8e0d0]'}`}>
                     <input
                       type="date"
                       value={(value as string) || ''}
@@ -117,7 +170,7 @@ export default function DynamicProfileForm({
                     <div className="relative group">
                       <div 
                         onClick={() => document.getElementById(`file-input-${field.name}`)?.click()}
-                        className="w-full h-32 rounded-[12px] bg-[#fffef9] border-2 border-dashed border-[#e8e0d0] flex flex-col items-center justify-center overflow-hidden transition-all group-hover:border-[#C9973A]/30 cursor-pointer"
+                        className="w-full h-32 rounded-[16px] bg-[#fffef9] border-2 border-dashed border-[#e8e0d0] flex flex-col items-center justify-center overflow-hidden transition-all group-hover:border-[#C9973A]/30 cursor-pointer"
                       >
                         {value ? (
                           <img src={value as string} alt={field.label} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -150,8 +203,8 @@ export default function DynamicProfileForm({
                 );
               case 'gps':
                 return (
-                  <div className="space-y-3 col-span-full">
-                    <div className="flex items-center justify-between gap-4 p-4 bg-[#fffef9] border-[1.5px] border-[#e8e0d0] rounded-[12px]">
+                  <div className="space-y-3 w-full">
+                    <div className="flex items-center justify-between gap-4 p-4 bg-[#fffef9] border-[1.5px] border-[#e8e0d0] rounded-[16px]">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-[#C9973A]/10 rounded-xl flex items-center justify-center text-[#C9973A]">
                           <Navigation className="w-5 h-5" />
@@ -174,7 +227,7 @@ export default function DynamicProfileForm({
                     </div>
                     
                     {(value as any)?.latitude && (
-                      <div className="aspect-video rounded-[12px] overflow-hidden border border-[#e8e0d0]">
+                      <div className="aspect-video rounded-[16px] overflow-hidden border border-[#e8e0d0]">
                         <iframe
                           width="100%"
                           height="100%"
@@ -189,6 +242,7 @@ export default function DynamicProfileForm({
                   </div>
                 );
               default:
+                console.warn(`Unsupported field type: ${field.type}`);
                 return null;
             }
           }}
@@ -212,18 +266,30 @@ export default function DynamicProfileForm({
   };
 
   return (
-    <form id="dynamic-profile-form" onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+    <form id="dynamic-profile-form" onSubmit={handleSubmit(onSubmit)} className="space-y-10">
       {schema.sections.map((section, sIdx) => (
-        <div key={sIdx} className="space-y-4">
+        <div key={sIdx} className="space-y-6 p-6 rounded-[24px] border border-[#e8e0d0]/50 bg-[#fcfcfc]/50">
           <div className="flex items-center gap-3 pl-3 border-l-[3px] border-[#C9973A]">
-            <h3 className="text-[16px] font-serif font-bold text-[#1e293b]">{section.title}</h3>
+            <h3 className="text-[18px] font-serif font-bold text-[#1e293b]">
+              {section.sectionHeader || section.title}
+            </h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {section.fields.map(field => renderField(field))}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+            {section.fields?.map((field, fIdx) => {
+              if (!field) return null;
+              const fieldName = (field as any).name || (field as any).id;
+              return (
+                <div key={fieldName || fIdx} className={`${field.type === 'gps' ? 'md:col-span-2' : ''}`}>
+                  {renderField(field)}
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}
-      {children}
+      <div className="pt-4">
+        {children}
+      </div>
     </form>
   );
 }

@@ -2,8 +2,17 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { Mail, Key, Eye, EyeOff } from 'lucide-react';
-import AuthLayout from '../components/AuthLayout';
+import AuthSplitLayout from '../components/AuthSplitLayout';
 import Button from '../components/Button';
+import { HeroContent } from '../types';
+
+const LOGIN_HERO: HeroContent = {
+  title: "Welcome Back to the Gold Standard.",
+  image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=1920&h=1080",
+  bullets: ["Secure Access", "Real-time Updates", "Global Trade Network"]
+};
+
+import FloatingInput from '../components/FloatingInput';
 
 export default function Login() {
   const { login } = useAuth();
@@ -29,92 +38,99 @@ export default function Login() {
   };
 
   return (
-    <AuthLayout 
-      title={
-        <div className="flex flex-col items-center">
-          <span>Welcome Back</span>
-        </div>
-      }
-      subtitle={
-        <span className="text-[#1a1612]/60">
-          Sign in to access your <span className="text-[#C9973A] font-bold">Trade Portal</span>.
-        </span>
-      }
+    <AuthSplitLayout 
+      title="Welcome Back"
+      subtitle="Sign in to access your Trade Portal."
+      hero={LOGIN_HERO}
     >
       <form 
-        className="space-y-6" 
+        className="w-full" 
         onSubmit={handleSubmit}
       >
         {error && (
-          <div className="p-4 bg-red-50 border border-red-100 text-red-600 text-[13px] rounded-xl font-medium">
+          <div className="p-4 bg-red-50 border border-red-100 text-red-600 text-[13px] rounded-xl font-medium mb-[24px]">
             {error}
           </div>
         )}
         
         {/* Email/Phone Field */}
-        <div>
-          <label className="block text-[11px] font-bold text-[#1a1612]/40 uppercase tracking-[0.2em] mb-3 ml-1">Email or Phone Number</label>
-          <div className="relative group">
-            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-              <Mail className="h-4 w-4 text-[#C9973A]/40 group-focus-within:text-[#C9973A] transition-colors" strokeWidth={2} />
-            </div>
-            <input 
-              type="text" 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="you@example.com or 097..." 
-              className="block w-full pl-14 pr-5 py-4 bg-[#fcfcfc] border border-[#e8e0d0] rounded-2xl text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20 font-medium" 
-            />
-          </div>
+        <div className="mb-6">
+          <FloatingInput
+            label="Email or Phone Number"
+            type="text"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            icon={Mail}
+          />
         </div>
 
         {/* Password Field */}
-        <div>
-          <div className="flex justify-between items-center mb-3 ml-1">
-            <label className="block text-[11px] font-bold text-[#1a1612]/40 uppercase tracking-[0.2em]">Password</label>
-            <button type="button" className="text-[10px] font-bold text-[#C9973A] uppercase tracking-widest hover:underline">Forgot?</button>
-          </div>
-          <div className="relative group">
-            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-              <Key className="h-4 w-4 text-[#C9973A]/40 group-focus-within:text-[#C9973A] transition-colors" strokeWidth={2} />
-            </div>
-            <input 
-              type={showPassword ? "text" : "password"} 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder="••••••••" 
-              className="block w-full pl-14 pr-14 py-4 bg-[#fcfcfc] border border-[#e8e0d0] rounded-2xl text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20 tracking-widest" 
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute inset-y-0 right-0 pr-5 flex items-center text-[#C9973A]/40 hover:text-[#C9973A] transition-colors"
+        <div className="mb-8">
+          <FloatingInput
+            label="Password"
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            icon={Key}
+            className={showPassword ? "" : "tracking-widest"}
+            rightElement={
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="text-[#C9973A] hover:text-[#C9973A]/80 transition-colors"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" strokeWidth={2} />
+                ) : (
+                  <Eye className="h-4 w-4" strokeWidth={2} />
+                )}
+              </button>
+            }
+          />
+          <div className="flex justify-end -mt-5 pr-2">
+            <button 
+              type="button" 
+              className="text-[11px] font-sans font-bold text-[#C9973A] hover:text-[#B08432] transition-colors uppercase tracking-wider"
             >
-              {showPassword ? (
-                <EyeOff className="h-4 w-4" strokeWidth={2} />
-              ) : (
-                <Eye className="h-4 w-4" strokeWidth={2} />
-              )}
+              Forgot Password?
             </button>
           </div>
         </div>
 
         {/* Submit Button */}
-        <div className="!mt-8">
+        <div className="mb-8">
           <Button 
             type="submit" 
             disabled={isLoading}
-            className="w-full py-5 px-4 shadow-md disabled:opacity-50 text-[18px] font-sans font-medium bg-[#C9973A] hover:bg-[#B08432] transition-colors"
+            className="w-full h-[56px] shadow-[0_8px_20px_rgba(201,151,58,0.25)] disabled:opacity-50 text-[16px] font-sans font-bold text-[#1e293b] bg-[#C9973A] hover:bg-[#B08432] transition-all active:scale-[0.98] rounded-[12px] uppercase tracking-widest"
           >
             {isLoading ? 'Authenticating...' : 'Sign In'}
           </Button>
         </div>
       </form>
 
-      <div className="mt-10 text-center">
-        <p className="text-[13px] font-medium text-[#1a1612]/40">
+      <div className="text-center">
+        <div className="flex items-center gap-4 mb-8">
+          <div className="h-[1px] flex-1 bg-[#e8e0d0]/60"></div>
+          <span className="text-[10px] font-bold text-[#1a1612]/30 uppercase tracking-[0.2em]">Or continue with</span>
+          <div className="h-[1px] flex-1 bg-[#e8e0d0]/60"></div>
+        </div>
+
+        <div className="flex justify-center mb-10">
+          <a 
+            href="#"
+            className="flex items-center gap-3 text-[#1a1612] hover:text-[#C9973A] transition-all text-[15px] font-sans font-bold group"
+          >
+            <div className="w-10 h-10 bg-white border border-[#e8e0d0] rounded-full flex items-center justify-center shadow-sm group-hover:border-[#C9973A] transition-colors">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google" className="w-5 h-5" />
+            </div>
+            <span>Google Account</span>
+          </a>
+        </div>
+
+        <p className="text-[14px] font-sans font-medium text-[#1a1612] pb-12">
           New to the gold standard?{' '}
           <button 
           type="button"
@@ -125,6 +141,6 @@ export default function Login() {
         </button>
       </p>
     </div>
-  </AuthLayout>
+  </AuthSplitLayout>
 );
 }
