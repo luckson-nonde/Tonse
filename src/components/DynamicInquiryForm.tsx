@@ -545,20 +545,20 @@ export default function DynamicInquiryForm({
           {/* Use a grid for fields on desktop */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {ungroupedFields.map((field, idx) => (
-              <div key={field.name} className={field.type === 'textarea' || field.type === 'image_upload' ? 'md:col-span-2' : ''}>
+              <div key={field.name || `field-${idx}`} className={field.type === 'textarea' || field.type === 'image_upload' ? 'md:col-span-2' : ''}>
                 {renderField(field)}
               </div>
             ))}
 
-            {Object.entries(groupedFields).map(([groupName, fields]) => (
-              <div key={groupName} className="md:col-span-2 flex flex-col gap-8">
+            {Object.entries(groupedFields).map(([groupName, fields], gIdx) => (
+              <div key={`group-${groupName}-${gIdx}`} className="md:col-span-2 flex flex-col gap-8">
                 <div className="mt-4">
                   <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] pb-1 border-b border-[rgba(201,151,58,0.2)] mb-6">
                     {groupName}
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {fields.map((field) => (
-                      <div key={field.name} className={field.type === 'textarea' || field.type === 'image_upload' ? 'md:col-span-2' : ''}>
+                    {fields.map((field, fIdx) => (
+                      <div key={field.name || `group-field-${fIdx}`} className={field.type === 'textarea' || field.type === 'image_upload' ? 'md:col-span-2' : ''}>
                         {renderField(field)}
                       </div>
                     ))}

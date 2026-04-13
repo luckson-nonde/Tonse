@@ -46,7 +46,7 @@ export default function ArchivedLeadsPage() {
     if (user?.role === 'SELLER' && user?.subRole) {
       filtered = filtered.filter(lead => {
         if (!lead.category) return true;
-        const leadCats = lead.category.split(',').map(c => c.trim());
+        const leadCats = (lead.category || '').split(',').map(c => c.trim());
         const leadCatIds = leadCats.map(name => CATEGORIES_DB.find(c => c.name === name)?.id).filter(Boolean) as string[];
         const natures = leadCatIds.map(id => getCategoryNature(id));
         
@@ -158,7 +158,7 @@ export default function ArchivedLeadsPage() {
 
               <div className="p-6">
                 <div className="flex flex-wrap gap-2 mb-4">
-                  {lead.category.split(', ').map((cat: string, catIdx: number) => (
+                  {(lead.category || '').split(', ').map((cat: string, catIdx: number) => (
                     <span key={`${lead.id}-${cat}-${catIdx}`} className="px-2 py-0.5 bg-[#fdf6e9] text-[#d49b35] text-[10px] font-bold rounded uppercase tracking-wider">
                       {cat}
                     </span>

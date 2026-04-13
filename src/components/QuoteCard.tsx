@@ -55,7 +55,7 @@ export default function QuoteCard({ quote, onView, onPrint, onArchive }: QuoteCa
           <div className="flex items-start justify-end">
             <span className="text-sm font-bold text-slate-400 mt-1 mr-0.5">k</span>
             <span className="text-2xl font-black text-[#1a1612] tracking-tight leading-none">
-              {quote.price.toLocaleString()}
+              {(quote.price || 0).toLocaleString()}
             </span>
           </div>
         </div>

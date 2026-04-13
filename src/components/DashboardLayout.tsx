@@ -130,7 +130,7 @@ export default function DashboardLayout({ children, onTabChange, externalActiveT
   };
 
   const handleTabClick = React.useCallback((tab: string) => {
-    if (user?.role === 'LABOUR' && onTabChange) {
+    if ((user?.role === 'LABOUR' || user?.role === 'BUYER') && onTabChange) {
       onTabChange(tab);
       setIsMobileMenuOpen(false);
       return;
@@ -406,7 +406,7 @@ export default function DashboardLayout({ children, onTabChange, externalActiveT
               <div className="flex items-center space-x-4 ml-auto">
                 <div className="hidden sm:flex flex-col items-end mr-2">
                   <span className="text-[11px] font-bold text-[#C9973A] uppercase tracking-widest leading-none mb-1">Welcome back,</span>
-                  <span className="text-sm font-black font-sans text-[#1e293b] leading-none">{user?.name?.split(' ')[0]}</span>
+                  <span className="text-sm font-black font-sans text-[#1e293b] leading-none">{(user?.name || '').split(' ')[0]}</span>
                 </div>
                 
                 <div className="relative flex items-center gap-3">
@@ -701,8 +701,8 @@ function LogoutToggle({ user, onLogout }: { user: any, onLogout: () => void }) {
   const labelOpacity = useTransform(x, [0, maxDrag * 0.6], [1, 0]);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const initials = user?.name
-    ?.split(' ')
+  const initials = (user?.name || '')
+    .split(' ')
     .map((n: string) => n[0])
     .join('')
     .toUpperCase()

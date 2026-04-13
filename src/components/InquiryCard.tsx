@@ -49,7 +49,7 @@ export default function InquiryCard({ inquiry, state, quoteCount = 0, paidQuote,
   };
 
   const formatValue = (key: string, value: any) => {
-    if (key === 'budget_limit') return `ZMW ${Number(value).toLocaleString()}`;
+    if (key === 'budget_limit') return `ZMW ${Number(value || 0).toLocaleString()}`;
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
     return String(value);
   };
@@ -127,7 +127,7 @@ export default function InquiryCard({ inquiry, state, quoteCount = 0, paidQuote,
               <p className="text-[10px] font-bold text-slate-400 tracking-wider uppercase font-sans mb-1">AMOUNT PAID</p>
               <div className="flex items-baseline gap-1 mb-2">
                 <span className="text-sm font-bold text-slate-500 font-sans">ZMW</span>
-                <span className="text-3xl font-bold text-[#1e293b] font-serif">{Number(paidQuote.price).toLocaleString()}</span>
+                <span className="text-3xl font-bold text-[#1e293b] font-serif">{Number(paidQuote.price || 0).toLocaleString()}</span>
               </div>
               <p className="text-xs text-slate-500 font-sans">
                 Paid on {new Date(paidQuote.updatedAt).toLocaleDateString()} · via Mobile Money

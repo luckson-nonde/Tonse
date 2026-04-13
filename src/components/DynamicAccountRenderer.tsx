@@ -44,6 +44,7 @@ import ProviderScheduleView from './provider/ProviderScheduleView';
 import ProviderTeamView from './provider/ProviderTeamView';
 import CollectionPage from '../pages/CollectionPage';
 import { Inquiry, Quote } from '../types';
+import { getLabourProfileSchema } from '../services/labourSchemaRegistry';
 import { getProfileSchema } from '../services/userSchemas';
 import { uniqueKey } from '../utils/keyUtils';
 
@@ -141,7 +142,7 @@ export default function DynamicAccountRenderer({
                   {data?.escrowBalance > 0 && (
                     <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-bold uppercase tracking-widest text-emerald-400">
                       <ShieldCheck className="w-3 h-3" />
-                      ZMW {data.escrowBalance.toLocaleString()} in Escrow
+                      ZMW {(data.escrowBalance || 0).toLocaleString()} in Escrow
                     </div>
                   )}
                   <div className="px-2 py-0.5 rounded-full bg-white/10 border border-white/10 text-[9px] font-bold uppercase tracking-widest text-slate-300">
@@ -396,7 +397,17 @@ export default function DynamicAccountRenderer({
       case 'details_renderer':
         return renderDetails();
       case 'profile_renderer':
-        const profileSchema = getProfileSchema(user?.role, user?.subRole);
+        const profileSchema = user?.role === 'LABOUR'
+          ? getLabourProfileSchema(user?.labourSubTypes?.[0] ?? 'generic')
+          : getProfileSchema(user?.role, user?.subRole);
+          
+        console.log('PROFILE SCHEMA:', JSON.stringify(profileSchema));
+        console.log('PROFILE SCHEMA TYPE:', typeof profileSchema);
+        
+        if (!profileSchema) {
+          return <div className="p-8 text-center text-slate-400">Profile schema not found</div>;
+        }
+        
         return (
           <div className="space-y-8">
             <div className="px-2">
@@ -404,7 +415,7 @@ export default function DynamicAccountRenderer({
               <p className="text-slate-500">{resolveValue(viewSchema.subtitle)}</p>
             </div>
             <DynamicProfileForm 
-              schema={profileSchema} 
+              schema={profileSchema as any} 
               initialData={user} 
               onSubmit={(updatedData) => onAction('save_profile', updatedData)} 
             >

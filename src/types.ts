@@ -58,6 +58,10 @@ export interface Inquiry {
   // Legacy fields for backward compatibility
   entertainmentData?: any;
   repairData?: any;
+  // Labour fields
+  isLabour?: boolean;
+  labourGroup?: string;
+  labourSubType?: string;
 }
 
 export interface Quote {

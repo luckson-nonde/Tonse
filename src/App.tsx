@@ -103,9 +103,7 @@ export default function App() {
               <Route path="/" element={<RootRedirect />} />
               <Route path="/buyer" element={
                 <ProtectedRoute allowedRoles={['BUYER']}>
-                  <DashboardLayout>
-                    <BuyerDashboard />
-                  </DashboardLayout>
+                  <BuyerDashboard />
                 </ProtectedRoute>
               } />
               <Route path="/buyer/financial" element={

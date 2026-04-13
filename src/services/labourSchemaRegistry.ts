@@ -9,5 +9,15 @@ export function getLabourProfileSchema(schemaKey: string) {
   if (!schemaKey || schemaKey === 'generic') {
     return labourProfileSchemas['genericLabourProfileSchema'];
   }
-  return labourProfileSchemas[schemaKey] ?? labourProfileSchemas['genericLabourProfileSchema'];
+  const schema = labourProfileSchemas[schemaKey] ?? labourProfileSchemas['genericLabourProfileSchema'];
+  
+  // Validate every field before returning
+  const sanitized = {
+    ...schema,
+    sections: schema.sections.map(section => ({
+      ...section,
+      fields: section.fields.filter(field => field && field.type && field.id && field.label)
+    }))
+  };
+  return sanitized;
 }

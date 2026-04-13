@@ -14,8 +14,10 @@ import InquiryPreferences from '../components/InquiryPreferences';
 import LocationDetails from '../components/LocationDetails';
 import InquirySuccess from '../components/InquirySuccess';
 import ConfirmationModal from '../components/ConfirmationModal';
+import DashboardLayout from '../components/DashboardLayout';
 import { CATEGORIES_DB, GENERIC_FALLBACK_SCHEMA } from '../services/categories';
 import { Inquiry, InquiryItem } from '../types';
+import { getLabourInquirySchema } from '../services/labourSchemaRegistry';
 
 export default function BuyerDashboard() {
   const { user } = useAuth();
@@ -75,6 +77,11 @@ export default function BuyerDashboard() {
   const [pendingInquiry, setPendingInquiry] = useState<{ 
     items: InquiryItem[]; 
     categories?: string[];
+    category?: string;
+    categoryId?: string;
+    isLabour?: boolean;
+    labourGroup?: string;
+    inquirySchemaKey?: string;
     preferences?: any;
     location?: string;
     attributes?: Record<string, any>;
@@ -92,7 +99,7 @@ export default function BuyerDashboard() {
     selectedOrder: orders.find(o => o.id === selectedOrderId),
     recentActivity: [
       ...inquiries.slice(0, 2).map(i => ({ id: `i-${i.id}`, title: i.title, subtitle: 'Inquiry Created', time: 'Recently', icon: 'MessageSquare' })),
-      ...quotes.slice(0, 2).map(q => ({ id: `q-${q.id}`, title: `Quote from ${q.providerName}`, subtitle: `K${q.price.toLocaleString()}`, time: 'Recently', icon: 'FileText' }))
+      ...quotes.slice(0, 2).map(q => ({ id: `q-${q.id}`, title: `Quote from ${q.providerName}`, subtitle: `K${(q.price || 0).toLocaleString()}`, time: 'Recently', icon: 'FileText' }))
     ]
   }), [inquiries, quotes, orders, selectedInquiryId, selectedQuoteId, selectedOrderId]);
 
@@ -147,8 +154,12 @@ export default function BuyerDashboard() {
     }
   };
 
-  const handleInquiryComplete = (selectedCategories: string[]) => {
-    setPendingInquiry(prev => ({ ...prev, categories: selectedCategories }));
+  const handleInquiryComplete = (selectedCategories: any) => {
+    if (selectedCategories.isLabour) {
+      setPendingInquiry(prev => ({ ...prev, ...selectedCategories }));
+    } else {
+      setPendingInquiry(prev => ({ ...prev, categories: selectedCategories }));
+    }
     setActiveTab('create-inquiry');
   };
 
@@ -157,7 +168,8 @@ export default function BuyerDashboard() {
     setIsSubmitting(true);
     
     try {
-      const categoryName = pendingInquiry.categories?.[pendingInquiry.categories.length - 1] || 'Inquiry';
+      const isLabour = pendingInquiry.isLabour === true;
+      const categoryName = isLabour ? pendingInquiry.category : (pendingInquiry.categories?.[pendingInquiry.categories.length - 1] || 'Inquiry');
       const title = pendingInquiry.attributes?.brand 
         ? `${pendingInquiry.attributes.brand} ${pendingInquiry.attributes.model || ''} Request`
         : `${categoryName} Request`;
@@ -178,7 +190,7 @@ export default function BuyerDashboard() {
         title,
         description: pendingInquiry.attributes?.description || 'No description provided.',
         items: [],
-        category: pendingInquiry.categories?.join(', ') || '',
+        category: isLabour ? (pendingInquiry.category || '') : (pendingInquiry.categories?.join(', ') || ''),
         location: `${locationData.city}, ${locationData.province}`,
         latitude: locationData.latitude,
         longitude: locationData.longitude,
@@ -190,7 +202,10 @@ export default function BuyerDashboard() {
         viewCount: 0,
         preferences: pendingInquiry.preferences,
         attributes: pendingInquiry.attributes,
-        processType: pendingInquiry.processType
+        processType: pendingInquiry.processType,
+        isLabour: isLabour,
+        labourGroup: pendingInquiry.labourGroup,
+        labourSubType: pendingInquiry.categoryId
       };
 
       await db.inquiries.add(newInquiry);
@@ -219,12 +234,19 @@ export default function BuyerDashboard() {
       case 'category-selection':
         return <CategorySelection onBack={() => setActiveTab('process-selection')} onComplete={handleInquiryComplete} />;
       case 'create-inquiry':
-        const rawCategoryName = pendingInquiry.categories?.[0] || 'Inquiry';
-        const selectedCategory = CATEGORIES_DB.find(cat => cat.name === rawCategoryName);
-        let schema = selectedCategory?.formSchema ?? GENERIC_FALLBACK_SCHEMA;
+        const isLabour = pendingInquiry.isLabour === true;
+        const rawCategoryName = isLabour ? pendingInquiry.category : (pendingInquiry.categories?.[0] || 'Inquiry');
+        
+        let schema;
+        if (isLabour) {
+          schema = getLabourInquirySchema(pendingInquiry.inquirySchemaKey)?.fields;
+        } else {
+          const selectedCategory = CATEGORIES_DB.find(cat => cat.name === rawCategoryName);
+          schema = selectedCategory?.formSchema ?? GENERIC_FALLBACK_SCHEMA;
+        }
         
         // If express, filter to core fields only to make it faster
-        if (pendingInquiry.processType === 'EXPRESS') {
+        if (pendingInquiry.processType === 'EXPRESS' && !isLabour) {
           const coreFieldNames = ['title', 'brand', 'model', 'quantity', 'budget_limit', 'urgency', 'images', 'problemCategory', 'itemType', 'eventType'];
           schema = schema.filter(f => f.required || coreFieldNames.includes(f.name));
         }
@@ -263,41 +285,43 @@ export default function BuyerDashboard() {
   const isFlowTab = ['process-selection', 'category-selection', 'create-inquiry', 'inquiry-preferences', 'location-details', 'inquiry-success'].includes(activeTab);
 
   return (
-    <div className="w-full max-w-7xl mx-auto">
-      <ConfirmationModal
-        isOpen={!!inquiryToDelete}
-        title="Delete Inquiry"
-        message="Are you sure you want to delete this inquiry? This action cannot be undone."
-        onConfirm={async () => {
-          if (inquiryToDelete?.id) {
-            await db.inquiries.delete(inquiryToDelete.id);
-          }
-          setInquiryToDelete(null);
-        }}
-        onCancel={() => setInquiryToDelete(null)}
-      />
-      <AnimatePresence mode="wait">
-        {isFlowTab ? (
-          <motion.div
-            key="flow"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-          >
-            {renderInquiryFlow()}
-          </motion.div>
-        ) : (
-          <DynamicAccountRenderer
-            key={activeTab}
-            schema={MASTER_BUYER_ACCOUNT_SCHEMA}
-            view={(activeTab === 'home' ? 'dashboard' : activeTab)}
-            data={dashboardData}
-            onAction={handleAction}
-            onNavigate={(viewId) => setActiveTab(viewId)}
-            user={user}
-          />
-        )}
-      </AnimatePresence>
-    </div>
+    <DashboardLayout onTabChange={(tab) => setActiveTab(tab)} externalActiveTab={activeTab}>
+      <div className="w-full max-w-7xl mx-auto">
+        <ConfirmationModal
+          isOpen={!!inquiryToDelete}
+          title="Delete Inquiry"
+          message="Are you sure you want to delete this inquiry? This action cannot be undone."
+          onConfirm={async () => {
+            if (inquiryToDelete?.id) {
+              await db.inquiries.delete(inquiryToDelete.id);
+            }
+            setInquiryToDelete(null);
+          }}
+          onCancel={() => setInquiryToDelete(null)}
+        />
+        <AnimatePresence mode="wait">
+          {isFlowTab ? (
+            <motion.div
+              key="flow"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              {renderInquiryFlow()}
+            </motion.div>
+          ) : (
+            <DynamicAccountRenderer
+              key={activeTab}
+              schema={MASTER_BUYER_ACCOUNT_SCHEMA}
+              view={(activeTab === 'home' ? 'dashboard' : activeTab)}
+              data={dashboardData}
+              onAction={handleAction}
+              onNavigate={(viewId) => setActiveTab(viewId)}
+              user={user}
+            />
+          )}
+        </AnimatePresence>
+      </div>
+    </DashboardLayout>
   );
 }

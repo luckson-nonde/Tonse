@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Check, X, Loader2, Smartphone, Armchair, Shirt, Home, Car, ShoppingBasket, Sparkles, Hammer, Music, ShoppingBag, Calendar, ChevronLeft, ChevronDown, Tractor, Laptop } from 'lucide-react';
+import { Search, Check, X, Loader2, Smartphone, Armchair, Shirt, Home, Car, ShoppingBasket, Sparkles, Hammer, Music, ShoppingBag, Calendar, ChevronLeft, ChevronDown, Tractor, Laptop, HardHat } from 'lucide-react';
 import Button from './Button';
 import { fetchCategories, Category } from '../services/categories';
+import { LABOUR_CATEGORY_GROUPS, LABOUR_CATEGORIES } from '../services/labourCategories';
 
 interface CategorySelectionProps {
   onBack?: () => void;
-  onComplete?: (selectedCategories: string[]) => void;
+  onComplete?: (selectedCategories: any) => void;
   submitLabel?: string;
   hideHeader?: boolean;
   role?: string;
@@ -27,6 +28,7 @@ const getCategoryStyles = (id: string) => {
     'events': { icon: Calendar, bg: 'bg-[#f5f2ed]' },
     'agriculture': { icon: Tractor, bg: 'bg-[#f5f2ed]' },
     'it-services': { icon: Laptop, bg: 'bg-[#f5f2ed]' },
+    'labour': { icon: HardHat, bg: 'bg-[#f5f2ed]' },
   };
   return styles[id] || { icon: ShoppingBag, bg: 'bg-[#f5f2ed]' };
 };
@@ -38,15 +40,17 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
   
   // Modal state
   const [activeParent, setActiveParent] = useState<Category | null>(null);
+  const [activeLabourGroup, setActiveLabourGroup] = useState<any | null>(null);
   const [subcategories, setSubcategories] = useState<Category[]>([]);
   const [loadingSub, setLoadingSub] = useState(false);
   const [subSearchQuery, setSubSearchQuery] = useState('');
   const [expandedSubcategory, setExpandedSubcategory] = useState<string | null>(null);
   
-  const [selectedCategories, setSelectedCategories] = useState<Category[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<any[]>([]);
 
   useEffect(() => {
     fetchCategories(null).then(async (cats) => {
+      // ... (keep existing filtering logic)
       let filtered = cats;
       
       // Filter based on role
@@ -76,30 +80,16 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
         }
       }
 
-      setGeneralCategories(filtered);
+      setGeneralCategories([...filtered, { id: 'labour', name: 'Labour & Skills', parentId: null } as Category]);
       setLoading(false);
-
-      // If we have initial categories, try to load them
-      if (initialSelectedIds.length > 0) {
-        const initialCats: Category[] = [];
-        for (const id of initialSelectedIds) {
-          // Check if it's a top-level category
-          const found = cats.find(c => c.id === id);
-          if (found) {
-            // If it's top-level, we might want to auto-open it
-            if (filtered.length === 1 || initialSelectedIds.length === 1) {
-              handleGeneralCategoryClick(found);
-            }
-          }
-        }
-      } else if (filtered.length === 1) {
-        // Auto-open if only one category
-        handleGeneralCategoryClick(filtered[0]);
-      }
     });
   }, [role, initialSelectedIds]);
 
-  const handleGeneralCategoryClick = async (category: Category) => {
+  const handleGeneralCategoryClick = async (category: any) => {
+    if (category.id === 'labour') {
+      setActiveLabourGroup('ROOT');
+      return;
+    }
     setActiveParent(category);
     setSubSearchQuery('');
     setExpandedSubcategory(null);
@@ -108,6 +98,24 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
     setSubcategories(subs);
     setLoadingSub(false);
   };
+
+  const handleLabourGroupClick = (group: any) => {
+    setActiveLabourGroup(group);
+  };
+
+  const handleLabourSubTypeSelect = (subType: any) => {
+    if (!onComplete) return;
+    onComplete({
+      category: subType.label,
+      categoryId: subType.id,
+      isLabour: true,
+      labourGroup: activeLabourGroup.id,
+      inquirySchemaKey: subType.inquirySchemaKey
+    });
+  };
+
+  // ... (keep existing consolidateNames, etc.)
+  // ... (need to update render logic to include Labour & Skills)
 
   const handleVariantSelect = async (sub: Category) => {
     if (!onComplete) return;
@@ -560,14 +568,14 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                       key={category.id}
                       onClick={() => handleGeneralCategoryClick(category)}
                       className={`relative h-[120px] rounded-[20px] overflow-hidden cursor-pointer group transition-all duration-300 border-[1.5px] ${
-                        hasSelectedSub 
+                        hasSelectedSub || (category.id === 'labour' && activeLabourGroup)
                           ? 'border-[#C9973A] bg-white shadow-[0_4px_16px_rgba(201,151,58,0.12)]' 
                           : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30 hover:shadow-[0_4px_16px_rgba(0,0,0,0.04)]'
                       }`}
                     >
                       <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
                         <div className={`w-[52px] h-[52px] rounded-full flex items-center justify-center mb-3 transition-all duration-300 ${
-                          hasSelectedSub ? 'bg-[#C9973A] text-white' : 'bg-[#f8fafc] text-[#C9973A] group-hover:bg-[#C9973A] group-hover:text-white'
+                          hasSelectedSub || (category.id === 'labour' && activeLabourGroup) ? 'bg-[#C9973A] text-white' : 'bg-[#f8fafc] text-[#C9973A] group-hover:bg-[#C9973A] group-hover:text-white'
                         }`}>
                           <CategoryIcon className="w-[26px] h-[26px]" />
                         </div>
@@ -577,7 +585,7 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                         </h4>
                       </div>
 
-                      {hasSelectedSub && (
+                      {(hasSelectedSub || (category.id === 'labour' && activeLabourGroup)) && (
                         <div className="absolute top-3 right-3 w-5 h-5 bg-[#C9973A] rounded-full flex items-center justify-center z-20 shadow-sm">
                           <Check className="w-3 h-3 text-white" strokeWidth={4} />
                         </div>
@@ -585,6 +593,29 @@ export default function CategorySelection({ onBack, onComplete, submitLabel = 'S
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {activeLabourGroup && (
+              <div className="fixed inset-0 bg-[#f5f2ed] z-50 p-6 overflow-y-auto">
+                <button onClick={() => setActiveLabourGroup(null)} className="mb-4">Back</button>
+                {activeLabourGroup === 'ROOT' ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    {LABOUR_CATEGORY_GROUPS.map(group => (
+                      <div key={group.id} onClick={() => handleLabourGroupClick(group)} className="p-4 bg-white rounded-xl cursor-pointer">
+                        {group.label}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {LABOUR_CATEGORIES.filter(c => c.category === activeLabourGroup.id).map(sub => (
+                      <div key={sub.id} onClick={() => handleLabourSubTypeSelect(sub)} className="p-4 bg-white rounded-xl cursor-pointer">
+                        {sub.label}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

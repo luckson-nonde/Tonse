@@ -94,3 +94,16 @@ export const labourProfileSchemas: Record<string, LabourProfileSchema> = {
   loaderProfileSchema: { id: 'loaderProfileSchema', sections: baseSections([{ id: 'skills', title: 'Skills', fields: [{ id: 'experience_years', label: 'Experience Years', type: 'number', required: true }] }]) },
   deliveryRiderProfileSchema: { id: 'deliveryRiderProfileSchema', sections: baseSections([{ id: 'skills', title: 'Skills', fields: [{ id: 'experience_years', label: 'Experience Years', type: 'number', required: true }] }]) },
 };
+
+function validateAllSchemas() {
+  Object.entries(labourProfileSchemas).forEach(([schemaKey, schema]) => {
+    schema.sections?.forEach((section, sIdx) => {
+      section.fields?.forEach((field, fIdx) => {
+        if (!field || !field.type || !field.id || !field.label) {
+          console.error(`BROKEN FIELD in ${schemaKey} > section[${sIdx}] > field[${fIdx}]:`, JSON.stringify(field));
+        }
+      });
+    });
+  });
+}
+validateAllSchemas();

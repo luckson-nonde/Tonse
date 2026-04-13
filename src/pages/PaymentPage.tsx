@@ -42,16 +42,21 @@ export default function PaymentPage() {
           const data = inquiry.entertainmentData || inquiry.attributes;
           if (data.eventDateTime || data.date) {
             const eventDateTime = new Date(data.eventDateTime || data.date);
-            scheduleDate = eventDateTime.toISOString().split('T')[0];
-            startTime = eventDateTime.toTimeString().substring(0, 5);
-            const durationHours = parseInt(data.eventDuration || data.duration) || 1;
-            const endDateTime = new Date(eventDateTime.getTime() + durationHours * 60 * 60 * 1000);
-            endTime = endDateTime.toTimeString().substring(0, 5);
+            if (!isNaN(eventDateTime.getTime())) {
+              scheduleDate = eventDateTime.toISOString().split('T')[0];
+              startTime = eventDateTime.toTimeString().substring(0, 5);
+              const durationHours = parseInt(data.eventDuration || data.duration) || 1;
+              const endDateTime = new Date(eventDateTime.getTime() + durationHours * 60 * 60 * 1000);
+              endTime = endDateTime.toTimeString().substring(0, 5);
+            }
           }
           location = data.venueLocation || data.location || inquiry.location;
         } else {
           // Fallback for non-entertainment inquiries
-          scheduleDate = new Date(inquiry?.createdAt || Date.now()).toISOString().split('T')[0];
+          const createdDate = new Date(inquiry?.createdAt || Date.now());
+          if (!isNaN(createdDate.getTime())) {
+            scheduleDate = createdDate.toISOString().split('T')[0];
+          }
         }
         
         await db.schedules.add({

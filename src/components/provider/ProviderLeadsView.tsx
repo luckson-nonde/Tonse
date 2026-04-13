@@ -398,7 +398,7 @@ export default function ProviderLeadsView({
 
             <div className="p-4 sm:p-6">
               <div className="flex flex-wrap gap-2 mb-4">
-                {lead.category.split(', ').map((cat: string, catIdx: number) => (
+                {(lead.category || '').split(', ').map((cat: string, catIdx: number) => (
                   <span key={uniqueKey('lead-cat', undefined, `${lead.id || idx}-${catIdx}`)} className="px-2 py-0.5 bg-[#fdf6e9] text-[#d49b35] text-[10px] font-bold rounded uppercase tracking-wider">
                     {cat}
                   </span>

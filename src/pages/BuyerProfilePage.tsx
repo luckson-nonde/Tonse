@@ -85,7 +85,12 @@ export default function BuyerProfilePage() {
   };
 
   const renderIdentitySection = (section: ProfileSection) => {
-    const initials = user?.name?.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2) || 'LC';
+    const initials = (user?.name || '')
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2) || 'LC';
     
     return (
       <div key={section.title} className="bg-white border border-[#f1f5f9] rounded-[24px] p-8 shadow-sm flex flex-col md:flex-row items-center md:items-start gap-8 relative overflow-hidden">

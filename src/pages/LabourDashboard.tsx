@@ -9,19 +9,21 @@ import DashboardLayout from '../components/DashboardLayout';
 export default function LabourDashboard() {
   const { user, updateUser } = useAuth();
   const [activeView, setActiveView] = useState('dashboard');
+  
+  console.log('LABOUR USER:', JSON.stringify(user?.labourSubTypes));
+  console.log('LABOUR CATEGORY:', user?.labourCategory);
 
   // Fetch data
   const jobRequests = useLiveQuery(
     () => db.inquiries
-      .filter(i => {
-        // Only show inquiries that match the user's labour sub-types and are not archived
-        if (i.archivedBy?.includes(user?.id?.toString() || '')) return false;
-        if (!user?.labourSubTypes || !i.category) return false;
-        return user.labourSubTypes.includes(i.category);
-      })
+      .filter(i =>
+        i.isLabour === true &&
+        !i.archivedBy?.includes(user?.id?.toString() || '') &&
+        (user?.labourSubTypes?.some(st => st === i.labourSubType) ?? true)
+      )
       .reverse()
       .toArray(),
-    [user?.labourSubTypes]
+    [user?.id, user?.labourSubTypes]
   ) || [];
 
   const quotes = useLiveQuery(

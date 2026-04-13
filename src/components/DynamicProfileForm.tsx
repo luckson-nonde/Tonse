@@ -22,7 +22,7 @@ export default function DynamicProfileForm({
   isSubmitting,
   children
 }: DynamicProfileFormProps) {
-  const allFields = schema.sections.flatMap(s => s.fields);
+  const allFields = schema.sections.flatMap(s => s.fields || []).filter(Boolean);
   const zodSchema = generateZodSchema(allFields);
   
   const { control, handleSubmit, formState: { errors } } = useForm({
@@ -61,8 +61,7 @@ export default function DynamicProfileForm({
   };
 
   const renderField = (field: any) => {
-    if (!field || !field.type) {
-      console.warn('Skipping invalid field:', field);
+    if (!field || typeof field !== 'object' || !('type' in field)) {
       return null;
     }
     const fieldName = field.name || field.id;
@@ -267,26 +266,29 @@ export default function DynamicProfileForm({
 
   return (
     <form id="dynamic-profile-form" onSubmit={handleSubmit(onSubmit)} className="space-y-10">
-      {schema.sections.map((section, sIdx) => (
-        <div key={sIdx} className="space-y-6 p-6 rounded-[24px] border border-[#e8e0d0]/50 bg-[#fcfcfc]/50">
-          <div className="flex items-center gap-3 pl-3 border-l-[3px] border-[#C9973A]">
-            <h3 className="text-[18px] font-serif font-bold text-[#1e293b]">
-              {section.sectionHeader || section.title}
-            </h3>
+      {schema.sections.map((section, sIdx) => {
+        if (!section) return null;
+        return (
+          <div key={sIdx} className="space-y-6 p-6 rounded-[24px] border border-[#e8e0d0]/50 bg-[#fcfcfc]/50">
+            <div className="flex items-center gap-3 pl-3 border-l-[3px] border-[#C9973A]">
+              <h3 className="text-[18px] font-serif font-bold text-[#1e293b]">
+                {section.sectionHeader || section.title}
+              </h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+              {section.fields?.map((field, fIdx) => {
+                if (!field) return null;
+                const fieldName = (field as any).name || (field as any).id;
+                return (
+                  <div key={fieldName || fIdx} className={`${field?.type === 'gps' ? 'md:col-span-2' : ''}`}>
+                    {renderField(field)}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-            {section.fields?.map((field, fIdx) => {
-              if (!field) return null;
-              const fieldName = (field as any).name || (field as any).id;
-              return (
-                <div key={fieldName || fIdx} className={`${field.type === 'gps' ? 'md:col-span-2' : ''}`}>
-                  {renderField(field)}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+        );
+      })}
       <div className="pt-4">
         {children}
       </div>
