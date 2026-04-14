@@ -31,16 +31,6 @@ const baseSections = (specificSections: any[] = []) => [
       { id: 'willing_to_relocate', label: 'Willing to Relocate', type: 'toggle', required: true },
     ],
   },
-  {
-    id: 'rate_terms',
-    title: 'Rate & Terms',
-    fields: [
-      { id: 'rate_type', label: 'Rate Type', type: 'select', options: ['Hourly', 'Daily', 'Weekly', 'Monthly'], required: true },
-      { id: 'rate_amount', label: 'Rate Amount', type: 'number', required: true },
-      { id: 'currency', label: 'Currency', type: 'select', options: ['ZMW', 'USD'], required: true },
-      { id: 'negotiable', label: 'Negotiable', type: 'toggle', required: true },
-    ],
-  },
   ...specificSections,
 ];
 

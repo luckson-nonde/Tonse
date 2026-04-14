@@ -226,7 +226,7 @@ export default function RoleSelection() {
               initial={{ x: -20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -20, opacity: 0 }}
-              className="grid grid-cols-1 gap-4 lg:gap-6"
+              className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6"
             >
               <button 
                 onClick={() => handleMasterSelect('BUYER')}
@@ -304,7 +304,7 @@ export default function RoleSelection() {
                 )}
               </AnimatePresence>
 
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <AnimatePresence mode="popLayout">
                   {(isCompanyExpanded ? companySubRoles : (masterRole === 'BUYER' ? buyerSubRoles : sellerSubRoles)).map((option) => {
                     const isSelected = selectedSubRole === option.subRole;

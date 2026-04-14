@@ -33,7 +33,7 @@ export default function AuthSplitLayout({
   return (
     <div className="min-h-screen flex flex-col lg:flex-row font-sans bg-[#fdfaf6]">
       {/* Left Pane (Hero Section) */}
-      <div className="hidden lg:flex lg:w-1/2 relative bg-[#1e293b] overflow-hidden">
+      <div className="hidden lg:flex lg:w-[40%] relative bg-[#1e293b] overflow-hidden">
         {/* Background Image / Gradient */}
         <div className="absolute inset-0 bg-gradient-to-br from-[#1e293b] to-[#C9973A]/20"></div>
         <div 
@@ -63,8 +63,8 @@ export default function AuthSplitLayout({
         </div>
       </div>
       {/* Right Pane (Form) */}
-      <div className="w-full lg:w-1/2 flex flex-col justify-center items-center pt-[24px] lg:pt-0 px-[20px] lg:px-[48px] bg-[#fdfaf6] min-h-screen lg:min-h-0">
-        <div className="w-full max-w-[440px]">
+      <div className="w-full lg:w-[60%] flex flex-col justify-center items-center pt-[24px] lg:pt-0 px-[20px] md:px-[32px] lg:px-[48px] bg-[#fdfaf6] min-h-screen lg:min-h-0">
+        <div className="w-full max-w-[440px] md:max-w-[520px] lg:max-w-[560px]">
           {/* Mobile Header (Logo + Back) */}
           <div className="lg:hidden flex items-center justify-center relative mb-10">
             {onBack && (

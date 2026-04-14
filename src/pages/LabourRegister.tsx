@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { Key, Eye, EyeOff, Check } from 'lucide-react';
+import { Key, Eye, EyeOff, Check, User, Phone, Mail } from 'lucide-react';
+import FloatingInput from '../components/FloatingInput';
 import AuthSplitLayout from '../components/AuthSplitLayout';
 import Button from '../components/Button';
 import { LABOUR_CATEGORIES, LABOUR_CATEGORY_GROUPS } from '../services/labourCategories';
@@ -136,7 +137,7 @@ export default function LabourRegister() {
               exit={{ x: 20, opacity: 0 }}
               className="space-y-5"
             >
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {LABOUR_CATEGORY_GROUPS.map(group => {
                   const isSelected = formData.selectedGroup === group.id;
                   return (
@@ -175,7 +176,7 @@ export default function LabourRegister() {
               exit={{ x: -20, opacity: 0 }}
               className="space-y-5"
             >
-              <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto p-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto p-1">
                 {filteredSubCategories.map(sub => {
                   const isSelected = formData.selectedSubTypes.includes(sub.id);
                   return (
@@ -218,27 +219,51 @@ export default function LabourRegister() {
               initial={{ x: 20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -20, opacity: 0 }}
-              className="space-y-5"
+              className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5"
             >
-              <input type="text" placeholder="Full Name" className="w-full p-4 rounded-[32px] border border-[#e8e4dc] bg-[#fcfcfc]" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} />
-              <input type="text" placeholder="Phone" className="w-full p-4 rounded-[32px] border border-[#e8e4dc] bg-[#fcfcfc]" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
-              <input type="email" placeholder="Email" className="w-full p-4 rounded-[32px] border border-[#e8e4dc] bg-[#fcfcfc]" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-              
-              <div className="relative">
-                <input type={showPassword ? "text" : "password"} placeholder="Password" className="w-full p-4 rounded-[32px] border border-[#e8e4dc] bg-[#fcfcfc]" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-[#C9973A]">{showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button>
+              <div className="md:col-span-2">
+                <FloatingInput label="Full Name" type="text" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} icon={User} required />
               </div>
-              <div className="relative">
-                <input type={showConfirmPassword ? "text" : "password"} placeholder="Confirm Password" className="w-full p-4 rounded-[32px] border border-[#e8e4dc] bg-[#fcfcfc]" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} />
-                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-4 text-[#C9973A]">{showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button>
-              </div>
+              <FloatingInput label="Phone Number" type="text" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} icon={Phone} required />
+              <FloatingInput label="Email Address" type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} icon={Mail} required />
               
-              <div className="flex items-start gap-4 pt-2">
+              <FloatingInput 
+                label="Password" 
+                type={showPassword ? "text" : "password"} 
+                value={formData.password} 
+                onChange={e => setFormData({...formData, password: e.target.value})} 
+                icon={Key} 
+                className={showPassword ? "" : "tracking-widest"}
+                rightElement={
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-[#C9973A] hover:text-[#C9973A]/80 transition-colors">
+                    {showPassword ? <EyeOff className="h-4 w-4" strokeWidth={2} /> : <Eye className="h-4 w-4" strokeWidth={2} />}
+                  </button>
+                }
+                required 
+              />
+              <FloatingInput 
+                label="Confirm Password" 
+                type={showConfirmPassword ? "text" : "password"} 
+                value={formData.confirmPassword} 
+                onChange={e => setFormData({...formData, confirmPassword: e.target.value})} 
+                icon={Key} 
+                className={showConfirmPassword ? "" : "tracking-widest"}
+                rightElement={
+                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="text-[#C9973A] hover:text-[#C9973A]/80 transition-colors">
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" strokeWidth={2} /> : <Eye className="h-4 w-4" strokeWidth={2} />}
+                  </button>
+                }
+                required 
+              />
+              
+              <div className="flex items-start gap-4 pt-2 md:col-span-2">
                 <input type="checkbox" id="terms" checked={agreeToTerms} onChange={(e) => setAgreeToTerms(e.target.checked)} className="mt-1" />
                 <label htmlFor="terms" className="text-[13px] text-[#1a1612]/60">I agree to the Terms of Service.</label>
               </div>
 
-              <Button onClick={handleNext} className="w-full py-5 rounded-[32px]">Next Step →</Button>
+              <div className="md:col-span-2 mt-2">
+                <Button onClick={handleNext} className="w-full h-[56px] shadow-[0_8px_20px_rgba(201,151,58,0.25)] text-[16px] font-sans font-bold text-[#1e293b] bg-[#C9973A] hover:bg-[#B08432] transition-all rounded-[12px] uppercase tracking-widest">Next Step →</Button>
+              </div>
             </motion.div>
           )}
 
