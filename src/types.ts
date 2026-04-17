@@ -4,15 +4,27 @@ export interface HeroContent {
   bullets: string[];
 }
 
-export type SubRole = 
-  | 'INDIVIDUAL_BUYER' 
-  | 'COMPANY_BUYER' 
+export interface User {
+  id: string;
+  email: string;
+  role: string;
+  name?: string;
+  phone?: string;
+  companyName?: string;
+  virtualAccountNumber?: string;
+  parentProviderId?: string;
+  [key: string]: any; // Allow additional properties
+}
+
+export type SubRole =
+  | 'INDIVIDUAL_BUYER'
+  | 'COMPANY_BUYER'
   | 'COMPANY_PROCUREMENT_OFFICER'
   | 'COMPANY_SECRETARY'
   | 'COMPANY_RECEPTIONIST'
   | 'COMPANY_MANAGER'
-  | 'PRODUCT_SELLER' 
-  | 'SERVICE_SELLER' 
+  | 'PRODUCT_SELLER'
+  | 'SERVICE_SELLER'
   | 'HYBRID_SELLER';
 export type EntityType = 'INDIVIDUAL' | 'BUSINESS';
 
@@ -52,7 +64,12 @@ export interface Inquiry {
   };
   attributes?: Record<string, any>;
   processType?: 'EXPRESS' | 'STANDARD';
-  currentStage?: 'quotation' | 'purchase_order' | 'order_confirmation' | 'delivery_order' | 'completed';
+  currentStage?:
+    | 'quotation'
+    | 'purchase_order'
+    | 'order_confirmation'
+    | 'delivery_order'
+    | 'completed';
   archivedBy?: string[];
   deletedBy?: string[];
   // Legacy fields for backward compatibility
@@ -73,7 +90,16 @@ export interface Quote {
   price: number;
   condition: string;
   message: string;
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'ARCHIVED' | 'PAID' | 'PENDING_COLLECTION' | 'AWAITING_PICKUP' | 'COMPLETED' | 'HANDED_OVER';
+  status:
+    | 'PENDING'
+    | 'ACCEPTED'
+    | 'REJECTED'
+    | 'ARCHIVED'
+    | 'PAID'
+    | 'PENDING_COLLECTION'
+    | 'AWAITING_PICKUP'
+    | 'COMPLETED'
+    | 'HANDED_OVER';
   createdAt: number;
   expiryDuration?: string;
   isRead?: boolean;
@@ -103,7 +129,7 @@ export interface Quote {
 
 export interface Product {
   id?: number;
-  providerId: number;
+  providerId: string | number;
   name: string;
   price: number;
   stock?: number;

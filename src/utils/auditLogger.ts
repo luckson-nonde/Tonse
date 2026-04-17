@@ -1,4 +1,4 @@
-import { db } from '../db';
+import { db } from '../services/api/database';
 import { User } from '../AuthContext';
 import { AuditLog } from '../types';
 

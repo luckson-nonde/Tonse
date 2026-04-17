@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Star, MapPin, MessageSquare, Truck, PackageOpen, Check, QrCode, ShieldCheck, Printer } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useLiveQuery } from '../hooks/useLiveQuery';
+import { db } from '../services/api/database';
 import VerificationModal from '../components/VerificationModal';
 import { QRCodeSVG } from 'qrcode.react';
 

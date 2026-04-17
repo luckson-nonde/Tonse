@@ -31,8 +31,8 @@ import {
   Trash2,
   Edit2
 } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useLiveQuery } from '../hooks/useLiveQuery';
+import { db } from '../services/api/database';
 import { useAuth } from '../AuthContext';
 import { useDashboard } from '../DashboardContext';
 import { CalendarEvent } from '../types';

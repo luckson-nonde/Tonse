@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useLiveQuery } from '../hooks/useLiveQuery';
+import { db } from '../services/api/database';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
 import { MASTER_LABOUR_ACCOUNT_SCHEMA } from '../services/labourAccountSchema';
 import DashboardLayout from '../components/DashboardLayout';

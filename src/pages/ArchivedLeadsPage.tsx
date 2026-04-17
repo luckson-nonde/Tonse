@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useLiveQuery } from '../hooks/useLiveQuery';
+import { db } from '../services/api/database';
 import { useAuth } from '../AuthContext';
 import { 
   PackageOpen, 

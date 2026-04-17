@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Eye, EyeOff, Send, Plus, CreditCard, Receipt, Wifi, Zap, Loader2, Wallet, ShieldCheck, Lock, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useLiveQuery } from '../hooks/useLiveQuery';
+import { db } from '../services/api/database';
 import Button from '../components/Button';
 
 export default function FinancialPage() {

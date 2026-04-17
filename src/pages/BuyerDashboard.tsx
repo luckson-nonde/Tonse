@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useLiveQuery } from '../hooks/useLiveQuery';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../AuthContext';
 import { useDashboard } from '../DashboardContext';
-import { db } from '../db';
+import { db } from '../services/api/database';
 import { ViewType, MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
 import CategorySelection from '../components/CategorySelection';
@@ -29,53 +29,69 @@ export default function BuyerDashboard() {
   const [inquiryToDelete, setInquiryToDelete] = useState<any | null>(null);
 
   // Data Fetching
-  const inquiries = useLiveQuery(
-    () => (user?.id) ? db.inquiries.where('buyerId').equals(user.id).reverse().sortBy('createdAt') : [],
-    [user]
-  ) || [];
+  const inquiries =
+    useLiveQuery(() => {
+      if (!user?.id) {
+        console.log('❌ No user ID - skipping inquiry fetch');
+        return [];
+      }
+      console.log('🔍 Fetching inquiries for user:', user.id);
+      return db.inquiries.where('buyerId').equals(user.id).reverse().sortBy('createdAt');
+    }, [user]) || [];
 
-  const quotes = useLiveQuery(
-    () => {
+  const quotes =
+    useLiveQuery(async () => {
       if (!user?.id) return [];
-      return db.inquiries.where('buyerId').equals(user.id).toArray().then(userInquiries => {
-        const inquiryIds = userInquiries.map(i => i.id!).filter(id => id !== undefined);
-        if (inquiryIds.length === 0) return [];
-        return db.quotes.where('inquiryId').anyOf(inquiryIds).sortBy('createdAt').then(arr => arr.reverse());
-      });
-    },
-    [user]
-  ) || [];
+      const userInquiries = await db.inquiries.where('buyerId').equals(user.id).toArray();
+      if (!Array.isArray(userInquiries) || userInquiries.length === 0) return [];
+      const inquiryIds = userInquiries.map((i) => i.id!).filter((id) => id !== undefined);
+      if (inquiryIds.length === 0) return [];
+      const quoteResults = await db.quotes.where('inquiryId').anyOf(inquiryIds).toArray();
+      if (!Array.isArray(quoteResults)) return [];
+      return quoteResults.sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    }, [user]) || [];
 
-  const orders = useMemo(() => quotes.filter(q => ['PAID', 'COMPLETED'].includes(q.status)), [quotes]);
-  
-  const transactions = useLiveQuery(
-    async () => {
-      if (!user?.id) return [];
-      return await db.transactions
-        .where('userId')
-        .equals(user.id)
-        .toArray();
-    },
-    [user]
-  ) || [];
+  const orders = useMemo(
+    () => quotes.filter((q) => ['PAID', 'COMPLETED'].includes(q.status)),
+    [quotes]
+  );
+
+  // Debug logging for data updates
+  React.useEffect(() => {
+    console.log('📊 Dashboard data updated:', { inquiries, quotes, orders });
+  }, [inquiries, quotes, orders]);
+
+  // TODO: Transactions endpoint not yet implemented on backend
+  // const transactions = useLiveQuery(
+  //   async () => {
+  //     if (!user?.id) return [];
+  //     return await db.transactions
+  //       .where('userId')
+  //       .equals(user.id)
+  //       .toArray();
+  //   },
+  //   [user]
+  // ) || [];
+
+  const transactions = []; // Empty until transactions endpoint is available
 
   const balance = useMemo(() => {
     return transactions
-      .filter(t => t.status === 'COMPLETED')
-      .reduce((sum, t) => t.type === 'IN' ? sum + t.amount : sum - t.amount, 0);
+      .filter((t) => t.status === 'COMPLETED')
+      .reduce((sum, t) => (t.type === 'IN' ? sum + t.amount : sum - t.amount), 0);
   }, [transactions]);
 
   const escrowBalance = useMemo(() => {
-    return transactions
-      .filter(t => t.status === 'ESCROW')
-      .reduce((sum, t) => sum + t.amount, 0);
+    return transactions.filter((t) => t.status === 'ESCROW').reduce((sum, t) => sum + t.amount, 0);
   }, [transactions]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Inquiry Flow State
-  const [pendingInquiry, setPendingInquiry] = useState<{ 
-    items: InquiryItem[]; 
+  const [pendingInquiry, setPendingInquiry] = useState<{
+    items: InquiryItem[];
     categories?: string[];
     category?: string;
     categoryId?: string;
@@ -88,20 +104,35 @@ export default function BuyerDashboard() {
     processType?: 'EXPRESS' | 'STANDARD';
   }>({ items: [] });
 
-  const dashboardData = useMemo(() => ({
-    inquiries,
-    quotes,
-    orders,
-    balance,
-    escrowBalance,
-    selectedInquiry: inquiries.find(i => i.id === selectedInquiryId),
-    selectedQuote: quotes.find(q => q.id === selectedQuoteId),
-    selectedOrder: orders.find(o => o.id === selectedOrderId),
-    recentActivity: [
-      ...inquiries.slice(0, 2).map(i => ({ id: `i-${i.id}`, title: i.title, subtitle: 'Inquiry Created', time: 'Recently', icon: 'MessageSquare' })),
-      ...quotes.slice(0, 2).map(q => ({ id: `q-${q.id}`, title: `Quote from ${q.providerName}`, subtitle: `K${(q.price || 0).toLocaleString()}`, time: 'Recently', icon: 'FileText' }))
-    ]
-  }), [inquiries, quotes, orders, selectedInquiryId, selectedQuoteId, selectedOrderId]);
+  const dashboardData = useMemo(
+    () => ({
+      inquiries,
+      quotes,
+      orders,
+      balance,
+      escrowBalance,
+      selectedInquiry: inquiries.find((i) => i.id === selectedInquiryId),
+      selectedQuote: quotes.find((q) => q.id === selectedQuoteId),
+      selectedOrder: orders.find((o) => o.id === selectedOrderId),
+      recentActivity: [
+        ...inquiries.slice(0, 2).map((i) => ({
+          id: `i-${i.id}`,
+          title: i.title,
+          subtitle: 'Inquiry Created',
+          time: 'Recently',
+          icon: 'MessageSquare',
+        })),
+        ...quotes.slice(0, 2).map((q) => ({
+          id: `q-${q.id}`,
+          title: `Quote from ${q.providerName}`,
+          subtitle: `K${(q.price || 0).toLocaleString()}`,
+          time: 'Recently',
+          icon: 'FileText',
+        })),
+      ],
+    }),
+    [inquiries, quotes, orders, selectedInquiryId, selectedQuoteId, selectedOrderId]
+  );
 
   const handleAction = async (actionId: string, payload?: any) => {
     switch (actionId) {
@@ -156,9 +187,9 @@ export default function BuyerDashboard() {
 
   const handleInquiryComplete = (selectedCategories: any) => {
     if (selectedCategories.isLabour) {
-      setPendingInquiry(prev => ({ ...prev, ...selectedCategories }));
+      setPendingInquiry((prev) => ({ ...prev, ...selectedCategories }));
     } else {
-      setPendingInquiry(prev => ({ ...prev, categories: selectedCategories }));
+      setPendingInquiry((prev) => ({ ...prev, categories: selectedCategories }));
     }
     setActiveTab('create-inquiry');
   };
@@ -166,18 +197,21 @@ export default function BuyerDashboard() {
   const handleLocationComplete = async (locationData: any) => {
     if (!user) return;
     setIsSubmitting(true);
-    
+
     try {
       const isLabour = pendingInquiry.isLabour === true;
-      const categoryName = isLabour ? pendingInquiry.category : (pendingInquiry.categories?.[pendingInquiry.categories.length - 1] || 'Inquiry');
-      const title = pendingInquiry.attributes?.brand 
+      const categoryName = isLabour
+        ? pendingInquiry.category
+        : pendingInquiry.categories?.[pendingInquiry.categories.length - 1] || 'Inquiry';
+      const title = pendingInquiry.attributes?.brand
         ? `${pendingInquiry.attributes.brand} ${pendingInquiry.attributes.model || ''} Request`
         : `${categoryName} Request`;
 
       // Check for duplicate inquiry for the same product
       const existingInquiry = await db.inquiries
-        .where('buyerId').equals(user.id)
-        .and(i => i.title === title)
+        .where('buyerId')
+        .equals(user.id)
+        .and((i) => i.title === title)
         .first();
 
       if (existingInquiry) {
@@ -186,29 +220,29 @@ export default function BuyerDashboard() {
         return;
       }
 
-      const newInquiry: Inquiry = {
+      // Prepare inquiry data - backend expects specific format
+      const inquiryData = {
         title,
         description: pendingInquiry.attributes?.description || 'No description provided.',
-        items: [],
-        category: isLabour ? (pendingInquiry.category || '') : (pendingInquiry.categories?.join(', ') || ''),
+        items: JSON.stringify([]), // Backend wants JSON string
+        category: isLabour
+          ? pendingInquiry.category || ''
+          : pendingInquiry.categories?.join(', ') || '',
         location: `${locationData.city}, ${locationData.province}`,
         latitude: locationData.latitude,
         longitude: locationData.longitude,
         radius: locationData.radius,
-        buyerName: user.name,
         buyerId: user.id!,
-        createdAt: Date.now(),
         status: 'OPEN',
-        viewCount: 0,
-        preferences: pendingInquiry.preferences,
-        attributes: pendingInquiry.attributes,
+        preferences: JSON.stringify(pendingInquiry.preferences || {}), // Backend wants JSON string
+        attributes: JSON.stringify(pendingInquiry.attributes || {}), // Backend wants JSON string
         processType: pendingInquiry.processType,
-        isLabour: isLabour,
-        labourGroup: pendingInquiry.labourGroup,
-        labourSubType: pendingInquiry.categoryId
       };
 
-      await db.inquiries.add(newInquiry);
+      await db.inquiries.add(inquiryData);
+      console.log('✅ Inquiry created:', inquiryData.title);
+
+      // Force a data refresh
       setPendingInquiry({ items: [] });
       setActiveTab('inquiry-success');
     } catch (error) {
@@ -223,32 +257,53 @@ export default function BuyerDashboard() {
     switch (activeTab) {
       case 'process-selection':
         return (
-          <ProcessSelection 
+          <ProcessSelection
             onComplete={(processType) => {
-              setPendingInquiry(prev => ({ ...prev, processType: processType.toUpperCase() as 'EXPRESS' | 'STANDARD' }));
+              setPendingInquiry((prev) => ({
+                ...prev,
+                processType: processType.toUpperCase() as 'EXPRESS' | 'STANDARD',
+              }));
               setActiveTab('category-selection');
             }}
             onBack={() => setActiveTab('dashboard')}
           />
         );
       case 'category-selection':
-        return <CategorySelection onBack={() => setActiveTab('process-selection')} onComplete={handleInquiryComplete} />;
+        return (
+          <CategorySelection
+            onBack={() => setActiveTab('process-selection')}
+            onComplete={handleInquiryComplete}
+          />
+        );
       case 'create-inquiry':
         const isLabour = pendingInquiry.isLabour === true;
-        const rawCategoryName = isLabour ? pendingInquiry.category : (pendingInquiry.categories?.[0] || 'Inquiry');
-        
+        const rawCategoryName = isLabour
+          ? pendingInquiry.category
+          : pendingInquiry.categories?.[0] || 'Inquiry';
+
         let schema;
         if (isLabour) {
           schema = getLabourInquirySchema(pendingInquiry.inquirySchemaKey)?.fields;
         } else {
-          const selectedCategory = CATEGORIES_DB.find(cat => cat.name === rawCategoryName);
+          const selectedCategory = CATEGORIES_DB.find((cat) => cat.name === rawCategoryName);
           schema = selectedCategory?.formSchema ?? GENERIC_FALLBACK_SCHEMA;
         }
-        
+
         // If express, filter to core fields only to make it faster
         if (pendingInquiry.processType === 'EXPRESS' && !isLabour) {
-          const coreFieldNames = ['title', 'brand', 'model', 'quantity', 'budget_limit', 'urgency', 'images', 'problemCategory', 'itemType', 'eventType'];
-          schema = schema.filter(f => f.required || coreFieldNames.includes(f.name));
+          const coreFieldNames = [
+            'title',
+            'brand',
+            'model',
+            'quantity',
+            'budget_limit',
+            'urgency',
+            'images',
+            'problemCategory',
+            'itemType',
+            'eventType',
+          ];
+          schema = schema.filter((f) => f.required || coreFieldNames.includes(f.name));
         }
 
         return (
@@ -258,7 +313,7 @@ export default function BuyerDashboard() {
             processType={pendingInquiry.processType}
             isLoading={isSubmitting}
             onSubmit={(data) => {
-              setPendingInquiry(prev => ({ ...prev, attributes: data }));
+              setPendingInquiry((prev) => ({ ...prev, attributes: data }));
               if (pendingInquiry.processType === 'EXPRESS') {
                 setActiveTab('location-details');
               } else {
@@ -269,12 +324,26 @@ export default function BuyerDashboard() {
           />
         );
       case 'inquiry-preferences':
-        return <InquiryPreferences onBack={() => setActiveTab('create-inquiry')} onNext={(prefs) => {
-          setPendingInquiry(prev => ({ ...prev, preferences: prefs }));
-          setActiveTab('location-details');
-        }} />;
+        return (
+          <InquiryPreferences
+            onBack={() => setActiveTab('create-inquiry')}
+            onNext={(prefs) => {
+              setPendingInquiry((prev) => ({ ...prev, preferences: prefs }));
+              setActiveTab('location-details');
+            }}
+          />
+        );
       case 'location-details':
-        return <LocationDetails onBack={() => pendingInquiry.processType === 'EXPRESS' ? setActiveTab('create-inquiry') : setActiveTab('inquiry-preferences')} onComplete={handleLocationComplete} />;
+        return (
+          <LocationDetails
+            onBack={() =>
+              pendingInquiry.processType === 'EXPRESS'
+                ? setActiveTab('create-inquiry')
+                : setActiveTab('inquiry-preferences')
+            }
+            onComplete={handleLocationComplete}
+          />
+        );
       case 'inquiry-success':
         return <InquirySuccess onGoToDashboard={() => setActiveTab('dashboard')} />;
       default:
@@ -282,7 +351,14 @@ export default function BuyerDashboard() {
     }
   };
 
-  const isFlowTab = ['process-selection', 'category-selection', 'create-inquiry', 'inquiry-preferences', 'location-details', 'inquiry-success'].includes(activeTab);
+  const isFlowTab = [
+    'process-selection',
+    'category-selection',
+    'create-inquiry',
+    'inquiry-preferences',
+    'location-details',
+    'inquiry-success',
+  ].includes(activeTab);
 
   return (
     <DashboardLayout onTabChange={(tab) => setActiveTab(tab)} externalActiveTab={activeTab}>
@@ -313,7 +389,7 @@ export default function BuyerDashboard() {
             <DynamicAccountRenderer
               key={activeTab}
               schema={MASTER_BUYER_ACCOUNT_SCHEMA}
-              view={(activeTab === 'home' ? 'dashboard' : activeTab)}
+              view={activeTab === 'home' ? 'dashboard' : activeTab}
               data={dashboardData}
               onAction={handleAction}
               onNavigate={(viewId) => setActiveTab(viewId)}

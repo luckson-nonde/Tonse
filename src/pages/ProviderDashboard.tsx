@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { motion, AnimatePresence } from 'motion/react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useLiveQuery } from '../hooks/useLiveQuery';
+import { db } from '../services/api/database';
 import { isRelatedCategory, getCategorySchema, getCategoryNature, CATEGORIES_DB } from '../services/categories';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';
 import { logAuditAction } from '../utils/auditLogger';

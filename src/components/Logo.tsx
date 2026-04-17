@@ -10,7 +10,7 @@ export default function Logo({ variant = 'dashboard', className = '' }: LogoProp
   
   return (
     <span className={`font-serif font-black leading-none tracking-[-0.04em] ${className}`}>
-      <span className={isLight ? "text-white" : "text-[#1e293b]"}>TON</span>
+      <span className={isLight ? "text-white" : "text-brand-dark"}>TON</span>
       <span className="text-[#C9973A] -ml-[0.02em]">SE</span>
     </span>
   );

@@ -1,11 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { db } from './db';
+import { authService } from './services/auth/authService';
+import { tokenManager } from './services/api/client';
 import { SubRole, EntityType } from './types';
 
 export type Role = 'BUYER' | 'SELLER' | 'SUPPLIER' | 'SERVICE_PROVIDER' | 'ENTERTAINMENT' | 'EVENTS' | 'PROVIDER_STAFF' | 'LABOUR';
 
 export interface User {
-  id?: number;
+  id: string;
   role: Role;
   subRole?: SubRole;
   labourCategory?: string;
@@ -14,12 +15,11 @@ export interface User {
   name: string;
   companyName?: string;
   email: string;
-  phone: string;
+  phone?: string;
   nrc?: string;
   tpin?: string;
   incorporationCertUrl?: string;
   location?: string;
-  password?: string;
   categories?: string[];
   businessDocs?: string[];
   socialMediaLink?: string;
@@ -47,11 +47,12 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password?: string) => Promise<void>;
-  register: (userData: User) => Promise<void>;
-  updateUser: (updates: Partial<User>) => Promise<void>;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, name: string, phone: string, role: string) => Promise<void>;
+  logout: () => Promise<void>;
   isLoading: boolean;
+  isAuthenticated: boolean;
+  error: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -59,135 +60,97 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // Initialize auth on mount - check if there's a valid token
   useEffect(() => {
-    // Check local storage for logged in user
-    const storedUserId = localStorage.getItem('auth_user_id');
-    if (storedUserId) {
-      db.users.get(Number(storedUserId)).then(foundUser => {
-        if (foundUser) {
-          setUser(foundUser);
+    const initializeAuth = async () => {
+      try {
+        const accessToken = tokenManager.getAccessToken();
+        if (accessToken && !tokenManager.isTokenExpired(accessToken)) {
+          // Try to fetch current user from API
+          const currentUser = await authService.getCurrentUser();
+          setUser({
+            id: currentUser.id,
+            email: currentUser.email,
+            name: currentUser.name || '',
+            role: (currentUser.role as Role) || 'BUYER',
+          });
+        } else if (accessToken) {
+          // Token expired, clear it
+          tokenManager.clearTokens();
         }
+      } catch (err) {
+        console.error('Failed to initialize auth:', err);
+        tokenManager.clearTokens();
+      } finally {
         setIsLoading(false);
-      }).catch(() => {
-        setIsLoading(false);
+      }
+    };
+
+    initializeAuth();
+  }, []);
+
+  const login = React.useCallback(async (email: string, password: string) => {
+    try {
+      setError(null);
+      const response = await authService.login(email, password);
+      setUser({
+        id: response.user.id,
+        email: response.user.email,
+        name: response.user.name,
+        role: (response.user.role as Role) || 'BUYER',
       });
-    } else {
-      setIsLoading(false);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Login failed';
+      setError(errorMessage);
+      throw err;
     }
   }, []);
 
-  const login = React.useCallback(async (identifier: string, password?: string) => {
-    // Try finding by email first, then by phone
-    let foundUser = await db.users.where('email').equals(identifier).first();
-    if (!foundUser) {
-      foundUser = await db.users.where('phone').equals(identifier).first();
-    }
-
-    if (!foundUser) {
-      throw new Error('User not found');
-    }
-    if (password && foundUser.password !== password) {
-      throw new Error('Invalid credentials');
-    }
-    setUser(foundUser);
-    if (foundUser.id) {
-      localStorage.setItem('auth_user_id', foundUser.id.toString());
-    }
-  }, []);
-
-  const register = React.useCallback(async (userData: User) => {
-    const existingUser = await db.users.where('email').equals(userData.email).first();
-    if (existingUser) {
-      throw new Error('Email already in use');
-    }
-
-    let newUser: User | null = null;
-
-    await db.transaction('rw', db.users, db.shops, async () => {
-      // Generate a 16-digit virtual account number
-      let virtualAccountNumber = '';
-      for (let i = 0; i < 16; i++) {
-        virtualAccountNumber += Math.floor(Math.random() * 10).toString();
+  const register = React.useCallback(
+    async (email: string, password: string, name: string, phone: string, role: string) => {
+      try {
+        setError(null);
+        await authService.register({ email, password, name, phone, role });
+        // Auto-login after registration
+        await login(email, password);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Registration failed';
+        setError(errorMessage);
+        throw err;
       }
-
-      const userToSave = {
-        ...userData,
-        virtualAccountNumber,
-        verificationStatus: userData.entityType === 'BUSINESS' ? 'PENDING' as const : undefined
-      };
-      const id = await db.users.add(userToSave);
-      newUser = { ...userToSave, id };
-
-      // Create a shop entry for providers
-      if (['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS'].includes(userData.role)) {
-        await db.shops.add({
-          providerId: id,
-          name: userData.name,
-          subRole: userData.subRole,
-          entityType: userData.entityType,
-          logo: userData.logo || '',
-          coverImage: userData.coverImage || 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=1200&q=80',
-          description: 'New shop on TONSE Marketplace',
-          category: userData.categories?.join(', ') || 'General',
-          categories: userData.categories || [],
-          location: userData.location || 'Zambia',
-          rating: 5,
-          reviewCount: 0,
-          isVerified: false,
-          registrationDate: Date.now(),
-          registrationDocuments: [],
-          proofPhotos: []
-        });
-      }
-    });
-
-    if (newUser && newUser.id) {
-      setUser(newUser);
-      localStorage.setItem('auth_user_id', newUser.id.toString());
-    }
-  }, []);
-
-  const updateUser = React.useCallback(async (updates: Partial<User>) => {
-    if (!user || !user.id) return;
-    const updatedUser = { ...user, ...updates };
-    await db.users.update(user.id, updates);
-    
-    // Also update shop if user is a provider
-    if (['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS'].includes(user.role)) {
-      const shop = await db.shops.where('providerId').equals(user.id).first();
-      if (shop && shop.id) {
-        await db.shops.update(shop.id, {
-          facebookLink: updates.facebookLink || user.facebookLink,
-          tiktokLink: updates.tiktokLink || user.tiktokLink,
-          whatsappLink: updates.whatsappLink || user.whatsappLink,
-          registrationDocuments: updates.businessDocs || user.businessDocs
-        });
-      }
-    }
-    
-    setUser(updatedUser);
-  }, [user]);
-
-  const logout = React.useCallback(() => {
-    setUser(null);
-    localStorage.removeItem('auth_user_id');
-  }, []);
-
-  const value = React.useMemo(() => ({ 
-    user, 
-    login, 
-    register, 
-    updateUser, 
-    logout, 
-    isLoading 
-  }), [user, isLoading]);
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+    },
+    [login]
   );
+
+  const logout = React.useCallback(async () => {
+    try {
+      await authService.logout();
+      setUser(null);
+      setError(null);
+    } catch (err) {
+      console.error('Logout error:', err);
+      // Still clear local state even if API call fails
+      setUser(null);
+      tokenManager.clearTokens();
+    }
+  }, []);
+
+  const value = React.useMemo(
+    () => ({
+      user,
+      login,
+      register,
+      logout,
+      isLoading,
+      isAuthenticated: !!user && authService.isAuthenticated(),
+      error,
+    }),
+    [user, login, register, logout, isLoading, error]
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

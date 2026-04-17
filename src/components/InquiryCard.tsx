@@ -36,8 +36,22 @@ export default function InquiryCard({ inquiry, state, quoteCount = 0, paidQuote,
     paid: 'COMPLETED'
   };
 
+  // Parse attributes if it's a JSON string
+  let parsedAttributes: Record<string, any> = {};
+  if (inquiry.attributes) {
+    if (typeof inquiry.attributes === 'string') {
+      try {
+        parsedAttributes = JSON.parse(inquiry.attributes);
+      } catch {
+        parsedAttributes = {};
+      }
+    } else {
+      parsedAttributes = inquiry.attributes;
+    }
+  }
+
   // Filter attributes to display (exclude images, title, budget_limit if handled separately)
-  const displayAttributes = inquiry.attributes ? Object.entries(inquiry.attributes).filter(([key, value]) => {
+  const displayAttributes = parsedAttributes ? Object.entries(parsedAttributes).filter(([key, value]) => {
     if (!value || value === '') return false;
     if (['images', 'title'].includes(key)) return false;
     return true;

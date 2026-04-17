@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, ChevronDown, Loader2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../components/Button';
-import { db } from '../db';
+import { db } from '../services/api/database';
 import { useAuth } from '../AuthContext';
 
 export default function PaymentPage() {

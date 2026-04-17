@@ -1,4 +1,4 @@
-import { db } from '../db';
+import { db } from './api/database';
 import { PurchaseOrder, OrderConfirmation, Inquiry } from '../types';
 
 export async function acceptPO(poId: number, notes?: string, processingTime?: string, expectedDeliveryDate?: string) {

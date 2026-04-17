@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../AuthContext';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useLiveQuery } from '../hooks/useLiveQuery';
+import { db } from '../services/api/database';
 import { VenueSpace } from '../types';
 import { Plus, Trash2, Edit2, MapPin, Users, DollarSign, Image as ImageIcon, Check, X } from 'lucide-react';
 

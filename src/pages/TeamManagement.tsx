@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../AuthContext';
-import { db } from '../db';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../services/api/database';
+import { useLiveQuery } from '../hooks/useLiveQuery';
 import { Users, UserPlus, Shield, Trash2, CheckCircle, FileText, QrCode, ShieldAlert } from 'lucide-react';
 import { PERMISSIONS, hasPermission } from '../utils/rbac';
 import { motion, AnimatePresence } from 'motion/react';

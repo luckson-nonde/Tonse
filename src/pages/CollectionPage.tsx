@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { QrCode, Search, Check, X, Loader2, Package, Clock, User, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useLiveQuery } from '../hooks/useLiveQuery';
+import { db } from '../services/api/database';
 import { Quote } from '../types';
 import { useAuth } from '../AuthContext';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';

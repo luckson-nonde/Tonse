@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import { ArrowLeft, Star, MapPin, FileText, Camera, Calendar, CheckCircle, ExternalLink, TrendingUp, ShoppingBag, BarChart2 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useLiveQuery } from '../hooks/useLiveQuery';
+import { db } from '../services/api/database';
 
 export default function ShopDetailsPage() {
   const navigate = useNavigate();

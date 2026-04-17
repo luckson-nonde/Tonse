@@ -58,6 +58,12 @@ export default function Register() {
   const handleRegister = async (data: Record<string, any>) => {
     setError('');
     
+    // Validate password length
+    if (!password || password.length < 8) {
+      setError('Password must be at least 8 characters long');
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -72,21 +78,28 @@ export default function Register() {
     try {
       const entityType: EntityType = isCompany ? 'BUSINESS' : 'INDIVIDUAL';
       
-      const userData: any = {
-        ...data,
-        role: role as Role,
-        subRole,
-        entityType,
-        password,
-        nrc: '', // Default empty, can be updated later
-        location: '', // Default empty
-        categories: initialCategories,
-      };
-
       if (user) {
+        // Extended data for profile update after registration
+        const userData: any = {
+          ...data,
+          role: role as Role,
+          subRole,
+          entityType,
+          password,
+          nrc: '', // Default empty, can be updated later
+          location: '', // Default empty
+          categories: initialCategories,
+        };
         await updateUser(userData);
       } else {
-        await register(userData);
+        // Register with only required fields
+        await register(
+          data.email,
+          password,
+          data.name,
+          data.phone,
+          role
+        );
       }
       
       if (isCompany) {

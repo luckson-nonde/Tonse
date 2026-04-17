@@ -1,4 +1,4 @@
-import { db } from '../db';
+import { db } from './api/database';
 import { DeliveryOrder } from '../types';
 
 export async function createDeliveryOrder(orderConfirmationId: number) {

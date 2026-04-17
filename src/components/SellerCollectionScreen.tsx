@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DeliveryOrder, PurchaseOrder } from '../types';
-import { db } from '../db';
+import { db } from '../services/api/database';
 import { startCollection } from '../services/deliveryService';
 import Button from './Button';
 import { Html5QrcodeScanner } from 'html5-qrcode';

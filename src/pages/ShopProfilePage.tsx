@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../AuthContext';
-import { db } from '../db';
+import { db } from '../services/api/database';
 import { 
   User, Save, Loader2, CheckCircle, Lock
 } from 'lucide-react';

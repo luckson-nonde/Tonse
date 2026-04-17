@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DeliveryOrder, PurchaseOrder } from '../types';
-import { db } from '../db';
+import { db } from '../services/api/database';
 import { confirmCollection } from '../services/deliveryService';
 import Button from './Button';
 import QRCode from 'react-qr-code';

@@ -1,8 +1,8 @@
 import React from 'react';
 import { ArrowLeft, Star, MapPin, TrendingUp, ShoppingBag, ChevronRight } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useLiveQuery } from '../hooks/useLiveQuery';
+import { db } from '../services/api/database';
 
 export default function ShopProductsPage() {
   const navigate = useNavigate();

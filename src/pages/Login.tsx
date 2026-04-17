@@ -48,7 +48,7 @@ export default function Login() {
         onSubmit={handleSubmit}
       >
         {error && (
-          <div className="p-4 bg-red-50 border border-red-100 text-red-600 text-[13px] rounded-xl font-medium mb-[24px]">
+          <div className="p-4 bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl font-medium mb-6">
             {error}
           </div>
         )}
@@ -104,7 +104,7 @@ export default function Login() {
           <Button 
             type="submit" 
             disabled={isLoading}
-            className="w-full h-[56px] shadow-[0_8px_20px_rgba(201,151,58,0.25)] disabled:opacity-50 text-[16px] font-sans font-bold text-[#1e293b] bg-[#C9973A] hover:bg-[#B08432] transition-all active:scale-[0.98] rounded-[12px] uppercase tracking-widest"
+            className="w-full h-14 shadow-[0_8px_20px_rgba(201,151,58,0.25)] disabled:opacity-50 text-base font-sans font-bold text-brand-dark bg-[#C9973A] hover:bg-[#B08432] transition-all active:scale-[0.98] rounded-xl uppercase tracking-widest"
           >
             {isLoading ? 'Authenticating...' : 'Sign In'}
           </Button>
@@ -113,9 +113,9 @@ export default function Login() {
 
       <div className="text-center">
         <div className="flex items-center gap-4 mb-8">
-          <div className="h-[1px] flex-1 bg-[#e8e0d0]/60"></div>
+          <div className="h-px flex-1 bg-[#e8e0d0]/60"></div>
           <span className="text-[10px] font-bold text-[#1a1612]/30 uppercase tracking-[0.2em]">Or continue with</span>
-          <div className="h-[1px] flex-1 bg-[#e8e0d0]/60"></div>
+          <div className="h-px flex-1 bg-[#e8e0d0]/60"></div>
         </div>
 
         <div className="flex justify-center mb-10">

@@ -1,0 +1,43 @@
+{
+  "css.lint.universalSelector": "ignore",
+  "css.lint.compatibleVendorPrefixes": "ignore",
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "[html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsx]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "css.hint.compatibleVendorPrefixes": "ignore",
+  "tailwindCSS.experimental.classRegex": [["cva\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]],
+  "tailwindCSS.lint.cssConflict": "off",
+  "tailwindCSS.lint.invalidApply": "off",
+  "tailwindCSS.lint.invalidScreen": "off",
+  "tailwindCSS.lint.invalidConfigPath": "off",
+  "tailwindCSS.lint.invalidTailwindDirective": "off",
+  "stylelint.enable": false,
+  "css.lint.boxModel": "ignore",
+  "css.lint.float": "ignore",
+  "css.lint.fontFaceProperties": "ignore",
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/.git": true,
+    "**/dist": true,
+    "**/.next": true
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "typescript.preferences.importModuleSpecifierEnding": "auto",
+  "typescript.tsserver.experimental.enableProjectDiagnostics": true
+}

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../AuthContext';
-import { db } from '../db';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../services/api/database';
+import { useLiveQuery } from '../hooks/useLiveQuery';
 import { 
   History, 
   Search, 
