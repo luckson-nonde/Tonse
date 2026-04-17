@@ -257,6 +257,16 @@ export default function DynamicAccountRenderer({
                   y: -6,
                   boxShadow: '0 20px 40px rgba(0, 0, 0, 0.12), 0 12px 32px rgba(0, 0, 0, 0.08)',
                 }}
+                onClick={() => {
+                  // Navigate to appropriate view based on metric type
+                  if (metric.id === 'active_inquiries') {
+                    onNavigate('inquiries');
+                  } else if (metric.id === 'pending_quotes') {
+                    onNavigate('quotes');
+                  } else if (metric.id === 'completed_orders') {
+                    onNavigate('paid-orders');
+                  }
+                }}
                 className={`${bgColor} p-8 rounded-3xl border-2 ${borderColor} shadow-premium hover:shadow-premium-lg transition-all duration-300 cursor-pointer relative overflow-hidden group`}
               >
                 {/* Animated background gradient */}

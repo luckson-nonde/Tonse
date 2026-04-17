@@ -11,15 +11,17 @@ import { HeroContent } from '../types';
 
 const REGISTER_HERO: Record<string, HeroContent> = {
   individual: {
-    title: "Join the Luxury Community.",
-    image: "https://images.unsplash.com/photo-1556740734-7f95834d0ff9?auto=format&fit=crop&q=80&w=1920&h=1080",
-    bullets: ["Personalized Experience", "Exclusive Access", "Seamless Trading"]
+    title: 'Join the Luxury Community.',
+    image:
+      'https://images.unsplash.com/photo-1556740734-7f95834d0ff9?auto=format&fit=crop&q=80&w=1920&h=1080',
+    bullets: ['Personalized Experience', 'Exclusive Access', 'Seamless Trading'],
   },
   business: {
-    title: "Professional Network Registration.",
-    image: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=1920&h=1080",
-    bullets: ["B2B Opportunities", "Verified Business Status", "Enterprise Tools"]
-  }
+    title: 'Professional Network Registration.',
+    image:
+      'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=1920&h=1080',
+    bullets: ['B2B Opportunities', 'Verified Business Status', 'Enterprise Tools'],
+  },
 };
 
 export default function Register() {
@@ -45,11 +47,14 @@ export default function Register() {
     return getRegistrationSchema(role, subRole);
   }, [role, subRole]);
 
-  const initialData = useMemo(() => ({
-    name: user?.name || '',
-    email: user?.email || '',
-    phone: user?.phone || ''
-  }), [user]);
+  const initialData = useMemo(
+    () => ({
+      name: user?.name || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
+    }),
+    [user]
+  );
 
   const currentHero = useMemo(() => {
     return isCompany ? REGISTER_HERO.business : REGISTER_HERO.individual;
@@ -57,7 +62,7 @@ export default function Register() {
 
   const handleRegister = async (data: Record<string, any>) => {
     setError('');
-    
+
     // Validate password length
     if (!password || password.length < 8) {
       setError('Password must be at least 8 characters long');
@@ -77,7 +82,7 @@ export default function Register() {
     setIsLoading(true);
     try {
       const entityType: EntityType = isCompany ? 'BUSINESS' : 'INDIVIDUAL';
-      
+
       if (user) {
         // Extended data for profile update after registration
         const userData: any = {
@@ -92,16 +97,14 @@ export default function Register() {
         };
         await updateUser(userData);
       } else {
-        // Register with only required fields
-        await register(
-          data.email,
-          password,
-          data.name,
-          data.phone,
-          role
-        );
+        // Register with required fields including identity verification
+        await register(data.email, password, data.name, data.phone, role, {
+          dob: data.dob,
+          nrc: data.nrc,
+          logo: data.logo,
+        });
       }
-      
+
       if (isCompany) {
         navigate('/register/company-documents');
       } else if (role === 'BUYER') {
@@ -117,18 +120,19 @@ export default function Register() {
   };
 
   return (
-    <AuthSplitLayout 
-      title={isCompany ? "Business Registration" : "Create Account"} 
+    <AuthSplitLayout
+      title={isCompany ? 'Business Registration' : 'Create Account'}
       subtitle={
         <span className="text-[#1a1612]/60">
-          {isCompany 
-            ? "Register your company on the TONSE professional network."
-            : "Join the TONSE luxury trade community."
-          }
+          {isCompany
+            ? 'Register your company on the TONSE professional network.'
+            : 'Join the TONSE luxury trade community.'}
         </span>
       }
       onBack={() => navigate('/role-selection')}
-      stepper={isCompany ? { current: 1, total: 2, labels: ['Account Details', 'Documents'] } : undefined}
+      stepper={
+        isCompany ? { current: 1, total: 2, labels: ['Account Details', 'Documents'] } : undefined
+      }
       hero={currentHero}
     >
       <div className="space-y-5">
@@ -147,18 +151,23 @@ export default function Register() {
           <div className="space-y-5 mt-5">
             {/* Password Field */}
             <div>
-              <label className="block text-[11px] font-bold text-[#1a1612]/40 uppercase tracking-[0.2em] mb-3 ml-1">Password</label>
+              <label className="block text-[11px] font-bold text-[#1a1612]/40 uppercase tracking-[0.2em] mb-3 ml-1">
+                Password
+              </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-                  <Key className="h-4 w-4 text-[#C9973A]/40 group-focus-within:text-[#C9973A] transition-colors" strokeWidth={2} />
+                  <Key
+                    className="h-4 w-4 text-[#C9973A]/40 group-focus-within:text-[#C9973A] transition-colors"
+                    strokeWidth={2}
+                  />
                 </div>
-                <input 
-                  type={showPassword ? "text" : "password"} 
+                <input
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••" 
+                  placeholder="••••••••"
                   required
-                  className="block w-full pl-14 pr-14 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-[32px] text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20 tracking-widest" 
+                  className="block w-full pl-14 pr-14 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-[32px] text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20 tracking-widest"
                 />
                 <button
                   type="button"
@@ -176,18 +185,23 @@ export default function Register() {
 
             {/* Confirm Password Field */}
             <div>
-              <label className="block text-[11px] font-bold text-[#1a1612]/40 uppercase tracking-[0.2em] mb-3 ml-1">Confirm Password</label>
+              <label className="block text-[11px] font-bold text-[#1a1612]/40 uppercase tracking-[0.2em] mb-3 ml-1">
+                Confirm Password
+              </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-                  <Key className="h-4 w-4 text-[#C9973A]/40 group-focus-within:text-[#C9973A] transition-colors" strokeWidth={2} />
+                  <Key
+                    className="h-4 w-4 text-[#C9973A]/40 group-focus-within:text-[#C9973A] transition-colors"
+                    strokeWidth={2}
+                  />
                 </div>
-                <input 
-                  type={showConfirmPassword ? "text" : "password"} 
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••" 
+                  placeholder="••••••••"
                   required
-                  className="block w-full pl-14 pr-14 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-[32px] text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20 tracking-widest" 
+                  className="block w-full pl-14 pr-14 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-[32px] text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20 tracking-widest"
                 />
                 <button
                   type="button"
@@ -206,48 +220,62 @@ export default function Register() {
             {/* Terms */}
             <div className="flex items-start gap-4 pt-2">
               <div className="relative flex items-center">
-                <input 
-                  type="checkbox" 
-                  id="terms" 
+                <input
+                  type="checkbox"
+                  id="terms"
                   checked={agreeToTerms}
                   onChange={(e) => setAgreeToTerms(e.target.checked)}
                   className="sr-only"
                 />
-                <label 
-                  htmlFor="terms" 
+                <label
+                  htmlFor="terms"
                   className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all ${
-                    agreeToTerms 
-                      ? 'bg-[#C9973A] border-[#C9973A]' 
-                      : 'bg-[#fdfaf6] border-[#d49b35]'
+                    agreeToTerms ? 'bg-[#C9973A] border-[#C9973A]' : 'bg-[#fdfaf6] border-[#d49b35]'
                   }`}
                 >
                   {agreeToTerms && (
-                    <svg className="w-3.5 h-3.5 text-[#1a1612]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
+                    <svg
+                      className="w-3.5 h-3.5 text-[#1a1612]"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={4}
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                   )}
                 </label>
               </div>
-              <label htmlFor="terms" className="text-[13px] text-[#1a1612]/60 leading-relaxed cursor-pointer">
-                I agree to the <a href="#" className="font-bold text-[#C9973A] hover:underline">Terms of Service</a> and <a href="#" className="font-bold text-[#C9973A] hover:underline">Privacy Policy</a>.
+              <label
+                htmlFor="terms"
+                className="text-[13px] text-[#1a1612]/60 leading-relaxed cursor-pointer"
+              >
+                I agree to the{' '}
+                <a href="#" className="font-bold text-[#C9973A] hover:underline">
+                  Terms of Service
+                </a>{' '}
+                and{' '}
+                <a href="#" className="font-bold text-[#C9973A] hover:underline">
+                  Privacy Policy
+                </a>
+                .
               </label>
             </div>
 
             {/* Submit Button */}
             <div className="pt-4">
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 disabled={isLoading}
                 className="w-full py-5 px-4 shadow-md disabled:opacity-50 text-[18px] font-serif font-normal rounded-[32px]"
               >
-                {isLoading 
-                  ? 'Creating Account...' 
-                  : isCompany 
-                    ? 'Next: Documents →' 
-                    : role === 'BUYER' 
-                      ? 'Complete Registration' 
-                      : 'Initialize Business Profile'
-                }
+                {isLoading
+                  ? 'Creating Account...'
+                  : isCompany
+                    ? 'Next: Documents →'
+                    : role === 'BUYER'
+                      ? 'Complete Registration'
+                      : 'Initialize Business Profile'}
               </Button>
             </div>
           </div>
@@ -257,9 +285,9 @@ export default function Register() {
       <div className="mt-10 text-center">
         <p className="text-[13px] font-medium text-[#1a1612]/40">
           Already a member?{' '}
-          <button 
+          <button
             type="button"
-            onClick={() => navigate('/login')} 
+            onClick={() => navigate('/login')}
             className="text-[#C9973A] font-bold hover:underline ml-1"
           >
             Sign In

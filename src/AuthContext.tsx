@@ -3,7 +3,15 @@ import { authService } from './services/auth/authService';
 import { tokenManager } from './services/api/client';
 import { SubRole, EntityType } from './types';
 
-export type Role = 'BUYER' | 'SELLER' | 'SUPPLIER' | 'SERVICE_PROVIDER' | 'ENTERTAINMENT' | 'EVENTS' | 'PROVIDER_STAFF' | 'LABOUR';
+export type Role =
+  | 'BUYER'
+  | 'SELLER'
+  | 'SUPPLIER'
+  | 'SERVICE_PROVIDER'
+  | 'ENTERTAINMENT'
+  | 'EVENTS'
+  | 'PROVIDER_STAFF'
+  | 'LABOUR';
 
 export interface User {
   id: string;
@@ -48,7 +56,14 @@ export interface User {
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string, phone: string, role: string) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    name: string,
+    phone: string,
+    role: string,
+    identityData?: { dob?: string; nrc?: string; logo?: string }
+  ) => Promise<void>;
   logout: () => Promise<void>;
   isLoading: boolean;
   isAuthenticated: boolean;
@@ -109,10 +124,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const register = React.useCallback(
-    async (email: string, password: string, name: string, phone: string, role: string) => {
+    async (
+      email: string,
+      password: string,
+      name: string,
+      phone: string,
+      role: string,
+      identityData?: { dob?: string; nrc?: string; logo?: string }
+    ) => {
       try {
         setError(null);
-        await authService.register({ email, password, name, phone, role });
+        await authService.register({
+          email,
+          password,
+          name,
+          phone,
+          role,
+          dob: identityData?.dob,
+          nrc: identityData?.nrc,
+          logo: identityData?.logo,
+        });
         // Auto-login after registration
         await login(email, password);
       } catch (err) {
