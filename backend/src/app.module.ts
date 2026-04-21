@@ -17,6 +17,8 @@ import { ProductsModule } from './modules/products/products.module';
 import { ShopsModule } from './modules/shops/shops.module';
 import { SchedulesModule } from './modules/schedules/schedules.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { FilesModule } from './modules/files/files.module';
 
 // Common
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -61,6 +63,8 @@ import encryptionConfig from './config/encryption.config';
     ShopsModule,
     SchedulesModule,
     AuditModule,
+    AdminModule,
+    FilesModule,
   ],
   providers: [
     {

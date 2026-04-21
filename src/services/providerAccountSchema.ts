@@ -14,6 +14,7 @@ export type ProviderViewType =
   | 'profile'
   | 'archived-leads'
   | 'venue-spaces'
+  | 'financial'
   | 'audit-trail';
 
 export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
@@ -46,6 +47,7 @@ export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       excludeRoles: ['ENTERTAINMENT']
     },
     { id: 'team', label: 'Team Management', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },
+    { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
     { id: 'audit-trail', label: 'Audit Trail', icon: 'History', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
   ],
   views: {
@@ -118,6 +120,11 @@ export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       title: "Venue Spaces",
       subtitle: "Manage your venue's available spaces",
       componentType: 'provider_placeholder'
+    },
+    financial: {
+      title: "Financial Account",
+      subtitle: "Manage your virtual wallet and transaction security",
+      componentType: 'financial_renderer'
     }
   }
 };

@@ -32,14 +32,8 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard)
   async findAll(@Query() query: any, @Request() req) {
     const filters = {
-      userId: query.userId,
-      type: query.type,
-      status: query.status,
-      search: query.search,
-      page: query.page,
-      limit: query.limit,
-      sort: query.sort,
-      order: query.order,
+      ...query,
+      userId: req.user.id,
     };
     return this.paymentsService.findAll(filters);
   }

@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { ChevronDown, Check, Navigation, Settings, Clock, Building2, Store, ChevronLeft } from 'lucide-react';
+import {
+  ChevronDown,
+  Check,
+  Navigation,
+  Settings,
+  Clock,
+  Building2,
+  Store,
+  ChevronLeft,
+} from 'lucide-react';
 
 interface InquiryPreferencesProps {
   onBack: () => void;
@@ -25,26 +34,26 @@ export default function InquiryPreferences({ onBack, onNext }: InquiryPreference
       validity: `${validity} Days`,
       maxQuotes,
       isConfidential,
-      leadTime
+      leadTime,
     });
   };
 
-  const labelClasses = "block text-[10px] font-bold text-[#94a3b8] tracking-[0.1em] uppercase mb-2 ml-1 font-sans";
+  const labelClasses =
+    'block text-[10px] font-bold text-[#94a3b8] tracking-[0.1em] uppercase mb-2 ml-1 font-sans';
 
   return (
-    <div className="max-w-[480px] mx-auto w-full bg-[#f5f2ed] min-h-screen">
+    <div className="max-w-4xl mx-auto w-full">
       {/* Sticky Header */}
-      <div className="sticky top-0 bg-[#f5f2ed] z-20 px-4 pt-4 pb-5">
+      <div className="sticky top-0 bg-[#f5f2ed]/80 backdrop-blur-md z-20 px-4 pt-4 pb-5">
         <div className="flex items-center gap-3">
-          <button 
-            onClick={onBack} 
-            className="w-10 h-10 -ml-2 flex items-center justify-center"
-          >
+          <button onClick={onBack} className="w-10 h-10 -ml-2 flex items-center justify-center">
             <ChevronLeft className="w-5 h-5 text-[#1a1a2e]" />
           </button>
-          <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">STEP 2</p>
+          <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">
+            STEP 2
+          </p>
         </div>
-        
+
         <div className="mt-2">
           <h1 className="font-serif text-[22px] font-bold text-[#1a1a2e] leading-tight">
             Preferences
@@ -62,7 +71,7 @@ export default function InquiryPreferences({ onBack, onNext }: InquiryPreference
             Target Destination
           </h3>
           <div className="grid grid-cols-3 gap-3">
-            <div 
+            <div
               onClick={() => setDestination('chain')}
               className={`p-4 rounded-2xl border-[1.5px] cursor-pointer transition-all relative flex flex-col items-center gap-2 text-center ${destination === 'chain' ? 'border-[#C9973A] bg-[rgba(201,151,58,0.03)]' : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'}`}
             >
@@ -71,10 +80,16 @@ export default function InquiryPreferences({ onBack, onNext }: InquiryPreference
                   <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
                 </div>
               )}
-              <Building2 className={`w-6 h-6 transition-colors ${destination === 'chain' ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`} />
-              <p className={`font-sans font-bold text-[11px] leading-tight transition-colors ${destination === 'chain' ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}>Chain Stores</p>
+              <Building2
+                className={`w-6 h-6 transition-colors ${destination === 'chain' ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`}
+              />
+              <p
+                className={`font-sans font-bold text-[11px] leading-tight transition-colors ${destination === 'chain' ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}
+              >
+                Chain Stores
+              </p>
             </div>
-            <div 
+            <div
               onClick={() => setDestination('local')}
               className={`p-4 rounded-2xl border-[1.5px] cursor-pointer transition-all relative flex flex-col items-center gap-2 text-center ${destination === 'local' ? 'border-[#C9973A] bg-[rgba(201,151,58,0.03)]' : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'}`}
             >
@@ -83,10 +98,16 @@ export default function InquiryPreferences({ onBack, onNext }: InquiryPreference
                   <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
                 </div>
               )}
-              <Store className={`w-6 h-6 transition-colors ${destination === 'local' ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`} />
-              <p className={`font-sans font-bold text-[11px] leading-tight transition-colors ${destination === 'local' ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}>Local Shops</p>
+              <Store
+                className={`w-6 h-6 transition-colors ${destination === 'local' ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`}
+              />
+              <p
+                className={`font-sans font-bold text-[11px] leading-tight transition-colors ${destination === 'local' ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}
+              >
+                Local Shops
+              </p>
             </div>
-            <div 
+            <div
               onClick={() => setDestination('service')}
               className={`p-4 rounded-2xl border-[1.5px] cursor-pointer transition-all relative flex flex-col items-center gap-2 text-center ${destination === 'service' ? 'border-[#C9973A] bg-[rgba(201,151,58,0.03)]' : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'}`}
             >
@@ -95,11 +116,20 @@ export default function InquiryPreferences({ onBack, onNext }: InquiryPreference
                   <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
                 </div>
               )}
-              <Settings className={`w-6 h-6 transition-colors ${destination === 'service' ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`} />
-              <p className={`font-sans font-bold text-[11px] leading-tight transition-colors ${destination === 'service' ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}>Service Providers</p>
+              <Settings
+                className={`w-6 h-6 transition-colors ${destination === 'service' ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`}
+              />
+              <p
+                className={`font-sans font-bold text-[11px] leading-tight transition-colors ${destination === 'service' ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}
+              >
+                Service Providers
+              </p>
             </div>
           </div>
-          <p className="text-[11px] font-medium text-[#94a3b8] ml-1 leading-relaxed font-sans">Choose between major retailers, independent local businesses, or specialized service providers.</p>
+          <p className="text-[11px] font-medium text-[#94a3b8] ml-1 leading-relaxed font-sans">
+            Choose between major retailers, independent local businesses, or specialized service
+            providers.
+          </p>
         </div>
 
         {/* Quote Settings */}
@@ -114,7 +144,7 @@ export default function InquiryPreferences({ onBack, onNext }: InquiryPreference
             <div>
               <label className={labelClasses}>Maximum Quotations</label>
               <div className="relative">
-                <select 
+                <select
                   value={maxQuotes}
                   onChange={(e) => setMaxQuotes(e.target.value)}
                   className="w-full px-4 py-3.5 bg-white border border-[#f1f5f9] rounded-xl appearance-none font-sans font-bold text-[14px] text-[#1a1a2e] focus:border-[#C9973A]/50 outline-none transition-all"
@@ -128,13 +158,19 @@ export default function InquiryPreferences({ onBack, onNext }: InquiryPreference
                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#C9973A] pointer-events-none" />
               </div>
             </div>
-            <div 
+            <div
               onClick={() => setIsConfidential(!isConfidential)}
               className="flex items-center justify-between p-4 bg-white border border-[#f1f5f9] rounded-xl cursor-pointer hover:bg-[#f1f5f9] transition-all"
             >
-              <span className="font-sans font-bold text-[#1a1a2e] text-[13px]">Confidential Inquiry</span>
-              <div className={`w-11 h-6 rounded-full relative transition-colors ${isConfidential ? 'bg-[#C9973A]' : 'bg-[#e2e8f0]'}`}>
-                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${isConfidential ? 'left-6' : 'left-1'}`}></div>
+              <span className="font-sans font-bold text-[#1a1a2e] text-[13px]">
+                Confidential Inquiry
+              </span>
+              <div
+                className={`w-11 h-6 rounded-full relative transition-colors ${isConfidential ? 'bg-[#C9973A]' : 'bg-[#e2e8f0]'}`}
+              >
+                <div
+                  className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${isConfidential ? 'left-6' : 'left-1'}`}
+                ></div>
               </div>
             </div>
           </div>
@@ -152,7 +188,7 @@ export default function InquiryPreferences({ onBack, onNext }: InquiryPreference
             <div>
               <label className={labelClasses}>Required Lead Time</label>
               <div className="relative">
-                <select 
+                <select
                   value={leadTime}
                   onChange={(e) => setLeadTime(e.target.value)}
                   className="w-full px-4 py-3.5 bg-white border border-[#f1f5f9] rounded-xl appearance-none font-sans font-bold text-[14px] text-[#1a1a2e] focus:border-[#C9973A]/50 outline-none transition-all"
@@ -183,16 +219,18 @@ export default function InquiryPreferences({ onBack, onNext }: InquiryPreference
           </div>
         </div>
 
-        {/* Submit Button */}
-        <div className="pt-4 pb-12">
-          <button 
-            onClick={handleNext}
-            className="w-full h-[54px] bg-[#C9973A] rounded-[50px] flex flex-col items-center justify-center gap-[2px] font-sans text-white shadow-[0_4px_16_rgba(201,151,58,0.35)] transition-all active:scale-[0.98]"
-          >
-            <span className="text-[15px] font-bold leading-none">Confirm & Continue</span>
-            <span className="text-[9px] font-bold uppercase tracking-[0.1em] opacity-70">Finalize Inquiry Preferences</span>
-          </button>
-        </div>
+      {/* Submit Button */}
+      <div className="pt-4 pb-12 flex justify-center sm:justify-end">
+        <button
+          onClick={handleNext}
+          className="w-full sm:w-auto sm:px-16 h-13.5 bg-[#C9973A] rounded-[50px] flex flex-col items-center justify-center gap-0.5 font-sans text-white shadow-[0_4px_16_rgba(201,151,58,0.35)] transition-all active:scale-[0.98]"
+        >
+          <span className="text-[15px] font-bold leading-none">Confirm & Continue</span>
+          <span className="text-[9px] font-bold uppercase tracking-[0.1em] opacity-70">
+            Finalize Inquiry Preferences
+          </span>
+        </button>
+      </div>
       </div>
     </div>
   );

@@ -41,15 +41,8 @@ export class OrdersController {
   async findAll(@Query() query: any, @Request() req) {
     // DATA ISOLATION: Users only see their own orders (as buyer or seller)
     const filters = {
+      ...query,
       userId: req.user.id,
-      buyerId: query.buyerId,
-      sellerId: query.sellerId,
-      status: query.status,
-      search: query.search,
-      page: query.page,
-      limit: query.limit,
-      sort: query.sort,
-      order: query.order,
     };
     return this.ordersService.findAll(filters);
   }

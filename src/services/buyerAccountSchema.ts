@@ -10,6 +10,7 @@ export type ViewType =
   | 'inquiry_details'
   | 'quote_details'
   | 'order_details'
+  | 'financial'
   | 'shops';
 
 export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
@@ -21,6 +22,7 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'orders', label: 'Order History', icon: 'ShoppingBag' },
     { id: 'shops', label: 'Saved Shops', icon: 'Store' },
     { id: 'profile', label: 'Account Settings', icon: 'User' },
+    { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
   ],
   views: {
     dashboard: {
@@ -68,6 +70,11 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       title: "Account Settings",
       subtitle: "Refine your professional presence and security",
       componentType: 'profile_renderer'
+    },
+    financial: {
+      title: "Financial Account",
+      subtitle: "Manage your virtual wallet and transaction security",
+      componentType: 'financial_renderer'
     },
     settings: {
       title: "Preferences",

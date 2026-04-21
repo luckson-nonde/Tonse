@@ -31,7 +31,7 @@ export default function ForcePasswordChange() {
     try {
       await updateUser({
         password: newPassword,
-        mustChangePassword: false
+        mustChangePassword: false,
       });
       navigate('/');
     } catch (err) {
@@ -44,21 +44,26 @@ export default function ForcePasswordChange() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-[#fffaf5] flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-brand-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
       {/* Background Texture */}
       <div className="fixed inset-0 pointer-events-none opacity-[0.03] z-0">
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
           <filter id="noiseFilter">
-            <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="3" stitchTiles="stitch" />
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="0.6"
+              numOctaves="3"
+              stitchTiles="stitch"
+            />
           </filter>
           <rect width="100%" height="100%" filter="url(#noiseFilter)" />
         </svg>
       </div>
 
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white p-8 rounded-[32px] shadow-xl border border-slate-100 relative z-10"
+        className="w-full max-w-md bg-white p-8 rounded-4xl shadow-xl border border-slate-100 relative z-10"
       >
         <div className="flex flex-col items-center text-center mb-8">
           <div className="w-16 h-16 bg-[#fdf8f0] rounded-2xl flex items-center justify-center text-[#C9973A] mb-4">
@@ -66,7 +71,8 @@ export default function ForcePasswordChange() {
           </div>
           <h1 className="text-2xl font-bold text-slate-900 font-serif mb-2">Update Password</h1>
           <p className="text-slate-500 text-sm">
-            Your account was created with a temporary password. For security, please set a new password to continue.
+            Your account was created with a temporary password. For security, please set a new
+            password to continue.
           </p>
         </div>
 
@@ -84,7 +90,7 @@ export default function ForcePasswordChange() {
               </label>
               <div className="relative">
                 <input
-                  type={showPassword ? "text" : "password"}
+                  type={showPassword ? 'text' : 'password'}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl focus:ring-2 focus:ring-[#C9973A] focus:border-transparent transition-all outline-none"
@@ -106,7 +112,7 @@ export default function ForcePasswordChange() {
                 Confirm New Password
               </label>
               <input
-                type={showPassword ? "text" : "password"}
+                type={showPassword ? 'text' : 'password'}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl focus:ring-2 focus:ring-[#C9973A] focus:border-transparent transition-all outline-none"
@@ -119,17 +125,20 @@ export default function ForcePasswordChange() {
           <div className="bg-blue-50 p-4 rounded-2xl flex items-start gap-3 border border-blue-100">
             <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
             <p className="text-xs text-blue-700 leading-relaxed">
-              Choose a strong password that you haven't used elsewhere. This will be your permanent password for TONSE.
+              Choose a strong password that you haven't used elsewhere. This will be your permanent
+              password for TONSE.
             </p>
           </div>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-[#1e293b] text-white font-bold py-4 rounded-2xl hover:bg-slate-800 transition-all shadow-lg flex items-center justify-center gap-2 group disabled:opacity-50"
+            className="w-full bg-brand-dark text-white font-bold py-4 rounded-2xl hover:bg-slate-800 transition-all shadow-lg flex items-center justify-center gap-2 group disabled:opacity-50"
           >
             {isLoading ? 'Updating...' : 'Set New Password'}
-            {!isLoading && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
+            {!isLoading && (
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            )}
           </button>
         </form>
       </motion.div>

@@ -15,6 +15,8 @@ export default function RegisterPage() {
     name: '',
     phone: '',
     role: 'BUYER',
+    nrc: '',
+    profilePicture: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { register, error } = useAuth();
@@ -42,7 +44,9 @@ export default function RegisterPage() {
         formData.password,
         formData.name,
         formData.phone,
-        formData.role
+        formData.role,
+        formData.nrc,
+        formData.profilePicture
       );
       // User will be automatically logged in and redirected
       navigate('/dashboard');
@@ -171,6 +175,39 @@ export default function RegisterPage() {
                 className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm"
                 placeholder="Confirm your password"
                 value={formData.confirmPassword}
+                onChange={handleChange}
+              />
+            </div>
+
+            {/* NRC */}
+            <div>
+              <label htmlFor="nrc" className="block text-sm font-medium text-gray-700">
+                NRC (National Registration Certificate)
+              </label>
+              <input
+                id="nrc"
+                name="nrc"
+                type="text"
+                required
+                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm"
+                placeholder="Enter your NRC"
+                value={formData.nrc}
+                onChange={handleChange}
+              />
+            </div>
+
+            {/* Profile Picture */}
+            <div>
+              <label htmlFor="profilePicture" className="block text-sm font-medium text-gray-700">
+                Profile Picture (URL)
+              </label>
+              <input
+                id="profilePicture"
+                name="profilePicture"
+                type="text"
+                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm"
+                placeholder="https://example.com/profile.jpg"
+                value={formData.profilePicture}
                 onChange={handleChange}
               />
             </div>

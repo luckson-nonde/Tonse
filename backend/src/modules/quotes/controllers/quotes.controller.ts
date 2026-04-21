@@ -18,6 +18,7 @@ import { QuotesService } from '../quotes.service';
 import { CreateQuoteDto } from '../dto/create-quote.dto';
 import { UpdateQuoteDto } from '../dto/update-quote.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { InquiriesService } from '../../inquiries/inquiries.service';
 
 interface AuthenticatedRequest extends ExpressRequest {
   user?: { id: string; email: string; role: string };
@@ -25,7 +26,10 @@ interface AuthenticatedRequest extends ExpressRequest {
 
 @Controller('quotes')
 export class QuotesController {
-  constructor(private readonly quotesService: QuotesService) {}
+  constructor(
+    private readonly quotesService: QuotesService,
+    private readonly inquiriesService: InquiriesService
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -42,15 +46,8 @@ export class QuotesController {
     // ENFORCE: Users can only see quotes relevant to them
     // Buyers see quotes for their inquiries, providers see their own quotes
     const filters = {
+      ...query,
       userId: req.user.id, // Pass the user ID for authorization check in service
-      inquiryId: query.inquiryId,
-      providerId: query.providerId,
-      status: query.status,
-      search: query.search,
-      page: query.page,
-      limit: query.limit,
-      sort: query.sort,
-      order: query.order,
     };
     return this.quotesService.findAll(filters);
   }
@@ -59,13 +56,23 @@ export class QuotesController {
   @UseGuards(JwtAuthGuard)
   async findByInquiry(@Param('inquiryId') inquiryId: string, @Request() req: AuthenticatedRequest) {
     // ENFORCE: Only the buyer of the inquiry can view its quotes
+    const inquiry = await this.inquiriesService.findOne(inquiryId);
+    if (!inquiry) {
+      throw new ForbiddenException('Inquiry not found');
+    }
+    if (inquiry.buyerId !== req.user.id) {
+      throw new ForbiddenException('You can only view quotes for your own inquiries');
+    }
     const quotes = await this.quotesService.findByInquiry(inquiryId, req.user.id);
     return quotes;
   }
 
   @Get('provider/:providerId')
   @UseGuards(JwtAuthGuard)
-  async findByProvider(@Param('providerId') providerId: string, @Request() req: AuthenticatedRequest) {
+  async findByProvider(
+    @Param('providerId') providerId: string,
+    @Request() req: AuthenticatedRequest
+  ) {
     // ENFORCE: Users can only view their own provider quotes
     if (providerId !== req.user.id) {
       throw new ForbiddenException('You can only view your own quotes');

@@ -34,18 +34,22 @@ export default function LabourQuotesView({ quotes, onAction }: LabourQuotesViewP
   return (
     <div className="space-y-4">
       {quotes.length === 0 ? (
-        <div className="bg-white rounded-[24px] p-12 text-center border border-slate-100 shadow-sm">
+        <div className="bg-white rounded-3xl p-12 text-center border border-slate-100 shadow-sm">
           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <FileText className="w-8 h-8 text-slate-400" />
           </div>
-          <h3 className="text-lg font-serif font-bold text-[#1e293b] mb-2">No Proposals Sent</h3>
+          <h3 className="text-lg font-serif font-bold text-brand-dark mb-2">No Proposals Sent</h3>
           <p className="text-slate-500 max-w-md mx-auto">
-            You haven't sent any proposals yet. Go to the Job Requests tab to find jobs and send proposals.
+            You haven't sent any proposals yet. Go to the Job Requests tab to find jobs and send
+            proposals.
           </p>
         </div>
       ) : (
         quotes.map((quote) => (
-          <div key={quote.id} className="bg-white rounded-[24px] p-6 shadow-sm border border-slate-100">
+          <div
+            key={quote.id}
+            className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100"
+          >
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
@@ -54,24 +58,26 @@ export default function LabourQuotesView({ quotes, onAction }: LabourQuotesViewP
                     Sent: {new Date(quote.createdAt).toLocaleDateString()}
                   </span>
                 </div>
-                <h3 className="text-lg font-serif font-bold text-[#1e293b] mb-1">
+                <h3 className="text-lg font-serif font-bold text-brand-dark mb-1">
                   Proposal for Job #{quote.inquiryId}
                 </h3>
                 <p className="text-slate-600 text-[14px] line-clamp-2">
                   {quote.message || 'No message provided.'}
                 </p>
               </div>
-              
-              <div className="flex flex-col items-end gap-2 min-w-[150px]">
+
+              <div className="flex flex-col items-end gap-2 min-w-37.5">
                 <div className="text-right">
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Offered Rate</p>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Offered Rate
+                  </p>
                   <p className="text-xl font-serif font-bold text-[#C9973A]">
                     ZMW {quote.totalAmount || quote.rate || '0'}
                   </p>
                 </div>
-                <button 
+                <button
                   onClick={() => onAction('view_quote', quote)}
-                  className="text-[13px] font-medium text-[#1e293b] hover:text-[#C9973A] transition-colors mt-2"
+                  className="text-xs font-medium text-brand-dark hover:text-[#C9973A] transition-colors mt-2"
                 >
                   View Details →
                 </button>

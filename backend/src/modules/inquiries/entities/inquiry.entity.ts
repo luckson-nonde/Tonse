@@ -10,6 +10,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { InquiryImage } from './inquiry-image.entity';
 
 @Entity('inquiries')
 @Index('idx_inquiries_buyer_id', ['buyerId'])
@@ -18,9 +19,13 @@ import { User } from '../../users/entities/user.entity';
 @Index('idx_inquiries_location', ['location'])
 @Index('idx_inquiries_created_at', ['createdAt'])
 @Index('idx_inquiries_buyer_status', ['buyerId', 'status'])
+@Index('idx_inquiries_display_id', ['displayId'], { unique: true })
 export class Inquiry {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ type: 'varchar', length: 20, unique: true, nullable: true })
+  displayId: string;
 
   @Column({ type: 'varchar', length: 255 })
   title: string;
@@ -105,6 +110,12 @@ export class Inquiry {
   updatedAt: Date;
 
   // Relations
+  @OneToMany(() => InquiryImage, (image) => image.inquiry, {
+    eager: true,
+    cascade: true,
+    onDelete: 'CASCADE',
+  })
+  images: InquiryImage[];
   // @OneToMany(() => Quote, (quote) => quote.inquiry)
   // quotes: Quote[];
 }

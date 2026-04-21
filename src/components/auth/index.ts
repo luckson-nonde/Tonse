@@ -1,6 +1,3 @@
 // Auth components exports
-export { default as LoginForm } from './LoginForm';
-export { default as RegisterForm } from './RegisterForm';
-export { default as ForgotPasswordForm } from './ForgotPasswordForm';
-export { default as VerificationForm } from './VerificationForm';
-export { default as MFASetup } from './MFASetup';
+// Note: Auth functionality is handled via Auth context and form components at root level
+// Add component exports here as they are created

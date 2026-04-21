@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../AuthContext';
 import { db } from '../services/api/database';
-import { 
-  User, Save, Loader2, CheckCircle, Lock
-} from 'lucide-react';
+import { User, Save, Loader2, CheckCircle, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useDashboard } from '../DashboardContext';
 import { getProfileSchema } from '../services/userSchemas';
@@ -22,7 +20,7 @@ export default function ShopProfilePage() {
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
-    confirmPassword: ''
+    confirmPassword: '',
   });
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
@@ -43,10 +41,13 @@ export default function ShopProfilePage() {
       ...user,
       storePhotoFront: user.storePhotos?.front || '',
       storePhotoInterior: user.storePhotos?.interior || '',
-      gps: user.latitude && user.longitude ? {
-        latitude: user.latitude,
-        longitude: user.longitude
-      } : undefined
+      gps:
+        user.latitude && user.longitude
+          ? {
+              latitude: user.latitude,
+              longitude: user.longitude,
+            }
+          : undefined,
     };
   }, [user]);
 
@@ -57,7 +58,7 @@ export default function ShopProfilePage() {
 
     try {
       const updates = { ...data };
-      
+
       // Handle GPS data
       if (data.gps) {
         updates.latitude = data.gps.latitude;
@@ -69,7 +70,7 @@ export default function ShopProfilePage() {
       if (data.storePhotoFront || data.storePhotoInterior) {
         updates.storePhotos = {
           front: data.storePhotoFront || user?.storePhotos?.front || '',
-          interior: data.storePhotoInterior || user?.storePhotos?.interior || ''
+          interior: data.storePhotoInterior || user?.storePhotos?.interior || '',
         };
         delete updates.storePhotoFront;
         delete updates.storePhotoInterior;
@@ -81,7 +82,7 @@ export default function ShopProfilePage() {
       if (user?.role !== 'BUYER' && user?.role !== 'PROVIDER_STAFF' && user?.id) {
         const effectiveProviderId = user.parentProviderId || user.id;
         const shop = await db.shops.where('providerId').equals(effectiveProviderId).first();
-        
+
         const shopUpdates = {
           name: updates.name || user.name,
           logo: updates.logo || user.logo,
@@ -98,7 +99,7 @@ export default function ShopProfilePage() {
           await db.shops.update(shop.id, shopUpdates);
         } else {
           await db.shops.add({
-            providerId: user.id,
+            providerId: typeof user.id === 'number' ? user.id : parseInt(user.id || '0', 10),
             ...shopUpdates,
             description: 'Shop on TONSE Marketplace',
             category: user.categories?.[0] || 'General',
@@ -107,7 +108,7 @@ export default function ShopProfilePage() {
             isVerified: false,
             registrationDate: Date.now(),
             registrationDocuments: [],
-            proofPhotos: []
+            proofPhotos: [],
           });
         }
       }
@@ -115,7 +116,7 @@ export default function ShopProfilePage() {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err: any) {
-      setError(err.message || "Failed to update profile");
+      setError(err.message || 'Failed to update profile');
     } finally {
       setIsSaving(false);
     }
@@ -128,7 +129,7 @@ export default function ShopProfilePage() {
     setPasswordSuccess(false);
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setPasswordError("Passwords do not match");
+      setPasswordError('Passwords do not match');
       setIsUpdatingPassword(false);
       return;
     }
@@ -139,7 +140,7 @@ export default function ShopProfilePage() {
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setTimeout(() => setPasswordSuccess(false), 3000);
     } catch (err: any) {
-      setPasswordError(err.message || "Failed to update password");
+      setPasswordError(err.message || 'Failed to update password');
     } finally {
       setIsUpdatingPassword(false);
     }
@@ -150,11 +151,19 @@ export default function ShopProfilePage() {
   return (
     <div className="max-w-4xl mx-auto pb-20">
       <div className="mb-8">
-        <h1 className="text-[26px] font-serif font-bold text-[#1e293b] leading-tight">
-          {user.role === 'BUYER' ? 'My Profile' : user.role === 'PROVIDER_STAFF' ? 'Personal Profile' : 'Shop Profile'}
+        <h1 className="text-[26px] font-serif font-bold text-brand-dark leading-tight">
+          {user.role === 'BUYER'
+            ? 'My Profile'
+            : user.role === 'PROVIDER_STAFF'
+              ? 'Personal Profile'
+              : 'Shop Profile'}
         </h1>
         <p className="text-[14px] font-sans text-[#64748b] mt-1">
-          {user.role === 'BUYER' ? 'Manage your account and personal details' : user.role === 'PROVIDER_STAFF' ? 'Manage your personal account details' : 'Manage your account and shop details'}
+          {user.role === 'BUYER'
+            ? 'Manage your account and personal details'
+            : user.role === 'PROVIDER_STAFF'
+              ? 'Manage your personal account details'
+              : 'Manage your account and shop details'}
         </p>
       </div>
 
@@ -173,12 +182,16 @@ export default function ShopProfilePage() {
                 disabled={isSaving}
                 className="px-10 py-4 bg-[#C9973A] text-white rounded-full text-[15px] font-sans font-bold hover:bg-[#a37d35] transition-all shadow-lg disabled:opacity-50 flex items-center gap-2"
               >
-                {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                {isSaving ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Save className="w-5 h-5" />
+                )}
                 {isSaving ? 'Saving Changes...' : 'Save Profile Changes'}
               </button>
             </div>
           </DynamicProfileForm>
-          
+
           {saveSuccess && (
             <div className="mt-6 flex items-center justify-center gap-2 px-6 py-4 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-2xl font-bold text-sm animate-in fade-in slide-in-from-bottom-2">
               <CheckCircle className="w-5 h-5" />
@@ -201,7 +214,9 @@ export default function ShopProfilePage() {
               <Lock className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-[18px] font-serif font-bold text-[#1e293b]">Security & Password</h2>
+              <h2 className="text-[18px] font-serif font-bold text-brand-dark">
+                Security & Password
+              </h2>
               <p className="text-[12px] text-[#9ca3af]">Update your account password</p>
             </div>
           </div>
@@ -209,22 +224,30 @@ export default function ShopProfilePage() {
           <form onSubmit={handlePasswordUpdate} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-sans font-bold text-[#9ca3af] uppercase tracking-widest">New Password</label>
+                <label className="text-[10px] font-sans font-bold text-[#9ca3af] uppercase tracking-widest">
+                  New Password
+                </label>
                 <input
                   type="password"
                   value={passwordData.newPassword}
-                  onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+                  onChange={(e) =>
+                    setPasswordData((prev) => ({ ...prev, newPassword: e.target.value }))
+                  }
                   className="w-full px-4 py-3 bg-[#fffef9] border border-[#e8e0d0] rounded-[10px] text-[14px] font-sans text-[#1e293b] focus:outline-none focus:border-[#C9973A] transition-colors"
                   placeholder="Enter new password"
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-sans font-bold text-[#9ca3af] uppercase tracking-widest">Confirm New Password</label>
+                <label className="text-[10px] font-sans font-bold text-[#9ca3af] uppercase tracking-widest">
+                  Confirm New Password
+                </label>
                 <input
                   type="password"
                   value={passwordData.confirmPassword}
-                  onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                  onChange={(e) =>
+                    setPasswordData((prev) => ({ ...prev, confirmPassword: e.target.value }))
+                  }
                   className="w-full px-4 py-3 bg-[#fffef9] border border-[#e8e0d0] rounded-[10px] text-[14px] font-sans text-[#1e293b] focus:outline-none focus:border-[#C9973A] transition-colors"
                   placeholder="Confirm new password"
                 />
@@ -235,9 +258,13 @@ export default function ShopProfilePage() {
               <button
                 type="submit"
                 disabled={isUpdatingPassword || !passwordData.newPassword}
-                className="w-full sm:w-auto px-8 py-3 bg-[#1e293b] text-white rounded-full text-[14px] font-sans font-bold hover:bg-black transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full sm:w-auto px-8 py-3 bg-brand-dark text-white rounded-full text-[14px] font-sans font-bold hover:bg-black transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {isUpdatingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {isUpdatingPassword ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
                 Update Password
               </button>
 
@@ -249,9 +276,7 @@ export default function ShopProfilePage() {
               )}
 
               {passwordError && (
-                <div className="text-rose-600 font-bold text-sm">
-                  {passwordError}
-                </div>
+                <div className="text-rose-600 font-bold text-sm">{passwordError}</div>
               )}
             </div>
           </form>

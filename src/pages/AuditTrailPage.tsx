@@ -2,20 +2,20 @@ import React, { useState, useMemo } from 'react';
 import { useAuth } from '../AuthContext';
 import { db } from '../services/api/database';
 import { useLiveQuery } from '../hooks/useLiveQuery';
-import { 
-  History, 
-  Search, 
-  Filter, 
-  Calendar, 
-  FileText, 
-  QrCode, 
-  CheckCircle2, 
-  User, 
+import {
+  History,
+  Search,
+  Filter,
+  Calendar,
+  FileText,
+  QrCode,
+  CheckCircle2,
+  User,
   ArrowUpRight,
   TrendingUp,
   PackageCheck,
   MessageSquare,
-  ShieldCheck
+  ShieldCheck,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PERMISSIONS, hasPermission } from '../utils/rbac';
@@ -27,29 +27,23 @@ export default function AuditTrailPage() {
 
   const providerId = user?.role === 'PROVIDER_STAFF' ? user.parentProviderId : user?.id;
 
-  const logs = useLiveQuery(
-    async () => {
+  const logs =
+    useLiveQuery(async () => {
       if (!providerId) return [];
-      
+
       let query = db.auditLogs.where('providerId').equals(providerId);
-      
+
       // If staff, only show their own logs
       if (user?.role === 'PROVIDER_STAFF') {
-        return await db.auditLogs
-          .where('staffId')
-          .equals(user.id!)
-          .reverse()
-          .sortBy('timestamp');
+        return await db.auditLogs.where('staffId').equals(user.id!).reverse().sortBy('timestamp');
       }
 
       return await query.reverse().sortBy('timestamp');
-    },
-    [providerId, user]
-  ) || [];
+    }, [providerId, user]) || [];
 
   const filteredLogs = useMemo(() => {
-    return logs.filter(log => {
-      const matchesSearch = 
+    return logs.filter((log) => {
+      const matchesSearch =
         log.targetTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.buyerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.staffName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -73,27 +67,35 @@ export default function AuditTrailPage() {
 
   const stats = useMemo(() => {
     return {
-      totalQuotes: filteredLogs.filter(l => l.actionType === 'QUOTE_SENT').length,
-      totalCollections: filteredLogs.filter(l => l.actionType === 'COLLECTION_STARTED').length,
-      totalHandovers: filteredLogs.filter(l => l.actionType === 'HANDOVER_COMPLETED').length,
+      totalQuotes: filteredLogs.filter((l) => l.actionType === 'QUOTE_SENT').length,
+      totalCollections: filteredLogs.filter((l) => l.actionType === 'COLLECTION_STARTED').length,
+      totalHandovers: filteredLogs.filter((l) => l.actionType === 'HANDOVER_COMPLETED').length,
     };
   }, [filteredLogs]);
 
   const getActionIcon = (type: string) => {
     switch (type) {
-      case 'QUOTE_SENT': return <MessageSquare className="w-4 h-4" />;
-      case 'COLLECTION_STARTED': return <QrCode className="w-4 h-4" />;
-      case 'HANDOVER_COMPLETED': return <PackageCheck className="w-4 h-4" />;
-      default: return <FileText className="w-4 h-4" />;
+      case 'QUOTE_SENT':
+        return <MessageSquare className="w-4 h-4" />;
+      case 'COLLECTION_STARTED':
+        return <QrCode className="w-4 h-4" />;
+      case 'HANDOVER_COMPLETED':
+        return <PackageCheck className="w-4 h-4" />;
+      default:
+        return <FileText className="w-4 h-4" />;
     }
   };
 
   const getActionColor = (type: string) => {
     switch (type) {
-      case 'QUOTE_SENT': return 'text-blue-600 bg-blue-50';
-      case 'COLLECTION_STARTED': return 'text-amber-600 bg-amber-50';
-      case 'HANDOVER_COMPLETED': return 'text-emerald-600 bg-emerald-50';
-      default: return 'text-slate-600 bg-slate-50';
+      case 'QUOTE_SENT':
+        return 'text-blue-600 bg-blue-50';
+      case 'COLLECTION_STARTED':
+        return 'text-amber-600 bg-amber-50';
+      case 'HANDOVER_COMPLETED':
+        return 'text-emerald-600 bg-emerald-50';
+      default:
+        return 'text-slate-600 bg-slate-50';
     }
   };
 
@@ -103,8 +105,8 @@ export default function AuditTrailPage() {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold text-slate-900 font-serif">Audit Trail</h1>
         <p className="text-sm text-slate-500">
-          {user?.role === 'PROVIDER_STAFF' 
-            ? 'Chronological record of your professional activities.' 
+          {user?.role === 'PROVIDER_STAFF'
+            ? 'Chronological record of your professional activities.'
             : 'Complete visibility into team performance and shop operations.'}
         </p>
       </div>
@@ -116,29 +118,35 @@ export default function AuditTrailPage() {
             <MessageSquare className="w-4 h-4" />
           </div>
           <div className="text-xl font-black text-slate-900">{stats.totalQuotes}</div>
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quotes</div>
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            Quotes
+          </div>
         </div>
         <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
           <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-3">
             <QrCode className="w-4 h-4" />
           </div>
           <div className="text-xl font-black text-slate-900">{stats.totalCollections}</div>
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Started</div>
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            Started
+          </div>
         </div>
         <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
           <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
             <PackageCheck className="w-4 h-4" />
           </div>
           <div className="text-xl font-black text-slate-900">{stats.totalHandovers}</div>
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Handovers</div>
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            Handovers
+          </div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white p-4 rounded-[32px] border border-slate-100 shadow-sm space-y-4">
+      <div className="bg-white p-4 rounded-4xl border border-slate-100 shadow-sm space-y-4">
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input 
+          <input
             type="text"
             placeholder="Search by buyer, item or staff..."
             value={searchTerm}
@@ -146,15 +154,15 @@ export default function AuditTrailPage() {
             className="w-full bg-slate-50 border-none p-4 pl-11 rounded-2xl text-sm focus:ring-2 focus:ring-[#C9973A] transition-all"
           />
         </div>
-        
+
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
           {(['all', 'today', 'week', 'month'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setDateFilter(f)}
               className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                dateFilter === f 
-                  ? 'bg-[#C9973A] text-white shadow-md shadow-[#C9973A]/20' 
+                dateFilter === f
+                  ? 'bg-[#C9973A] text-white shadow-md shadow-[#C9973A]/20'
                   : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
               }`}
             >
@@ -168,13 +176,15 @@ export default function AuditTrailPage() {
       <div className="space-y-3">
         <AnimatePresence mode="popLayout">
           {filteredLogs.length === 0 ? (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-white rounded-[32px] p-12 text-center border border-slate-100"
+              className="bg-white rounded-4xl p-12 text-center border border-slate-100"
             >
               <History className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-              <p className="text-slate-500 font-medium italic">No activities found matching your filters.</p>
+              <p className="text-slate-500 font-medium italic">
+                No activities found matching your filters.
+              </p>
             </motion.div>
           ) : (
             filteredLogs.map((log) => (
@@ -185,10 +195,12 @@ export default function AuditTrailPage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-white p-4 rounded-[28px] border border-slate-100 shadow-sm flex items-start gap-4 hover:border-[#C9973A]/30 transition-colors group"
               >
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${getActionColor(log.actionType)}`}>
+                <div
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${getActionColor(log.actionType)}`}
+                >
                   {getActionIcon(log.actionType)}
                 </div>
-                
+
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-start mb-1">
                     <div className="flex flex-col">
@@ -204,7 +216,10 @@ export default function AuditTrailPage() {
                         {new Date(log.timestamp).toLocaleDateString()}
                       </div>
                       <div className="text-[10px] text-slate-300 font-medium">
-                        {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(log.timestamp).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
                       </div>
                     </div>
                   </div>
@@ -214,7 +229,7 @@ export default function AuditTrailPage() {
                       <User className="w-3 h-3 text-slate-400" />
                       <span className="text-[11px] font-bold text-slate-600">{log.buyerName}</span>
                     </div>
-                    
+
                     {user?.role !== 'PROVIDER_STAFF' && (
                       <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded-lg">
                         <ShieldCheck className="w-3 h-3 text-[#C9973A]" />
@@ -224,12 +239,14 @@ export default function AuditTrailPage() {
                       </div>
                     )}
 
-                    {log.amount !== undefined && (hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) || hasPermission(user, PERMISSIONS.MANAGE_QUOTES)) && (
-                      <div className="flex items-center gap-1 text-[11px] font-black text-emerald-600">
-                        <TrendingUp className="w-3 h-3" />
-                        ZMW {log.amount.toLocaleString()}
-                      </div>
-                    )}
+                    {log.amount !== undefined &&
+                      (hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) ||
+                        hasPermission(user, PERMISSIONS.MANAGE_QUOTES)) && (
+                        <div className="flex items-center gap-1 text-[11px] font-black text-emerald-600">
+                          <TrendingUp className="w-3 h-3" />
+                          ZMW {log.amount.toLocaleString()}
+                        </div>
+                      )}
                   </div>
 
                   {log.details && (

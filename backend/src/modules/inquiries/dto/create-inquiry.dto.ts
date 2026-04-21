@@ -23,9 +23,9 @@ export class CreateInquiryDto {
   @MinLength(10)
   description: string;
 
+  @IsOptional()
   @IsUUID()
-  @IsNotEmpty()
-  buyerId: string;
+  buyerId?: string;
 
   @IsString()
   @IsNotEmpty()

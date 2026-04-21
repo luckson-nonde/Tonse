@@ -39,6 +39,15 @@ export class UpdateUserDto {
   isActive?: boolean;
 
   @IsOptional()
+  @IsString()
+  @MinLength(4)
+  @MaxLength(4)
+  pin?: string;
+
+  @IsOptional()
+  metadata?: Record<string, any>;
+
+  @IsOptional()
   @IsEnum(['PENDING', 'VERIFIED', 'REJECTED'])
   verificationStatus?: string;
 }

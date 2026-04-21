@@ -7,6 +7,7 @@ export const MASTER_LABOUR_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'job_requests', label: 'Job Requests', icon: 'MessageSquare' },
     { id: 'my_quotes', label: 'My Proposals', icon: 'FileText' },
     { id: 'schedule', label: 'My Schedule', icon: 'Calendar' },
+    { id: 'financial', label: 'Financial', icon: 'Wallet' },
     { id: 'profile', label: 'My Profile', icon: 'User' },
   ],
   views: {
@@ -38,6 +39,11 @@ export const MASTER_LABOUR_ACCOUNT_SCHEMA: MasterAccountSchema = {
       subtitle: 'View your confirmed jobs and availability',
       componentType: 'labour_schedule',
       dataKey: 'schedules'
+    },
+    financial: {
+      title: 'Financial Overview',
+      subtitle: 'Manage your earnings and withdrawals',
+      componentType: 'financial_renderer',
     },
     profile: {
       title: 'My Profile',

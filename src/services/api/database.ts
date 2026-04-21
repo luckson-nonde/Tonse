@@ -4,10 +4,11 @@
  */
 
 import { apiClient } from './client';
+import { robustParse } from '../../utils/jsonUtils';
 import type {
-  User,
   Inquiry,
   Quote,
+  User,
   Transaction,
   Shop,
   Product,
@@ -17,8 +18,37 @@ import type {
   AuditLog,
   PurchaseOrder,
   OrderConfirmation,
-  DeliveryOrder
+  DeliveryOrder,
 } from '../../types';
+
+// Helper to normalize Inquiries
+function transformInquiry(inquiry: any): Inquiry {
+  if (!inquiry) return inquiry;
+  return {
+    ...inquiry,
+    preferences: robustParse(inquiry.preferences, {}),
+    attributes: robustParse(inquiry.attributes, {}),
+    items: robustParse(inquiry.items, []),
+    entertainmentData: robustParse(inquiry.entertainmentData, null),
+    repairData: robustParse(inquiry.repairData, null),
+    // Ensure description isn't a stringified empty object
+    description:
+      typeof inquiry.description === 'string' &&
+      (inquiry.description === '{}' || inquiry.description === '[]')
+        ? ''
+        : inquiry.description || '',
+  };
+}
+
+// Helper to normalize Quotes
+function transformQuote(quote: any): Quote {
+  if (!quote) return quote;
+  return {
+    ...quote,
+    itemPrices: robustParse(quote.itemPrices, []),
+    inquiry: quote.inquiry ? transformInquiry(quote.inquiry) : undefined,
+  };
+}
 
 // Table interfaces that mirror Dexie operations
 interface ITable<T> {
@@ -48,27 +78,29 @@ interface IQueryChain<T> {
 
 // Implementation of Table
 class Table<T> implements ITable<T> {
-  constructor(private endpoint: string, private entityName: string) {}
+  constructor(
+    private endpoint: string,
+    private entityName: string,
+    private transform?: (item: any) => T
+  ) {}
+
+  private doTransform(item: any): T {
+    return this.transform ? this.transform(item) : (item as T);
+  }
 
   async add(item: T | T[]): Promise<number> {
     const items = Array.isArray(item) ? item : [item];
-    
+
     // For single item, POST directly to endpoint
     if (items.length === 1) {
-      const response = await apiClient.post<any>(
-        this.endpoint,
-        items[0]
-      );
+      const response = await apiClient.post<any>(this.endpoint, items[0]);
       return response.data?.id || response.data?._id || 0;
     }
-    
+
     // For multiple items, post each one
     let lastId = 0;
     for (const singleItem of items) {
-      const response = await apiClient.post<any>(
-        this.endpoint,
-        singleItem
-      );
+      const response = await apiClient.post<any>(this.endpoint, singleItem);
       lastId = response.data?.id || response.data?._id || 0;
     }
     return lastId;
@@ -80,8 +112,8 @@ class Table<T> implements ITable<T> {
 
   async get(id: number | string): Promise<T | undefined> {
     try {
-      const response = await apiClient.get<T>(`${this.endpoint}/${id}`);
-      return response.data;
+      const response = await apiClient.get<any>(`${this.endpoint}/${id}`);
+      return response.data ? this.doTransform(response.data) : undefined;
     } catch {
       return undefined;
     }
@@ -99,16 +131,15 @@ class Table<T> implements ITable<T> {
     try {
       const response = await apiClient.get<any>(`${this.endpoint}`);
       // Handle nested response structure: { data: [...], total: ... }
+      let rawData: any[] = [];
       if (response.data) {
         if (Array.isArray(response.data)) {
-          return response.data;
-        }
-        // If response.data is an object with a 'data' property (nested structure)
-        if (response.data.data && Array.isArray(response.data.data)) {
-          return response.data.data;
+          rawData = response.data;
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          rawData = response.data.data;
         }
       }
-      return [];
+      return rawData.map((item) => this.doTransform(item));
     } catch (error: any) {
       console.debug(`Table.toArray() for ${this.entityName} returned no data:`, error?.message);
       return [];
@@ -116,7 +147,7 @@ class Table<T> implements ITable<T> {
   }
 
   where(key: string): IQuery<T> {
-    return new Query(this.endpoint, key);
+    return new Query(this.endpoint, key, this.transform);
   }
 
   async clear(): Promise<void> {
@@ -131,14 +162,18 @@ class Table<T> implements ITable<T> {
 
 // Implementation of Query chain
 class Query<T> implements IQuery<T> {
-  constructor(private endpoint: string, private key: string) {}
+  constructor(
+    private endpoint: string,
+    private key: string,
+    private transform?: (item: any) => T
+  ) {}
 
   equals(value: any): IQueryChain<T> {
-    return new QueryChain(this.endpoint, this.key, [value]);
+    return new QueryChain(this.endpoint, this.key, [value], this.transform);
   }
 
   anyOf(values: any[]): IQueryChain<T> {
-    return new QueryChain(this.endpoint, `${this.key}[]`, values);
+    return new QueryChain(this.endpoint, `${this.key}[]`, values, this.transform);
   }
 }
 
@@ -147,27 +182,33 @@ class QueryChain<T> implements IQueryChain<T> {
   private order: 'ASC' | 'DESC' = 'ASC';
   private filterFn?: (item: T) => boolean;
 
-  constructor(private endpoint: string, private key: string, values: any[]) {
+  constructor(
+    private endpoint: string,
+    private key: string,
+    values: any[],
+    private transform?: (item: any) => T
+  ) {
     this.values = values;
+  }
+
+  private doTransform(item: any): T {
+    return this.transform ? this.transform(item) : (item as T);
   }
 
   async toArray(): Promise<T[]> {
     try {
       const queryParams = new URLSearchParams();
-      queryParams.append('filter', this.key);
       if (this.values.length === 1) {
-        queryParams.append('value', String(this.values[0]));
+        queryParams.append(this.key, String(this.values[0]));
       } else {
-        this.values.forEach(v => queryParams.append('values', String(v)));
+        this.values.forEach((v) => queryParams.append(this.key, String(v)));
       }
       queryParams.append('order', this.order);
 
-      const response = await apiClient.get<any>(
-        `${this.endpoint}?${queryParams.toString()}`
-      );
-      
+      const response = await apiClient.get<any>(`${this.endpoint}?${queryParams.toString()}`);
+
       // Handle nested response structure: { data: [...], total: ... }
-      let results: T[] = [];
+      let results: any[] = [];
       if (response.data) {
         if (Array.isArray(response.data)) {
           results = response.data;
@@ -175,13 +216,15 @@ class QueryChain<T> implements IQueryChain<T> {
           results = response.data.data;
         }
       }
-      
+
+      let transformedResults = results.map((item) => this.doTransform(item));
+
       // Apply additional filter if provided
       if (this.filterFn) {
-        results = results.filter(this.filterFn);
+        transformedResults = transformedResults.filter(this.filterFn);
       }
-      
-      return results;
+
+      return transformedResults;
     } catch (error: any) {
       // Return empty array on any error (404, network, etc)
       console.debug('Query returned no data:', error?.message);
@@ -229,18 +272,18 @@ export class AppDatabaseAPI {
   constructor() {
     // Initialize all tables with their respective API endpoints
     this.users = new Table<User>('/users', 'users');
-    this.inquiries = new Table<Inquiry>('/inquiries', 'inquiries');
-    this.quotes = new Table<Quote>('/quotes', 'quotes');
-    this.transactions = new Table<Transaction>('/transactions', 'transactions');
+    this.inquiries = new Table<Inquiry>('/inquiries', 'inquiries', transformInquiry);
+    this.quotes = new Table<Quote>('/quotes', 'quotes', transformQuote);
+    this.transactions = new Table<Transaction>('/payments', 'transactions');
     this.shops = new Table<Shop>('/shops', 'shops');
     this.products = new Table<Product>('/products', 'products');
     this.schedules = new Table<Schedule>('/schedules', 'schedules');
     this.calendarEvents = new Table<CalendarEvent>('/calendar-events', 'calendarEvents');
     this.venueSpaces = new Table<VenueSpace>('/venue-spaces', 'venueSpaces');
     this.auditLogs = new Table<AuditLog>('/audit-logs', 'auditLogs');
-    this.purchaseOrders = new Table<PurchaseOrder>('/purchase-orders', 'purchaseOrders');
-    this.orderConfirmations = new Table<OrderConfirmation>('/order-confirmations', 'orderConfirmations');
-    this.deliveryOrders = new Table<DeliveryOrder>('/delivery-orders', 'deliveryOrders');
+    this.purchaseOrders = new Table<PurchaseOrder>('/orders', 'purchaseOrders');
+    this.orderConfirmations = new Table<OrderConfirmation>('/orders', 'orderConfirmations');
+    this.deliveryOrders = new Table<DeliveryOrder>('/orders', 'deliveryOrders');
   }
 
   async clearAllTables() {
@@ -254,11 +297,7 @@ export class AppDatabaseAPI {
   }
 
   // Syncing/transaction support (placeholder for API-based implementation)
-  async transaction<T>(
-    mode: string,
-    tables: any[],
-    callback: () => Promise<T>
-  ): Promise<T> {
+  async transaction<T>(mode: string, tables: any[], callback: () => Promise<T>): Promise<T> {
     // In a real implementation, this would handle database transactions
     // For now, just execute the callback
     return callback();
@@ -278,7 +317,7 @@ export class AppDatabaseAPI {
       this.auditLogs,
       this.purchaseOrders,
       this.orderConfirmations,
-      this.deliveryOrders
+      this.deliveryOrders,
     ];
   }
 }

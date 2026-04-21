@@ -3,13 +3,11 @@ import {
   IsNotEmpty,
   IsOptional,
   IsUUID,
-  IsJSON,
   IsNumber,
   IsBoolean,
   IsEnum,
   MinLength,
   MaxLength,
-  IsDecimal,
 } from 'class-validator';
 
 export class CreateQuoteDto {
@@ -66,12 +64,10 @@ export class CreateQuoteDto {
   isRead?: boolean = false;
 
   @IsOptional()
-  @IsJSON()
-  itemPrices?: Record<string, any>[];
+  itemPrices?: any;
 
   @IsOptional()
-  @IsJSON()
-  buyerContact?: Record<string, any>;
+  buyerContact?: any;
 
   @IsOptional()
   @IsString()
@@ -79,8 +75,7 @@ export class CreateQuoteDto {
   collectionCode?: string;
 
   @IsOptional()
-  @IsJSON()
-  requirements?: Record<string, any>[];
+  requirements?: any;
 
   @IsOptional()
   @IsUUID()
@@ -100,16 +95,14 @@ export class CreateQuoteDto {
   cleaningFee?: number;
 
   @IsOptional()
-  @IsJSON()
-  dynamicFields?: Record<string, any>;
+  dynamicFields?: any;
 
   @IsOptional()
   @IsEnum(['EXPRESS', 'STANDARD'])
   processType?: string = 'STANDARD';
 
   @IsOptional()
-  @IsJSON()
-  delivery?: Record<string, any>;
+  delivery?: any;
 
   @IsOptional()
   @IsString()

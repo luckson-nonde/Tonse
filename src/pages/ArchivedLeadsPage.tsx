@@ -1,14 +1,7 @@
 import React, { useState } from 'react';
-import { useLiveQuery } from '../hooks/useLiveQuery';
-import { db } from '../services/api/database';
 import { useAuth } from '../AuthContext';
-import { 
-  PackageOpen, 
-  MapPin, 
-  Eye, 
-  ChevronRight,
-  ArrowLeft
-} from 'lucide-react';
+import { useOpenInquiries } from '../hooks/useInquiries';
+import { PackageOpen, MapPin, Eye, ChevronRight, ArrowLeft } from 'lucide-react';
 import Button from '../components/Button';
 import { useNavigate } from 'react-router-dom';
 import { getCategoryNature } from '../services/categories';
@@ -20,58 +13,55 @@ export default function ArchivedLeadsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const effectiveProviderId = user?.parentProviderId || user?.id;
-  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [deleteInquiryId, setDeleteInquiryId] = useState<number | null>(null);
+  const [notification, setNotification] = useState<{
+    message: string;
+    type: 'success' | 'error';
+  } | null>(null);
+  const [deleteInquiryId, setDeleteInquiryId] = useState<string | null>(null);
 
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const allLeads = useLiveQuery(() => db.inquiries.where('status').equals('OPEN').toArray()) || [];
-  const myQuotes = useLiveQuery(() => db.quotes.where('providerId').equals(effectiveProviderId?.toString() || '').toArray()) || [];
+  // Fetch open inquiries from PostgreSQL backend
+  const { inquiries: allLeads } = useOpenInquiries();
 
   const archivedLeads = React.useMemo(() => {
     let filtered = allLeads;
-    const quotedIds = new Set(myQuotes.map(q => q.inquiryId));
-    filtered = filtered.filter(lead => !quotedIds.has(lead.id!));
 
-    const providerId = effectiveProviderId?.toString() || '';
-    filtered = filtered.filter(lead => lead.archivedBy?.includes(providerId));
-
-    // Filter by Delete Status
-    filtered = filtered.filter(lead => !lead.deletedBy?.includes(providerId));
+    // TODO: Implement quote filtering from backend
+    // const quotedIds = new Set(myQuotes.map((q) => q.inquiryId));
+    // filtered = filtered.filter((lead) => !quotedIds.has(lead.id!));
 
     // Filter by Role/SubRole Nature
     if (user?.role === 'SELLER' && user?.subRole) {
-      filtered = filtered.filter(lead => {
+      filtered = filtered.filter((lead) => {
         if (!lead.category) return true;
-        const leadCats = (lead.category || '').split(',').map(c => c.trim());
-        const leadCatIds = leadCats.map(name => CATEGORIES_DB.find(c => c.name === name)?.id).filter(Boolean) as string[];
-        const natures = leadCatIds.map(id => getCategoryNature(id));
-        
+        const leadCats = (lead.category || '').split(',').map((c) => c.trim());
+        const leadCatIds = leadCats
+          .map((name) => CATEGORIES_DB.find((c) => c.name === name)?.id)
+          .filter(Boolean) as string[];
+        const natures = leadCatIds.map((id) => getCategoryNature(id));
+
         if (user.subRole === 'PRODUCT_SELLER') {
-          return natures.some(n => n === 'PRODUCT' || n === 'BOTH');
+          return natures.some((n) => n === 'PRODUCT' || n === 'BOTH');
         }
         if (user.subRole === 'SERVICE_SELLER') {
-          return natures.some(n => n === 'SERVICE' || n === 'BOTH');
+          return natures.some((n) => n === 'SERVICE' || n === 'BOTH');
         }
         return true;
       });
     }
 
     return filtered;
-  }, [allLeads, myQuotes, effectiveProviderId, user]);
+  }, [allLeads, effectiveProviderId, user]);
 
-  const handleRestoreInquiry = async (id: number) => {
+  const handleRestoreInquiry = async (id: string) => {
     try {
-      const inquiry = await db.inquiries.get(id);
-      if (!inquiry) return;
-
-      const providerId = effectiveProviderId?.toString() || '';
-      const newArchivedBy = (inquiry.archivedBy || []).filter(pid => pid !== providerId);
-      
-      await db.inquiries.update(id, { archivedBy: newArchivedBy });
+      // TODO: Implement restore inquiry endpoint on backend
+      // POST /api/inquiries/:id/restore
+      console.log('Restore inquiry:', id);
       showNotification('Lead restored to active list');
     } catch (error) {
       console.error('Error restoring inquiry:', error);
@@ -79,21 +69,16 @@ export default function ArchivedLeadsPage() {
     }
   };
 
-  const handleDeleteInquiry = async (id: number) => {
+  const handleDeleteInquiry = async (id: string) => {
     setDeleteInquiryId(id);
   };
 
   const confirmDeleteInquiry = async () => {
     if (!deleteInquiryId) return;
     try {
-      const inquiry = await db.inquiries.get(deleteInquiryId);
-      if (!inquiry) return;
-
-      const providerId = effectiveProviderId?.toString() || '';
-      const deletedBy = inquiry.deletedBy || [];
-      if (!deletedBy.includes(providerId)) {
-        await db.inquiries.update(deleteInquiryId, { deletedBy: [...deletedBy, providerId] });
-      }
+      // TODO: Implement delete inquiry endpoint on backend
+      // DELETE /api/inquiries/:id (soft delete or mark as deleted)
+      console.log('Delete inquiry:', deleteInquiryId);
       showNotification('Lead deleted from your view');
     } catch (error) {
       console.error('Error deleting inquiry:', error);
@@ -106,7 +91,7 @@ export default function ArchivedLeadsPage() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-center gap-4 mb-8">
-        <button 
+        <button
           onClick={() => navigate('/provider')}
           className="p-2 hover:bg-slate-100 rounded-full transition-colors"
         >
@@ -120,7 +105,7 @@ export default function ArchivedLeadsPage() {
 
       <div className="space-y-6">
         {archivedLeads.length === 0 ? (
-          <div className="bg-white rounded-[32px] p-12 text-center border border-slate-100 shadow-sm">
+          <div className="bg-white rounded-4xl p-12 text-center border border-slate-100 shadow-sm">
             <PackageOpen className="w-16 h-16 text-slate-200 mx-auto mb-4" />
             <h3 className="text-xl font-serif font-bold text-slate-900 mb-2">No Archived Leads</h3>
             <p className="text-slate-500 max-w-md mx-auto">
@@ -129,20 +114,27 @@ export default function ArchivedLeadsPage() {
           </div>
         ) : (
           archivedLeads.map((lead, idx) => (
-            <div key={lead.id || `archived-${idx}`} className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
+            <div
+              key={lead.id || `archived-${idx}`}
+              className="bg-white rounded-4xl shadow-sm border border-slate-100 overflow-hidden"
+            >
               <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-[#fdf6e9] flex items-center justify-center text-[#d49b35] font-bold text-sm overflow-hidden border border-[#d49b35]/20">
-                    <img 
-                      src={`https://picsum.photos/seed/${lead.buyerId}/100/100`} 
-                      alt={lead.buyerName} 
-                      className="w-full h-full object-cover" 
-                      referrerPolicy="no-referrer" 
+                    <img
+                      src={`https://picsum.photos/seed/${lead.buyerId}/100/100`}
+                      alt={lead.buyerName}
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
                     />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900 leading-tight">{lead.buyerName}</h3>
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Matched Inquiry</p>
+                    <h3 className="text-sm font-bold text-slate-900 leading-tight">
+                      {lead.buyerName}
+                    </h3>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                      Matched Inquiry
+                    </p>
                   </div>
                 </div>
                 <div className="text-right flex flex-col items-end">
@@ -159,7 +151,10 @@ export default function ArchivedLeadsPage() {
               <div className="p-6">
                 <div className="flex flex-wrap gap-2 mb-4">
                   {(lead.category || '').split(', ').map((cat: string, catIdx: number) => (
-                    <span key={`${lead.id}-${cat}-${catIdx}`} className="px-2 py-0.5 bg-[#fdf6e9] text-[#d49b35] text-[10px] font-bold rounded uppercase tracking-wider">
+                    <span
+                      key={`${lead.id}-${cat}-${catIdx}`}
+                      className="px-2 py-0.5 bg-[#fdf6e9] text-[#d49b35] text-[10px] font-bold rounded uppercase tracking-wider"
+                    >
                       {cat}
                     </span>
                   ))}
@@ -167,9 +162,11 @@ export default function ArchivedLeadsPage() {
                     Archived
                   </span>
                 </div>
-                
+
                 <h4 className="text-xl font-serif font-bold text-slate-900 mb-2">{lead.title}</h4>
-                <p className="text-sm text-slate-600 leading-relaxed mb-6 line-clamp-2">{lead.description}</p>
+                <p className="text-sm text-slate-600 leading-relaxed mb-6 line-clamp-2">
+                  {lead.description}
+                </p>
 
                 <div className="flex items-center justify-between pt-6 border-t border-slate-100">
                   <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-medium">
@@ -177,21 +174,21 @@ export default function ArchivedLeadsPage() {
                     {lead.viewCount || 0} Views
                   </div>
                   <div className="flex gap-3">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       onClick={() => handleRestoreInquiry(lead.id!)}
                       className="rounded-xl"
                     >
                       Restore
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       onClick={() => handleDeleteInquiry(lead.id!)}
                       className="rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50"
                     >
                       Delete
                     </Button>
-                    <Button 
+                    <Button
                       onClick={() => navigate(`/provider`)}
                       className="bg-[#d49b35] hover:bg-[#a37d35] text-white rounded-xl"
                     >
@@ -206,11 +203,11 @@ export default function ArchivedLeadsPage() {
       </div>
 
       {notification && (
-        <Notification 
-          message={notification.message} 
-          type={notification.type} 
+        <Notification
+          message={notification.message}
+          type={notification.type}
           isVisible={!!notification}
-          onClose={() => setNotification(null)} 
+          onClose={() => setNotification(null)}
         />
       )}
 

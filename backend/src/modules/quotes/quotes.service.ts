@@ -9,12 +9,31 @@ import { UpdateQuoteDto } from './dto/update-quote.dto';
 export class QuotesService {
   constructor(
     @InjectRepository(Quote)
-    private quotesRepository: Repository<Quote>,
+    private quotesRepository: Repository<Quote>
   ) {}
 
+  private parseJsonFields(data: any): any {
+    const parsed = { ...data };
+    const jsonFields = ['itemPrices', 'buyerContact', 'requirements', 'dynamicFields', 'delivery'];
+
+    jsonFields.forEach((field) => {
+      if (parsed[field] && typeof parsed[field] === 'string') {
+        try {
+          parsed[field] = JSON.parse(parsed[field]);
+        } catch (e) {
+          // If parsing fails, leave as is
+        }
+      }
+    });
+
+    return parsed;
+  }
+
   async create(createQuoteDto: CreateQuoteDto): Promise<Quote> {
-    const quote = this.quotesRepository.create(createQuoteDto);
-    return this.quotesRepository.save(quote);
+    const parsedDto = this.parseJsonFields(createQuoteDto);
+    const quote = this.quotesRepository.create(parsedDto);
+    return (await this.quotesRepository.save(quote)) as unknown as Quote;
+    
   }
 
   async findAll(filters: any = {}): Promise<{ data: Quote[]; total: number }> {
@@ -24,10 +43,9 @@ export class QuotesService {
 
     // DATA ISOLATION: Filter by user (buyer or provider)
     if (filters.userId) {
-      queryBuilder.andWhere(
-        '(quote.providerId = :userId OR inquiry.buyerId = :userId)',
-        { userId: filters.userId },
-      );
+      queryBuilder.andWhere('(quote.providerId = :userId OR inquiry.buyerId = :userId)', {
+        userId: filters.userId,
+      });
     }
 
     if (filters.inquiryId) {
@@ -49,7 +67,7 @@ export class QuotesService {
     if (filters.search) {
       queryBuilder.andWhere(
         '(quote.providerName ILIKE :search OR quote.inquiryTitle ILIKE :search)',
-        { search: `%${filters.search}%` },
+        { search: `%${filters.search}%` }
       );
     }
 
@@ -73,7 +91,8 @@ export class QuotesService {
   }
 
   async update(id: string, updateQuoteDto: UpdateQuoteDto): Promise<Quote> {
-    await this.quotesRepository.update(id, updateQuoteDto);
+    const parsedDto = this.parseJsonFields(updateQuoteDto);
+    await this.quotesRepository.update(id, parsedDto);
     return this.findOne(id);
   }
 

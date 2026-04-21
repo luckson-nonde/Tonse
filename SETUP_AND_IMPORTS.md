@@ -41,6 +41,7 @@ tonse-hub/
 ## 🚀 Quick Start (5 Minutes)
 
 ### 1. Install Dependencies
+
 ```bash
 # Frontend
 cd /path/to/project
@@ -52,6 +53,7 @@ npm install
 ```
 
 ### 2. Setup Environment Variables
+
 ```bash
 # Backend
 cp backend/.env.example backend/.env
@@ -63,6 +65,7 @@ cp .env.example .env.local
 ```
 
 ### 3. Start Docker Services
+
 ```bash
 # Start PostgreSQL + PgAdmin
 docker-compose up -d
@@ -72,12 +75,14 @@ docker ps
 ```
 
 ### 4. Run Migrations
+
 ```bash
 cd backend
 npm run migrations:run
 ```
 
 ### 5. Start Development
+
 ```bash
 # Terminal 1: Backend (NestJS)
 cd backend
@@ -88,9 +93,16 @@ npm run dev
 ```
 
 ### 6. Access Services
+
 - **Frontend**: http://localhost:5173
 - **Backend**: http://localhost:3000
 - **PgAdmin**: http://localhost:5050 (admin/admin)
+  - In pgAdmin server registration, use:
+    - Host name/address: `postgres`
+    - Port: `5432`
+    - Maintenance DB / Database: `tonse_db`
+    - Username: `tonse_user`
+    - Password: `tonse_password_secure_change_me`
 
 ---
 
@@ -99,6 +111,7 @@ npm run dev
 ### Backend Imports
 
 #### Utilities
+
 ```typescript
 // Import helpers, validators, constants
 import { PaginationHelper, DateHelper, StringHelper } from '@/utils/helpers';
@@ -107,6 +120,7 @@ import { ROLES, STATUSES, INQUIRY_STATUS, QUOTE_STATUS, ORDER_STATUS } from '@/u
 ```
 
 #### Services
+
 ```typescript
 // Import services
 import { AuthService } from '@/modules/auth/auth.service';
@@ -115,6 +129,7 @@ import { EncryptionService } from '@/common/services/encryption.service';
 ```
 
 #### Entities
+
 ```typescript
 // Import entities
 import { User } from '@/modules/users/user.entity';
@@ -123,6 +138,7 @@ import { Quote } from '@/modules/quotes/quote.entity';
 ```
 
 #### DTOs
+
 ```typescript
 // Import DTOs
 import { CreateUserDto } from '@/modules/users/dto/create-user.dto';
@@ -134,6 +150,7 @@ import { LoginDto } from '@/modules/auth/dto/login.dto';
 ### Frontend Imports
 
 #### Components
+
 ```typescript
 // Common components
 import { Button, Card, Modal, Input } from '@/components/common';
@@ -148,6 +165,7 @@ import { LoginForm, RegisterForm } from '@/components/auth';
 ```
 
 #### Types
+
 ```typescript
 // Import types
 import type { User, UserRole } from '@/types/user.types';
@@ -159,6 +177,7 @@ import type { ApiResponse, PaginatedResponse } from '@/types/api.types';
 ```
 
 #### Utilities
+
 ```typescript
 // Import validators
 import { validateEmail, validatePassword, validatePhoneNumber } from '@/lib/validators';
@@ -171,6 +190,7 @@ import { API_BASE_URL, ROLES, QUOTE_STATUSES, ORDER_STATUSES } from '@/lib/const
 ```
 
 #### Hooks
+
 ```typescript
 // Import custom hooks
 import { useAuth } from '@/hooks/useAuth';
@@ -181,6 +201,7 @@ import { usePagination } from '@/hooks/usePagination';
 ```
 
 #### Services
+
 ```typescript
 // Import API services
 import { userService } from '@/services/api/userService';
@@ -196,6 +217,7 @@ import { authService } from '@/services/auth/authService';
 ## 🔐 Environment Setup
 
 ### Backend (.env)
+
 ```env
 # Database
 DATABASE_URL=postgresql://tonse_user:tonse_pass@localhost:5432/tonse_db
@@ -220,12 +242,14 @@ APP_PORT=3000
 ```
 
 ### Frontend (.env.local)
+
 ```env
 VITE_API_URL=http://localhost:3000/api
 VITE_APP_NAME=TONSE Marketplace
 ```
 
 ### Generate Secure Keys (Backend)
+
 ```bash
 # Generate JWT_SECRET
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -260,6 +284,7 @@ modules/
 ### Example: Creating an Inquiry Service
 
 **Step 1**: Define DTO (`modules/inquiries/dto/create-inquiry.dto.ts`)
+
 ```typescript
 import { IsString, IsArray, IsOptional } from 'class-validator';
 
@@ -280,6 +305,7 @@ export class CreateInquiryDto {
 ```
 
 **Step 2**: Create Entity (`modules/inquiries/inquiry.entity.ts`)
+
 ```typescript
 import { Entity, Column, ManyToOne, CreateDateColumn } from 'typeorm';
 import { User } from '@/modules/users/user.entity';
@@ -298,6 +324,7 @@ export class Inquiry {
 ```
 
 **Step 3**: Build Service (`modules/inquiries/services/inquiries.service.ts`)
+
 ```typescript
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -309,7 +336,7 @@ import { CreateInquiryDto } from '../dto/create-inquiry.dto';
 export class InquiriesService {
   constructor(
     @InjectRepository(Inquiry)
-    private inquiryRepository: Repository<Inquiry>,
+    private inquiryRepository: Repository<Inquiry>
   ) {}
 
   async create(dto: CreateInquiryDto, buyerId: string) {
@@ -326,6 +353,7 @@ export class InquiriesService {
 ```
 
 **Step 4**: Add Controller (`modules/inquiries/controllers/inquiries.controller.ts`)
+
 ```typescript
 import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
 import { InquiriesService } from '../services/inquiries.service';
@@ -349,6 +377,7 @@ export class InquiriesController {
 ```
 
 **Step 5**: Register in Module (`modules/inquiries/inquiries.module.ts`)
+
 ```typescript
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -370,6 +399,7 @@ export class InquiriesModule {}
 ## 🧪 Testing Structure
 
 ### Backend Tests
+
 ```
 backend/src/
 ├── __tests__/
@@ -384,6 +414,7 @@ backend/src/
 ```
 
 ### Running Tests
+
 ```bash
 # Unit tests
 npm run test
@@ -450,6 +481,7 @@ npm run lint:fix
 ## 🔍 Debugging
 
 ### Backend Debugging
+
 ```bash
 # Start with debugger
 node --inspect-brk -r ts-node/register src/main.ts
@@ -458,11 +490,13 @@ node --inspect-brk -r ts-node/register src/main.ts
 ```
 
 ### Frontend Debugging
+
 - Open Chrome DevTools (F12)
 - React DevTools Extension
 - Check Network tab for API calls
 
 ### Database Debugging
+
 ```bash
 # Connect directly to PostgreSQL
 docker exec -it tonse-postgres psql -U tonse_user tonse_db
@@ -504,6 +538,7 @@ SELECT * FROM users LIMIT 5;
 ## 🆘 Troubleshooting
 
 **Issue**: Port 3000 already in use
+
 ```bash
 # Find process using port
 lsof -i :3000
@@ -512,6 +547,7 @@ kill -9 <PID>
 ```
 
 **Issue**: PostgreSQL connection failed
+
 ```bash
 # Check if container is running
 docker ps
@@ -521,6 +557,7 @@ docker logs tonse-postgres
 ```
 
 **Issue**: Module not found errors
+
 ```bash
 # Clear node_modules
 rm -rf node_modules
@@ -531,6 +568,7 @@ npm run build
 ```
 
 **Issue**: JWT token expired
+
 - Refresh token using `/auth/refresh` endpoint
 - Check `JWT_EXPIRE` in `.env`
 

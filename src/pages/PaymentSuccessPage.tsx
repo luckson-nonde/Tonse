@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, CheckCircle, Copy } from 'lucide-react';
+import successOwl from '../assets/images/empty-states/owl_triumphant.png';
 import { useNavigate, useLocation } from 'react-router-dom';
 import QRCode from 'qrcode';
 import Button from '../components/Button';
@@ -23,10 +24,9 @@ export default function PaymentSuccessPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 flex flex-col items-center justify-center text-center">
-      <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mb-8">
-        <CheckCircle className="w-12 h-12 text-emerald-600" />
+      <div className="mb-8 flex justify-center">
+        <img src={successOwl} alt="Payment Successful" className="w-48 h-48 sm:w-56 sm:h-56 object-contain" />
       </div>
-
       <h1 className="text-2xl font-black text-slate-900 mb-4">Payment Successful</h1>
       
       <p className="text-slate-600 mb-8 leading-relaxed max-w-xs">

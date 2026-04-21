@@ -6,11 +6,24 @@
   --color-brand-blue: #c9973a;
   --color-brand-yellow: #c9973a;
   --color-brand-white: #fffaf5;
-  --color-brand-dark: #1e293b;
+  --color-brand-dark: #1B3068;
+  --color-brand-navy-dark: #142550;
   --color-brand-error: #ef4444;
 
   --font-serif: 'Playfair Display', serif;
   --font-sans: 'DM Sans', sans-serif;
+
+  @keyframes bounce-slow {
+    0%, 100% {
+      transform: translateY(-5%);
+      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+    }
+    50% {
+      transform: translateY(0);
+      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+    }
+  }
+  --animation-bounce-slow: bounce-slow 3s infinite;
 }
 
 * {

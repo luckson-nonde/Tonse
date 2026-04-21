@@ -14,12 +14,12 @@ export async function logAuditAction(
   if (!user.id) return;
 
   const providerId = user.role === 'PROVIDER_STAFF' ? user.parentProviderId : user.id;
-  
+
   if (!providerId) return;
 
   const log: AuditLog = {
-    providerId,
-    staffId: user.id,
+    providerId: typeof providerId === 'number' ? providerId : parseInt(String(providerId), 10),
+    staffId: typeof user.id === 'number' ? user.id : parseInt(String(user.id), 10),
     staffName: user.name,
     actionType,
     targetId,
@@ -27,7 +27,7 @@ export async function logAuditAction(
     buyerName,
     amount,
     details,
-    timestamp: Date.now()
+    timestamp: Date.now(),
   };
 
   try {

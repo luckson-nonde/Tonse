@@ -3,17 +3,23 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Inquiry } from './entities/inquiry.entity';
 import { CreateInquiryDto, UpdateInquiryDto } from './dto';
+import { DisplayIdUtil } from '../../utils/display-id.util';
 
 @Injectable()
 export class InquiriesService {
   constructor(
     @InjectRepository(Inquiry)
-    private readonly inquiriesRepository: Repository<Inquiry>,
+    private readonly inquiriesRepository: Repository<Inquiry>
   ) {}
 
   async create(createInquiryDto: CreateInquiryDto): Promise<Inquiry> {
     const inquiry = this.inquiriesRepository.create(createInquiryDto);
-    return await this.inquiriesRepository.save(inquiry);
+    const savedInquiry = await this.inquiriesRepository.save(inquiry);
+
+    // Generate display ID from the actual UUID after creation
+    savedInquiry.displayId = DisplayIdUtil.generateDisplayId(savedInquiry.id);
+
+    return await this.inquiriesRepository.save(savedInquiry);
   }
 
   async findAll(filters: any = {}): Promise<{ data: Inquiry[]; total: number }> {
@@ -33,10 +39,9 @@ export class InquiriesService {
     }
 
     if (filters.search) {
-      queryBuilder.andWhere(
-        '(inquiry.title ILIKE :search OR inquiry.description ILIKE :search)',
-        { search: `%${filters.search}%` }
-      );
+      queryBuilder.andWhere('(inquiry.title ILIKE :search OR inquiry.description ILIKE :search)', {
+        search: `%${filters.search}%`,
+      });
     }
 
     // Pagination
@@ -80,5 +85,11 @@ export class InquiriesService {
 
   async updateStatus(id: string, status: string): Promise<Inquiry> {
     return await this.update(id, { status } as UpdateInquiryDto);
+  }
+
+  async findByDisplayId(displayId: string): Promise<Inquiry> {
+    return await this.inquiriesRepository.findOne({
+      where: { displayId },
+    });
   }
 }

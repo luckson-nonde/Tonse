@@ -31,14 +31,8 @@ export class ProductsController {
   @Get()
   async findAll(@Query() query: any) {
     const filters = {
-      sellerId: query.sellerId,
-      category: query.category,
-      search: query.search,
+      ...query,
       isActive: query.isActive === 'true',
-      page: query.page,
-      limit: query.limit,
-      sort: query.sort,
-      order: query.order,
     };
     return this.productsService.findAll(filters);
   }
