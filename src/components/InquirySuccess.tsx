@@ -7,7 +7,7 @@ interface InquirySuccessProps {
 
 export default function InquirySuccess({ onGoToDashboard }: InquirySuccessProps) {
   return (
-    <div className="max-w-[480px] mx-auto w-full bg-[#f5f2ed] min-h-screen flex flex-col items-center justify-center px-6 text-center">
+    <div className="max-w-4xl mx-auto w-full flex flex-col items-center justify-center px-6 text-center py-12">
       {/* Success Icon */}
       <div className="relative mb-10">
         <div className="absolute inset-0 bg-[#C9973A]/20 rounded-full animate-ping" />
@@ -20,18 +20,23 @@ export default function InquirySuccess({ onGoToDashboard }: InquirySuccessProps)
         Inquiry Sent Successfully!
       </h2>
       <p className="font-sans text-[#94a3b8] text-[16px] max-w-[320px] mb-12 leading-relaxed font-medium">
-        Your request has been delivered to the selected shops. You will be notified as soon as you receive quotations.
+        Your request has been delivered to the selected shops. You will be notified as soon as you
+        receive quotations.
       </p>
 
       {/* Inquiry Details Card */}
-      <div className="w-full bg-white rounded-[24px] p-8 shadow-sm border border-[#f1f5f9] mb-12">
+      <div className="w-full bg-white rounded-3xl p-8 shadow-sm border border-[#f1f5f9] mb-12">
         <div className="flex justify-between items-center mb-5">
-          <span className="font-sans text-[10px] font-bold text-[#94a3b8] tracking-[0.1em] uppercase">Inquiry ID</span>
+          <span className="font-sans text-[10px] font-bold text-[#94a3b8] tracking-[0.1em] uppercase">
+            Inquiry ID
+          </span>
           <span className="font-sans font-bold text-[#1a1a2e] text-[14px]">#INQ-8829</span>
         </div>
         <div className="h-px bg-[#f1f5f9] w-full mb-5"></div>
         <div className="flex justify-between items-center">
-          <span className="font-sans text-[10px] font-bold text-[#94a3b8] tracking-[0.1em] uppercase">Status</span>
+          <span className="font-sans text-[10px] font-bold text-[#94a3b8] tracking-[0.1em] uppercase">
+            Status
+          </span>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             <span className="font-sans font-bold text-[#1a1a2e] text-[14px]">Active & Pending</span>
@@ -40,10 +45,10 @@ export default function InquirySuccess({ onGoToDashboard }: InquirySuccessProps)
       </div>
 
       {/* Dashboard Button */}
-      <div className="w-full pt-4 pb-12">
-        <button 
+      <div className="w-full pt-4 pb-12 flex justify-center">
+        <button
           onClick={onGoToDashboard}
-          className="w-full h-[54px] bg-[#C9973A] rounded-[50px] flex items-center justify-center gap-[10px] font-sans text-[15px] font-semibold text-white tracking-[0.02em] shadow-[0_4px_16_rgba(201,151,58,0.35)] transition-all active:scale-[0.98]"
+          className="w-full sm:w-auto sm:px-16 h-13.5 bg-[#C9973A] rounded-[50px] flex items-center justify-center gap-2.5 font-sans text-[15px] font-semibold text-white tracking-[0.02em] shadow-[0_4px_16_rgba(201,151,58,0.35)] transition-all active:scale-[0.98]"
         >
           Go to Dashboard <ArrowRight className="w-5 h-5" strokeWidth={2.5} />
         </button>

@@ -15,8 +15,14 @@ export function generateZodSchema(fields: FieldSchema[]) {
       case 'currency':
       case 'counter':
         fieldSchema = z.coerce.number();
-        if (field.min !== undefined) fieldSchema = fieldSchema.min(field.min, { message: `${field.label} must be at least ${field.min}` });
-        if (field.max !== undefined) fieldSchema = fieldSchema.max(field.max, { message: `${field.label} must be at most ${field.max}` });
+        if (field.min !== undefined)
+          fieldSchema = fieldSchema.min(field.min, {
+            message: `${field.label} must be at least ${field.min}`,
+          });
+        if (field.max !== undefined)
+          fieldSchema = fieldSchema.max(field.max, {
+            message: `${field.label} must be at most ${field.max}`,
+          });
         break;
 
       case 'select':
@@ -46,17 +52,27 @@ export function generateZodSchema(fields: FieldSchema[]) {
         break;
 
       case 'gps':
-        fieldSchema = z.object({
-          latitude: z.number(),
-          longitude: z.number()
-        }).optional();
+        fieldSchema = z
+          .object({
+            latitude: z.number(),
+            longitude: z.number(),
+          })
+          .optional();
         break;
 
       case 'textarea':
       case 'text':
       default:
         fieldSchema = z.string();
-        if (field.required) {
+
+        // Add specific validation for NRC field (Zambian format: 000000/00/0)
+        if (field.name === 'nrc' && field.required) {
+          fieldSchema = z
+            .string()
+            .regex(/^\d{6}\/\d{2}\/\d{1}$/, 'NRC must be in Zambian format: 000000/00/0');
+        }
+
+        if (field.required && field.name !== 'nrc') {
           fieldSchema = fieldSchema.min(1, `${field.label} is required`);
         }
         break;

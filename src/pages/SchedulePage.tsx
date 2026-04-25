@@ -1,25 +1,25 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  format, 
-  addMonths, 
-  subMonths, 
-  startOfMonth, 
-  endOfMonth, 
-  startOfWeek, 
-  endOfWeek, 
-  isSameMonth, 
-  isSameDay, 
-  addDays, 
+import {
+  format,
+  addMonths,
+  subMonths,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  isSameMonth,
+  isSameDay,
+  addDays,
   eachDayOfInterval,
   isToday,
-  parseISO
+  parseISO,
 } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Plus, 
-  Search, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Search,
   Calendar as CalendarIcon,
   Clock,
   CheckCircle2,
@@ -29,10 +29,10 @@ import {
   BellOff,
   MoreVertical,
   Trash2,
-  Edit2
+  Edit2,
 } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useLiveQuery } from '../hooks/useLiveQuery';
+import { db } from '../services/api/database';
 import { useAuth } from '../AuthContext';
 import { useDashboard } from '../DashboardContext';
 import { CalendarEvent } from '../types';
@@ -59,20 +59,24 @@ export default function SchedulePage() {
   }, [setActiveTab]);
 
   const events = useLiveQuery(
-    () => db.calendarEvents.where('userId').equals(user?.id || 0).toArray(),
+    () =>
+      db.calendarEvents
+        .where('userId')
+        .equals(user?.id || 0)
+        .toArray(),
     [user?.id]
   );
 
   const selectedDateEvents = useMemo(() => {
     if (!events) return [];
     return events
-      .filter(event => isSameDay(parseISO(event.date), selectedDate))
+      .filter((event) => isSameDay(parseISO(event.date), selectedDate))
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
   }, [events, selectedDate]);
 
   const hasEventsOnDay = (day: Date) => {
     if (!events) return false;
-    return events.some(event => isSameDay(parseISO(event.date), day));
+    return events.some((event) => isSameDay(parseISO(event.date), day));
   };
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -92,9 +96,9 @@ export default function SchedulePage() {
 
   const handleToggleStatus = async (event: CalendarEvent) => {
     const nextStatus: Record<string, 'PENDING' | 'ACTIVE' | 'COMPLETED'> = {
-      'PENDING': 'ACTIVE',
-      'ACTIVE': 'COMPLETED',
-      'COMPLETED': 'PENDING'
+      PENDING: 'ACTIVE',
+      ACTIVE: 'COMPLETED',
+      COMPLETED: 'PENDING',
     };
     await db.calendarEvents.update(event.id!, { status: nextStatus[event.status] });
   };
@@ -106,15 +110,16 @@ export default function SchedulePage() {
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-2">
             <CalendarIcon className="w-6 h-6" />
-            <h1 className="text-2xl font-bold font-serif">
-              {format(currentMonth, 'MMMM yyyy')}
-            </h1>
+            <h1 className="text-2xl font-bold font-serif">{format(currentMonth, 'MMMM yyyy')}</h1>
           </div>
           <div className="flex items-center gap-4">
-            <button onClick={() => {}} className="p-2 hover:bg-white/20 rounded-full transition-colors">
+            <button
+              onClick={() => {}}
+              className="p-2 hover:bg-white/20 rounded-full transition-colors"
+            >
               <Search className="w-5 h-5" />
             </button>
-            <button 
+            <button
               onClick={goToToday}
               className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
             >
@@ -132,11 +137,8 @@ export default function SchedulePage() {
           ))}
         </div>
 
-        <motion.div 
-          layout
-          className="grid grid-cols-7 gap-1"
-        >
-          <CalendarGrid 
+        <motion.div layout className="grid grid-cols-7 gap-1">
+          <CalendarGrid
             currentMonth={currentMonth}
             selectedDate={selectedDate}
             onDateSelect={setSelectedDate}
@@ -147,7 +149,7 @@ export default function SchedulePage() {
 
         {/* Collapse Handle */}
         <div className="absolute -bottom-3 left-1/2 -translate-x-1/2">
-          <button 
+          <button
             onClick={() => setIsCollapsed(!isCollapsed)}
             className="w-12 h-1.5 bg-white/40 rounded-full hover:bg-white/60 transition-colors"
           />
@@ -157,7 +159,7 @@ export default function SchedulePage() {
       {/* Events List */}
       <div className="flex-1 p-0 overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-[#1e293b] font-serif">
+          <h2 className="text-xl font-bold text-brand-dark font-serif">
             {isToday(selectedDate) ? 'Today' : format(selectedDate, 'EEEE, MMM d')}
           </h2>
           <span className="text-sm text-slate-500 font-medium">
@@ -168,12 +170,12 @@ export default function SchedulePage() {
         {selectedDateEvents.length > 0 ? (
           <div className="space-y-6 relative">
             {/* Timeline Axis */}
-            <div className="absolute left-[11px] top-4 bottom-4 w-0.5 bg-gray-200" />
-            
+            <div className="absolute left-2.75 top-4 bottom-4 w-0.5 bg-gray-200" />
+
             {selectedDateEvents.map((event, index) => (
-              <EventCard 
-                key={event.id} 
-                event={event} 
+              <EventCard
+                key={event.id}
+                event={event}
                 onDelete={() => handleDeleteEvent(event.id!)}
                 onEdit={() => {
                   setEditingEvent(event);
@@ -195,7 +197,7 @@ export default function SchedulePage() {
       </div>
 
       {/* Floating Action Button */}
-      <button 
+      <button
         onClick={() => {
           setEditingEvent(null);
           setIsAddModalOpen(true);
@@ -208,7 +210,7 @@ export default function SchedulePage() {
       {/* Add/Edit Modal */}
       <AnimatePresence>
         {isAddModalOpen && (
-          <AddEventModal 
+          <AddEventModal
             onClose={() => setIsAddModalOpen(false)}
             selectedDate={selectedDate}
             editingEvent={editingEvent}
@@ -219,7 +221,13 @@ export default function SchedulePage() {
   );
 }
 
-function CalendarGrid({ currentMonth, selectedDate, onDateSelect, hasEventsOnDay, isCollapsed }: any) {
+function CalendarGrid({
+  currentMonth,
+  selectedDate,
+  onDateSelect,
+  hasEventsOnDay,
+  isCollapsed,
+}: any) {
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(monthStart);
   const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -231,7 +239,7 @@ function CalendarGrid({ currentMonth, selectedDate, onDateSelect, hasEventsOnDay
     const selectedWeekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
     return eachDayOfInterval({
       start: selectedWeekStart,
-      end: addDays(selectedWeekStart, 6)
+      end: addDays(selectedWeekStart, 6),
     });
   }, [selectedDate]);
 
@@ -253,15 +261,17 @@ function CalendarGrid({ currentMonth, selectedDate, onDateSelect, hasEventsOnDay
               isSelected ? 'bg-white text-[#C9973A] shadow-md scale-110 z-10' : 'hover:bg-white/10'
             }`}
           >
-            <span className={`text-sm font-bold ${
-              !isCurrentMonth && !isCollapsed ? 'opacity-30' : ''
-            } ${isCurrentDay && !isSelected ? 'text-white underline decoration-2 underline-offset-4' : ''}`}>
+            <span
+              className={`text-sm font-bold ${
+                !isCurrentMonth && !isCollapsed ? 'opacity-30' : ''
+              } ${isCurrentDay && !isSelected ? 'text-white underline decoration-2 underline-offset-4' : ''}`}
+            >
               {format(day, 'd')}
             </span>
             {hasEvents && (
-              <div className={`w-1 h-1 rounded-full mt-1 ${
-                isSelected ? 'bg-[#C9973A]' : 'bg-white'
-              }`} />
+              <div
+                className={`w-1 h-1 rounded-full mt-1 ${isSelected ? 'bg-[#C9973A]' : 'bg-white'}`}
+              />
             )}
           </button>
         );
@@ -270,29 +280,36 @@ function CalendarGrid({ currentMonth, selectedDate, onDateSelect, hasEventsOnDay
   );
 }
 
-function EventCard({ event, onDelete, onEdit, onToggleStatus }: { 
-  event: CalendarEvent, 
-  onDelete: () => void,
-  onEdit: () => void,
-  onToggleStatus: () => void
+function EventCard({
+  event,
+  onDelete,
+  onEdit,
+  onToggleStatus,
+}: {
+  event: CalendarEvent;
+  onDelete: () => void;
+  onEdit: () => void;
+  onToggleStatus: () => void;
 }) {
   const [showActions, setShowActions] = useState(false);
 
   const statusColors = {
-    'PENDING': 'bg-gray-100 text-gray-500',
-    'ACTIVE': 'bg-yellow-100 text-yellow-600',
-    'COMPLETED': 'bg-orange-100 text-orange-600'
+    PENDING: 'bg-gray-100 text-gray-500',
+    ACTIVE: 'bg-yellow-100 text-yellow-600',
+    COMPLETED: 'bg-orange-100 text-orange-600',
   };
 
-  const categoryColor = CATEGORIES.find(c => c.id === event.category)?.color || 'bg-gray-500';
+  const categoryColor = CATEGORIES.find((c) => c.id === event.category)?.color || 'bg-gray-500';
 
   return (
     <div className="flex gap-4 group">
       <div className="relative z-10 mt-1">
-        <button 
+        <button
           onClick={onToggleStatus}
           className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
-            event.status === 'COMPLETED' ? 'bg-orange-500 text-white' : 'bg-white border-2 border-gray-200'
+            event.status === 'COMPLETED'
+              ? 'bg-orange-500 text-white'
+              : 'bg-white border-2 border-gray-200'
           }`}
         >
           {event.status === 'COMPLETED' ? (
@@ -307,10 +324,12 @@ function EventCard({ event, onDelete, onEdit, onToggleStatus }: {
 
       <div className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all relative overflow-hidden">
         <div className={`absolute left-0 top-0 bottom-0 w-1 ${categoryColor}`} />
-        
+
         <div className="flex justify-between items-start mb-2">
           <div className="flex flex-col">
-            <h3 className={`font-bold text-lg ${event.status === 'COMPLETED' ? 'line-through text-gray-400' : 'text-[#1a1a1a]'}`}>
+            <h3
+              className={`font-bold text-lg ${event.status === 'COMPLETED' ? 'line-through text-gray-400' : 'text-[#1a1a1a]'}`}
+            >
               {event.title}
             </h3>
             <div className="flex items-center gap-2 text-xs text-gray-400 font-medium mt-1">
@@ -318,40 +337,45 @@ function EventCard({ event, onDelete, onEdit, onToggleStatus }: {
               {event.startTime} - {event.endTime}
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2">
-            <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-lg ${statusColors[event.status]}`}>
+            <span
+              className={`text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-lg ${statusColors[event.status]}`}
+            >
               {event.status.replace('_', ' ')}
             </span>
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setShowActions(!showActions)}
                 className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <MoreVertical className="w-4 h-4 text-gray-400" />
               </button>
-              
+
               <AnimatePresence>
                 {showActions && (
                   <>
-                    <div 
-                      className="fixed inset-0 z-20" 
-                      onClick={() => setShowActions(false)} 
-                    />
-                    <motion.div 
+                    <div className="fixed inset-0 z-20" onClick={() => setShowActions(false)} />
+                    <motion.div
                       initial={{ opacity: 0, scale: 0.95, y: -10 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: -10 }}
                       className="absolute right-0 mt-2 w-32 bg-white rounded-xl shadow-xl border border-gray-100 z-30 py-1"
                     >
-                      <button 
-                        onClick={() => { onEdit(); setShowActions(false); }}
+                      <button
+                        onClick={() => {
+                          onEdit();
+                          setShowActions(false);
+                        }}
                         className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 text-gray-600"
                       >
                         <Edit2 className="w-4 h-4" /> Edit
                       </button>
-                      <button 
-                        onClick={() => { onDelete(); setShowActions(false); }}
+                      <button
+                        onClick={() => {
+                          onDelete();
+                          setShowActions(false);
+                        }}
                         className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 text-red-500"
                       >
                         <Trash2 className="w-4 h-4" /> Delete
@@ -365,9 +389,7 @@ function EventCard({ event, onDelete, onEdit, onToggleStatus }: {
         </div>
 
         {event.note && (
-          <p className="text-sm text-gray-500 line-clamp-2 mt-2 leading-relaxed">
-            {event.note}
-          </p>
+          <p className="text-sm text-gray-500 line-clamp-2 mt-2 leading-relaxed">{event.note}</p>
         )}
 
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
@@ -377,26 +399,30 @@ function EventCard({ event, onDelete, onEdit, onToggleStatus }: {
               {event.category}
             </span>
           </div>
-          {event.reminderEnabled && (
-            <Bell className="w-3 h-3 text-[#C9973A]" />
-          )}
+          {event.reminderEnabled && <Bell className="w-3 h-3 text-[#C9973A]" />}
         </div>
       </div>
     </div>
   );
 }
 
-function AddEventModal({ onClose, selectedDate, editingEvent }: { 
-  onClose: () => void, 
-  selectedDate: Date,
-  editingEvent: CalendarEvent | null
+function AddEventModal({
+  onClose,
+  selectedDate,
+  editingEvent,
+}: {
+  onClose: () => void;
+  selectedDate: Date;
+  editingEvent: CalendarEvent | null;
 }) {
   const { user } = useAuth();
   const [title, setTitle] = useState(editingEvent?.title || '');
   const [note, setNote] = useState(editingEvent?.note || '');
   const [startTime, setStartTime] = useState(editingEvent?.startTime || '09:00');
   const [endTime, setEndTime] = useState(editingEvent?.endTime || '10:00');
-  const [category, setCategory] = useState<CalendarEvent['category']>(editingEvent?.category || 'WORK');
+  const [category, setCategory] = useState<CalendarEvent['category']>(
+    editingEvent?.category || 'WORK'
+  );
   const [reminderEnabled, setReminderEnabled] = useState(editingEvent?.reminderEnabled || false);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -404,7 +430,7 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
     if (!user) return;
 
     const eventData: Omit<CalendarEvent, 'id'> = {
-      userId: user.id!,
+      userId: typeof user.id === 'number' ? user.id : parseInt(user.id || '0', 10),
       title,
       note,
       date: format(selectedDate, 'yyyy-MM-dd'),
@@ -413,7 +439,7 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
       category,
       reminderEnabled,
       status: editingEvent?.status || 'PENDING',
-      createdAt: editingEvent?.createdAt || Date.now()
+      createdAt: editingEvent?.createdAt || Date.now(),
     };
 
     if (editingEvent?.id) {
@@ -425,16 +451,16 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <motion.div 
+    <div className="fixed inset-0 z-100 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      
-      <motion.div 
+
+      <motion.div
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
@@ -445,24 +471,30 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
             <h2 className="text-2xl font-bold font-serif">
               {editingEvent ? 'Edit Event' : 'Add Note'}
             </h2>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors">
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/20 rounded-full transition-colors"
+            >
               <Plus className="w-6 h-6 rotate-45" />
             </button>
           </div>
-          <p className="opacity-80 text-sm font-sans">
-            {format(selectedDate, 'EEEE, MMMM do')}
-          </p>
+          <p className="opacity-80 text-sm font-sans">{format(selectedDate, 'EEEE, MMMM do')}</p>
         </div>
 
-        <form onSubmit={handleSave} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto scrollbar-hide bg-[#fffaf5]">
+        <form
+          onSubmit={handleSave}
+          className="p-8 space-y-6 max-h-70vh overflow-y-auto scrollbar-hide bg-brand-white"
+        >
           {/* Time Selection */}
           <div className="space-y-4">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Time Range</label>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              Time Range
+            </label>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <span className="text-[10px] text-slate-400">Start Time</span>
-                <input 
-                  type="time" 
+                <input
+                  type="time"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
                   className="w-full p-3 bg-white border border-slate-100 rounded-xl outline-none focus:border-[#C9973A] transition-all"
@@ -470,8 +502,8 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
               </div>
               <div className="space-y-2">
                 <span className="text-[10px] text-slate-400">End Time</span>
-                <input 
-                  type="time" 
+                <input
+                  type="time"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
                   className="w-full p-3 bg-white border border-slate-100 rounded-xl outline-none focus:border-[#C9973A] transition-all"
@@ -482,9 +514,11 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
 
           {/* Title */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Title</label>
-            <input 
-              type="text" 
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              Title
+            </label>
+            <input
+              type="text"
               placeholder="Write the title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -495,8 +529,10 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
 
           {/* Note */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Note</label>
-            <textarea 
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              Note
+            </label>
+            <textarea
               placeholder="Write your important note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -508,15 +544,19 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
           {/* Category & Alarm */}
           <div className="grid grid-cols-2 gap-8">
             <div className="space-y-3">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Color</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                Color
+              </label>
               <div className="flex gap-3">
-                {CATEGORIES.map(cat => (
+                {CATEGORIES.map((cat) => (
                   <button
                     key={cat.id}
                     type="button"
                     onClick={() => setCategory(cat.id as any)}
                     className={`w-6 h-6 rounded-full transition-all ${cat.color} ${
-                      category === cat.id ? 'ring-4 ring-slate-100 scale-125' : 'opacity-40 hover:opacity-100'
+                      category === cat.id
+                        ? 'ring-4 ring-slate-100 scale-125'
+                        : 'opacity-40 hover:opacity-100'
                     }`}
                   />
                 ))}
@@ -524,7 +564,9 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
             </div>
 
             <div className="space-y-3">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Alarm</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                Alarm
+              </label>
               <button
                 type="button"
                 onClick={() => setReminderEnabled(!reminderEnabled)}
@@ -532,17 +574,19 @@ function AddEventModal({ onClose, selectedDate, editingEvent }: {
                   reminderEnabled ? 'bg-[#C9973A]' : 'bg-slate-200'
                 }`}
               >
-                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
-                  reminderEnabled ? 'left-7' : 'left-1'
-                }`} />
+                <div
+                  className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+                    reminderEnabled ? 'left-7' : 'left-1'
+                  }`}
+                />
               </button>
             </div>
           </div>
 
           <div className="pt-4">
-            <Button 
+            <Button
               type="submit"
-              className="w-full py-5 bg-[#1e293b] text-white text-xl font-bold rounded-2xl shadow-xl shadow-slate-200"
+              className="w-full py-5 bg-brand-dark text-white text-xl font-bold rounded-2xl shadow-xl shadow-slate-200"
             >
               Save
             </Button>

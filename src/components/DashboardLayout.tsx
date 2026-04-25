@@ -1,17 +1,91 @@
 import { MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import { MASTER_LABOUR_ACCOUNT_SCHEMA } from '../services/labourAccountSchema';
 import { MASTER_PROVIDER_ACCOUNT_SCHEMA } from '../services/providerAccountSchema';
+import { MASTER_SUPPLIER_ACCOUNT_SCHEMA } from '../services/supplierAccountSchema';
 import { NavigationItem } from '../services/accountSchemaTypes';
-import { Menu, Bell, Home, ClipboardCheck, List, Store, X, ChevronLeft, PlusCircle, MessageSquare, FileText, User, Users, Truck, QrCode, ChevronRight, Archive, Calendar, MapPin, History, ChevronDown, LayoutDashboard } from 'lucide-react';
+import {
+  Menu,
+  Bell,
+  Home,
+  ClipboardCheck,
+  List,
+  Store,
+  X,
+  ChevronLeft,
+  PlusCircle,
+  MessageSquare,
+  FileText,
+  User,
+  Users,
+  Truck,
+  QrCode,
+  ChevronRight,
+  Archive,
+  Calendar,
+  MapPin,
+  History,
+  ChevronDown,
+  LayoutDashboard,
+  Wallet,
+} from 'lucide-react';
 import Logo from './Logo';
+import ConfirmModal from './ConfirmModal';
+import DashboardCalendar from './DashboardCalendar';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
 import { useDashboard } from '../DashboardContext';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';
 import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useUserInquiries } from '../hooks/useInquiries';
+import { useUserQuotes } from '../hooks/useQuotes';
+import { Inquiry } from '../types';
+
+// Calendar panel shown in right sidebar on dashboard/home tabs
+const CalendarPanel = () => {
+  const { user } = useAuth();
+  const { inquiries } = useUserInquiries(user?.id);
+  const { quotes } = useUserQuotes(user?.id);
+
+  const events = useMemo(() => {
+    const evts: any[] = [];
+
+    if (inquiries) {
+      inquiries.forEach((inq) => {
+        evts.push({
+          date: new Date(inq.createdAt),
+          title: inq.title || 'New Inquiry',
+          type: 'inquiry',
+          color: 'amber',
+        });
+      });
+    }
+
+    if (quotes) {
+      quotes.forEach((quote) => {
+        if (quote.status === 'PAID' || quote.status === 'COMPLETED' || quote.status === 'HANDED_OVER') {
+          evts.push({
+            date: new Date(quote.updatedAt),
+            title: `Order: ${quote.inquiryTitle || 'Unknown'}`,
+            type: 'order',
+            color: 'emerald',
+          });
+        } else {
+          evts.push({
+            date: new Date(quote.createdAt),
+            title: `Quote: ${quote.inquiryTitle || 'Unknown'}`,
+            type: 'quote',
+            color: 'purple',
+          });
+        }
+      });
+    }
+
+    return evts;
+  }, [inquiries, quotes]);
+
+  return <DashboardCalendar events={events} />;
+};
 
 // Map icon names to components
 const iconMap: Record<string, any> = {
@@ -34,6 +108,7 @@ const iconMap: Record<string, any> = {
   PlusCircle,
   ClipboardCheck,
   List,
+  Wallet,
 };
 
 interface DashboardLayoutProps {
@@ -42,7 +117,11 @@ interface DashboardLayoutProps {
   externalActiveTab?: string;
 }
 
-export default function DashboardLayout({ children, onTabChange, externalActiveTab }: DashboardLayoutProps) {
+export default function DashboardLayout({
+  children,
+  onTabChange,
+  externalActiveTab,
+}: DashboardLayoutProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { activeTab: internalActiveTab, setActiveTab } = useDashboard();
@@ -50,63 +129,26 @@ export default function DashboardLayout({ children, onTabChange, externalActiveT
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
-  const notificationCounts = useLiveQuery(async () => {
-    if (!user) return { inquiries: 0, quotes: 0, activeInquiry: null };
-    
-    if (user.role === 'BUYER') {
-      if (!user.id) return { inquiries: 0, quotes: 0, activeInquiry: null };
-      const userInquiries = await db.inquiries.where('buyerId').equals(user.id).toArray();
-      const activeInquiry = userInquiries.find(i => i.status === 'OPEN') || null;
-      const allInquiryIds = userInquiries.map(i => i.id!).filter(id => id !== undefined);
-      
-      if (allInquiryIds.length === 0) return { inquiries: 0, quotes: 0, activeInquiry };
-      
-      // Quotes tab badge: Total number of unread PENDING quotes across all inquiries
-      const pendingQuotes = await db.quotes
-        .where('inquiryId').anyOf(allInquiryIds)
-        .filter(q => q.status === 'PENDING' && !q.isRead)
-        .toArray();
-        
-      // Inquiries tab badge: Number of open inquiries that have NO quotes yet
-      const openInquiryIds = userInquiries.filter(i => i.status === 'OPEN').map(i => i.id!);
-      let unquotedInquiriesCount = 0;
-      
-      if (openInquiryIds.length > 0) {
-        const allQuotesForOpenInquiries = await db.quotes
-          .where('inquiryId').anyOf(openInquiryIds)
-          .toArray();
-        
-        const inquiriesWithQuotes = new Set(allQuotesForOpenInquiries.map(q => q.inquiryId));
-        unquotedInquiriesCount = openInquiryIds.filter(id => !inquiriesWithQuotes.has(id)).length;
-      }
-      
-      return { inquiries: unquotedInquiriesCount, quotes: pendingQuotes.length, activeInquiry };
-    } else {
-      const inquiries = await db.inquiries.where('status').equals('OPEN').toArray();
-      const relevantInquiries = user.categories && user.categories.length > 0
-        ? inquiries.filter(i => user.categories!.includes(i.category))
-        : inquiries;
-        
-      if (relevantInquiries.length === 0) return { inquiries: 0, quotes: 0, activeInquiry: null };
-      
-      const relevantInquiryIds = relevantInquiries.map(i => i.id!).filter(id => id !== undefined);
-      
-      const effectiveProviderId = user.parentProviderId || user.id;
-      if (!effectiveProviderId) return { inquiries: 0, quotes: 0, activeInquiry: null };
-      
-      // Find quotes submitted by THIS seller
-      const sellerQuotes = await db.quotes
-        .where('providerId').equals(effectiveProviderId)
-        .toArray();
-        
-      const inquiriesQuotedBySeller = new Set(sellerQuotes.map(q => q.inquiryId));
-      
-      // Seller Inquiries badge: Relevant open inquiries that the seller HAS NOT quoted yet
-      const unquotedRelevantInquiriesCount = relevantInquiryIds.filter(id => !inquiriesQuotedBySeller.has(id)).length;
-      
-      return { inquiries: unquotedRelevantInquiriesCount, quotes: 0, activeInquiry: null };
-    }
+  const [notificationCounts, setNotificationCounts] = useState<{
+    inquiries: number;
+    quotes: number;
+    activeInquiry: Partial<Inquiry> | null;
+  }>({
+    inquiries: 0,
+    quotes: 0,
+    activeInquiry: null,
+  });
+
+  // TODO: Implement badge counts from backend API
+  // For Buyers: unquoted open inquiries, unread pending quotes
+  // For Sellers: relevant open inquiries not yet quoted by this seller
+  useEffect(() => {
+    // Placeholder: Set counts to 0
+    // Once backend endpoints are ready, fetch actual counts
+    setNotificationCounts({ inquiries: 0, quotes: 0, activeInquiry: null });
   }, [user]);
 
   const navItems = useMemo(() => {
@@ -114,12 +156,31 @@ export default function DashboardLayout({ children, onTabChange, externalActiveT
     let schema;
     if (user.role === 'BUYER') schema = MASTER_BUYER_ACCOUNT_SCHEMA;
     else if (user.role === 'LABOUR') schema = MASTER_LABOUR_ACCOUNT_SCHEMA;
+    else if (user.subRole === 'SUPPLIER_SELLER') schema = MASTER_SUPPLIER_ACCOUNT_SCHEMA;
     else schema = MASTER_PROVIDER_ACCOUNT_SCHEMA;
-    
-    return schema.navigation.filter(item => {
-      if (item.permissions && !hasPermission(user, item.permissions)) return false;
+
+    return schema.navigation.filter((item) => {
+      if (item.permissions && Array.isArray(item.permissions)) {
+        // Check if user has ALL required permissions
+        if (!item.permissions.every((perm) => hasPermission(user, perm))) return false;
+      } else if (item.permissions && typeof item.permissions === 'string') {
+        if (!hasPermission(user, item.permissions)) return false;
+      }
       if (item.roleFilter && !item.roleFilter.includes(user.role)) return false;
       if (item.excludeRoles && item.excludeRoles.includes(user.role)) return false;
+      
+      if (item.categoryFilter && user.categories) {
+        if (typeof item.categoryFilter === 'function') {
+          if (!item.categoryFilter(user.role, user.categories)) return false;
+        } else {
+          const userCategoriesLower = user.categories.map((c: string) => c.toLowerCase());
+          const hasMatchingCategory = item.categoryFilter.some((filterCat) => 
+            userCategoriesLower.some((userCat: string) => userCat.includes(filterCat.toLowerCase()))
+          );
+          if (!hasMatchingCategory) return false;
+        }
+      }
+      
       return true;
     });
   }, [user]);
@@ -129,82 +190,103 @@ export default function DashboardLayout({ children, onTabChange, externalActiveT
     return label;
   };
 
-  const handleTabClick = React.useCallback((tab: string) => {
-    if ((user?.role === 'LABOUR' || user?.role === 'BUYER') && onTabChange) {
-      onTabChange(tab);
+  const handleTabClick = React.useCallback(
+    (tab: string) => {
+      if ((user?.role === 'LABOUR' || user?.role === 'BUYER') && onTabChange) {
+        onTabChange(tab);
+        setIsMobileMenuOpen(false);
+        return;
+      }
+
+      setActiveTab(tab);
       setIsMobileMenuOpen(false);
-      return;
-    }
 
-    setActiveTab(tab);
-    setIsMobileMenuOpen(false);
-    
-    const isBuyer = user?.role === 'BUYER';
-    const isLabour = user?.role === 'LABOUR';
-    const basePath = isBuyer ? '/buyer' : isLabour ? '/labour' : '/provider';
-    const activeInquiry = notificationCounts?.activeInquiry;
+      const isBuyer = user?.role === 'BUYER';
+      const isLabour = user?.role === 'LABOUR';
+      const basePath = isBuyer ? '/buyer' : isLabour ? '/labour' : '/provider';
+      const activeInquiry = notificationCounts?.activeInquiry;
 
-    if (['quotation', 'purchase_order', 'order_confirmation', 'delivery_order'].includes(tab)) {
-      if (activeInquiry) {
-        navigate(`${basePath}/inquiries/${activeInquiry.id}/${tab}`);
+      if (['quotation', 'purchase_order', 'order_confirmation', 'delivery_order'].includes(tab)) {
+        if (activeInquiry) {
+          navigate(`${basePath}/inquiries/${activeInquiry.id}/${tab}`);
+        } else {
+          navigate(`${basePath}/inquiries`);
+        }
+      } else if (tab === 'collection') {
+        if (isBuyer && activeInquiry) {
+          navigate(`${basePath}/inquiries/${activeInquiry.id}/collection`);
+        } else if (isBuyer) {
+          navigate(`${basePath}/inquiries`);
+        } else {
+          navigate(`${basePath}/collection`);
+        }
+      } else if (tab === 'suppliers') {
+        navigate(`${basePath}/suppliers`);
+      } else if (tab === 'archived') {
+        navigate(`${basePath}/archived`);
+      } else if (tab === 'archived-leads') {
+        navigate(`${basePath}/archived-leads`);
+      } else if (tab === 'profile') {
+        navigate(`${basePath}/profile`);
+      } else if (tab === 'schedule') {
+        navigate(isLabour ? '/labour/schedule' : '/schedule');
+      } else if (tab === 'venue-spaces') {
+        navigate('/provider/venue-spaces');
+      } else if (tab === 'audit-trail') {
+        navigate('/provider/audit-trail');
       } else {
-        navigate(`${basePath}/inquiries`);
+        navigate(tab === 'home' ? basePath : `${basePath}/${tab}`);
       }
-    } else if (tab === 'collection') {
-      if (activeInquiry) {
-        navigate(`${basePath}/inquiries/${activeInquiry.id}/collection`);
-      } else {
-        navigate(`${basePath}/inquiries`);
-      }
-    } else if (tab === 'suppliers') {
-      navigate(`${basePath}/suppliers`);
-    } else if (tab === 'archived') {
-      navigate(`${basePath}/archived`);
-    } else if (tab === 'archived-leads') {
-      navigate(`${basePath}/archived-leads`);
-    } else if (tab === 'profile') {
-      navigate(`${basePath}/profile`);
-    } else if (tab === 'schedule') {
-      navigate(isLabour ? '/labour/schedule' : '/schedule');
-    } else if (tab === 'venue-spaces') {
-      navigate('/provider/venue-spaces');
-    } else if (tab === 'audit-trail') {
-      navigate('/provider/audit-trail');
-    } else {
-      navigate(tab === 'home' ? basePath : `${basePath}/${tab}`);
-    }
-  }, [setActiveTab, navigate, user?.role, notificationCounts?.activeInquiry, onTabChange]);
+    },
+    [setActiveTab, navigate, user?.role, notificationCounts?.activeInquiry, onTabChange]
+  );
 
-  React.useEffect(() => {
-    console.log('DashboardLayout activeTab state:', activeTab);
-  }, [activeTab]);
 
   const getPageTitle = () => {
     const isBookingBased = user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS';
-    switch(activeTab) {
+    switch (activeTab) {
       case 'home':
-      case 'dashboard': return 'MARKETPLACE OVERVIEW';
-      case 'quotes': return 'RECEIVED QUOTATIONS';
-      case 'inquiries': return 'MY INQUIRIES';
-      case 'create-inquiry': return 'EVENT BOOKING REQUEST';
-      case 'inquiry-items': return 'ITEM LIST';
-      case 'category-selection': return 'SELECT CATEGORY';
-      case 'shops': return 'SHOPS & RETAILERS';
-      case 'suppliers': return 'VERIFIED SUPPLIERS';
-      case 'paid-orders': 
+      case 'dashboard':
+        return 'MARKETPLACE OVERVIEW';
+      case 'quotes':
+        return 'RECEIVED QUOTATIONS';
+      case 'inquiries':
+        return 'MY INQUIRIES';
+      case 'create-inquiry':
+        return 'EVENT BOOKING REQUEST';
+      case 'inquiry-items':
+        return 'ITEM LIST';
+      case 'category-selection':
+        return 'SELECT CATEGORY';
+      case 'shops':
+        return 'SHOPS & RETAILERS';
+      case 'suppliers':
+        return 'VERIFIED SUPPLIERS';
+      case 'paid-orders':
         if (user?.role === 'EVENTS') return 'PAID RENTALS';
         return isBookingBased ? 'PAID BOOKINGS' : 'PAID ORDERS (ESCROW)';
-      case 'collection': return 'PARCEL COLLECTION';
-      case 'products': return user?.role === 'EVENTS' ? 'INVENTORY' : 'MY PRODUCTS';
-      case 'venue-spaces': return 'VENUE SPACES';
-      case 'archived': return 'ARCHIVED QUOTES';
-      case 'profile': return 'SHOP PROFILE';
-      case 'leads': 
-        if (user?.role === 'EVENTS') return 'RENTAL REQUESTS';
-        return isBookingBased ? 'BOOKING REQUESTS' : 'INCOMING LEADS';
-      case 'my-quotes': return 'MY QUOTES';
-      case 'schedule': return 'MY SCHEDULE';
-      default: return 'HOME';
+      case 'collection':
+        return 'PARCEL COLLECTION';
+      case 'products':
+        if (user?.subRole === 'SUPPLIER_SELLER') return 'SUPPLY INVENTORY';
+        return user?.role === 'EVENTS' ? 'INVENTORY' : 'MY PRODUCTS';
+      case 'venue-spaces':
+        return 'VENUE SPACES';
+      case 'archived':
+        return user?.subRole === 'SUPPLIER_SELLER' ? 'ARCHIVED REQUESTS' : 'ARCHIVED QUOTES';
+      case 'profile':
+        return user?.subRole === 'SUPPLIER_SELLER' ? 'SUPPLIER PROFILE' : 'SHOP PROFILE';
+      case 'leads':
+        if (user?.subRole === 'SUPPLIER_SELLER') return 'PURCHASE REQUESTS';
+        return 'BOOKING REQUESTS';
+      case 'my-quotes':
+        return user?.subRole === 'SUPPLIER_SELLER' ? 'ACTIVE QUOTATIONS' : 'MY QUOTES';
+      case 'schedule':
+        return 'MY SCHEDULE';
+      case 'audit-trail':
+        return user?.subRole === 'SUPPLIER_SELLER' ? 'SUPPLY AUDIT' : 'AUDIT TRAIL';
+      default:
+        return 'HOME';
     }
   };
 
@@ -213,20 +295,49 @@ export default function DashboardLayout({ children, onTabChange, externalActiveT
     navigate('/login');
   };
 
-  const NavLink = ({ tab, icon: Icon, label, isActive, badgeCount }: { tab: string, icon: any, label: string, isActive: boolean, badgeCount?: number }) => (
-    <button 
+  const handleFactoryReset = async () => {
+    try {
+      setIsResetting(true);
+      const { db } = await import('../services/api/database');
+      await db.clearAllTables();
+      setIsResetModalOpen(false);
+      // Force refresh/logout to clear local state
+      logout();
+      navigate('/login');
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to reset data:', error);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  const NavLink = ({
+    tab,
+    icon: Icon,
+    label,
+    isActive,
+    badgeCount,
+  }: {
+    tab: string;
+    icon: any;
+    label: string;
+    isActive: boolean;
+    badgeCount?: number;
+  }) => (
+    <button
       onClick={() => handleTabClick(tab)}
-      className={`flex items-center justify-between w-full px-4 py-3 text-[14px] font-medium font-sans transition-all duration-200 ${
-        isActive 
-          ? 'border-l-[3px] border-[#C9973A] bg-[#fdf8f0] text-[#1e293b]' 
-          : 'text-[#64748b] hover:bg-slate-50 hover:text-[#1e293b] border-l-[3px] border-transparent'
+      className={`flex items-center justify-between w-full px-6 py-3.5 md:py-4 text-[14px] font-medium font-sans transition-all duration-200 ${
+        isActive
+          ? 'border-l-[4px] border-[#C9973A] bg-[#1B3068] text-white shadow-md'
+          : 'text-slate-500 hover:bg-[#1B3068] hover:text-white border-l-[4px] border-transparent'
       }`}
     >
       <div className="flex items-center">
-        <Icon className="w-[18px] h-[18px] mr-4 stroke-[1.8]" /> {label}
+        <Icon className="w-4.5 h-4.5 mr-4 stroke-[1.8]" /> {label}
       </div>
       {badgeCount !== undefined && badgeCount > 0 && (
-        <span className="bg-[#ef4444] text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1.5 shadow-sm">
+        <span className="bg-brand-error text-white text-[10px] font-bold min-w-4.5 h-4.5 flex items-center justify-center rounded-full px-1.5 shadow-sm">
           {badgeCount}
         </span>
       )}
@@ -237,19 +348,21 @@ export default function DashboardLayout({ children, onTabChange, externalActiveT
     <div className="min-h-screen bg-[#f5f2ed] noise-bg flex relative font-sans">
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/70 z-[100] md:hidden backdrop-blur-sm transition-opacity"
+        <div
+          className="fixed inset-0 bg-black/70 z-100 md:hidden backdrop-blur-sm transition-opacity"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
 
       {/* Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-[199] w-64 bg-[#ffffff] text-[#1e293b] flex flex-col transform transition-transform duration-300 ease-in-out md:sticky md:top-0 md:h-screen md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} border-r border-[#f1f5f9] shadow-[4px_0_24px_rgba(26,22,18,0.02)]`}>
-        <div 
-          className="p-4 border-b border-[#f1f5f9] flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors h-[73px]"
+      <div
+        className={`fixed inset-y-0 left-0 z-199 w-64 bg-[#ffffff] text-brand-dark flex flex-col transform transition-transform duration-300 ease-in-out md:sticky md:top-0 md:h-screen md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} border-r border-[#f1f5f9] shadow-[4px_0_24px_rgba(26,22,18,0.02)]`}
+      >
+        <div
+          className="p-4 border-b border-[#f1f5f9] flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors h-18.25"
           onClick={() => handleTabClick('home')}
         >
-          <div className="flex items-center space-x-3 hidden md:flex">
+          <div className="hidden md:flex items-center space-x-3">
             <div className="flex flex-col">
               <Logo className="text-2xl" />
               <span className="text-[10px] font-sans text-[#9ca3af] tracking-wider uppercase mt-1">
@@ -258,71 +371,79 @@ export default function DashboardLayout({ children, onTabChange, externalActiveT
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={(e) => {
                 e.stopPropagation();
                 setIsMobileMenuOpen(false);
-              }} 
-              className="md:hidden p-1 text-[#1e293b]/60 hover:text-[#1e293b]"
+              }}
+              className="md:hidden p-1 text-brand-dark/60 hover:text-brand-dark"
             >
               <X className="w-6 h-6" />
             </button>
           </div>
         </div>
-        
-        <div className="py-4 flex-1 overflow-y-auto scrollbar-hide">
-          <nav className="space-y-1">
-            <button 
-              onClick={() => handleTabClick('profile')}
-              className={`flex items-center w-full px-4 py-3 text-[14px] font-medium font-sans transition-all duration-200 mb-2 ${
-                activeTab === 'profile' 
-                  ? 'border-l-[3px] border-[#C9973A] bg-[#fdf8f0] text-[#1e293b]' 
-                  : 'text-[#64748b] hover:bg-slate-50 hover:text-[#1e293b] border-l-[3px] border-transparent'
-              }`}
-            >
-              <div className="w-6 h-6 rounded-lg bg-white border border-slate-200 overflow-hidden flex items-center justify-center mr-4">
-                {user?.logo ? (
-                  <img src={user.logo} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                ) : (
-                  <User className="w-[18px] h-[18px] stroke-[1.8] text-[#64748b]" />
-                )}
-              </div>
-              Profile
-            </button>
-            
-            {navItems.map(item => {
-              if (item.id === 'inquiries' && user?.role === 'BUYER' && notificationCounts?.activeInquiry?.processType === 'STANDARD') {
+
+        <div className="py-8 flex-1 overflow-y-auto scrollbar-hide">
+          <nav className="space-y-2 md:space-y-3">
+            {navItems.map((item) => {
+              if (
+                item.id === 'inquiries' &&
+                user?.role === 'BUYER' &&
+                notificationCounts?.activeInquiry?.processType === 'STANDARD'
+              ) {
                 return (
                   <div key={item.id} className="w-full">
-                    <button 
+                    <button
                       onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                      className="flex items-center justify-between w-full px-4 py-3 text-[14px] font-medium font-sans text-[#1e293b] hover:bg-slate-50 border-l-[3px] border-transparent"
+                      className="flex items-center justify-between w-full px-4 py-3 text-[14px] font-medium font-sans text-brand-dark hover:bg-slate-50 border-l-[3px] border-transparent"
                     >
                       <div className="flex items-center">
-                        <FileText className="w-[18px] h-[18px] mr-4 stroke-[1.8]" /> {getLabel(item.label)}
+                        <FileText className="w-4.5 h-4.5 mr-4 stroke-[1.8]" />{' '}
+                        {getLabel(item.label)}
                       </div>
-                      {isDropdownOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      {isDropdownOpen ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )}
                     </button>
                     {isDropdownOpen && (
                       <div className="pl-8 space-y-1 pb-2">
-                        {['quotation', 'purchase_order', 'order_confirmation', 'delivery_order'].map((stage) => {
-                          const stages = ['quotation', 'purchase_order', 'order_confirmation', 'delivery_order'];
-                          const currentStage = notificationCounts.activeInquiry?.currentStage || 'quotation';
-                          const isUnlocked = stages.indexOf(stage) <= stages.indexOf(currentStage) || (stage === 'delivery_order' && currentStage === 'order_confirmation');
-                          
+                        {[
+                          'quotation',
+                          'purchase_order',
+                          'order_confirmation',
+                          'delivery_order',
+                        ].map((stage) => {
+                          const stages = [
+                            'quotation',
+                            'purchase_order',
+                            'order_confirmation',
+                            'delivery_order',
+                          ];
+                          const currentStage =
+                            notificationCounts.activeInquiry?.currentStage || 'quotation';
+                          const isUnlocked =
+                            stages.indexOf(stage) <= stages.indexOf(currentStage) ||
+                            (stage === 'delivery_order' && currentStage === 'order_confirmation');
+
                           const stageLabels: Record<string, string> = {
                             quotation: 'Quotations',
                             purchase_order: 'Purchase Order',
                             order_confirmation: 'Order Confirmation',
-                            delivery_order: 'Delivery Order'
+                            delivery_order: 'Delivery Order',
                           };
                           return (
-                            <button 
+                            <button
                               key={stage}
                               disabled={!isUnlocked}
                               onClick={() => handleTabClick(stage)}
                               className={`flex items-center w-full px-4 py-2 text-[13px] font-medium font-sans transition-all duration-200 ${
-                                activeTab === stage ? 'text-[#C9973A]' : isUnlocked ? 'text-[#64748b]' : 'text-slate-300 cursor-not-allowed'
+                                activeTab === stage
+                                  ? 'text-[#C9973A]'
+                                  : isUnlocked
+                                    ? 'text-[#64748b]'
+                                    : 'text-slate-300 cursor-not-allowed'
                               }`}
                             >
                               {stageLabels[stage]}
@@ -334,56 +455,75 @@ export default function DashboardLayout({ children, onTabChange, externalActiveT
                   </div>
                 );
               }
-              
+
               const Icon = iconMap[item.icon] || Home;
               let badgeCount;
               if (item.id === 'inquiries') badgeCount = notificationCounts?.inquiries;
-              else if (item.id === 'my-quotes' || item.id === 'quotes') badgeCount = notificationCounts?.quotes;
+              else if (item.id === 'my-quotes' || item.id === 'quotes')
+                badgeCount = notificationCounts?.quotes;
 
               return (
-                <NavLink 
+                <NavLink
                   key={item.id}
-                  tab={item.id} 
-                  icon={Icon} 
-                  label={getLabel(item.label)} 
-                  isActive={activeTab === item.id || (item.id === 'inquiries' && ['inquiries', 'create-inquiry', 'inquiry-items', 'category-selection', 'inquiry-preferences', 'location-details'].includes(activeTab))} 
-                  badgeCount={badgeCount} 
+                  tab={item.id}
+                  icon={Icon}
+                  label={getLabel(item.label)}
+                  isActive={
+                    activeTab === item.id ||
+                    (item.id === 'inquiries' &&
+                      [
+                        'inquiries',
+                        'create-inquiry',
+                        'inquiry-items',
+                        'category-selection',
+                        'inquiry-preferences',
+                        'location-details',
+                      ].includes(activeTab))
+                  }
+                  badgeCount={badgeCount}
                 />
               );
             })}
           </nav>
         </div>
 
-        <div className="p-4 border-t border-[#f1f5f9] mt-auto h-[120px] flex flex-col items-center justify-center bg-white">
+        <div className="p-4 border-t border-[#f1f5f9] mt-auto min-h-[140px] flex flex-col items-center justify-center bg-white space-y-4">
           <LogoutToggle user={user} onLogout={handleLogout} />
-          <button
-            onClick={async () => {
-              console.log('Clear Database button clicked');
-              await db.clearAllTables();
-              window.location.reload();
-            }}
-            className="mt-4 text-[10px] font-bold text-rose-500 uppercase tracking-wider hover:text-rose-700 transition-all"
+          <button 
+            onClick={() => setIsResetModalOpen(true)}
+            className="text-[10px] font-bold text-slate-400 hover:text-rose-500 transition-colors uppercase tracking-widest flex items-center gap-1.5"
           >
-            Clear Database
+            <History className="w-3 h-3" />
+            Factory Reset
           </button>
         </div>
+
+        <ConfirmModal
+          isOpen={isResetModalOpen}
+          onClose={() => setIsResetModalOpen(false)}
+          onConfirm={handleFactoryReset}
+          title="Factory Reset"
+          message="This will permanently delete all inquiries, quotes, orders, and products. Your user account will be preserved, but all activity will be wiped. This Cannot be undone."
+          confirmText={isResetting ? "Clearing..." : "Yes, Clear All Data"}
+          variant="danger"
+        />
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main Content + Calendar */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {activeTab !== 'create-inquiry' && (
-          <header className="sticky top-0 bg-[#ffffff] text-[#1e293b] z-50 py-4 border-b border-[#f1f5f9] h-[73px] flex items-center">
+          <header className="sticky top-0 bg-[#ffffff] text-brand-dark z-50 py-4 border-b border-[#f1f5f9] h-18.25 flex items-center">
             <div className="px-4 sm:px-6 lg:px-8 flex items-center justify-between w-full">
               {/* Left Section: Mobile Menu */}
               <div className="flex items-center">
-                <button 
+                <button
                   onClick={() => setIsMobileMenuOpen(true)}
-                  className="md:hidden w-10 h-10 bg-white border border-[#f1f5f9] rounded-lg flex items-center justify-center text-[#1e293b] mr-4 hover:bg-slate-50 transition-colors"
+                  className="md:hidden w-10 h-10 bg-white border border-[#f1f5f9] rounded-lg flex items-center justify-center text-brand-dark mr-4 hover:bg-slate-50 transition-colors"
                 >
                   <Menu className="w-5 h-5" />
                 </button>
               </div>
-              
+
               {/* Center Section: Mobile Logo & Title */}
               <div className="flex flex-col items-center justify-center flex-1 md:hidden">
                 <Logo className="text-2xl" />
@@ -394,186 +534,241 @@ export default function DashboardLayout({ children, onTabChange, externalActiveT
 
               {/* Desktop Title Section */}
               <div className="hidden md:flex flex-col ml-4">
-                <h2 className="text-lg font-serif font-black text-[#1e293b] leading-tight uppercase tracking-tight">
+                <h2 className="text-lg font-serif font-black text-brand-dark leading-tight uppercase tracking-tight">
                   {getPageTitle()}
                 </h2>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                  {new Date().toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
                 </p>
               </div>
 
               {/* Right Section: User Info & Notifications */}
               <div className="flex items-center space-x-4 ml-auto">
                 <div className="hidden sm:flex flex-col items-end mr-2">
-                  <span className="text-[11px] font-bold text-[#C9973A] uppercase tracking-widest leading-none mb-1">Welcome back,</span>
-                  <span className="text-sm font-black font-sans text-[#1e293b] leading-none">{(user?.name || '').split(' ')[0]}</span>
+                  <span className="text-[11px] font-bold text-[#C9973A] uppercase tracking-widest leading-none mb-1">
+                    Welcome back,
+                  </span>
+                  <span className="text-sm font-black font-sans text-brand-dark leading-none">
+                    {(user?.name || '').split(' ')[0]}
+                  </span>
                 </div>
-                
+
                 <div className="relative flex items-center gap-3">
-                  <button 
+                  <button
                     onClick={() => setIsNotificationPanelOpen(true)}
-                    className="w-10 h-10 bg-transparent flex items-center justify-center text-[#1e293b] hover:bg-slate-50 transition-colors relative rounded-full"
+                    className="w-10 h-10 bg-transparent flex items-center justify-center text-brand-dark hover:bg-slate-50 transition-colors relative rounded-full"
                   >
-                    <Bell className="w-[18px] h-[18px] stroke-[1.8]" />
-                    <span className="absolute top-[11px] right-[11px] w-[6px] h-[6px] bg-[#C9973A] rounded-full"></span>
+                    <Bell className="w-4.5 h-4.5 stroke-[1.8]" />
+                    <span className="absolute top-2.75 right-2.75 w-1.5 h-1.5 bg-[#C9973A] rounded-full"></span>
                   </button>
                 </div>
               </div>
             </div>
           </header>
         )}
-        
-        <main className="flex-1 px-4 sm:px-8 pt-4 sm:pt-7 pb-24 md:pb-8 relative overflow-x-hidden">
-          {children}
-        </main>
+
+        <div className="flex flex-1 overflow-hidden">
+          <main className="flex-1 px-4 sm:px-5 pt-4 sm:pt-6 pb-24 md:pb-8 relative overflow-x-hidden overflow-y-auto">
+            {children}
+          </main>
+
+          {/* Right Calendar Panel - desktop only, shown on home/dashboard views */}
+          {(activeTab === 'home' || activeTab === 'dashboard') && (
+            <aside className="hidden xl:flex flex-col w-88 shrink-0 border-l border-[#f1f5f9] bg-white overflow-y-auto">
+              <div className="p-6 pt-8">
+                <CalendarPanel />
+              </div>
+            </aside>
+          )}
+        </div>
 
         {/* Mobile Bottom Navigation */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#1a1612]/5 flex justify-around items-center h-[70px] z-[110] px-2 pb-safe shadow-[0_-10px_30px_rgba(26,22,18,0.05)]">
-          <button 
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#1a1612]/5 flex justify-around items-center h-17.5 z-110 px-2 pb-safe shadow-[0_-10px_30px_rgba(26,22,18,0 (truncated…).05)]">
+          <button
             onClick={() => handleTabClick('home')}
             className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'home' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
           >
-            <Home 
-              className="w-[22px] h-[22px] mb-1" 
+            <Home
+              className="w-5.5 h-5.5 mb-1"
               stroke="white"
-              strokeWidth={1.5} 
+              strokeWidth={1.5}
               fill="currentColor"
             />
-            <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'home' ? 'font-bold' : 'font-normal'}`}>Home</span>
+            <span
+              className={`text-[11px] font-sans tracking-tight ${activeTab === 'home' ? 'font-bold' : 'font-normal'}`}
+            >
+              Home
+            </span>
           </button>
-          
+
           {user?.role === 'BUYER' ? (
             <>
-              <button 
+              <button
                 onClick={() => handleTabClick('inquiries')}
                 className={`flex flex-col items-center justify-center w-full h-full transition-all relative ${['inquiries', 'create-inquiry', 'inquiry-items', 'category-selection', 'inquiry-preferences', 'location-details'].includes(activeTab) ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
               >
-                <FileText 
-                  className="w-[22px] h-[22px] mb-1" 
+                <FileText
+                  className="w-5.5 h-5.5 mb-1"
                   stroke="white"
-                  strokeWidth={1.5} 
+                  strokeWidth={1.5}
                   fill="currentColor"
                 />
                 {notificationCounts?.inquiries > 0 && (
-                  <span className="absolute top-1.5 right-1/2 translate-x-3.5 bg-[#ef4444] text-white text-[9px] font-bold min-w-[14px] h-3.5 flex items-center justify-center rounded-full px-1 shadow-[0_2px_4px_rgba(239,68,68,0.3)] border border-white">
+                  <span className="absolute top-1.5 right-1/2 translate-x-3.5 bg-brand-error text-white text-[9px] font-bold min-w-3.5 h-3.5 flex items-center justify-center rounded-full px-1 shadow-[0_2px_4px_rgba(239,68,68,0.3)] border border-white">
                     {notificationCounts.inquiries}
                   </span>
                 )}
-                <span className={`text-[11px] font-sans tracking-tight ${['inquiries', 'create-inquiry', 'inquiry-items', 'category-selection', 'inquiry-preferences', 'location-details'].includes(activeTab) ? 'font-bold' : 'font-normal'}`}>Inquiries</span>
+                <span
+                  className={`text-[11px] font-sans tracking-tight ${['inquiries', 'create-inquiry', 'inquiry-items', 'category-selection', 'inquiry-preferences', 'location-details'].includes(activeTab) ? 'font-bold' : 'font-normal'}`}
+                >
+                  Inquiries
+                </span>
               </button>
-              <button 
+              <button
                 onClick={() => handleTabClick('quotes')}
                 className={`flex flex-col items-center justify-center w-full h-full transition-all relative ${activeTab === 'quotes' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
               >
-                <MessageSquare 
-                  className="w-[22px] h-[22px] mb-1" 
+                <MessageSquare
+                  className="w-5.5 h-5.5 mb-1"
                   stroke="white"
-                  strokeWidth={1.5} 
+                  strokeWidth={1.5}
                   fill="currentColor"
                 />
                 {notificationCounts?.quotes > 0 && (
-                  <span className="absolute top-1.5 right-1/2 translate-x-3.5 bg-[#ef4444] text-white text-[9px] font-bold min-w-[14px] h-3.5 flex items-center justify-center rounded-full px-1 shadow-[0_2px_4px_rgba(239,68,68,0.3)] border border-white">
+                  <span className="absolute top-1.5 right-1/2 translate-x-3.5 bg-brand-error text-white text-[9px] font-bold min-w-3.5 h-3.5 flex items-center justify-center rounded-full px-1 shadow-[0_2px_4px_rgba(239,68,68,0.3)] border border-white">
                     {notificationCounts.quotes}
                   </span>
                 )}
-                <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'quotes' ? 'font-bold' : 'font-normal'}`}>Quotes</span>
+                <span
+                  className={`text-[11px] font-sans tracking-tight ${activeTab === 'quotes' ? 'font-bold' : 'font-normal'}`}
+                >
+                  Quotes
+                </span>
               </button>
-              <button 
+              <button
                 onClick={() => handleTabClick('shops')}
                 className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'shops' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
               >
-                <Store 
-                  className="w-[22px] h-[22px] mb-1" 
+                <Store
+                  className="w-5.5 h-5.5 mb-1"
                   stroke="white"
-                  strokeWidth={1.5} 
+                  strokeWidth={1.5}
                   fill="currentColor"
                 />
-                <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'shops' ? 'font-bold' : 'font-normal'}`}>Shops</span>
+                <span
+                  className={`text-[11px] font-sans tracking-tight ${activeTab === 'shops' ? 'font-bold' : 'font-normal'}`}
+                >
+                  Shops
+                </span>
               </button>
             </>
           ) : (
             <>
               {hasPermission(user, PERMISSIONS.MANAGE_QUOTES) && (
                 <>
-                  <button 
+                  <button
                     onClick={() => handleTabClick('leads')}
                     className={`flex flex-col items-center justify-center w-full h-full transition-all relative ${activeTab === 'leads' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
                   >
-                    <FileText 
-                      className="w-[22px] h-[22px] mb-1" 
+                    <FileText
+                      className="w-5.5 h-5.5 mb-1"
                       stroke="white"
-                      strokeWidth={1.5} 
+                      strokeWidth={1.5}
                       fill="currentColor"
                     />
                     {notificationCounts?.inquiries > 0 && (
-                      <span className="absolute top-1.5 right-1/2 translate-x-3.5 bg-[#ef4444] text-white text-[9px] font-bold min-w-[14px] h-3.5 flex items-center justify-center rounded-full px-1 shadow-[0_2px_4px_rgba(239,68,68,0.3)] border border-white">
+                      <span className="absolute top-1.5 right-1/2 translate-x-3.5 bg-brand-error text-white text-[9px] font-bold min-w-3.5 h-3.5 flex items-center justify-center rounded-full px-1 shadow-[0_2px_4px_rgba(239,68,68,0.3)] border border-white">
                         {notificationCounts.inquiries}
                       </span>
                     )}
-                    <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'leads' ? 'font-bold' : 'font-normal'}`}>Inquiries</span>
+                    <span
+                      className={`text-[11px] font-sans tracking-tight ${activeTab === 'leads' ? 'font-bold' : 'font-normal'}`}
+                    >
+                      Inquiries
+                    </span>
                   </button>
-                  <button 
+                  <button
                     onClick={() => handleTabClick('my-quotes')}
                     className={`flex flex-col items-center justify-center w-full h-full transition-all relative ${activeTab === 'my-quotes' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
                   >
-                    <MessageSquare 
-                      className="w-[22px] h-[22px] mb-1" 
+                    <MessageSquare
+                      className="w-5.5 h-5.5 mb-1"
                       stroke="white"
-                      strokeWidth={1.5} 
+                      strokeWidth={1.5}
                       fill="currentColor"
                     />
                     {notificationCounts?.quotes > 0 && (
-                      <span className="absolute top-1.5 right-1/2 translate-x-3.5 bg-[#ef4444] text-white text-[9px] font-bold min-w-[14px] h-3.5 flex items-center justify-center rounded-full px-1 shadow-[0_2px_4px_rgba(239,68,68,0.3)] border border-white">
+                      <span className="absolute top-1.5 right-1/2 translate-x-3.5 bg-brand-error text-white text-[9px] font-bold min-w-3.5 h-3.5 flex items-center justify-center rounded-full px-1 shadow-[0_2px_4px_rgba(239,68,68,0.3)] border border-white">
                         {notificationCounts.quotes}
                       </span>
                     )}
-                    <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'my-quotes' ? 'font-bold' : 'font-normal'}`}>Quotes</span>
+                    <span
+                      className={`text-[11px] font-sans tracking-tight ${activeTab === 'my-quotes' ? 'font-bold' : 'font-normal'}`}
+                    >
+                      Quotes
+                    </span>
                   </button>
                 </>
               )}
-              
+
               {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && (
-                <button 
+                <button
                   onClick={() => handleTabClick('products')}
                   className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'products' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
                 >
-                  <Store 
-                    className="w-[22px] h-[22px] mb-1" 
+                  <Store
+                    className="w-5.5 h-5.5 mb-1"
                     stroke="white"
-                    strokeWidth={1.5} 
+                    strokeWidth={1.5}
                     fill="currentColor"
                   />
-                  <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'products' ? 'font-bold' : 'font-normal'}`}>Shops</span>
+                  <span
+                    className={`text-[11px] font-sans tracking-tight ${activeTab === 'products' ? 'font-bold' : 'font-normal'}`}
+                  >
+                    Shops
+                  </span>
                 </button>
               )}
 
               {user?.parentProviderId && hasPermission(user, PERMISSIONS.MANAGE_COLLECTIONS) && (
-                <button 
+                <button
                   onClick={() => handleTabClick('collection')}
                   className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'collection' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
                 >
-                  <QrCode 
-                    className="w-[22px] h-[22px] mb-1" 
+                  <QrCode
+                    className="w-5.5 h-5.5 mb-1"
                     stroke="white"
-                    strokeWidth={1.5} 
+                    strokeWidth={1.5}
                     fill="currentColor"
                   />
-                  <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'collection' ? 'font-bold' : 'font-normal'}`}>Collections</span>
+                  <span
+                    className={`text-[11px] font-sans tracking-tight ${activeTab === 'collection' ? 'font-bold' : 'font-normal'}`}
+                  >
+                    Collections
+                  </span>
                 </button>
               )}
 
               {user?.parentProviderId && !hasPermission(user, PERMISSIONS.MANAGE_COLLECTIONS) && (
-                <button 
+                <button
                   onClick={() => handleTabClick('profile')}
                   className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'profile' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
                 >
-                  <User 
-                    className="w-[22px] h-[22px] mb-1" 
+                  <User
+                    className="w-5.5 h-5.5 mb-1"
                     stroke="white"
-                    strokeWidth={1.5} 
+                    strokeWidth={1.5}
                     fill="currentColor"
                   />
-                  <span className={`text-[11px] font-sans tracking-tight ${activeTab === 'profile' ? 'font-bold' : 'font-normal'}`}>Profile</span>
+                  <span
+                    className={`text-[11px] font-sans tracking-tight ${activeTab === 'profile' ? 'font-bold' : 'font-normal'}`}
+                  >
+                    Profile
+                  </span>
                 </button>
               )}
             </>
@@ -590,7 +785,7 @@ export default function DashboardLayout({ children, onTabChange, externalActiveT
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setIsNotificationPanelOpen(false)}
-                className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[200]"
+                className="fixed inset-0 bg-black/40 backdrop-blur-sm z-200"
               />
               {/* Panel */}
               <motion.div
@@ -598,39 +793,47 @@ export default function DashboardLayout({ children, onTabChange, externalActiveT
                 animate={{ x: 0 }}
                 exit={{ x: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="fixed inset-y-0 right-0 w-full sm:w-[400px] bg-white z-[201] shadow-2xl flex flex-col"
+                className="fixed inset-y-0 right-0 w-full sm:w-96 bg-white z-201 shadow-2xl flex flex-col"
               >
-                <div className="p-6 border-b border-[#f1f5f9] flex items-center justify-between bg-[#fffaf5]">
+                <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-brand-white">
                   <div>
-                    <h3 className="font-serif font-bold text-2xl text-[#1e293b]">Notifications</h3>
-                    <p className="text-[10px] font-sans font-bold text-[#C9973A] uppercase tracking-widest mt-1">Stay updated with your activity</p>
+                    <h3 className="font-serif font-bold text-2xl text-brand-dark">Notifications</h3>
+                    <p className="text-[10px] font-sans font-bold text-[#C9973A] uppercase tracking-widest mt-1">
+                      Stay updated with your activity
+                    </p>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setIsNotificationPanelOpen(false)}
                     className="w-10 h-10 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-colors"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
-                
+
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
                   <div className="flex items-center justify-between px-2 mb-2">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Recent</span>
-                    <button className="text-[11px] font-bold text-[#C9973A] uppercase tracking-wider hover:underline">Mark all read</button>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      Recent
+                    </span>
+                    <button className="text-[11px] font-bold text-[#C9973A] uppercase tracking-wider hover:underline">
+                      Mark all read
+                    </button>
                   </div>
 
                   {/* Notification Items */}
-                  <div className="p-4 rounded-2xl bg-[#fffaf5] border border-[#C9973A]/10 hover:border-[#C9973A]/30 transition-all cursor-pointer group">
+                  <div className="p-4 rounded-2xl bg-brand-white border border-[#C9973A]/10 hover:border-[#C9973A]/30 transition-all cursor-pointer group">
                     <div className="flex gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-[#C9973A]/10 flex items-center justify-center flex-shrink-0 text-xl">
+                      <div className="w-10 h-10 rounded-xl bg-[#C9973A]/10 flex items-center justify-center shrink-0 text-xl">
                         💬
                       </div>
                       <div className="flex-1">
                         <div className="flex justify-between items-start mb-1">
-                          <p className="text-sm font-bold text-[#1e293b]">New Quote Received</p>
+                          <p className="text-sm font-bold text-brand-dark">New Quote Received</p>
                           <span className="text-[10px] font-bold text-[#C9973A]">2m</span>
                         </div>
-                        <p className="text-xs text-[#64748b] leading-relaxed">SolarTech Zambia sent a quote for your "50 Solar Panels" inquiry.</p>
+                        <p className="text-xs text-[#64748b] leading-relaxed">
+                          SolarTech Zambia sent a quote for your "50 Solar Panels" inquiry.
+                        </p>
                         <div className="mt-3 flex items-center gap-2">
                           <button className="text-[10px] font-bold text-[#C9973A] uppercase tracking-wider px-3 py-1.5 bg-white border border-[#C9973A]/20 rounded-lg hover:bg-[#C9973A] hover:text-white transition-all">
                             View Quote
@@ -642,15 +845,17 @@ export default function DashboardLayout({ children, onTabChange, externalActiveT
 
                   <div className="p-4 rounded-2xl bg-white border border-slate-100 hover:border-[#C9973A]/20 transition-all cursor-pointer group">
                     <div className="flex gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center flex-shrink-0 text-xl">
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center shrink-0 text-xl">
                         ⏳
                       </div>
                       <div className="flex-1">
                         <div className="flex justify-between items-start mb-1">
-                          <p className="text-sm font-bold text-[#1e293b]">Inquiry Expiring Soon</p>
+                          <p className="text-sm font-bold text-brand-dark">Inquiry Expiring Soon</p>
                           <span className="text-[10px] font-bold text-slate-400">1h</span>
                         </div>
-                        <p className="text-xs text-[#64748b] leading-relaxed">Your inquiry for "Office Laptops" expires in 24 hours.</p>
+                        <p className="text-xs text-[#64748b] leading-relaxed">
+                          Your inquiry for "Office Laptops" expires in 24 hours.
+                        </p>
                         <div className="mt-3 flex items-center gap-2">
                           <button className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg hover:bg-slate-100 transition-all">
                             Extend
@@ -662,22 +867,24 @@ export default function DashboardLayout({ children, onTabChange, externalActiveT
 
                   <div className="p-4 rounded-2xl bg-white border border-slate-100 hover:border-[#C9973A]/20 transition-all cursor-pointer group">
                     <div className="flex gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center flex-shrink-0 text-xl">
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center shrink-0 text-xl">
                         📦
                       </div>
                       <div className="flex-1">
                         <div className="flex justify-between items-start mb-1">
-                          <p className="text-sm font-bold text-[#1e293b]">Order Dispatched</p>
+                          <p className="text-sm font-bold text-brand-dark">Order Dispatched</p>
                           <span className="text-[10px] font-bold text-slate-400">3h</span>
                         </div>
-                        <p className="text-xs text-[#64748b] leading-relaxed">Your order #ORD-7721 has been dispatched by the supplier.</p>
+                        <p className="text-xs text-[#64748b] leading-relaxed">
+                          Your order #ORD-7721 has been dispatched by the supplier.
+                        </p>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-6 border-t border-[#f1f5f9] bg-[#fffaf5]">
-                  <button className="w-full py-4 bg-[#1e293b] text-white rounded-2xl font-bold text-sm hover:bg-[#2d3a4f] transition-all shadow-lg shadow-slate-200 uppercase tracking-widest">
+                <div className="p-6 border-t border-slate-100 bg-brand-white">
+                  <button className="w-full py-4 bg-brand-dark text-white rounded-2xl font-bold text-sm hover:bg-brand-navy-dark transition-all shadow-lg shadow-slate-200 uppercase tracking-widest">
                     View All Activity
                   </button>
                 </div>
@@ -690,40 +897,44 @@ export default function DashboardLayout({ children, onTabChange, externalActiveT
   );
 }
 
-function LogoutToggle({ user, onLogout }: { user: any, onLogout: () => void }) {
+function LogoutToggle({ user, onLogout }: { user: any; onLogout: () => void }) {
   const x = useMotionValue(0);
   const xSpring = useSpring(x, { stiffness: 400, damping: 30 });
-  
+
   // Track width: 160px. Thumb width: 38px. Padding: 5px.
   // Max travel = 160 - 38 - 10 = 112px.
   const maxDrag = 112;
-  
+
   const labelOpacity = useTransform(x, [0, maxDrag * 0.6], [1, 0]);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const initials = (user?.name || '')
-    .split(' ')
-    .map((n: string) => n[0])
-    .join('')
-    .toUpperCase()
-    .substring(0, 2) || 'JD';
+  const initials =
+    (user?.name || '')
+      .split(' ')
+      .map((n: string) => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2) || 'JD';
 
   return (
     <div className="w-full flex justify-center">
-      <div 
-        className="relative w-[160px] h-[48px] rounded-full border-2 border-white overflow-hidden cursor-pointer"
-        style={{ 
-          background: "linear-gradient(145deg, #c9973a, #b8832a)",
-          boxShadow: "0 4px 12px rgba(201,151,58,0.25), 0 1px 3px rgba(0,0,0,0.1), inset 0 3px 8px rgba(0,0,0,0.2), inset 0 -1px 4px rgba(255,255,255,0.1)"
+      <div
+        className="relative w-40 h-12 rounded-full border-2 border-white overflow-hidden cursor-pointer"
+        style={{
+          background: 'linear-gradient(145deg, #c9973a, #b8832a)',
+          boxShadow:
+            '0 4px 12px rgba(201,151,58,0.25), 0 1px 3px rgba(0,0,0,0.1), inset 0 3px 8px rgba(0,0,0,0.2), inset 0 -1px 4px rgba(255,255,255,0.1)',
         }}
       >
         {/* Slide to Logout Text */}
-        <motion.div 
+        <motion.div
           className="absolute inset-0 flex items-center justify-end pr-4 pointer-events-none z-10"
           style={{ opacity: labelOpacity }}
         >
           <span className="text-[9px] font-bold font-sans text-white/85 uppercase tracking-widest text-right leading-tight">
-            SLIDE TO<br/>LOGOUT
+            SLIDE TO
+            <br />
+            LOGOUT
           </span>
         </motion.div>
 
@@ -745,17 +956,18 @@ function LogoutToggle({ user, onLogout }: { user: any, onLogout: () => void }) {
             }
           }}
           style={{ x: xSpring }}
-          className="absolute inset-y-0 left-[4px] flex items-center z-30 cursor-grab active:cursor-grabbing"
+          className="absolute inset-y-0 left-1 flex items-center z-30 cursor-grab active:cursor-grabbing"
         >
-          <motion.div 
-            className="w-[38px] h-[38px] rounded-full flex items-center justify-center border border-white/90 relative overflow-hidden"
+          <motion.div
+            className="w-9 h-9 rounded-full flex items-center justify-center border border-white/90 relative overflow-hidden"
             style={{
-              background: "linear-gradient(145deg, #ffffff, #f0ece4)",
-              boxShadow: "0 4px 10px rgba(0,0,0,0.20), 0 1px 3px rgba(0,0,0,0.10), inset 0 -2px 3px rgba(0,0,0,0.05)"
+              background: 'linear-gradient(145deg, #ffffff, #f0ece4)',
+              boxShadow:
+                '0 4px 10px rgba(0,0,0,0.20), 0 1px 3px rgba(0,0,0,0.10), inset 0 -2px 3px rgba(0,0,0,0.05)',
             }}
           >
             {isSuccess ? (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, scale: 0.5 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className="flex items-center justify-center"
@@ -763,11 +975,11 @@ function LogoutToggle({ user, onLogout }: { user: any, onLogout: () => void }) {
                 <ClipboardCheck className="w-4 h-4 text-[#C9973A]" />
               </motion.div>
             ) : user?.logo ? (
-              <img 
-                src={user.logo} 
-                alt="Profile" 
-                className="w-full h-full object-cover" 
-                referrerPolicy="no-referrer" 
+              <img
+                src={user.logo}
+                alt="Profile"
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
               />
             ) : (
               <span className="text-[13px] font-bold font-serif text-[#C9973A] flex items-center justify-center h-full w-full">

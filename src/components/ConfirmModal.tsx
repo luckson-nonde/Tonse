@@ -22,7 +22,7 @@ export default function ConfirmModal({
   message,
   confirmText = 'Confirm',
   cancelText = 'Cancel',
-  variant = 'primary'
+  variant = 'primary',
 }: ConfirmModalProps) {
   if (!isOpen) return null;
 
@@ -31,17 +31,17 @@ export default function ConfirmModal({
       case 'danger':
         return {
           icon: <AlertTriangle className="w-6 h-6 text-rose-500" />,
-          button: 'bg-rose-500 hover:bg-rose-600 text-white'
+          button: 'bg-rose-500 hover:bg-rose-600 text-white',
         };
       case 'warning':
         return {
           icon: <AlertTriangle className="w-6 h-6 text-amber-500" />,
-          button: 'bg-amber-500 hover:bg-amber-600 text-white'
+          button: 'bg-amber-500 hover:bg-amber-600 text-white',
         };
       default:
         return {
           icon: <AlertTriangle className="w-6 h-6 text-[#d49b35]" />,
-          button: 'bg-[#d49b35] hover:bg-[#b8862d] text-white'
+          button: 'bg-[#C9973A] hover:bg-brand-dark text-white transition-all duration-300',
         };
     }
   };
@@ -51,7 +51,7 @@ export default function ConfirmModal({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-9999 flex items-center justify-center p-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -63,28 +63,28 @@ export default function ConfirmModal({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden"
+            className="relative bg-white rounded-4xl shadow-2xl w-full max-w-md overflow-hidden"
           >
             <div className="p-6 sm:p-8">
               <div className="flex items-center gap-4 mb-6">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                  variant === 'danger' ? 'bg-rose-50' : variant === 'warning' ? 'bg-amber-50' : 'bg-[#fdf6e9]'
-                }`}>
+                <div
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                    variant === 'danger'
+                      ? 'bg-rose-50'
+                      : variant === 'warning'
+                        ? 'bg-amber-50'
+                        : 'bg-[#fdf6e9]'
+                  }`}
+                >
                   {styles.icon}
                 </div>
                 <h3 className="text-xl font-serif font-bold text-slate-900">{title}</h3>
               </div>
 
-              <p className="text-slate-600 leading-relaxed mb-8">
-                {message}
-              </p>
+              <p className="text-slate-600 leading-relaxed mb-8">{message}</p>
 
               <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={onClose}
-                  className="flex-1 rounded-xl py-3"
-                >
+                <Button variant="outline" onClick={onClose} className="flex-1 rounded-xl py-3">
                   {cancelText}
                 </Button>
                 <Button

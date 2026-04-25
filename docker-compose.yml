@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: tonse_postgres
+    environment:
+      POSTGRES_USER: tonse_user
+      POSTGRES_PASSWORD: tonse_password_secure_change_me
+      POSTGRES_DB: tonse_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U tonse_user -d tonse_db']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: tonse_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@tonse.marketplace
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - '5050:80'
+    depends_on:
+      - postgres
+    # If connecting from the Dockerized pgAdmin UI, use the PostgreSQL service hostname:
+    # Host: postgres
+    # Port: 5432
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+
+networks:
+  default:
+    name: tonse_network

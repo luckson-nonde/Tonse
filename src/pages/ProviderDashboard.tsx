@@ -1,20 +1,54 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { type Inquiry, type Quote } from '../types';
 import { useDashboard } from '../DashboardContext';
-import { 
-  TrendingUp, FileText, MessageSquare, Truck, Star, Search, 
-  PackageOpen, Plus, MapPin, Clock, User, Check, ChevronDown, 
-  ChevronUp, Eye, ArrowRight, Settings, Loader2, Archive, X, Printer,
-  ChevronRight, MoreHorizontal, Zap, Calendar, CheckCircle, Music, Heart,
-  QrCode, Camera, Image as ImageIcon, ShieldCheck, ArrowLeft, Info
+import {
+  TrendingUp,
+  FileText,
+  MessageSquare,
+  Truck,
+  Star,
+  Search,
+  PackageOpen,
+  Plus,
+  MapPin,
+  Clock,
+  User,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  ArrowRight,
+  Settings,
+  Loader2,
+  Archive,
+  X,
+  Printer,
+  ChevronRight,
+  MoreHorizontal,
+  Zap,
+  Calendar,
+  CheckCircle,
+  Music,
+  Heart,
+  QrCode,
+  Camera,
+  Image as ImageIcon,
+  ShieldCheck,
+  ArrowLeft,
+  Info,
 } from 'lucide-react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { motion, AnimatePresence } from 'motion/react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
-import { isRelatedCategory, getCategorySchema, getCategoryNature, CATEGORIES_DB } from '../services/categories';
+import { useLiveQuery } from '../hooks/useLiveQuery';
+import { db } from '../services/api/database';
+import {
+  isRelatedCategory,
+  getCategorySchema,
+  getCategoryNature,
+  CATEGORIES_DB,
+} from '../services/categories';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';
 import { logAuditAction } from '../utils/auditLogger';
 import DynamicDataDisplay from '../components/DynamicDataDisplay';
@@ -23,30 +57,66 @@ import Button from '../components/Button';
 import ConfirmModal from '../components/ConfirmModal';
 import ProviderHomeView from '../components/provider/ProviderHomeView';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
+import { robustParse } from '../utils/jsonUtils';
 import { MASTER_PROVIDER_ACCOUNT_SCHEMA } from '../services/providerAccountSchema';
+import { MASTER_SUPPLIER_ACCOUNT_SCHEMA } from '../services/supplierAccountSchema';
 
-  const renderSpecifications = (data: any, category: string = "", title: string = "Specifications") => {
-    if (!data || Object.keys(data).length === 0) return null;
-    
-    const schema = getCategorySchema(category);
+const renderSpecifications = (
+  data: any,
+  category: string = '',
+  title: string = 'Specifications'
+) => {
+  // Use robustParse utility for consistent data handling
+  const parsedData = robustParse(data, null);
 
-    return (
-      <div className="space-y-4">
-        <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">
-          {title}
-        </h5>
-        <DynamicDataDisplay schema={schema} attributes={data} />
-      </div>
-    );
-  };
+  if (!parsedData || typeof parsedData !== 'object' || Object.keys(parsedData).length === 0)
+    return null;
+
+  const schema = getCategorySchema(category);
+
+  return (
+    <div className="space-y-4">
+      <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">
+        {title}
+      </h5>
+      <DynamicDataDisplay schema={schema} attributes={parsedData} />
+    </div>
+  );
+};
 
 export default function ProviderDashboard() {
   const { activeTab, setActiveTab } = useDashboard();
   const { user } = useAuth();
   const navigate = useNavigate();
-  
+  const { tab } = useParams<{ tab: string }>();
+
+  // Synchronize URL tab parameter with Dashboard Context
+  useEffect(() => {
+    if (
+      tab &&
+      tab !== activeTab &&
+      ![
+        'profile',
+        'suppliers',
+        'financial',
+        'venue-spaces',
+        'audit-trail',
+        'archived-leads',
+      ].includes(tab)
+    ) {
+      setActiveTab(tab);
+    } else if (!tab && activeTab !== 'home') {
+      setActiveTab('home');
+    }
+  }, [tab, activeTab, setActiveTab]);
+
+  const currentSchema = useMemo(() => {
+    if (user?.subRole === 'SUPPLIER_SELLER') return MASTER_SUPPLIER_ACCOUNT_SCHEMA;
+    return MASTER_PROVIDER_ACCOUNT_SCHEMA;
+  }, [user]);
+
   const effectiveProviderId = user?.parentProviderId || user?.id;
-  
+
   // RBAC Redirect Logic
   useEffect(() => {
     if (user && user.role === 'PROVIDER_STAFF') {
@@ -55,54 +125,82 @@ export default function ProviderDashboard() {
       }
     }
   }, [user?.id, user?.permissions, activeTab, setActiveTab]);
-  
+
   const isBookingBased = user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS';
-  
+
   const isServiceOrEvent = (inquiry: Inquiry) => {
-    return !!inquiry.entertainmentData || (inquiry.attributes && (inquiry.attributes.eventType || inquiry.attributes.eventName || inquiry.attributes.performanceType));
+    return (
+      !!inquiry.entertainmentData ||
+      (inquiry.attributes &&
+        (inquiry.attributes.eventType ||
+          inquiry.attributes.eventName ||
+          inquiry.attributes.performanceType))
+    );
   };
-  
-  const handleTabClick = useCallback((tab: string) => {
-    setActiveTab(tab);
-    if (tab === 'profile') {
-      navigate('/provider/profile');
-    } else if (tab === 'home') {
-      navigate('/provider');
-    }
-  }, [setActiveTab, navigate]);
+
+  const handleTabClick = useCallback(
+    (tab: string) => {
+      setActiveTab(tab);
+      if (tab === 'profile') {
+        navigate('/provider/profile');
+      } else if (tab === 'home') {
+        navigate('/provider');
+      } else if (
+        [
+          'leads',
+          'my-quotes',
+          'paid-orders',
+          'schedule',
+          'products',
+          'team',
+          'collection',
+          'audit-trail',
+          'archived-leads',
+          'financial',
+          'venue-spaces',
+        ].includes(tab)
+      ) {
+        navigate(`/provider/${tab}`);
+      }
+    },
+    [setActiveTab, navigate]
+  );
 
   const handleAction = useCallback((actionId: string, payload?: any) => {
     console.log('Provider Action:', actionId, payload);
   }, []);
-  
-  const products = useLiveQuery(
-    async () => {
-      if (!effectiveProviderId) return [];
-      return await db.products.where('providerId').equals(effectiveProviderId).reverse().limit(5).toArray();
-    },
-    [effectiveProviderId]
-  ) || [];
 
-  const myQuotes = useLiveQuery(
-    async () => {
+  const products =
+    useLiveQuery(async () => {
       if (!effectiveProviderId) return [];
-      const quotes = await db.quotes.where('providerId').equals(effectiveProviderId).reverse().sortBy('createdAt');
-      const enrichedQuotes = await Promise.all(quotes.map(async (quote) => {
-        const inquiry = await db.inquiries.get(quote.inquiryId);
-        return { ...quote, inquiry };
-      }));
+      const allProducts = await db.products
+        .where('providerId')
+        .equals(effectiveProviderId)
+        .toArray();
+      return allProducts.reverse().slice(0, 5);
+    }, [effectiveProviderId]) || [];
+
+  const myQuotes =
+    useLiveQuery(async () => {
+      if (!effectiveProviderId) return [];
+      const quotes = await db.quotes.where('providerId').equals(effectiveProviderId).toArray();
+      const sortedQuotes = quotes.sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      const enrichedQuotes = await Promise.all(
+        sortedQuotes.map(async (quote) => {
+          const inquiry = await db.inquiries.get(quote.inquiryId);
+          return { ...quote, inquiry };
+        })
+      );
       return enrichedQuotes;
-    },
-    [effectiveProviderId]
-  ) || [];
+    }, [effectiveProviderId]) || [];
 
-  const schedules = useLiveQuery(
-    async () => {
+  const schedules =
+    useLiveQuery(async () => {
       if (!effectiveProviderId) return [];
       return await db.schedules.where('providerId').equals(effectiveProviderId).toArray();
-    },
-    [effectiveProviderId]
-  ) || [];
+    }, [effectiveProviderId]) || [];
 
   const [selectedSchedule, setSelectedSchedule] = useState<any | null>(null);
   const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
@@ -110,11 +208,11 @@ export default function ProviderDashboard() {
   const [rescheduleTime, setRescheduleTime] = useState('');
 
   const displayQuotes = React.useMemo(() => {
-    return myQuotes.filter(q => !q.isArchived);
+    return myQuotes.filter((q) => !q.isArchived);
   }, [myQuotes]);
 
-  const chartData = useLiveQuery(
-    async () => {
+  const chartData =
+    useLiveQuery(async () => {
       if (!effectiveProviderId) return [];
       const now = new Date();
       const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -123,42 +221,50 @@ export default function ProviderDashboard() {
         return {
           name: d.toLocaleDateString('en-US', { weekday: 'short' }),
           date: d.setHours(0, 0, 0, 0),
-          sales: 0
+          sales: 0,
         };
       });
 
-      const completedQuotes = await db.quotes
-        .where('providerId').equals(effectiveProviderId)
-        .filter(q => q.status === 'COMPLETED' || q.status === 'PAID')
-        .toArray();
+      const allQuotes = await db.quotes.where('providerId').equals(effectiveProviderId).toArray();
+      const completedQuotes = allQuotes.filter(
+        (q) => q.status === 'COMPLETED' || q.status === 'PAID'
+      );
 
-      completedQuotes.forEach(quote => {
+      completedQuotes.forEach((quote) => {
         const quoteDate = new Date(quote.createdAt).setHours(0, 0, 0, 0);
-        const day = last7Days.find(d => d.date === quoteDate);
+        const day = last7Days.find((d) => d.date === quoteDate);
         if (day) {
           day.sales += quote.price;
         }
       });
 
       return last7Days;
-    },
-    [user, myQuotes]
-  ) || [];
+    }, [user, myQuotes]) || [];
 
-  const allLeads = useLiveQuery(
-    async () => {
+  const allLeads =
+    useLiveQuery(async () => {
       const inquiries = await db.inquiries.where('status').equals('OPEN').toArray();
-      return inquiries.sort((a, b) => b.createdAt - a.createdAt);
-    },
-    []
-  ) || [];
+      const userCategories = user?.categories || [];
+
+      // If user has no categories, we show everything (Default)
+      // but if they HAVE categories, we strictly filter using isRelatedCategory
+      const filtered = inquiries.filter((lead) => {
+        if (!userCategories || userCategories.length === 0) return true;
+        const leadCats = (lead.category || '').split(', ').map((c: string) => c.trim());
+        return leadCats.some((leadCat) => 
+          userCategories.some(userCat => isRelatedCategory(userCat, leadCat))
+        );
+      });
+
+      return filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    }, [user?.categories]) || [];
 
   const availableBalance = displayQuotes
-    .filter(q => q.status === 'COMPLETED' || q.status === 'PAID')
+    .filter((q) => q.status === 'COMPLETED' || q.status === 'PAID')
     .reduce((sum, q) => sum + q.price, 0);
 
   const pendingClearance = displayQuotes
-    .filter(q => q.status === 'ACCEPTED')
+    .filter((q) => q.status === 'ACCEPTED')
     .reduce((sum, q) => sum + q.price, 0);
 
   const [quotingInquiryId, setQuotingInquiryId] = useState<number | null>(null);
@@ -169,54 +275,70 @@ export default function ProviderDashboard() {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedInquiryIds, setSelectedInquiryIds] = useState<number[]>([]);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  
+
   // Filter leads by provider categories AND exclude already quoted ones
   const leads = React.useMemo(() => {
     let filtered = allLeads;
-    
+
     // Exclude already quoted
-    const quotedIds = new Set(myQuotes.map(q => q.inquiryId));
-    filtered = filtered.filter(lead => !quotedIds.has(lead.id!));
+    const quotedIds = new Set(myQuotes.map((q) => q.inquiryId));
+    filtered = filtered.filter((lead) => !quotedIds.has(lead.id!));
 
     // Filter by Archive Status
     const providerId = effectiveProviderId?.toString() || '';
-    filtered = filtered.filter(lead => !lead.archivedBy?.includes(providerId));
+    filtered = filtered.filter((lead) => !lead.archivedBy?.includes(providerId));
 
     // Filter by Delete Status
-    filtered = filtered.filter(lead => !lead.deletedBy?.includes(providerId));
+    filtered = filtered.filter((lead) => !lead.deletedBy?.includes(providerId));
 
-    // Filter by Role/SubRole Nature
-    if (user?.role === 'SELLER' && user?.subRole) {
-      filtered = filtered.filter(lead => {
+    // Filter by Role/SubRole Nature (Strictly block Product vs Service leakage)
+    const isProviderRole = ['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS'].includes(user?.role || '');
+    if (isProviderRole) {
+      filtered = filtered.filter((lead) => {
+        // If the lead has no category, we can't reliably filter by nature here
         if (!lead.category) return true;
-        const leadCats = lead.category.split(',').map(c => c.trim());
-        const leadCatIds = leadCats.map(name => CATEGORIES_DB.find(c => c.name === name)?.id).filter(Boolean) as string[];
         
-        const natures = leadCatIds.map(id => getCategoryNature(id));
-        
-        if (user.subRole === 'PRODUCT_SELLER') {
-          return natures.some(n => n === 'PRODUCT' || n === 'BOTH');
+        // Determine Provider Nature
+        let providerNature: 'PRODUCT' | 'SERVICE' | 'BOTH' = 'BOTH';
+        if (user?.subRole === 'PRODUCT_SELLER' || user?.role === 'SUPPLIER') providerNature = 'PRODUCT';
+        else if (user?.subRole === 'SERVICE_SELLER' || user?.role === 'EVENTS' || user?.role === 'ENTERTAINMENT' || user?.role === 'SERVICE_PROVIDER') providerNature = 'SERVICE';
+        else if (user?.subRole === 'HYBRID_SELLER') providerNature = 'BOTH';
+        const leadCats = lead.category.split(',').map((c) => c.trim());
+        const leadCatIds = leadCats
+          .map((name) => CATEGORIES_DB.find((c) => c.name.toLowerCase() === name.toLowerCase())?.id)
+          .filter(Boolean) as string[];
+
+        // If we can't find the category in DB, we use a string-based guess for nature
+        const natures = leadCatIds.length > 0 
+          ? leadCatIds.map((id) => getCategoryNature(id))
+          : [lead.category.toLowerCase().includes('phone') || lead.category.toLowerCase().includes('laptop') ? 'PRODUCT' : 'SERVICE'];
+
+        if (providerNature === 'PRODUCT') {
+          return natures.some((n) => n === 'PRODUCT' || n === 'BOTH');
         }
-        if (user.subRole === 'SERVICE_SELLER') {
-          return natures.some(n => n === 'SERVICE' || n === 'BOTH');
+        if (providerNature === 'SERVICE') {
+          return natures.some((n) => n === 'SERVICE' || n === 'BOTH');
         }
-        return true; // HYBRID_SELLER
+        return true; // BOTH / HYBRID
       });
     }
 
     if (user?.categories && user.categories.length > 0) {
-      filtered = filtered.filter(lead => {
-        if (!lead.category) return true; // Show uncategorized leads to everyone
+      filtered = filtered.filter((lead) => {
+        // If it's targeted directly to this provider, always show it
+        if (lead.targetedProviderId === effectiveProviderId) return true;
         
-        const leadCats = lead.category.split(',').map(c => c.trim());
-        
-        const isMatch = user.categories?.some(providerCat => 
-          leadCats.some(leadCat => isRelatedCategory(providerCat, leadCat))
+        if (!lead.category) return false; // Hide uncategorized leads from providers to prevent leakage
+
+        const leadCats = lead.category.split(',').map((c) => c.trim());
+
+        const isMatch = user.categories?.some((providerCat) =>
+          leadCats.some((leadCat) => isRelatedCategory(providerCat, leadCat))
         );
         return isMatch;
       });
     }
-    
+
     return filtered;
   }, [user?.categories, user?.role, user?.subRole, allLeads, myQuotes, effectiveProviderId]);
 
@@ -226,10 +348,14 @@ export default function ProviderDashboard() {
   const [activeChecklistQuote, setActiveChecklistQuote] = useState<Quote | null>(null);
   const [checklistSteps, setChecklistSteps] = useState({ photo: false, received: false });
   const [handoverCompleteQuote, setHandoverCompleteQuote] = useState<Quote | null>(null);
-  const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error', isVisible: boolean }>({
+  const [notification, setNotification] = useState<{
+    message: string;
+    type: 'success' | 'error';
+    isVisible: boolean;
+  }>({
     message: '',
     type: 'success',
-    isVisible: false
+    isVisible: false,
   });
 
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
@@ -237,19 +363,25 @@ export default function ProviderDashboard() {
   };
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
 
-  const venueSpaces = useLiveQuery(
-    async () => {
+  const venueSpaces =
+    useLiveQuery(async () => {
+      // Temporarily disabled to stop 404 logs until backend route /venue-spaces is implemented
       if (!effectiveProviderId || user?.role !== 'EVENTS') return [];
-      return await db.venueSpaces.where('providerId').equals(effectiveProviderId).toArray();
-    },
-    [effectiveProviderId, user?.role]
-  ) || [];
+      return [] as any[];
+      /* 
+      try {
+        return await db.venueSpaces.where('providerId').equals(effectiveProviderId).toArray();
+      } catch (e) {
+        return [];
+      }
+      */
+    }, [effectiveProviderId, user?.role]) || [];
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeTab]);
 
-  const handleConfirmCollection = async (quoteId: number) => {
+  const handleConfirmCollection = async (quoteId: string | number) => {
     if (!user) return;
     setIsUpdating(true);
     try {
@@ -260,16 +392,17 @@ export default function ProviderDashboard() {
 
       // Release funds from escrow
       const escrowTx = await db.transactions
-        .where('quoteId').equals(quoteId)
-        .filter(tx => tx.status === 'ESCROW')
-        .first();
-      
+        .where('quoteId')
+        .equals(quoteId)
+        .toArray()
+        .then((txs: any[]) => txs.find((tx: any) => tx.status === 'ESCROW'));
+
       if (escrowTx && escrowTx.id) {
-        await db.transactions.update(escrowTx.id, { 
+        await db.transactions.update(escrowTx.id, {
           status: 'COMPLETED',
           description: `Funds released for Quote #${quoteId} (Handover Completed)`,
           category: 'ESCROW_RELEASE',
-          createdAt: Date.now()
+          createdAt: Date.now(),
         });
       }
 
@@ -332,29 +465,32 @@ export default function ProviderDashboard() {
     let scanner: Html5QrcodeScanner | null = null;
     if (scanningQuoteId) {
       scanner = new Html5QrcodeScanner(
-        "qr-reader",
+        'qr-reader',
         { fps: 10, qrbox: { width: 250, height: 250 } },
         /* verbose= */ false
       );
-      
-      scanner.render((decodedText) => {
-        // Assume decodedText is the quote ID or a specific code
-        if (decodedText.includes(`QT-${scanningQuoteId}`)) {
-          scanner?.clear();
-          setScanningQuoteId(null);
-          db.quotes.get(scanningQuoteId).then(quote => {
-            if (quote) setVerifyingQuote(quote);
-          });
-        } else {
-          showNotification("Invalid QR Code for this order.", "error");
+
+      scanner.render(
+        (decodedText) => {
+          // Assume decodedText is the quote ID or a specific code
+          if (decodedText.includes(`QT-${scanningQuoteId}`)) {
+            scanner?.clear();
+            setScanningQuoteId(null);
+            db.quotes.get(scanningQuoteId).then((quote) => {
+              if (quote) setVerifyingQuote(quote);
+            });
+          } else {
+            showNotification('Invalid QR Code for this order.', 'error');
+          }
+        },
+        (error) => {
+          // Ignore errors
         }
-      }, (error) => {
-        // Ignore errors
-      });
+      );
     }
     return () => {
       if (scanner) {
-        scanner.clear().catch(err => console.error("Failed to clear scanner", err));
+        scanner.clear().catch((err) => console.error('Failed to clear scanner', err));
       }
     };
   }, [scanningQuoteId]);
@@ -366,10 +502,10 @@ export default function ProviderDashboard() {
       await db.quotes.update(verifyingQuote.id, { status: 'AWAITING_PICKUP' });
       setActiveChecklistQuote(verifyingQuote);
       setVerifyingQuote(null);
-      showNotification("Buyer identity verified successfully!");
+      showNotification('Buyer identity verified successfully!');
     } catch (error) {
-      console.error("Failed to update status:", error);
-      showNotification("Failed to verify buyer. Please try again.", "error");
+      console.error('Failed to update status:', error);
+      showNotification('Failed to verify buyer. Please try again.', 'error');
     } finally {
       setIsUpdating(false);
     }
@@ -377,54 +513,79 @@ export default function ProviderDashboard() {
 
   const handleTakePhoto = () => {
     // Simulate taking a photo
-    setCapturedPhoto("https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&fit=crop&q=80&w=400&h=400");
-    setChecklistSteps(prev => ({ ...prev, photo: true }));
+    setCapturedPhoto(
+      'https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&fit=crop&q=80&w=400&h=400'
+    );
+    setChecklistSteps((prev) => ({ ...prev, photo: true }));
   };
 
   const handleDynamicQuoteSubmit = async (submittedQuoteData: any) => {
     if (!quotingInquiryId || !user) return;
 
-    const lead = leads.find(l => l.id === quotingInquiryId);
-    
-    // Calculate total from item prices if they exist, otherwise use the manual price
-    const itemPricesArray = lead?.items.map((item, idx) => ({
-      itemId: item.id || `${lead.id}-item-${idx}`,
-      price: Number(itemPrices[`${quotingInquiryId}-${idx}`] || 0)
-    })).filter(ip => ip.price > 0);
+    const lead = leads.find((l) => l.id === quotingInquiryId);
 
-    const totalPrice = itemPricesArray && itemPricesArray.length > 0 
-      ? itemPricesArray.reduce((sum, ip) => sum + ip.price, 0)
-      : (submittedQuoteData.calculatedTotal > 0 ? submittedQuoteData.calculatedTotal : Number(submittedQuoteData.price || 0));
+    // Calculate total from item prices if they exist, otherwise use the manual price
+    const itemPricesArray = lead?.items
+      .map((item, idx) => ({
+        itemId: item.id || `${lead.id}-item-${idx}`,
+        price: Number(itemPrices[`${quotingInquiryId}-${idx}`] || 0),
+      }))
+      .filter((ip) => ip.price > 0);
+
+    const totalPrice =
+      itemPricesArray && itemPricesArray.length > 0
+        ? itemPricesArray.reduce((sum, ip) => sum + ip.price, 0)
+        : Number(submittedQuoteData.calculatedTotal || submittedQuoteData.price || submittedQuoteData.venueHireFee || 0);
 
     const adminUser = user.parentProviderId ? await db.users.get(user.parentProviderId) : user;
-    
-    const newQuote: Quote = {
+
+    const newQuote: any = {
       inquiryId: quotingInquiryId,
       inquiryTitle: lead?.title || 'Inquiry',
       price: totalPrice,
       condition: submittedQuoteData.condition || 'N/A',
-      message: submittedQuoteData.message || '',
+      message:
+        (submittedQuoteData.message || '').length >= 10
+          ? submittedQuoteData.message
+          : (
+              submittedQuoteData.message ||
+              'Thank you for your inquiry. We are pleased to provide this quotation for your review.'
+            ).padEnd(10, ' '),
       expiryDuration: submittedQuoteData.expiryDuration || '1 Month',
       status: 'PENDING' as const,
-      providerId: effectiveProviderId!,
+      providerId: effectiveProviderId, // Keep as UUID string
       providerName: adminUser?.name || user.name,
-      createdAt: Date.now(),
-      itemPrices: itemPricesArray && itemPricesArray.length > 0 ? itemPricesArray : undefined,
-      requirements: [], // We can omit requirements for now, or add them to the dynamic form
-      dynamicFields: submittedQuoteData, // Save all dynamic fields
-      ...(submittedQuoteData.venueSpaceId ? {
-        venueSpaceId: Number(submittedQuoteData.venueSpaceId),
-        venueSpaceName: venueSpaces.find(v => v.id === Number(submittedQuoteData.venueSpaceId))?.name,
-        damageDeposit: submittedQuoteData.damageDeposit ? Number(submittedQuoteData.damageDeposit) : undefined,
-        cleaningFee: submittedQuoteData.cleaningFee ? Number(submittedQuoteData.cleaningFee) : undefined,
-      } : {}),
-      delivery: {
-        offered: submittedQuoteData.optionalDeliveryOffer === true || !!submittedQuoteData.deliveryFee,
+      // createdAt removed - backend should handle it
+      itemPrices:
+        itemPricesArray && itemPricesArray.length > 0 ? JSON.stringify(itemPricesArray) : undefined,
+      requirements: JSON.stringify([]), // Must be a JSON string
+      dynamicFields: JSON.stringify(submittedQuoteData), // Must be a JSON string
+      ...(submittedQuoteData.venueSpaceId
+        ? {
+            venueSpaceId: Number(submittedQuoteData.venueSpaceId),
+            venueSpaceName: venueSpaces.find(
+              (v) => v.id === Number(submittedQuoteData.venueSpaceId)
+            )?.name,
+            damageDeposit: submittedQuoteData.damageDeposit
+              ? Number(submittedQuoteData.damageDeposit)
+              : undefined,
+            cleaningFee: submittedQuoteData.cleaningFee
+              ? Number(submittedQuoteData.cleaningFee)
+              : undefined,
+          }
+        : {}),
+      delivery: JSON.stringify({
+        offered:
+          submittedQuoteData.optionalDeliveryOffer === true || !!submittedQuoteData.deliveryFee,
         fee: Number(submittedQuoteData.optionalDeliveryFee || submittedQuoteData.deliveryFee || 0),
-        method: (submittedQuoteData.optionalDeliveryOffer === true || !!submittedQuoteData.deliveryFee) ? 'SELLER_DELIVERY' : 'PICKUP'
-      },
-      pickupInstructions: submittedQuoteData.pickupInstructions || '',
-      processType: submittedQuoteData.processType
+        method:
+          submittedQuoteData.optionalDeliveryOffer === true || !!submittedQuoteData.deliveryFee
+            ? 'SELLER_DELIVERY'
+            : 'PICKUP',
+        pickupInstructions: submittedQuoteData.pickupInstructions || '',
+      }),
+      // pickupInstructions removed from top level
+      processType: submittedQuoteData.processType,
     };
 
     console.log('ProviderDashboard: Adding new quote:', newQuote);
@@ -452,10 +613,6 @@ export default function ProviderDashboard() {
       setExpandedInquiryId(null);
     } else {
       setExpandedInquiryId(id);
-      const inquiry = await db.inquiries.get(id);
-      if (inquiry) {
-        await db.inquiries.update(id, { viewCount: (inquiry.viewCount || 0) + 1 });
-      }
     }
   };
 
@@ -467,12 +624,15 @@ export default function ProviderDashboard() {
     }
   };
 
-    const handlePrintQuote = (quote: Quote, inquiry: Inquiry) => {
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) return;
+  const handlePrintQuote = (quote: Quote, inquiry: Inquiry) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
 
-      const itemsHtml = inquiry.items.map((item, idx) => {
-        const itemPrice = quote.itemPrices?.find(ip => ip.itemId === (item.id || `${inquiry.id}-item-${idx}`))?.price;
+    const itemsHtml = inquiry.items
+      .map((item, idx) => {
+        const itemPrice = quote.itemPrices?.find(
+          (ip: any) => ip.itemId === (item.id || `${inquiry.id}-item-${idx}`)
+        )?.price;
         return `
           <tr>
             <td style="padding: 12px; border-bottom: 1px solid #eee;">
@@ -488,9 +648,10 @@ export default function ProviderDashboard() {
             <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right; color: #d49b35; font-weight: bold;">${itemPrice ? `K${itemPrice.toLocaleString()}` : 'N/A'}</td>
           </tr>
         `;
-      }).join('');
+      })
+      .join('');
 
-      const html = `
+    const html = `
         <!DOCTYPE html>
         <html>
           <head>
@@ -610,20 +771,20 @@ export default function ProviderDashboard() {
         </html>
       `;
 
-      printWindow.document.write(html);
-      printWindow.document.close();
-    };
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
 
   const handleReschedule = async () => {
     if (!selectedSchedule || !rescheduleDate || !rescheduleTime) return;
-    
+
     await db.schedules.update(selectedSchedule.id, {
       date: rescheduleDate,
       startTime: rescheduleTime,
       status: 'RESCHEDULED',
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     });
-    
+
     setIsRescheduleModalOpen(false);
     setSelectedSchedule(null);
     setRescheduleDate('');
@@ -631,202 +792,218 @@ export default function ProviderDashboard() {
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto pb-24 px-0 sm:px-0">
+    <div className="w-full pb-24 px-0 sm:px-0">
       {activeTab === 'collection' ? (
-         <DynamicAccountRenderer
-           schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
-           view="collection"
-           data={{}}
-           onAction={handleAction}
-           onNavigate={handleTabClick}
-           user={user}
-         />
-       ) :
-       activeTab === 'home' ? (
-         <DynamicAccountRenderer
-           schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
-           view="home"
-           data={{
-             homeProps: {
-               user,
-               leads,
-               myQuotes,
-               products,
-               schedules,
-               availableBalance,
-               pendingClearance,
-               chartData,
-               isSelectionMode,
-               selectedInquiryIds,
-               onTabClick: handleTabClick,
-               onAction: handleAction,
-               onSelectionToggle: () => { setIsSelectionMode(!isSelectionMode); setSelectedInquiryIds([]); },
-               onSelectInquiry: (id, checked) => checked ? setSelectedInquiryIds([...selectedInquiryIds, id]) : setSelectedInquiryIds(selectedInquiryIds.filter(i => i !== id)),
-               onArchiveSelected: handleArchiveSelected,
-               onDeleteSelected: handleDeleteSelected,
-             }
-           }}
-           onAction={handleAction}
-           onNavigate={handleTabClick}
-           user={user}
-         />
-       ) :
-       activeTab === 'leads' ? (
-         <DynamicAccountRenderer
-           schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
-           view="leads"
-           data={{
-             leadsProps: {
-               user,
-               leads,
-               isSelectionMode,
-               selectedInquiryIds,
-               quotingInquiryId,
-               itemPrices,
-               venueSpaces,
-               onArchiveSelected: handleArchiveSelected,
-               onDeleteSelected: handleDeleteSelected,
-               onSetSelectionMode: setIsSelectionMode,
-               onSetSelectedInquiryIds: setSelectedInquiryIds,
-               onSetItemPrices: setItemPrices,
-               onSetQuotingInquiryId: setQuotingInquiryId,
-               onQuoteSubmit: handleDynamicQuoteSubmit,
-               renderSpecifications,
-             }
-           }}
-           onAction={handleAction}
-           onNavigate={handleTabClick}
-           user={user}
-         />
-       ) :
-       activeTab === 'paid-orders' ? (
-         <DynamicAccountRenderer
-           schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
-           view="paid-orders"
-           data={{
-             ordersProps: {
-               user,
-               displayQuotes,
-               isBookingBased,
-               onSetActiveChecklistQuote: setActiveChecklistQuote,
-               onStartScan: handleStartScan,
-             }
-           }}
-           onAction={handleAction}
-           onNavigate={handleTabClick}
-           user={user}
-         />
-       ) :
-       activeTab === 'my-quotes' ? (
-         <DynamicAccountRenderer
-           schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
-           view="my-quotes"
-           data={{
-             quotesProps: {
-               user,
-               displayQuotes,
-               quoteSort,
-               expandedInquiryId,
-               onSetQuoteSort: setQuoteSort,
-               onToggleExpand: toggleExpand,
-               onPrintQuote: handlePrintQuote,
-               onArchiveQuote: handleArchiveQuote,
-               renderSpecifications,
-             }
-           }}
-           onAction={handleAction}
-           onNavigate={handleTabClick}
-           user={user}
-         />
-       ) :
-       activeTab === 'products' ? (
-         <DynamicAccountRenderer
-           schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
-           view="products"
-           data={{
-             productsProps: { user }
-           }}
-           onAction={handleAction}
-           onNavigate={handleTabClick}
-           user={user}
-         />
-       ) :
-       activeTab === 'schedule' ? (
-         <DynamicAccountRenderer
-           schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
-           view="schedule"
-           data={{
-             scheduleProps: {
-               user,
-               schedules,
-               selectedSchedule,
-               isRescheduleModalOpen,
-               rescheduleDate,
-               rescheduleTime,
-               onSetSelectedSchedule: setSelectedSchedule,
-               onSetRescheduleModalOpen: setIsRescheduleModalOpen,
-               onSetRescheduleDate: setRescheduleDate,
-               onSetRescheduleTime: setRescheduleTime,
-               onReschedule: handleReschedule,
-             }
-           }}
-           onAction={handleAction}
-           onNavigate={handleTabClick}
-           user={user}
-         />
-       ) :
-       activeTab === 'team' && hasPermission(user, PERMISSIONS.MANAGE_TEAM) ? (
-         <DynamicAccountRenderer
-           schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
-           view="team"
-           data={{
-             teamProps: { user }
-           }}
-           onAction={handleAction}
-           onNavigate={handleTabClick}
-           user={user}
-         />
-       ) : (
-         <DynamicAccountRenderer
-           schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
-           view="home"
-           data={{
-             homeProps: {
-               user,
-               leads,
-               myQuotes,
-               products,
-               schedules,
-               availableBalance,
-               pendingClearance,
-               chartData,
-               isSelectionMode,
-               selectedInquiryIds,
-               onTabClick: handleTabClick,
-               onAction: handleAction,
-               onSelectionToggle: () => { setIsSelectionMode(!isSelectionMode); setSelectedInquiryIds([]); },
-               onSelectInquiry: (id, checked) => checked ? setSelectedInquiryIds([...selectedInquiryIds, id]) : setSelectedInquiryIds(selectedInquiryIds.filter(i => i !== id)),
-               onArchiveSelected: handleArchiveSelected,
-               onDeleteSelected: handleDeleteSelected,
-             }
-           }}
-           onAction={handleAction}
-           onNavigate={handleTabClick}
-           user={user}
-         />
-       )}
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="collection"
+          data={{}}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'home' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="home"
+          data={{
+            homeProps: {
+              user,
+              leads,
+              myQuotes,
+              products,
+              schedules,
+              availableBalance,
+              pendingClearance,
+              chartData,
+              isSelectionMode,
+              selectedInquiryIds,
+              onTabClick: handleTabClick,
+              onAction: handleAction,
+              onSelectionToggle: () => {
+                setIsSelectionMode(!isSelectionMode);
+                setSelectedInquiryIds([]);
+              },
+              onSelectInquiry: (id: number, checked: boolean) =>
+                checked
+                  ? setSelectedInquiryIds([...selectedInquiryIds, id])
+                  : setSelectedInquiryIds(selectedInquiryIds.filter((i) => i !== id)),
+              onArchiveSelected: handleArchiveSelected,
+              onDeleteSelected: handleDeleteSelected,
+            },
+          }}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'leads' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="leads"
+          data={{
+            leadsProps: {
+              user,
+              leads,
+              isSelectionMode,
+              selectedInquiryIds,
+              quotingInquiryId,
+              itemPrices,
+              venueSpaces,
+              onArchiveSelected: handleArchiveSelected,
+              onDeleteSelected: handleDeleteSelected,
+              onSetSelectionMode: setIsSelectionMode,
+              onSetSelectedInquiryIds: setSelectedInquiryIds,
+              onSetItemPrices: setItemPrices,
+              onSetQuotingInquiryId: setQuotingInquiryId,
+              onQuoteSubmit: handleDynamicQuoteSubmit,
+              renderSpecifications,
+            },
+          }}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'paid-orders' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="paid-orders"
+          data={{
+            ordersProps: {
+              user,
+              displayQuotes,
+              isBookingBased,
+              onSetActiveChecklistQuote: setActiveChecklistQuote,
+              onStartScan: handleStartScan,
+            },
+          }}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'my-quotes' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="my-quotes"
+          data={{
+            quotesProps: {
+              user,
+              displayQuotes,
+              quoteSort,
+              expandedInquiryId,
+              onSetQuoteSort: setQuoteSort,
+              onToggleExpand: toggleExpand,
+              onPrintQuote: handlePrintQuote,
+              onArchiveQuote: handleArchiveQuote,
+              renderSpecifications,
+            },
+          }}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'products' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="products"
+          data={{
+            productsProps: { user },
+          }}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'schedule' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="schedule"
+          data={{
+            scheduleProps: {
+              user,
+              schedules,
+              selectedSchedule,
+              isRescheduleModalOpen,
+              rescheduleDate,
+              rescheduleTime,
+              onSetSelectedSchedule: setSelectedSchedule,
+              onSetRescheduleModalOpen: setIsRescheduleModalOpen,
+              onSetRescheduleDate: setRescheduleDate,
+              onSetRescheduleTime: setRescheduleTime,
+              onReschedule: handleReschedule,
+            },
+          }}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'team' && hasPermission(user, PERMISSIONS.MANAGE_TEAM) ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="team"
+          data={{
+            teamProps: { user },
+          }}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'financial' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="financial"
+          data={{}}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="home"
+          data={{
+            homeProps: {
+              user,
+              leads,
+              myQuotes,
+              products,
+              schedules,
+              availableBalance,
+              pendingClearance,
+              chartData,
+              isSelectionMode,
+              selectedInquiryIds,
+              onTabClick: handleTabClick,
+              onAction: handleAction,
+              onSelectionToggle: () => {
+                setIsSelectionMode(!isSelectionMode);
+                setSelectedInquiryIds([]);
+              },
+              onSelectInquiry: (id: number, checked: boolean) =>
+                checked
+                  ? setSelectedInquiryIds([...selectedInquiryIds, id])
+                  : setSelectedInquiryIds(selectedInquiryIds.filter((i) => i !== id)),
+              onArchiveSelected: handleArchiveSelected,
+              onDeleteSelected: handleDeleteSelected,
+            },
+          }}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      )}
 
       <AnimatePresence>
         {/* QR Scanner Modal */}
         {/* Notification System */}
-        <Notification 
+        <Notification
+          key="notificationModal"
           message={notification.message}
           type={notification.type}
           isVisible={notification.isVisible}
-          onClose={() => setNotification(prev => ({ ...prev, isVisible: false }))}
+          onClose={() => setNotification((prev) => ({ ...prev, isVisible: false }))}
         />
 
         <ConfirmModal
+          key="confirmDeleteModal"
           isOpen={isDeleteModalOpen}
           onClose={() => setIsDeleteModalOpen(false)}
           onConfirm={confirmDeleteSelected}
@@ -837,27 +1014,31 @@ export default function ProviderDashboard() {
         />
 
         {scanningQuoteId && (
-          <motion.div 
+          <motion.div
+            key="scannerModal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] flex flex-col"
+            className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-100 flex flex-col"
           >
             <div className="p-6 flex items-center justify-between text-white">
-              <button onClick={() => setScanningQuoteId(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+              <button
+                onClick={() => setScanningQuoteId(null)}
+                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              >
                 <ArrowLeft className="w-6 h-6" />
               </button>
               <h3 className="text-lg font-bold">Scan Buyer QR Code</h3>
               <div className="w-10" />
             </div>
-            
+
             <div className="flex-1 flex flex-col items-center justify-center p-6">
               <div className="w-full max-w-sm aspect-square bg-black rounded-3xl overflow-hidden border-4 border-[#d49b35] relative shadow-2xl shadow-[#d49b35]/20">
                 <div id="qr-reader" className="w-full h-full"></div>
-                <div className="absolute inset-0 border-[40px] border-black/40 pointer-events-none"></div>
+                <div className="absolute inset-0 border-40 border-black/40 pointer-events-none"></div>
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-2 border-[#d49b35] border-dashed rounded-2xl animate-pulse"></div>
               </div>
-              
+
               <div className="mt-12 text-center space-y-4 max-w-xs">
                 <div className="w-12 h-12 bg-[#d49b35]/20 rounded-2xl flex items-center justify-center mx-auto">
                   <QrCode className="w-6 h-6 text-[#d49b35]" />
@@ -872,64 +1053,91 @@ export default function ProviderDashboard() {
 
         {/* Buyer Verification Modal */}
         {verifyingQuote && (
-          <motion.div 
+          <motion.div
+            key="verifyingModal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-110 flex items-center justify-center p-4"
           >
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              className="bg-white rounded-[32px] w-full max-w-md overflow-hidden shadow-2xl"
+              className="bg-white rounded-4xl w-full max-w-md overflow-hidden shadow-2xl"
             >
               <div className="p-8 text-center border-b border-slate-50">
                 <div className="w-20 h-20 bg-[#fdf6e9] rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-white shadow-xl">
                   <ShieldCheck className="w-10 h-10 text-[#d49b35]" />
                 </div>
-                <h3 className="text-2xl font-serif font-black text-slate-900 mb-2">Verify Buyer Identity</h3>
-                <p className="text-slate-500 text-sm font-medium">Please confirm the details match the person in front of you</p>
+                <h3 className="text-2xl font-serif font-black text-slate-900 mb-2">
+                  Verify Buyer Identity
+                </h3>
+                <p className="text-slate-500 text-sm font-medium">
+                  Please confirm the details match the person in front of you
+                </p>
               </div>
-              
+
               <div className="p-8 space-y-6">
                 <div className="space-y-4">
                   <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                     <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-sm">
-                      <img src={`https://picsum.photos/seed/${verifyingQuote.inquiryId}/100/100`} alt="Buyer" className="w-full h-full object-cover" />
+                      <img
+                        src={`https://picsum.photos/seed/${verifyingQuote.inquiryId}/100/100`}
+                        alt="Buyer"
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Buyer Name</p>
-                      <p className="text-base font-black text-slate-900">{(verifyingQuote as any).inquiry?.buyerName || 'Verified Buyer'}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        Buyer Name
+                      </p>
+                      <p className="text-base font-black text-slate-900">
+                        {(verifyingQuote as any).inquiry?.buyerName || 'Verified Buyer'}
+                      </p>
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Quote ID</p>
-                      <p className="text-sm font-black text-slate-900">#QT-{verifyingQuote.id?.toString().padStart(4, '0')}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                        Quote ID
+                      </p>
+                      <p className="text-sm font-black text-slate-900">
+                        #QT-{verifyingQuote.id?.toString().padStart(4, '0')}
+                      </p>
                     </div>
                     <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Amount</p>
-                      <p className="text-sm font-black text-[#d49b35]">ZMW {verifyingQuote.price.toLocaleString()}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                        Budget (ZMW)
+                      </p>
+                      <p className="text-sm font-black text-[#d49b35]">
+                        {((verifyingQuote as any).inquiry?.attributes?.budget && (verifyingQuote as any).inquiry.attributes.budget > 0) 
+                          ? `ZMW ${(verifyingQuote as any).inquiry.attributes.budget.toLocaleString()}` 
+                          : 'Not specified'}
+                      </p>
                     </div>
                   </div>
-                  
+
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Item Details</p>
-                    <p className="text-sm font-bold text-slate-700 truncate">{verifyingQuote.inquiryTitle}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                      Item Details
+                    </p>
+                    <p className="text-sm font-bold text-slate-700 truncate">
+                      {verifyingQuote.inquiryTitle}
+                    </p>
                   </div>
                 </div>
-                
+
                 <div className="flex gap-3 pt-2">
-                  <button 
+                  <button
                     onClick={() => setVerifyingQuote(null)}
                     className="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-2xl hover:bg-slate-200 transition-all"
                   >
                     Cancel
                   </button>
-                  <button 
+                  <button
                     onClick={handleVerifyBuyer}
-                    className="flex-[2] py-4 bg-[#d49b35] text-white font-bold rounded-2xl hover:bg-[#a37d35] transition-all shadow-lg shadow-[#d49b35]/20"
+                    className="flex-2 py-4 bg-[#d49b35] text-white font-bold rounded-2xl hover:bg-[#a37d35] transition-all shadow-lg shadow-[#d49b35]/20"
                   >
                     Confirm Identity
                   </button>
@@ -941,42 +1149,60 @@ export default function ProviderDashboard() {
 
         {/* Pickup Checklist Modal */}
         {activeChecklistQuote && (
-          <motion.div 
+          <motion.div
+            key="checklistModal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-120 flex items-center justify-center p-4"
           >
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              className="bg-white rounded-[32px] w-full max-w-md overflow-hidden shadow-2xl"
+              className="bg-white rounded-4xl w-full max-w-md overflow-hidden shadow-2xl"
             >
               <div className="p-6 border-b border-slate-50 flex items-center justify-between">
                 <h3 className="text-xl font-serif font-black text-slate-900">Pickup Checklist</h3>
-                <button onClick={() => setActiveChecklistQuote(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                <button
+                  onClick={() => setActiveChecklistQuote(null)}
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                >
                   <X className="w-5 h-5 text-slate-400" />
                 </button>
               </div>
-              
+
               <div className="p-8">
                 <div className="space-y-12 relative">
                   {/* Vertical Line */}
-                  <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100"></div>
-                  
+                  <div className="absolute left-4.75 top-2 bottom-2 w-0.5 bg-slate-100"></div>
+
                   {/* Step 1 */}
                   <div className="relative flex gap-6">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center z-10 border-4 border-white shadow-sm transition-colors ${checklistSteps.photo ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                      {checklistSteps.photo ? <Check className="w-5 h-5" /> : <span className="text-sm font-black">1</span>}
+                    <div
+                      className={`w-10 h-10 rounded-full flex items-center justify-center z-10 border-4 border-white shadow-sm transition-colors ${checklistSteps.photo ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}
+                    >
+                      {checklistSteps.photo ? (
+                        <Check className="w-5 h-5" />
+                      ) : (
+                        <span className="text-sm font-black">1</span>
+                      )}
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-black text-slate-900 text-lg mb-1">Take Handover Photo</h4>
-                      <p className="text-slate-500 text-sm mb-4">Capture the item being handed over to the buyer</p>
-                      
+                      <h4 className="font-black text-slate-900 text-lg mb-1">
+                        Take Handover Photo
+                      </h4>
+                      <p className="text-slate-500 text-sm mb-4">
+                        Capture the item being handed over to the buyer
+                      </p>
+
                       {capturedPhoto ? (
                         <div className="relative w-full aspect-video rounded-2xl overflow-hidden border-2 border-emerald-500 shadow-md">
-                          <img src={capturedPhoto} alt="Handover" className="w-full h-full object-cover" />
-                          <button 
+                          <img
+                            src={capturedPhoto}
+                            alt="Handover"
+                            className="w-full h-full object-cover"
+                          />
+                          <button
                             onClick={() => setCapturedPhoto(null)}
                             className="absolute top-2 right-2 p-2 bg-black/50 text-white rounded-full backdrop-blur-md"
                           >
@@ -984,44 +1210,66 @@ export default function ProviderDashboard() {
                           </button>
                         </div>
                       ) : (
-                        <button 
+                        <button
                           onClick={handleTakePhoto}
                           className="w-full py-4 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-2 hover:border-[#d49b35] hover:bg-[#fdf6e9] transition-all group"
                         >
                           <Camera className="w-6 h-6 text-slate-400 group-hover:text-[#d49b35]" />
-                          <span className="text-xs font-bold text-slate-500 group-hover:text-[#d49b35]">Tap to capture photo</span>
+                          <span className="text-xs font-bold text-slate-500 group-hover:text-[#d49b35]">
+                            Tap to capture photo
+                          </span>
                         </button>
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Step 2 */}
                   <div className="relative flex gap-6">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center z-10 border-4 border-white shadow-sm transition-colors ${checklistSteps.received ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                      {checklistSteps.received ? <Check className="w-5 h-5" /> : <span className="text-sm font-black">2</span>}
+                    <div
+                      className={`w-10 h-10 rounded-full flex items-center justify-center z-10 border-4 border-white shadow-sm transition-colors ${checklistSteps.received ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}
+                    >
+                      {checklistSteps.received ? (
+                        <Check className="w-5 h-5" />
+                      ) : (
+                        <span className="text-sm font-black">2</span>
+                      )}
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-black text-slate-900 text-lg mb-1">Confirm Item Receipt</h4>
-                      <p className="text-slate-500 text-sm mb-4">Buyer has inspected and received all items</p>
-                      
-                      <button 
-                        onClick={() => setChecklistSteps(prev => ({ ...prev, received: !prev.received }))}
+                      <h4 className="font-black text-slate-900 text-lg mb-1">
+                        Confirm Item Receipt
+                      </h4>
+                      <p className="text-slate-500 text-sm mb-4">
+                        Buyer has inspected and received all items
+                      </p>
+
+                      <button
+                        onClick={() =>
+                          setChecklistSteps((prev) => ({ ...prev, received: !prev.received }))
+                        }
                         className={`w-full py-4 rounded-2xl border-2 font-bold text-sm transition-all flex items-center justify-center gap-2 ${checklistSteps.received ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
                       >
-                        {checklistSteps.received ? <CheckCircle className="w-5 h-5" /> : <div className="w-5 h-5 rounded-full border-2 border-slate-200" />}
+                        {checklistSteps.received ? (
+                          <CheckCircle className="w-5 h-5" />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full border-2 border-slate-200" />
+                        )}
                         {checklistSteps.received ? 'Items Received' : 'Confirm Receipt'}
                       </button>
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="mt-12 pt-8 border-t border-slate-50">
-                  <button 
+                  <button
                     disabled={!checklistSteps.photo || !checklistSteps.received || isUpdating}
                     onClick={() => handleConfirmCollection(activeChecklistQuote.id!)}
-                    className={`w-full py-5 rounded-2xl font-black text-lg shadow-xl transition-all flex items-center justify-center gap-3 ${(!checklistSteps.photo || !checklistSteps.received) ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none' : 'bg-[#1e293b] text-white hover:bg-[#0f172a] shadow-slate-200 active:scale-[0.98]'}`}
+                    className={`w-full py-5 rounded-2xl font-black text-lg shadow-xl transition-all flex items-center justify-center gap-3 ${!checklistSteps.photo || !checklistSteps.received ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none' : 'bg-brand-dark text-white hover:bg-brand-navy-dark shadow-slate-200 active:scale-[0.98]'}`}
                   >
-                    {isUpdating ? <Loader2 className="w-6 h-6 animate-spin" /> : <CheckCircle className="w-6 h-6" />}
+                    {isUpdating ? (
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                    ) : (
+                      <CheckCircle className="w-6 h-6" />
+                    )}
                     Confirm Handover
                   </button>
                   <p className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-4 flex items-center justify-center gap-2">
@@ -1036,14 +1284,15 @@ export default function ProviderDashboard() {
 
         {/* Handover Complete Screen */}
         {handoverCompleteQuote && (
-          <motion.div 
+          <motion.div
+            key="handoverCompleteModal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-[#fffaf5] z-[200] flex flex-col"
+            className="fixed inset-0 bg-brand-white z-200 flex flex-col"
           >
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-              <motion.div 
+              <motion.div
                 initial={{ scale: 0, rotate: -20 }}
                 animate={{ scale: 1, rotate: 0 }}
                 transition={{ type: 'spring', damping: 12 }}
@@ -1051,8 +1300,8 @@ export default function ProviderDashboard() {
               >
                 <Check className="w-16 h-16 text-white" />
               </motion.div>
-              
-              <motion.h2 
+
+              <motion.h2
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
@@ -1060,48 +1309,65 @@ export default function ProviderDashboard() {
               >
                 Handover Complete!
               </motion.h2>
-              
-              <motion.p 
+
+              <motion.p
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
                 className="text-slate-500 font-medium max-w-xs mx-auto mb-12"
               >
-                The items have been successfully collected and funds have been released to your account.
+                The items have been successfully collected and funds have been released to your
+                account.
               </motion.p>
-              
-              <motion.div 
+
+              <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.4 }}
-                className="w-full max-w-sm bg-white rounded-[32px] p-8 shadow-xl shadow-slate-200/50 border border-slate-100 space-y-6"
+                className="w-full max-w-sm bg-white rounded-4xl p-8 shadow-xl shadow-slate-200/50 border border-slate-100 space-y-6"
               >
                 <div className="flex justify-between items-center pb-4 border-b border-slate-50">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Amount Released</span>
-                  <span className="text-2xl font-black text-emerald-600">ZMW {handoverCompleteQuote.price.toLocaleString()}</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                    Amount Released
+                  </span>
+                  <span className="text-2xl font-black text-emerald-600">
+                    ZMW {handoverCompleteQuote.price.toLocaleString()}
+                  </span>
                 </div>
-                
+
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Order ID</span>
-                    <span className="text-sm font-black text-slate-900">#QT-{handoverCompleteQuote.id?.toString().padStart(4, '0')}</span>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                      Order ID
+                    </span>
+                    <span className="text-sm font-black text-slate-900">
+                      #QT-{handoverCompleteQuote.id?.toString().padStart(4, '0')}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Buyer</span>
-                    <span className="text-sm font-black text-slate-900">{(handoverCompleteQuote as any).inquiry?.buyerName || 'Verified Buyer'}</span>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                      Buyer
+                    </span>
+                    <span className="text-sm font-black text-slate-900">
+                      {(handoverCompleteQuote as any).inquiry?.buyerName || 'Verified Buyer'}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Date</span>
-                    <span className="text-sm font-black text-slate-900">{new Date().toLocaleDateString()}</span>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                      Date
+                    </span>
+                    <span className="text-sm font-black text-slate-900">
+                      {new Date().toLocaleDateString()}
+                    </span>
                   </div>
                 </div>
               </motion.div>
             </div>
-            
+
             <div className="p-8">
-              <button 
+              <button
                 onClick={() => setHandoverCompleteQuote(null)}
-                className="w-full py-5 bg-[#1e293b] text-white font-black text-lg rounded-2xl hover:bg-[#0f172a] transition-all shadow-xl shadow-slate-200"
+                className="w-full py-5 bg-brand-dark text-white font-black text-lg rounded-2xl hover:bg-brand-navy-dark transition-all shadow-xl shadow-slate-200"
               >
                 Back to Dashboard
               </button>

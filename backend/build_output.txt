@@ -1,0 +1,8 @@
+
+> tonse-backend@1.0.0 prebuild
+> rimraf dist
+
+
+> tonse-backend@1.0.0 build
+> nest build
+

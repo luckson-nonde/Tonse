@@ -4,16 +4,80 @@ export interface HeroContent {
   bullets: string[];
 }
 
-export type SubRole = 
-  | 'INDIVIDUAL_BUYER' 
-  | 'COMPANY_BUYER' 
+export interface User {
+  // System Identifiers (Three-Tier Identity System)
+  id: string; // System UUID for internal operations
+  displayId?: string; // User-facing ID (USER-XXXXXX format)
+  nrcNumber?: string; // National Registration Card (real-world anchor)
+
+  // Contact Information
+  email: string; // Primary email
+  primaryEmail?: string; // Primary email (alternative field name)
+  phone?: string; // Primary phone number
+  emails?: UserEmail[]; // Multiple emails for same account
+
+  // User Profile
+  role: string; // User role (BUYER, SELLER, etc.)
+  name?: string; // Full name
+  profilePicture?: string; // Profile picture URL or base64
+  location?: string; // Location
+  balance?: number; // Virtual account balance
+
+  // Business Information (optional)
+  companyName?: string;
+  businessLicenseId?: string;
+  categories?: string[];
+
+  // Account Status
+  isActive?: boolean; // Account active status
+  verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED';
+  isNrcVerified?: boolean; // NRC verification status
+
+  // Legacy/Additional Fields
+  virtualAccountNumber?: string;
+  parentProviderId?: string;
+  [key: string]: any; // Allow additional properties
+}
+
+export interface UserEmail {
+  id: string;
+  userId: string;
+  email: string;
+  isPrimary: boolean;
+  verificationStatus: 'NOT_VERIFIED' | 'VERIFICATION_SENT' | 'VERIFIED';
+  isRecoveryEmail?: boolean;
+  verifiedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface IdentityAudit {
+  id: string;
+  userId: string;
+  eventType: string;
+  description: string;
+  previousValue?: any;
+  newValue?: any;
+  changedField?: string;
+  adminId?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  isSuspicious?: boolean;
+  verificationStatus?: 'UNVERIFIED' | 'VERIFIED' | 'FRAUD';
+  createdAt: string;
+}
+
+export type SubRole =
+  | 'INDIVIDUAL_BUYER'
+  | 'COMPANY_BUYER'
   | 'COMPANY_PROCUREMENT_OFFICER'
   | 'COMPANY_SECRETARY'
   | 'COMPANY_RECEPTIONIST'
   | 'COMPANY_MANAGER'
-  | 'PRODUCT_SELLER' 
-  | 'SERVICE_SELLER' 
-  | 'HYBRID_SELLER';
+  | 'PRODUCT_SELLER'
+  | 'SERVICE_SELLER'
+  | 'HYBRID_SELLER'
+  | 'SUPPLIER_SELLER';
 export type EntityType = 'INDIVIDUAL' | 'BUSINESS';
 
 export interface InquiryItem {
@@ -32,6 +96,7 @@ export interface InquiryItem {
 
 export interface Inquiry {
   id?: number;
+  displayId?: string; // Human-friendly display ID (QID-XXXXXX format)
   title: string;
   description: string;
   items: InquiryItem[];
@@ -52,7 +117,12 @@ export interface Inquiry {
   };
   attributes?: Record<string, any>;
   processType?: 'EXPRESS' | 'STANDARD';
-  currentStage?: 'quotation' | 'purchase_order' | 'order_confirmation' | 'delivery_order' | 'completed';
+  currentStage?:
+    | 'quotation'
+    | 'purchase_order'
+    | 'order_confirmation'
+    | 'delivery_order'
+    | 'completed';
   archivedBy?: string[];
   deletedBy?: string[];
   // Legacy fields for backward compatibility
@@ -62,48 +132,59 @@ export interface Inquiry {
   isLabour?: boolean;
   labourGroup?: string;
   labourSubType?: string;
+  targetedProviderId?: string; // ID of the specific provider if it's a direct inquiry
 }
 
 export interface Quote {
-  id?: number;
-  inquiryId: number;
+  id?: string | number;
+  inquiryId: string | number;
   inquiryTitle: string;
-  providerId: number;
+  providerId: string | number;
   providerName: string;
   price: number;
   condition: string;
   message: string;
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'ARCHIVED' | 'PAID' | 'PENDING_COLLECTION' | 'AWAITING_PICKUP' | 'COMPLETED' | 'HANDED_OVER';
-  createdAt: number;
+  status:
+    | 'PENDING'
+    | 'ACCEPTED'
+    | 'REJECTED'
+    | 'ARCHIVED'
+    | 'PAID'
+    | 'PENDING_COLLECTION'
+    | 'AWAITING_PICKUP'
+    | 'COMPLETED'
+    | 'HANDED_OVER';
+  createdAt: number | string | Date;
   expiryDuration?: string;
   isRead?: boolean;
   isArchived?: boolean;
-  itemPrices?: { itemId: string | number; price: number }[];
+  itemPrices?: any;
   buyerContact?: {
     name: string;
     email: string;
     phone: string;
   };
   collectionCode?: string;
-  requirements?: { item: string; description: string }[];
-  venueSpaceId?: number;
+  requirements?: any;
+  venueSpaceId?: number | string;
   venueSpaceName?: string;
   damageDeposit?: number;
   cleaningFee?: number;
-  dynamicFields?: Record<string, any>;
+  securityDeposit?: number;
+  maxCapacity?: number;
+  numberOfWorkers?: number;
+  availabilityDate?: string | Date;
+  rateUnit?: string;
+  dynamicFields?: any;
   processType?: 'EXPRESS' | 'STANDARD';
-  delivery?: {
-    offered: boolean;
-    fee: number;
-    method: 'PICKUP' | 'SELLER_DELIVERY';
-  };
+  delivery?: any;
   pickupLocation?: string;
   pickupInstructions?: string;
 }
 
 export interface Product {
   id?: number;
-  providerId: number;
+  providerId: string | number;
   name: string;
   price: number;
   stock?: number;

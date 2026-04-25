@@ -1,0 +1,21 @@
+{
+  "extends": ["stylelint-config-standard", "stylelint-config-tailwindcss"],
+  "rules": {
+    "at-rule-no-unknown": null,
+    "function-no-unknown": null,
+    "unit-allowed-list": null,
+    "property-no-unknown": null,
+    "declaration-block-no-duplicate-properties": null,
+    "selector-pseudo-element-no-unknown": null,
+    "selector-class-pattern": null,
+    "font-family-no-missing-generic-family-keyword": null,
+    "no-empty-source": null,
+    "selector-type-no-unknown": null,
+    "no-descending-specificity": null,
+    "alpha-value-notation": null,
+    "color-function-notation": null,
+    "keyframes-name-pattern": null,
+    "rule-empty-line-before": null
+  },
+  "ignoreFiles": ["node_modules/**/*", "dist/**/*", "build/**/*"]
+}

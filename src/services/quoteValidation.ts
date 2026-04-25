@@ -20,6 +20,9 @@ export const generateZodSchema = (fields: QuoteField[]) => {
       case 'toggle':
         zodType = z.boolean();
         break;
+      case 'multiselect':
+        zodType = z.array(z.string());
+        break;
       default:
         zodType = z.string();
     }
