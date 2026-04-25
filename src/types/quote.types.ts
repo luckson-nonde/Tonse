@@ -11,9 +11,24 @@ export interface Quote {
   status: QuoteStatus;
   expiryDuration?: string;
   isRead: boolean;
-  itemPrices?: Record<string, number>[];
-  createdAt: Date;
-  updatedAt: Date;
+  itemPrices?: any; // Stringified or array
+  dynamicFields?: any; // Stringified or object
+  delivery?: any; // Stringified or object
+  processType?: 'EXPRESS' | 'STANDARD';
+  
+  // Category-specific fields (flattened for convenience)
+  securityDeposit?: number;
+  maxCapacity?: number;
+  numberOfWorkers?: number;
+  availabilityDate?: string | Date;
+  rateUnit?: string;
+  cleaningFee?: number;
+  damageDeposit?: number;
+  venueSpaceId?: number;
+  venueSpaceName?: string;
+  
+  createdAt: Date | string;
+  updatedAt: Date | string;
 }
 
 export enum QuoteStatus {

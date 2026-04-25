@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ArrowLeft,
   Star,
@@ -11,8 +11,15 @@ import {
   TrendingUp,
   ShoppingBag,
   BarChart2,
+  Send,
+  Plus,
+  ArrowRight,
+  Package,
+  MessageSquare,
+  X,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { useLiveQuery } from '../hooks/useLiveQuery';
 import { db } from '../services/api/database';
 
@@ -20,11 +27,18 @@ export default function ShopDetailsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const shopId = Number(searchParams.get('id'));
+  const [isInquiryModalOpen, setIsInquiryModalOpen] = useState(false);
 
   const shop = useLiveQuery(async () => {
     if (!shopId) return null;
     return await db.shops.get(shopId);
   }, [shopId]);
+
+  const products =
+    useLiveQuery(async () => {
+      if (!shopId) return [];
+      return await db.products.where('providerId').equals(String(shopId)).toArray();
+    }, [shopId]) || [];
 
   /**
    * TEMPORARY CLIENT-SIDE ANALYSIS LOGIC
@@ -84,7 +98,8 @@ export default function ShopDetailsPage() {
   }
 
   return (
-    <div className="-mx-4 sm:-mx-6 lg:-mx-8 -mt-4 sm:-mt-6 lg:-mt-8 pb-12">
+    <>
+      <div className="-mx-4 sm:-mx-6 lg:-mx-8 -mt-4 sm:-mt-6 lg:-mt-8 pb-12">
       {/* Header */}
       <div className="relative h-55 overflow-hidden">
         <img
@@ -145,9 +160,24 @@ export default function ShopDetailsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+              <button
+                onClick={() => setIsInquiryModalOpen(true)}
+                className="flex items-center justify-center gap-2 px-8 py-4 bg-[#C9973A] hover:bg-[#B6862D] text-white rounded-2xl font-serif font-bold text-base transition-all shadow-lg shadow-[#C9973A]/20"
+              >
+                <Send className="w-5 h-5" />
+                Request a Quotation
+              </button>
+              <button className="flex items-center justify-center gap-2 px-8 py-4 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-2xl font-sans font-bold text-sm transition-all border border-slate-100">
+                <MessageSquare className="w-5 h-5 text-slate-400" />
+                Chat with Supplier
+              </button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8">
             <div className="md:col-span-2 space-y-8">
               {/* About */}
               <section>
@@ -155,6 +185,65 @@ export default function ShopDetailsPage() {
                   About the Shop
                 </h3>
                 <p className="text-slate-600 leading-relaxed">{shop.description}</p>
+              </section>
+
+              {/* Products Section */}
+              <section>
+                <div className="flex items-center justify-between mb-6 border-l-[3px] border-[#C9973A] pl-2.5">
+                  <div className="flex items-center gap-2">
+                    <Package className="w-5 h-5 text-[#64748b]" />
+                    <h3 className="text-lg font-serif font-bold text-brand-dark">Listed Products</h3>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    {products.length} Items Available
+                  </span>
+                </div>
+                {products.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-4">
+                    {products.map((product) => (
+                      <div
+                        key={product.id}
+                        className="bg-white rounded-3xl p-4 flex items-center gap-4 border border-slate-100 hover:shadow-md transition-all group cursor-pointer"
+                      >
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-slate-50 shrink-0">
+                          <img
+                            src={product.images[0]}
+                            alt={product.name}
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[9px] font-black text-[#C9973A] bg-[#C9973A]/5 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                              {product.category}
+                            </span>
+                          </div>
+                          <h4 className="font-bold text-slate-900 truncate">{product.name}</h4>
+                          <p className="text-xs text-slate-500 line-clamp-1 mt-1">
+                            {product.description}
+                          </p>
+                          <div className="flex items-center gap-4 mt-2">
+                            <span className="text-sm font-black text-brand-dark">
+                              ZMW {product.price.toLocaleString()}
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                              IN STOCK ({product.stock})
+                            </span>
+                          </div>
+                        </div>
+                        <button className="p-3 rounded-xl bg-slate-50 text-slate-400 hover:bg-[#C9973A] hover:text-white transition-all hidden sm:flex">
+                          <ArrowRight className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-slate-50 rounded-3xl p-12 text-center border border-dashed border-slate-200">
+                    <Package className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+                    <p className="text-slate-500 font-medium italic">No products listed by this supplier yet.</p>
+                  </div>
+                )}
               </section>
 
               {/* Proof Photos */}
@@ -310,5 +399,114 @@ export default function ShopDetailsPage() {
         </div>
       </div>
     </div>
+
+    {/* Inquiry Modal */}
+      <AnimatePresence>
+        {isInquiryModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-white rounded-[32px] w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+            >
+              <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">Request Quotation</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                    Direct Inquiry to {shop?.name}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsInquiryModalOpen(false)}
+                  className="p-2 hover:bg-slate-200 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-500" />
+                </button>
+              </div>
+
+              <div className="p-8 overflow-y-auto space-y-6">
+                {/* Inquiry Form Fields would go here */}
+                <div className="p-6 bg-brand-gold/5 rounded-2xl border border-brand-gold/20 flex gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-brand-gold flex items-center justify-center text-white shrink-0">
+                    <FileText className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-brand-dark">Professional Inquiry</h4>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Our dynamic inquiry system will help you specify exactly what you need to receive the most accurate quote.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                   <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                      Subject / Title
+                    </label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Bulk Office Stationery Supply" 
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm focus:ring-4 focus:ring-brand-gold/10 focus:border-brand-gold outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                      Details of requirements
+                    </label>
+                    <textarea 
+                      placeholder="Specify quantities, brands, or specific service requirements..." 
+                      rows={4}
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm focus:ring-4 focus:ring-brand-gold/10 focus:border-brand-gold outline-none transition-all resize-none"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={async () => {
+                    if (!shopId) return;
+                    
+                    const titleInput = document.querySelector('input[placeholder*="Bulk Office"]') as HTMLInputElement;
+                    const descInput = document.querySelector('textarea[placeholder*="Specify quantities"]') as HTMLTextAreaElement;
+                    
+                    if (!titleInput?.value || !descInput?.value) {
+                      alert('Please fill in all required fields');
+                      return;
+                    }
+
+                    try {
+                      const newInquiry: any = {
+                        title: titleInput.value,
+                        description: descInput.value,
+                        items: [{ title: titleInput.value, description: descInput.value, quantity: 1 }],
+                        category: shop?.category,
+                        location: shop?.location,
+                        buyerName: 'Premium Buyer', // Fallback if no user
+                        buyerId: 0,
+                        createdAt: Date.now(),
+                        status: 'OPEN',
+                        targetedProviderId: String(shopId),
+                      };
+
+                      await db.inquiries.add(newInquiry);
+                      setIsInquiryModalOpen(false);
+                      alert(`Your inquiry for "${titleInput.value}" has been sent directly to ${shop?.name}!`);
+                    } catch (error) {
+                      console.error('Failed to send inquiry:', error);
+                      alert('Failed to send inquiry. Please try again.');
+                    }
+                  }}
+                  className="w-full py-5 bg-[#C9973A] hover:bg-[#B6862D] text-white rounded-2xl font-serif font-black text-lg transition-all shadow-xl shadow-[#C9973A]/20 flex items-center justify-center gap-3"
+                >
+                  Send Professional Inquiry
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

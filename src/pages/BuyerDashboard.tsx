@@ -110,6 +110,18 @@ export default function BuyerDashboard() {
     processType?: 'EXPRESS' | 'STANDARD';
   }>({ items: [] });
 
+  const categoryType = useMemo(() => {
+    if (pendingInquiry.isLabour) return 'LABOR';
+    const cats = pendingInquiry.categories || [];
+    const lowerCats = cats.map(c => c.toLowerCase());
+    const pathStr = lowerCats.join(' > ');
+    
+    if (pathStr.includes('venues') || pathStr.includes('clubs')) return 'VENUES';
+    if (pathStr.includes('rental') || pathStr.includes('catering') || pathStr.includes('planning') || pathStr.includes('management') || pathStr.includes('decor') || pathStr.includes('repair') || pathStr.includes('recovery') || pathStr.includes('services')) return 'SERVICES';
+    
+    return 'PRODUCTS';
+  }, [pendingInquiry.categories, pendingInquiry.isLabour]);
+
   const dashboardData = useMemo(
     () => ({
       inquiries,
@@ -350,6 +362,7 @@ export default function BuyerDashboard() {
       case 'inquiry-preferences':
         return (
           <InquiryPreferences
+            categoryType={categoryType as any}
             onBack={() => handleTabChange('create-inquiry')}
             onNext={(prefs) => {
               setPendingInquiry((prev) => ({ ...prev, preferences: prefs }));
@@ -399,6 +412,7 @@ export default function BuyerDashboard() {
               try {
                 await deleteInquiry(inquiryToDelete.id);
                 refreshInquiries();
+                refreshQuotes();
               } catch (error) {
                 alert('Failed to delete inquiry');
               }

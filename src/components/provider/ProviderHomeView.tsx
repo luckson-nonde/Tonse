@@ -23,6 +23,7 @@ import {
 } from 'recharts';
 import { hasPermission, PERMISSIONS } from '../../utils/rbac';
 import { uniqueKey } from '../../utils/keyUtils';
+import { generateVirtualAccount } from '../../utils/financeUtils';
 
 interface ProviderHomeViewProps {
   user: any;
@@ -63,6 +64,8 @@ export default function ProviderHomeView({
 }: ProviderHomeViewProps) {
   const navigate = useNavigate();
   const isBookingBased = user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS';
+  const isSupplier = user?.subRole === 'SUPPLIER_SELLER';
+
   const displayQuotes = React.useMemo(() => {
     return myQuotes.filter((q) => !q.isArchived);
   }, [myQuotes]);
@@ -92,10 +95,7 @@ export default function ProviderHomeView({
               onClick={() => navigate('/provider/financial')}
               className="border border-[#C9973A] text-[#C9973A] bg-transparent font-medium font-sans py-2.5 px-6 rounded-[8px] text-[13px] hover:bg-[#C9973A]/10 transition-colors"
             >
-              My Account{' '}
-              {user?.virtualAccountNumber
-                ? `${user.virtualAccountNumber.substring(0, 4)}********${user.virtualAccountNumber.substring(12)}`
-                : `**** **** **** ${user?.id?.toString().padStart(4, '0') || '0000'}`}
+              My Account {user?.phone}
             </button>
           </div>
         </div>
@@ -282,11 +282,11 @@ export default function ProviderHomeView({
         </div>
       )}
 
-      {/* Incoming Booking Requests Section */}
+      {/* Booking Requests Section */}
       <div>
         <div className="flex justify-between items-center mb-3 sm:mb-4 px-1">
           <h3 className="text-lg font-serif font-black text-slate-900">
-            {user?.role === 'EVENTS' ? 'Incoming Rental Requests' : 'Incoming Booking Requests'}
+            Booking Requests
           </h3>
           <div className="flex items-center gap-2">
             {isSelectionMode && selectedInquiryIds.length > 0 && (
@@ -398,10 +398,7 @@ export default function ProviderHomeView({
                 onClick={() => navigate('/provider/financial')}
                 className="border border-[#C9973A] text-[#C9973A] bg-transparent font-medium font-sans py-2.5 px-6 rounded-[8px] text-[13px] hover:bg-[#C9973A]/10 transition-colors"
               >
-                My Account{' '}
-                {user?.virtualAccountNumber
-                  ? `${user.virtualAccountNumber.substring(0, 4)}********${user.virtualAccountNumber.substring(12)}`
-                  : `**** **** **** ${user?.id?.toString().padStart(4, '0') || '0000'}`}
+                My Account {user?.phone}
               </button>
             </div>
           </div>
@@ -416,7 +413,7 @@ export default function ProviderHomeView({
               <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6 text-[#d49b35]" />
             </div>
             <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
-              {isBookingBased ? 'INCOMING BOOKING REQUESTS' : 'INQUIRIES RECEIVED'}
+              {isSupplier ? 'PURCHASE REQUESTS' : 'BOOKING REQUESTS'}
             </p>
             <div className="flex items-end gap-3 mb-1 min-w-0">
               <h2
@@ -426,7 +423,9 @@ export default function ProviderHomeView({
                 {leads.length}
               </h2>
             </div>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium">New requests available</p>
+            <p className="text-xs sm:text-sm text-slate-500 font-medium">
+              {isSupplier ? 'New supply leads' : 'New requests available'}
+            </p>
           </div>
 
           <div
@@ -437,7 +436,7 @@ export default function ProviderHomeView({
               <Check className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
             </div>
             <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
-              QUOTES SENT
+              {isSupplier ? 'QUOTATIONS SENT' : 'QUOTES SENT'}
             </p>
             <div className="flex items-end gap-3 mb-1 min-w-0">
               <h2
@@ -458,7 +457,7 @@ export default function ProviderHomeView({
               <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-[#d49b35]" />
             </div>
             <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
-              TOTAL QUOTED VALUE
+              {isSupplier ? 'TOTAL SUPPLY VALUE' : 'TOTAL QUOTED VALUE'}
             </p>
             <div className="flex items-end gap-3 mb-1 min-w-0">
               <h2
@@ -479,7 +478,7 @@ export default function ProviderHomeView({
               <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-[#d49b35]" />
             </div>
             <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
-              {isBookingBased ? 'PENDING COMPLETION' : 'PENDING COLLECTION'}
+              {isSupplier ? 'AWAITING PICKUP' : isBookingBased ? 'PENDING COMPLETION' : 'PENDING COLLECTION'}
             </p>
             <div className="flex items-end gap-3 mb-1 min-w-0">
               <h2
@@ -580,11 +579,11 @@ export default function ProviderHomeView({
           </div>
         )}
 
-        {/* Incoming Booking Requests Section */}
+        {/* Booking Requests Section */}
         <div>
           <div className="flex justify-between items-center mb-3 sm:mb-4 px-1">
             <h3 className="text-lg font-serif font-black text-slate-900">
-              {isBookingBased ? 'Incoming Booking Requests' : 'Incoming Leads'}
+              {isSupplier ? 'Purchase Requests' : 'Booking Requests'}
             </h3>
             <div className="flex items-center gap-2">
               {isSelectionMode && selectedInquiryIds.length > 0 && (

@@ -21,6 +21,7 @@ export interface User {
   name?: string; // Full name
   profilePicture?: string; // Profile picture URL or base64
   location?: string; // Location
+  balance?: number; // Virtual account balance
 
   // Business Information (optional)
   companyName?: string;
@@ -75,7 +76,8 @@ export type SubRole =
   | 'COMPANY_MANAGER'
   | 'PRODUCT_SELLER'
   | 'SERVICE_SELLER'
-  | 'HYBRID_SELLER';
+  | 'HYBRID_SELLER'
+  | 'SUPPLIER_SELLER';
 export type EntityType = 'INDIVIDUAL' | 'BUSINESS';
 
 export interface InquiryItem {
@@ -130,13 +132,14 @@ export interface Inquiry {
   isLabour?: boolean;
   labourGroup?: string;
   labourSubType?: string;
+  targetedProviderId?: string; // ID of the specific provider if it's a direct inquiry
 }
 
 export interface Quote {
-  id?: number;
-  inquiryId: number;
+  id?: string | number;
+  inquiryId: string | number;
   inquiryTitle: string;
-  providerId: number;
+  providerId: string | number;
   providerName: string;
   price: number;
   condition: string;
@@ -151,29 +154,30 @@ export interface Quote {
     | 'AWAITING_PICKUP'
     | 'COMPLETED'
     | 'HANDED_OVER';
-  createdAt: number;
+  createdAt: number | string | Date;
   expiryDuration?: string;
   isRead?: boolean;
   isArchived?: boolean;
-  itemPrices?: { itemId: string | number; price: number }[];
+  itemPrices?: any;
   buyerContact?: {
     name: string;
     email: string;
     phone: string;
   };
   collectionCode?: string;
-  requirements?: { item: string; description: string }[];
-  venueSpaceId?: number;
+  requirements?: any;
+  venueSpaceId?: number | string;
   venueSpaceName?: string;
   damageDeposit?: number;
   cleaningFee?: number;
-  dynamicFields?: Record<string, any>;
+  securityDeposit?: number;
+  maxCapacity?: number;
+  numberOfWorkers?: number;
+  availabilityDate?: string | Date;
+  rateUnit?: string;
+  dynamicFields?: any;
   processType?: 'EXPRESS' | 'STANDARD';
-  delivery?: {
-    offered: boolean;
-    fee: number;
-    method: 'PICKUP' | 'SELLER_DELIVERY';
-  };
+  delivery?: any;
   pickupLocation?: string;
   pickupInstructions?: string;
 }

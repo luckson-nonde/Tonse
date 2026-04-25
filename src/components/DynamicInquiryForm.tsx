@@ -188,7 +188,7 @@ export default function DynamicInquiryForm({
             case 'number':
               return (
                 <div
-                  className={`flex items-center bg-white border-[1.5px] rounded-[12px] px-4 py-3.5 transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-[#ef4444] shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#f1f5f9]'}`}
+                  className={`flex items-center bg-white border-[1.5px] rounded-[12px] px-4 py-3.5 transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-[#ef4444] shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#e2e8f0]'}`}
                 >
                   <input
                     type={field.type === 'number' ? 'number' : 'text'}
@@ -206,7 +206,7 @@ export default function DynamicInquiryForm({
             case 'textarea':
               return (
                 <div
-                  className={`flex items-start bg-white border-[1.5px] rounded-xl px-4 py-3.5 min-h-25 transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-brand-error shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#f1f5f9]'}`}
+                  className={`flex items-start bg-white border-[1.5px] rounded-xl px-4 py-3.5 min-h-25 transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-brand-error shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#e2e8f0]'}`}
                 >
                   <textarea
                     value={(value as string) || ''}
@@ -219,13 +219,13 @@ export default function DynamicInquiryForm({
               );
             case 'counter':
               return (
-                <div className="flex items-center bg-white border-[1.5px] border-[#f1f5f9] rounded-xl overflow-hidden w-fit min-w-40">
+                <div className="flex items-center bg-white border-[1.5px] border-[#e2e8f0] rounded-xl overflow-hidden w-fit min-w-40">
                   <motion.button
                     whileTap={{ scale: 0.88 }}
                     type="button"
                     onClick={() => onChange(Math.max(field.min ?? 0, (Number(value) || 0) - 1))}
                     disabled={field.min !== undefined && (Number(value) || 0) <= field.min}
-                    className="w-12 h-13 bg-[#f8fafc] border-r border-[#f1f5f9] flex items-center justify-center disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                    className="w-12 h-13 bg-[#f8fafc] border-r border-[#e2e8f0] flex items-center justify-center disabled:opacity-40 disabled:pointer-events-none transition-colors"
                   >
                     <Minus
                       className={`w-4.5 h-4.5 ${field.min !== undefined && (Number(value) || 0) <= field.min ? 'text-[#d1d5db]' : 'text-[#1a1a2e]'}`}
@@ -250,7 +250,7 @@ export default function DynamicInquiryForm({
             case 'currency':
               return (
                 <div
-                  className={`flex items-stretch bg-white border-[1.5px] rounded-xl overflow-hidden transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-brand-error shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#f1f5f9]'}`}
+                  className={`flex items-stretch bg-white border-[1.5px] rounded-xl overflow-hidden transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-brand-error shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#e2e8f0]'}`}
                 >
                   <div className="w-18 bg-[rgba(201,151,58,0.08)] border-r-[1.5px] border-[rgba(201,151,58,0.2)] flex items-center justify-center font-sans text-[12px] font-bold text-[#C9973A] tracking-[0.05em]">
                     ZMW
@@ -325,7 +325,7 @@ export default function DynamicInquiryForm({
             case 'date':
               return (
                 <div
-                  className={`flex items-center bg-white border-[1.5px] rounded-xl px-4 py-3.5 transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-brand-error shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#f1f5f9]'}`}
+                  className={`flex items-center bg-white border-[1.5px] rounded-xl px-4 py-3.5 transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-brand-error shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#e2e8f0]'}`}
                 >
                   <input
                     type="date"

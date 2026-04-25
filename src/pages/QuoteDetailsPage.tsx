@@ -204,7 +204,7 @@ export default function QuoteDetailsPage() {
                     Artist Requirements
                   </p>
                   <div className="space-y-2">
-                    {quoteData.requirements.map((req) => (
+                    {quoteData.requirements.map((req: any) => (
                       <div
                         key={req.item}
                         className="flex gap-3 items-start bg-white p-3 rounded-xl border border-slate-200"

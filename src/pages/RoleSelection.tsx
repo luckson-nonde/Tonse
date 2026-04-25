@@ -136,6 +136,13 @@ const sellerSubRoles: RoleOption[] = [
     icon: Layers,
     subRole: 'HYBRID_SELLER',
   },
+  {
+    id: 'SUPPLIER_SELLER',
+    title: 'Wholesale Supplier',
+    description: 'Supply goods in bulk to other businesses.',
+    icon: Truck,
+    subRole: 'SUPPLIER_SELLER',
+  },
 ];
 
 export default function RoleSelection() {
@@ -144,6 +151,7 @@ export default function RoleSelection() {
   const [selectedSubRole, setSelectedSubRole] = useState<SubRole | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isCompanyExpanded, setIsCompanyExpanded] = useState(false);
+  const [isViewingSubcategories, setIsViewingSubcategories] = useState(false);
   const navigate = useNavigate();
 
   const handleMasterSelect = (role: 'BUYER' | 'SELLER') => {
@@ -198,8 +206,27 @@ export default function RoleSelection() {
       }
     } else if (tier === 3 && selectedCategories.length > 0) {
       const categoriesParam = selectedCategories.join(',');
+      
+      let actualRole = masterRole as string;
+      if (masterRole === 'SELLER') {
+        const isEvent = selectedCategories.some(catName => {
+          const matchingCats = CATEGORIES_DB.filter(c => c.id === catName || c.name === catName || c.baseName === catName);
+          return matchingCats.some(cat => cat.parentId === 'events' || cat.id === 'events');
+        });
+        const isEntertainment = selectedCategories.some(catName => {
+          const matchingCats = CATEGORIES_DB.filter(c => c.id === catName || c.name === catName || c.baseName === catName);
+          return matchingCats.some(cat => cat.parentId === 'entertainment' || cat.id === 'entertainment');
+        });
+
+        if (isEvent) {
+          actualRole = 'EVENTS';
+        } else if (isEntertainment) {
+          actualRole = 'ENTERTAINMENT';
+        }
+      }
+
       navigate(
-        `/register?role=${masterRole}&subRole=${selectedSubRole}&categories=${categoriesParam}`
+        `/register?role=${actualRole}&subRole=${selectedSubRole}&categories=${categoriesParam}`
       );
     }
   };
@@ -229,22 +256,26 @@ export default function RoleSelection() {
   return (
     <AuthSplitLayout
       title={
-        tier === 1
-          ? 'Select Your Role'
-          : tier === 2
-            ? `Configure your ${masterRole === 'BUYER' ? 'Buyer' : 'Seller'} Account`
-            : 'Business Categories'
+        isViewingSubcategories
+          ? null
+          : tier === 1
+            ? 'Select Your Role'
+            : tier === 2
+              ? `Configure your ${masterRole === 'BUYER' ? 'Buyer' : 'Seller'} Account`
+              : 'Business Categories'
       }
       subtitle={
-        <span className="text-[#1a1612]/60">
-          {tier === 1
-            ? 'Choose how you want to use TONSE'
-            : tier === 2
-              ? `Select the sub-role that best fits your ${masterRole === 'BUYER' ? 'needs' : 'business model'}`
-              : 'Select the categories that best describe your business.'}
-        </span>
+        isViewingSubcategories
+          ? null
+          : <span className="text-[#1a1612]/60">
+              {tier === 1
+                ? 'Choose how you want to use TONSE'
+                : tier === 2
+                  ? `Select the sub-role that best fits your ${masterRole === 'BUYER' ? 'needs' : 'business model'}`
+                  : 'Select the categories that best describe your business.'}
+            </span>
       }
-      onBack={tier > 1 ? handleBack : () => navigate('/login')}
+      onBack={isViewingSubcategories ? undefined : (tier > 1 ? handleBack : () => navigate('/login'))}
       hero={currentHero}
     >
       <div className="relative overflow-hidden min-h-100">
@@ -445,6 +476,7 @@ export default function RoleSelection() {
                     }
                     return true;
                   }}
+                  onSubcategoryViewChange={setIsViewingSubcategories}
                 />
               </div>
             </motion.div>
@@ -452,22 +484,24 @@ export default function RoleSelection() {
         </AnimatePresence>
       </div>
 
-      <div className="pt-8">
-        <Button
-          onClick={handleContinue}
-          disabled={
-            tier === 1
-              ? !masterRole
-              : tier === 2
-                ? !selectedSubRole
-                : selectedCategories.length === 0
-          }
-          className="w-full py-5 px-4 shadow-lg flex justify-center items-center gap-3 text-[18px] font-serif font-bold disabled:opacity-50 rounded-4xl"
-        >
-          {tier === 1 ? 'Next Step' : tier === 2 ? 'Continue' : 'Initialize Membership'}
-          <span className="text-xl leading-none">→</span>
-        </Button>
-      </div>
+      {!isViewingSubcategories && (
+        <div className="pt-8">
+          <Button
+            onClick={handleContinue}
+            disabled={
+              tier === 1
+                ? !masterRole
+                : tier === 2
+                  ? !selectedSubRole
+                  : selectedCategories.length === 0
+            }
+            className="w-full py-5 px-4 shadow-lg flex justify-center items-center gap-3 text-[18px] font-serif font-bold disabled:opacity-50 rounded-4xl"
+          >
+            {tier === 1 ? 'Next Step' : tier === 2 ? 'Continue' : 'Initialize Membership'}
+            <span className="text-xl leading-none">→</span>
+          </Button>
+        </div>
+      )}
     </AuthSplitLayout>
   );
 }

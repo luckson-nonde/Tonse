@@ -69,6 +69,7 @@ export interface NavigationItem {
   permissions?: string[];
   roleFilter?: string[];
   excludeRoles?: string[];
+  categoryFilter?: string[] | ((role: string, categories: string[]) => boolean);
 }
 
 export interface MasterAccountSchema {

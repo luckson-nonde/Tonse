@@ -5,7 +5,7 @@ import { AuditLog } from '../types';
 export async function logAuditAction(
   user: User,
   actionType: AuditLog['actionType'],
-  targetId: number,
+  targetId: string | number,
   targetTitle: string,
   buyerName: string,
   amount?: number,
@@ -17,11 +17,14 @@ export async function logAuditAction(
 
   if (!providerId) return;
 
-  const log: AuditLog = {
-    providerId: typeof providerId === 'number' ? providerId : parseInt(String(providerId), 10),
-    staffId: typeof user.id === 'number' ? user.id : parseInt(String(user.id), 10),
+  const log: any = {
+    providerId: typeof providerId === 'number' ? providerId : String(providerId),
+    staffId: typeof user.id === 'number' ? user.id : String(user.id),
     staffName: user.name,
     actionType,
+    action: actionType, // Backend field
+    entityType: 'AUDIT', // Backend field
+    entityId: typeof targetId === 'number' ? String(targetId) : targetId, // Backend field
     targetId,
     targetTitle,
     buyerName,

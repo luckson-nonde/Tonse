@@ -24,14 +24,21 @@ export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'home', label: 'Home', icon: 'Home', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     { 
       id: 'leads', 
-      label: (role) => (role === 'ENTERTAINMENT' || role === 'EVENTS') ? 'Incoming Booking Requests' : 'Incoming Leads', 
+      label: (role) => (role === 'ENTERTAINMENT' || role === 'EVENTS') ? 'Booking Requests' : 'Booking Requests', 
       icon: 'FileText', 
       permissions: [PERMISSIONS.MANAGE_QUOTES] 
     },
     { id: 'my-quotes', label: 'My Quotes', icon: 'MessageSquare', permissions: [PERMISSIONS.MANAGE_QUOTES] },
     { id: 'archived-leads', label: 'Archived Leads', icon: 'Archive', permissions: [PERMISSIONS.MANAGE_QUOTES] },
     { id: 'schedule', label: 'My Schedule', icon: 'Calendar', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
-    { id: 'venue-spaces', label: 'Venue Spaces', icon: 'MapPin', permissions: [PERMISSIONS.VIEW_ANALYTICS], roleFilter: ['EVENTS'] },
+    { 
+      id: 'venue-spaces', 
+      label: 'Venue Spaces', 
+      icon: 'MapPin', 
+      permissions: [PERMISSIONS.VIEW_ANALYTICS], 
+      roleFilter: ['EVENTS'],
+      categoryFilter: ['event venues']
+    },
     { 
       id: 'paid-orders', 
       label: (role) => (role === 'ENTERTAINMENT' || role === 'EVENTS') ? 'Paid Bookings' : 'Paid Orders', 
@@ -44,7 +51,14 @@ export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       label: (role) => role === 'EVENTS' ? 'Inventory' : 'My Products', 
       icon: 'Store', 
       permissions: [PERMISSIONS.VIEW_ANALYTICS],
-      excludeRoles: ['ENTERTAINMENT']
+      excludeRoles: ['ENTERTAINMENT'],
+      categoryFilter: (role, categories) => {
+        if (role === 'EVENTS') {
+          const catsLower = categories.map(c => c.toLowerCase());
+          return catsLower.some(c => c.includes('equipment rental') || c.includes('catering') || c.includes('decor'));
+        }
+        return true;
+      }
     },
     { id: 'team', label: 'Team Management', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
@@ -68,7 +82,7 @@ export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       ]
     },
     leads: {
-      title: (role) => (role === 'ENTERTAINMENT' || role === 'EVENTS') ? 'Incoming Booking Requests' : 'Incoming Leads',
+      title: (role) => (role === 'ENTERTAINMENT' || role === 'EVENTS') ? 'Booking Requests' : 'Booking Requests',
       subtitle: "Based on your categories",
       componentType: 'provider_leads',
       dataKey: 'leads'
@@ -119,7 +133,7 @@ export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     'venue-spaces': {
       title: "Venue Spaces",
       subtitle: "Manage your venue's available spaces",
-      componentType: 'provider_placeholder'
+      componentType: 'venue_spaces_renderer'
     },
     financial: {
       title: "Financial Account",

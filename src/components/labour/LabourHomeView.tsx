@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageSquare, FileText, CheckCircle, Clock } from 'lucide-react';
+import { generateVirtualAccount } from '../../utils/financeUtils';
 
 interface LabourHomeViewProps {
   user: any;
@@ -70,11 +71,14 @@ export default function LabourHomeView({
             AVAILABLE BALANCE
           </p>
           <h2
-            className="text-[42px] font-bold mb-6 truncate font-serif text-white leading-none"
+            className="text-[42px] font-bold mb-2 truncate font-serif text-white leading-none"
             title={`ZMW ${availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
           >
             ZMW {availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </h2>
+          <p className="text-white/60 font-mono tracking-[0.2em] text-xs mb-6">
+            {user?.phone}
+          </p>
           <button
             onClick={(e) => {
               e.stopPropagation();

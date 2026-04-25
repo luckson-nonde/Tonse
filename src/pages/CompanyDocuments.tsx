@@ -73,7 +73,13 @@ export default function CompanyDocuments() {
       await updateUser({
         verificationStatus: 'PENDING',
       });
-      navigate('/buyer');
+      if (user?.role === 'BUYER') {
+        navigate('/buyer');
+      } else if (user?.role === 'LABOUR') {
+        navigate('/labour');
+      } else {
+        navigate('/provider');
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to update documents');
     } finally {
@@ -86,7 +92,13 @@ export default function CompanyDocuments() {
       await updateUser({
         verificationStatus: 'INCOMPLETE',
       });
-      navigate('/buyer');
+      if (user?.role === 'BUYER') {
+        navigate('/buyer');
+      } else if (user?.role === 'LABOUR') {
+        navigate('/labour');
+      } else {
+        navigate('/provider');
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to skip');
     }

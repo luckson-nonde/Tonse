@@ -12,6 +12,7 @@ import { Inquiry } from '../../types';
 import emptyQuotesImage from '../../assets/images/empty-states/owl_reading.png';
 import { hasPermission, PERMISSIONS } from '../../utils/rbac';
 import { uniqueKey } from '../../utils/keyUtils';
+import { robustParse } from '../../utils/jsonUtils';
 
 interface ProviderQuotesViewProps {
   user: any;
@@ -39,7 +40,9 @@ export default function ProviderQuotesView({
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex justify-between items-center px-0 sm:px-0">
-        <h2 className="text-2xl font-serif font-bold text-slate-900">My Submitted Quotes</h2>
+        <h2 className="text-2xl font-serif font-bold text-slate-900">
+          {user?.subRole === 'SUPPLIER_SELLER' ? 'Active Quotations' : 'My Submitted Quotes'}
+        </h2>
         <div className="flex items-center gap-2">
           <button
             onClick={() => onSetQuoteSort('recent')}
@@ -123,8 +126,14 @@ export default function ProviderQuotesView({
                           </p>
                           {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) ||
                           hasPermission(user, PERMISSIONS.MANAGE_QUOTES) ? (
-                            <p className="text-[10px] font-black text-[#d49b35]">
-                              k{quote.price.toLocaleString()}
+                            <p className="text-sm font-black text-[#d49b35]">
+                              ZMW {quote.price.toLocaleString()}
+                              {(() => {
+                                const dynamicFields = robustParse(quote.dynamicFields);
+                                const unit = dynamicFields.rateUnit || quote.rateUnit;
+                                if (unit) return <span className="text-[10px] font-bold text-slate-400 ml-1">/ {unit.replace('Per ', '')}</span>;
+                                return null;
+                              })()}
                             </p>
                           ) : (
                             <p className="text-[10px] font-black text-[#d49b35]">Price Hidden</p>
@@ -142,6 +151,48 @@ export default function ProviderQuotesView({
                           {quote.status}
                         </div>
                       </div>
+
+                      {/* Professional Offer Details Grid */}
+                      {(() => {
+                        const dynamicFields = robustParse(quote.dynamicFields);
+                        const details = [];
+
+                        if (dynamicFields.securityDeposit || quote.securityDeposit) {
+                          details.push({ label: 'Sec. Deposit', value: `K${(dynamicFields.securityDeposit || quote.securityDeposit).toLocaleString()}` });
+                        }
+                        if (dynamicFields.maxCapacity || quote.maxCapacity) {
+                          details.push({ label: 'Capacity', value: `${dynamicFields.maxCapacity || quote.maxCapacity} Guests` });
+                        }
+                        if (dynamicFields.numberOfWorkers || quote.numberOfWorkers) {
+                          details.push({ label: 'Workers', value: `${dynamicFields.numberOfWorkers || quote.numberOfWorkers}` });
+                        }
+                        if (quote.cleaningFee) {
+                          details.push({ label: 'Cleaning', value: `K${quote.cleaningFee.toLocaleString()}` });
+                        }
+                        if (quote.damageDeposit) {
+                          details.push({ label: 'Damage Dep.', value: `K${quote.damageDeposit.toLocaleString()}` });
+                        }
+
+                        if (details.length === 0 && !quote.venueSpaceName) return null;
+
+                        return (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+                            {quote.venueSpaceName && (
+                              <div className="bg-white/60 p-2 rounded-xl border border-[#d49b35]/5">
+                                <p className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter mb-0.5">Space</p>
+                                <p className="text-[10px] font-bold text-slate-700 truncate">{quote.venueSpaceName}</p>
+                              </div>
+                            )}
+                            {details.map((d, i) => (
+                              <div key={i} className="bg-white/60 p-2 rounded-xl border border-[#d49b35]/5">
+                                <p className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter mb-0.5">{d.label}</p>
+                                <p className="text-[10px] font-bold text-slate-700">{d.value}</p>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+
                       <div className="flex items-center gap-2 mb-3">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                           Condition:
@@ -150,38 +201,7 @@ export default function ProviderQuotesView({
                           {quote.condition}
                         </span>
                       </div>
-                      {quote.venueSpaceName && (
-                        <div className="flex flex-col gap-1 mb-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                              Venue Space:
-                            </span>
-                            <span className="text-[10px] font-bold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">
-                              {quote.venueSpaceName}
-                            </span>
-                          </div>
-                          {(quote.damageDeposit || quote.cleaningFee) && (
-                            <div className="flex items-center gap-3 mt-1">
-                              {quote.damageDeposit && (
-                                <span className="text-[10px] text-slate-500">
-                                  <span className="font-bold text-slate-400 uppercase tracking-widest">
-                                    Deposit:
-                                  </span>{' '}
-                                  K{quote.damageDeposit.toLocaleString()}
-                                </span>
-                              )}
-                              {quote.cleaningFee && (
-                                <span className="text-[10px] text-slate-500">
-                                  <span className="font-bold text-slate-400 uppercase tracking-widest">
-                                    Cleaning:
-                                  </span>{' '}
-                                  K{quote.cleaningFee.toLocaleString()}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
+
                       <p className="text-sm text-slate-600 italic">"{quote.message}"</p>
                     </div>
 
@@ -303,7 +323,7 @@ export default function ProviderQuotesView({
                       const items = Array.isArray(lead.items)
                         ? lead.items
                         : typeof lead.items === 'string'
-                          ? (() => { try { return JSON.parse(lead.items); } catch { return []; } })()
+                          ? robustParse(lead.items)
                           : [];
                       
                       if (!isExpanded || !items || items.length === 0) return null;

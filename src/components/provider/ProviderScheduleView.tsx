@@ -2,6 +2,7 @@ import React from 'react';
 import { Clock, MapPin, ChevronRight, X } from 'lucide-react';
 import { uniqueKey } from '../../utils/keyUtils';
 import emptyScheduleImage from '../../assets/images/empty-states/owl_reading.png';
+import DashboardCalendar from '../DashboardCalendar';
 
 interface ProviderScheduleViewProps {
   user: any;
@@ -56,8 +57,20 @@ export default function ProviderScheduleView({
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-4 px-3 sm:px-6 lg:px-8 items-center">
-          {[...schedules]
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <DashboardCalendar
+              events={schedules.map(s => ({
+                date: new Date(s.date),
+                title: s.title,
+                type: s.type === 'RENTAL' ? 'order' : 'meeting',
+                color: s.status === 'SCHEDULED' ? 'emerald' : 'amber'
+              }))}
+            />
+          </div>
+          <div className="flex flex-col gap-4">
+            <h3 className="text-lg font-bold text-slate-900 mb-2">Upcoming</h3>
+            {[...schedules]
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
             .map((schedule, idx) => (
               <div
@@ -103,6 +116,7 @@ export default function ProviderScheduleView({
                 </div>
               </div>
             ))}
+          </div>
         </div>
       )}
 

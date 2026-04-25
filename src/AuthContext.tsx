@@ -114,10 +114,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               role: (currentUser.role as Role) || (pendingProfile as any).role || 'BUYER',
             };
 
-            // Automatically assign virtual account if missing
-            if (!finalUser.virtualAccountNumber && finalUser.phone) {
-              finalUser.virtualAccountNumber = generateVirtualAccount(finalUser.phone);
-            }
 
             setUser(finalUser);
           } catch (apiError) {
@@ -128,13 +124,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               const stored = localStorage.getItem('pendingProfile');
               if (stored) {
                 const pendingProfile = JSON.parse(stored);
-                setUser({
+                const finalPendingUser = {
                   id: 'pending',
                   email: pendingProfile.email || '',
                   name: pendingProfile.name || '',
                   role: (pendingProfile.role as Role) || 'BUYER',
                   ...pendingProfile,
-                } as User);
+                } as User;
+                
+                setUser(finalPendingUser);
               }
             } catch (e) {
               console.warn('Could not restore pending profile:', e);
@@ -180,10 +178,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role: (response.user.role as Role) || (pendingProfile as any).role || 'BUYER',
       };
 
-      // Automatically assign virtual account if missing
-      if (!finalUser.virtualAccountNumber && finalUser.phone) {
-        finalUser.virtualAccountNumber = generateVirtualAccount(finalUser.phone);
-      }
 
       setUser(finalUser);
     } catch (err) {
@@ -272,9 +266,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Update local user state with flattened metadata
         const { metadata: updatedMetadata, ...rest } = response;
-        setUser((prevUser) =>
-          prevUser ? { ...prevUser, ...rest, ...updatedMetadata, metadata: updatedMetadata } : null
-        );
+        setUser((prevUser) => {
+          if (!prevUser) return null;
+          const finalUser = { ...prevUser, ...rest, ...updatedMetadata, metadata: updatedMetadata };
+          return finalUser;
+        });
 
         // Save to pendingProfile as well for redundancy
         try {

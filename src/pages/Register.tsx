@@ -362,10 +362,6 @@ export default function Register() {
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
               {/* Email Section */}
               <div className="space-y-4">
-                <h3 className="text-[13px] font-bold text-[#1a1612]/60 uppercase tracking-widest">
-                  Account Setup
-                </h3>
-
                 <div>
                   <label className="block text-[11px] font-bold text-[#1a1612]/40 uppercase tracking-[0.2em] mb-3 ml-1">
                     Email Address *
@@ -382,10 +378,6 @@ export default function Register() {
 
               {/* Password Section */}
               <div className="space-y-4">
-                <h3 className="text-[13px] font-bold text-[#1a1612]/60 uppercase tracking-widest">
-                  Security
-                </h3>
-
                 <div>
                   <label className="block text-[11px] font-bold text-[#1a1612]/40 uppercase tracking-[0.2em] mb-3 ml-1">
                     Password *
@@ -453,10 +445,6 @@ export default function Register() {
 
               {/* Terms Section */}
               <div className="space-y-4">
-                <h3 className="text-[13px] font-bold text-[#1a1612]/60 uppercase tracking-widest">
-                  Terms & Conditions
-                </h3>
-
                 <div className="flex items-start gap-4">
                   <div className="relative flex items-center pt-1">
                     <input
@@ -517,13 +505,6 @@ export default function Register() {
                       ? 'Next: Documents →'
                       : 'Complete Registration'}
                 </Button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentStep(2)}
-                  className="w-full py-3 px-4 text-[#C9973A] font-bold border border-[#C9973A] rounded-4xl hover:bg-[#C9973A]/5 transition-all"
-                >
-                  ← Back to Location
-                </button>
               </div>
             </div>
           )}

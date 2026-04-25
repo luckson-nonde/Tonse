@@ -1,6 +1,7 @@
 import { MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import { MASTER_LABOUR_ACCOUNT_SCHEMA } from '../services/labourAccountSchema';
 import { MASTER_PROVIDER_ACCOUNT_SCHEMA } from '../services/providerAccountSchema';
+import { MASTER_SUPPLIER_ACCOUNT_SCHEMA } from '../services/supplierAccountSchema';
 import { NavigationItem } from '../services/accountSchemaTypes';
 import {
   Menu,
@@ -37,33 +38,54 @@ import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useUserInquiries } from '../hooks/useInquiries';
+import { useUserQuotes } from '../hooks/useQuotes';
 import { Inquiry } from '../types';
 
 // Calendar panel shown in right sidebar on dashboard/home tabs
-const CalendarPanel = () => (
-  <DashboardCalendar
-    events={[
-      {
-        date: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1),
-        title: 'New Inquiry',
-        type: 'inquiry',
-        color: 'amber',
-      },
-      {
-        date: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2),
-        title: 'Review Quote',
-        type: 'quote',
-        color: 'purple',
-      },
-      {
-        date: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 5),
-        title: 'Order Scheduled',
-        type: 'order',
-        color: 'emerald',
-      },
-    ]}
-  />
-);
+const CalendarPanel = () => {
+  const { user } = useAuth();
+  const { inquiries } = useUserInquiries(user?.id);
+  const { quotes } = useUserQuotes(user?.id);
+
+  const events = useMemo(() => {
+    const evts: any[] = [];
+
+    if (inquiries) {
+      inquiries.forEach((inq) => {
+        evts.push({
+          date: new Date(inq.createdAt),
+          title: inq.title || 'New Inquiry',
+          type: 'inquiry',
+          color: 'amber',
+        });
+      });
+    }
+
+    if (quotes) {
+      quotes.forEach((quote) => {
+        if (quote.status === 'PAID' || quote.status === 'COMPLETED' || quote.status === 'HANDED_OVER') {
+          evts.push({
+            date: new Date(quote.updatedAt),
+            title: `Order: ${quote.inquiryTitle || 'Unknown'}`,
+            type: 'order',
+            color: 'emerald',
+          });
+        } else {
+          evts.push({
+            date: new Date(quote.createdAt),
+            title: `Quote: ${quote.inquiryTitle || 'Unknown'}`,
+            type: 'quote',
+            color: 'purple',
+          });
+        }
+      });
+    }
+
+    return evts;
+  }, [inquiries, quotes]);
+
+  return <DashboardCalendar events={events} />;
+};
 
 // Map icon names to components
 const iconMap: Record<string, any> = {
@@ -134,6 +156,7 @@ export default function DashboardLayout({
     let schema;
     if (user.role === 'BUYER') schema = MASTER_BUYER_ACCOUNT_SCHEMA;
     else if (user.role === 'LABOUR') schema = MASTER_LABOUR_ACCOUNT_SCHEMA;
+    else if (user.subRole === 'SUPPLIER_SELLER') schema = MASTER_SUPPLIER_ACCOUNT_SCHEMA;
     else schema = MASTER_PROVIDER_ACCOUNT_SCHEMA;
 
     return schema.navigation.filter((item) => {
@@ -145,6 +168,19 @@ export default function DashboardLayout({
       }
       if (item.roleFilter && !item.roleFilter.includes(user.role)) return false;
       if (item.excludeRoles && item.excludeRoles.includes(user.role)) return false;
+      
+      if (item.categoryFilter && user.categories) {
+        if (typeof item.categoryFilter === 'function') {
+          if (!item.categoryFilter(user.role, user.categories)) return false;
+        } else {
+          const userCategoriesLower = user.categories.map((c: string) => c.toLowerCase());
+          const hasMatchingCategory = item.categoryFilter.some((filterCat) => 
+            userCategoriesLower.some((userCat: string) => userCat.includes(filterCat.toLowerCase()))
+          );
+          if (!hasMatchingCategory) return false;
+        }
+      }
+      
       return true;
     });
   }, [user]);
@@ -177,10 +213,12 @@ export default function DashboardLayout({
           navigate(`${basePath}/inquiries`);
         }
       } else if (tab === 'collection') {
-        if (activeInquiry) {
+        if (isBuyer && activeInquiry) {
           navigate(`${basePath}/inquiries/${activeInquiry.id}/collection`);
-        } else {
+        } else if (isBuyer) {
           navigate(`${basePath}/inquiries`);
+        } else {
+          navigate(`${basePath}/collection`);
         }
       } else if (tab === 'suppliers') {
         navigate(`${basePath}/suppliers`);
@@ -230,20 +268,23 @@ export default function DashboardLayout({
       case 'collection':
         return 'PARCEL COLLECTION';
       case 'products':
+        if (user?.subRole === 'SUPPLIER_SELLER') return 'SUPPLY INVENTORY';
         return user?.role === 'EVENTS' ? 'INVENTORY' : 'MY PRODUCTS';
       case 'venue-spaces':
         return 'VENUE SPACES';
       case 'archived':
-        return 'ARCHIVED QUOTES';
+        return user?.subRole === 'SUPPLIER_SELLER' ? 'ARCHIVED REQUESTS' : 'ARCHIVED QUOTES';
       case 'profile':
-        return 'SHOP PROFILE';
+        return user?.subRole === 'SUPPLIER_SELLER' ? 'SUPPLIER PROFILE' : 'SHOP PROFILE';
       case 'leads':
-        if (user?.role === 'EVENTS') return 'RENTAL REQUESTS';
-        return isBookingBased ? 'BOOKING REQUESTS' : 'INCOMING LEADS';
+        if (user?.subRole === 'SUPPLIER_SELLER') return 'PURCHASE REQUESTS';
+        return 'BOOKING REQUESTS';
       case 'my-quotes':
-        return 'MY QUOTES';
+        return user?.subRole === 'SUPPLIER_SELLER' ? 'ACTIVE QUOTATIONS' : 'MY QUOTES';
       case 'schedule':
         return 'MY SCHEDULE';
+      case 'audit-trail':
+        return user?.subRole === 'SUPPLIER_SELLER' ? 'SUPPLY AUDIT' : 'AUDIT TRAIL';
       default:
         return 'HOME';
     }

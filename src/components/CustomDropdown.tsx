@@ -35,7 +35,7 @@ export default function CustomDropdown({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3.5 rounded-xl border-[1.5px] border-[#f1f5f9] text-[15px] text-[#1a1a2e] bg-white flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-[#C9973A]/10 focus:border-[#C9973A] transition-all"
+        className="w-full px-4 py-3.5 rounded-xl border-[1.5px] border-[#e2e8f0] text-[15px] text-[#1a1a2e] bg-white flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-[#C9973A]/10 focus:border-[#C9973A] transition-all"
       >
         <span className={!selectedOption ? 'text-[#94a3b8]' : ''}>{displayLabel}</span>
         <ChevronDown

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { type Inquiry, type Quote } from '../types';
@@ -59,6 +59,7 @@ import ProviderHomeView from '../components/provider/ProviderHomeView';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
 import { robustParse } from '../utils/jsonUtils';
 import { MASTER_PROVIDER_ACCOUNT_SCHEMA } from '../services/providerAccountSchema';
+import { MASTER_SUPPLIER_ACCOUNT_SCHEMA } from '../services/supplierAccountSchema';
 
 const renderSpecifications = (
   data: any,
@@ -108,6 +109,11 @@ export default function ProviderDashboard() {
       setActiveTab('home');
     }
   }, [tab, activeTab, setActiveTab]);
+
+  const currentSchema = useMemo(() => {
+    if (user?.subRole === 'SUPPLIER_SELLER') return MASTER_SUPPLIER_ACCOUNT_SCHEMA;
+    return MASTER_PROVIDER_ACCOUNT_SCHEMA;
+  }, [user]);
 
   const effectiveProviderId = user?.parentProviderId || user?.id;
 
@@ -238,8 +244,20 @@ export default function ProviderDashboard() {
   const allLeads =
     useLiveQuery(async () => {
       const inquiries = await db.inquiries.where('status').equals('OPEN').toArray();
-      return inquiries.sort((a, b) => b.createdAt - a.createdAt);
-    }, []) || [];
+      const userCategories = user?.categories || [];
+
+      // If user has no categories, we show everything (Default)
+      // but if they HAVE categories, we strictly filter using isRelatedCategory
+      const filtered = inquiries.filter((lead) => {
+        if (!userCategories || userCategories.length === 0) return true;
+        const leadCats = (lead.category || '').split(', ').map((c: string) => c.trim());
+        return leadCats.some((leadCat) => 
+          userCategories.some(userCat => isRelatedCategory(userCat, leadCat))
+        );
+      });
+
+      return filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    }, [user?.categories]) || [];
 
   const availableBalance = displayQuotes
     .filter((q) => q.status === 'COMPLETED' || q.status === 'PAID')
@@ -273,30 +291,44 @@ export default function ProviderDashboard() {
     // Filter by Delete Status
     filtered = filtered.filter((lead) => !lead.deletedBy?.includes(providerId));
 
-    // Filter by Role/SubRole Nature
-    if (user?.role === 'SELLER' && user?.subRole) {
+    // Filter by Role/SubRole Nature (Strictly block Product vs Service leakage)
+    const isProviderRole = ['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS'].includes(user?.role || '');
+    if (isProviderRole) {
       filtered = filtered.filter((lead) => {
+        // If the lead has no category, we can't reliably filter by nature here
         if (!lead.category) return true;
+        
+        // Determine Provider Nature
+        let providerNature: 'PRODUCT' | 'SERVICE' | 'BOTH' = 'BOTH';
+        if (user?.subRole === 'PRODUCT_SELLER' || user?.role === 'SUPPLIER') providerNature = 'PRODUCT';
+        else if (user?.subRole === 'SERVICE_SELLER' || user?.role === 'EVENTS' || user?.role === 'ENTERTAINMENT' || user?.role === 'SERVICE_PROVIDER') providerNature = 'SERVICE';
+        else if (user?.subRole === 'HYBRID_SELLER') providerNature = 'BOTH';
         const leadCats = lead.category.split(',').map((c) => c.trim());
         const leadCatIds = leadCats
-          .map((name) => CATEGORIES_DB.find((c) => c.name === name)?.id)
+          .map((name) => CATEGORIES_DB.find((c) => c.name.toLowerCase() === name.toLowerCase())?.id)
           .filter(Boolean) as string[];
 
-        const natures = leadCatIds.map((id) => getCategoryNature(id));
+        // If we can't find the category in DB, we use a string-based guess for nature
+        const natures = leadCatIds.length > 0 
+          ? leadCatIds.map((id) => getCategoryNature(id))
+          : [lead.category.toLowerCase().includes('phone') || lead.category.toLowerCase().includes('laptop') ? 'PRODUCT' : 'SERVICE'];
 
-        if (user.subRole === 'PRODUCT_SELLER') {
+        if (providerNature === 'PRODUCT') {
           return natures.some((n) => n === 'PRODUCT' || n === 'BOTH');
         }
-        if (user.subRole === 'SERVICE_SELLER') {
+        if (providerNature === 'SERVICE') {
           return natures.some((n) => n === 'SERVICE' || n === 'BOTH');
         }
-        return true; // HYBRID_SELLER
+        return true; // BOTH / HYBRID
       });
     }
 
     if (user?.categories && user.categories.length > 0) {
       filtered = filtered.filter((lead) => {
-        if (!lead.category) return true; // Show uncategorized leads to everyone
+        // If it's targeted directly to this provider, always show it
+        if (lead.targetedProviderId === effectiveProviderId) return true;
+        
+        if (!lead.category) return false; // Hide uncategorized leads from providers to prevent leakage
 
         const leadCats = lead.category.split(',').map((c) => c.trim());
 
@@ -333,15 +365,23 @@ export default function ProviderDashboard() {
 
   const venueSpaces =
     useLiveQuery(async () => {
+      // Temporarily disabled to stop 404 logs until backend route /venue-spaces is implemented
       if (!effectiveProviderId || user?.role !== 'EVENTS') return [];
-      return await db.venueSpaces.where('providerId').equals(effectiveProviderId).toArray();
+      return [] as any[];
+      /* 
+      try {
+        return await db.venueSpaces.where('providerId').equals(effectiveProviderId).toArray();
+      } catch (e) {
+        return [];
+      }
+      */
     }, [effectiveProviderId, user?.role]) || [];
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeTab]);
 
-  const handleConfirmCollection = async (quoteId: number) => {
+  const handleConfirmCollection = async (quoteId: string | number) => {
     if (!user) return;
     setIsUpdating(true);
     try {
@@ -495,9 +535,7 @@ export default function ProviderDashboard() {
     const totalPrice =
       itemPricesArray && itemPricesArray.length > 0
         ? itemPricesArray.reduce((sum, ip) => sum + ip.price, 0)
-        : submittedQuoteData.calculatedTotal > 0
-          ? submittedQuoteData.calculatedTotal
-          : Number(submittedQuoteData.price || 0);
+        : Number(submittedQuoteData.calculatedTotal || submittedQuoteData.price || submittedQuoteData.venueHireFee || 0);
 
     const adminUser = user.parentProviderId ? await db.users.get(user.parentProviderId) : user;
 
@@ -575,10 +613,6 @@ export default function ProviderDashboard() {
       setExpandedInquiryId(null);
     } else {
       setExpandedInquiryId(id);
-      const inquiry = await db.inquiries.get(id);
-      if (inquiry) {
-        await db.inquiries.update(id, { viewCount: (inquiry.viewCount || 0) + 1 });
-      }
     }
   };
 
@@ -597,7 +631,7 @@ export default function ProviderDashboard() {
     const itemsHtml = inquiry.items
       .map((item, idx) => {
         const itemPrice = quote.itemPrices?.find(
-          (ip) => ip.itemId === (item.id || `${inquiry.id}-item-${idx}`)
+          (ip: any) => ip.itemId === (item.id || `${inquiry.id}-item-${idx}`)
         )?.price;
         return `
           <tr>
@@ -761,7 +795,7 @@ export default function ProviderDashboard() {
     <div className="w-full pb-24 px-0 sm:px-0">
       {activeTab === 'collection' ? (
         <DynamicAccountRenderer
-          schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
+          schema={currentSchema}
           view="collection"
           data={{}}
           onAction={handleAction}
@@ -770,7 +804,7 @@ export default function ProviderDashboard() {
         />
       ) : activeTab === 'home' ? (
         <DynamicAccountRenderer
-          schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
+          schema={currentSchema}
           view="home"
           data={{
             homeProps: {
@@ -804,7 +838,7 @@ export default function ProviderDashboard() {
         />
       ) : activeTab === 'leads' ? (
         <DynamicAccountRenderer
-          schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
+          schema={currentSchema}
           view="leads"
           data={{
             leadsProps: {
@@ -831,7 +865,7 @@ export default function ProviderDashboard() {
         />
       ) : activeTab === 'paid-orders' ? (
         <DynamicAccountRenderer
-          schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
+          schema={currentSchema}
           view="paid-orders"
           data={{
             ordersProps: {
@@ -848,7 +882,7 @@ export default function ProviderDashboard() {
         />
       ) : activeTab === 'my-quotes' ? (
         <DynamicAccountRenderer
-          schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
+          schema={currentSchema}
           view="my-quotes"
           data={{
             quotesProps: {
@@ -869,7 +903,7 @@ export default function ProviderDashboard() {
         />
       ) : activeTab === 'products' ? (
         <DynamicAccountRenderer
-          schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
+          schema={currentSchema}
           view="products"
           data={{
             productsProps: { user },
@@ -880,7 +914,7 @@ export default function ProviderDashboard() {
         />
       ) : activeTab === 'schedule' ? (
         <DynamicAccountRenderer
-          schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
+          schema={currentSchema}
           view="schedule"
           data={{
             scheduleProps: {
@@ -903,7 +937,7 @@ export default function ProviderDashboard() {
         />
       ) : activeTab === 'team' && hasPermission(user, PERMISSIONS.MANAGE_TEAM) ? (
         <DynamicAccountRenderer
-          schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
+          schema={currentSchema}
           view="team"
           data={{
             teamProps: { user },
@@ -914,7 +948,7 @@ export default function ProviderDashboard() {
         />
       ) : activeTab === 'financial' ? (
         <DynamicAccountRenderer
-          schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
+          schema={currentSchema}
           view="financial"
           data={{}}
           onAction={handleAction}
@@ -923,7 +957,7 @@ export default function ProviderDashboard() {
         />
       ) : (
         <DynamicAccountRenderer
-          schema={MASTER_PROVIDER_ACCOUNT_SCHEMA}
+          schema={currentSchema}
           view="home"
           data={{
             homeProps: {
@@ -1074,10 +1108,12 @@ export default function ProviderDashboard() {
                     </div>
                     <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-                        Amount
+                        Budget (ZMW)
                       </p>
                       <p className="text-sm font-black text-[#d49b35]">
-                        ZMW {verifyingQuote.price.toLocaleString()}
+                        {((verifyingQuote as any).inquiry?.attributes?.budget && (verifyingQuote as any).inquiry.attributes.budget > 0) 
+                          ? `ZMW ${(verifyingQuote as any).inquiry.attributes.budget.toLocaleString()}` 
+                          : 'Not specified'}
                       </p>
                     </div>
                   </div>

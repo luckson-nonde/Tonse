@@ -4,6 +4,7 @@ import {
   Check,
   X,
   Loader2,
+  ArrowLeft,
   Smartphone,
   Armchair,
   Shirt,
@@ -32,6 +33,7 @@ import {
   Speaker,
   Briefcase,
   BedDouble,
+  ArrowRight,
 } from 'lucide-react';
 import Button from './Button';
 import { fetchCategories, Category } from '../services/categories';
@@ -48,6 +50,7 @@ interface CategorySelectionProps {
   isStandalone?: boolean;
   categoryFilter?: (category: Category) => boolean;
   hideSubmitButton?: boolean;
+  onSubcategoryViewChange?: (isViewing: boolean) => void;
 }
 
 const getCategoryStyles = (id: string) => {
@@ -96,6 +99,7 @@ export default function CategorySelection({
   isStandalone = true,
   categoryFilter,
   hideSubmitButton = false,
+  onSubcategoryViewChange,
 }: CategorySelectionProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [generalCategories, setGeneralCategories] = useState<Category[]>([]);
@@ -112,6 +116,13 @@ export default function CategorySelection({
   const [parentCategoryVersions, setParentCategoryVersions] = useState<Record<string, Category[]>>({});
 
   const [selectedCategories, setSelectedCategories] = useState<any[]>([]);
+
+  // Notify parent of subcategory view state
+  useEffect(() => {
+    if (onSubcategoryViewChange) {
+      onSubcategoryViewChange(!!activeParent || !!activeLabourGroup);
+    }
+  }, [activeParent, activeLabourGroup, onSubcategoryViewChange]);
 
   // Effect to handle real-time changes
   useEffect(() => {
@@ -184,12 +195,7 @@ export default function CategorySelection({
           const initialParents = cats.filter((c) => initialSelectedIds.includes(c.id));
           if (initialParents.length > 0) {
             filtered = initialParents;
-          } else {
-            // It might be a subcategory ID, but usually it's a parent ID from RoleSelection
-            filtered = cats.filter((c) => !['entertainment', 'events'].includes(c.id));
           }
-        } else {
-          filtered = cats.filter((c) => !['entertainment', 'events'].includes(c.id));
         }
       }
 
@@ -471,37 +477,65 @@ export default function CategorySelection({
       }
     >
       {activeParent ? (
-        <div className="flex flex-col min-h-screen bg-[#f5f2ed] animate-in slide-in-from-right duration-300">
+        <div className={`flex flex-col animate-in slide-in-from-right duration-300 ${isStandalone ? 'min-h-screen bg-[#f5f2ed]' : 'bg-transparent'}`}>
           {/* Subcategory Header */}
-          <div className="sticky top-0 bg-[#f5f2ed] z-20 px-6 pt-6 pb-5">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => {
-                  if (activeSubGroup) {
-                    setActiveSubGroup(null);
-                  } else {
-                    setActiveParent(null);
-                  }
-                }}
-                className="w-10 h-10 -ml-2 flex items-center justify-center bg-white/50 rounded-full hover:bg-white transition-all"
-              >
-                <ChevronLeft className="w-5 h-5 text-[#1a1a2e]" />
-              </button>
-              <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">
-                {activeSubGroup ? 'SELECT SPECIFIC TYPES' : 'SELECT A CATEGORY'}
-              </p>
-            </div>
-
-            <div className="mt-4">
-              <h1 className="font-serif text-[28px] font-bold text-[#1a1a2e] leading-tight">
-                {activeSubGroup ? activeSubGroup : activeParent.name}
-              </h1>
-            </div>
+          <div className={`sticky top-0 z-20 ${isStandalone ? 'px-6 pt-6 pb-5 bg-[#f5f2ed]' : 'bg-transparent mb-8 lg:mb-10'}`}>
+            {isStandalone ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      if (activeSubGroup) {
+                        setActiveSubGroup(null);
+                      } else {
+                        setActiveParent(null);
+                      }
+                    }}
+                    className="w-10 h-10 -ml-2 flex items-center justify-center bg-white/50 rounded-full hover:bg-white transition-all"
+                  >
+                    <ChevronLeft className="w-5 h-5 text-[#1a1a2e]" />
+                  </button>
+                  <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">
+                    {activeSubGroup ? 'SELECT SPECIFIC TYPES' : 'SELECT A CATEGORY'}
+                  </p>
+                </div>
+                <div className="mt-4">
+                  <h1 className="font-serif text-[28px] font-bold text-[#1a1a2e] leading-tight">
+                    {activeSubGroup ? activeSubGroup : activeParent.name}
+                  </h1>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
+                  <h2 className="text-[28px] lg:text-[26px] font-serif font-bold text-brand-dark leading-tight whitespace-nowrap">
+                    {activeSubGroup ? activeSubGroup : activeParent.name}
+                  </h2>
+                  <div className="text-[#C9973A] font-sans font-normal text-xs lg:text-sm leading-relaxed opacity-80 italic">
+                    {activeSubGroup ? 'SELECT SPECIFIC TYPES' : 'SELECT A CATEGORY'}
+                  </div>
+                </div>
+                <button 
+                  onClick={() => {
+                    if (activeSubGroup) {
+                      setActiveSubGroup(null);
+                    } else {
+                      setActiveParent(null);
+                      if (onSubcategoryViewChange) onSubcategoryViewChange(false);
+                    }
+                  }}
+                  className="hidden lg:flex items-center text-slate-400 hover:text-[#C9973A] transition-colors text-base w-fit group"
+                >
+                  <ArrowLeft className="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform" />
+                  Back
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Subcategory Content */}
           <div className="flex-1 overflow-y-auto scrollbar-hide">
-            <div className="p-6 flex flex-col gap-6">
+            <div className={`flex flex-col gap-6 ${isStandalone ? 'p-6' : ''}`}>
               {/* Select All */}
               <div className="flex justify-start">
                 <button
@@ -523,7 +557,7 @@ export default function CategorySelection({
                     placeholder="Search subcategories..."
                     value={subSearchQuery}
                     onChange={(e) => setSubSearchQuery(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3.5 bg-white border border-[#f1f5f9] rounded-2xl text-[15px] focus:border-[#C9973A]/50 focus:bg-white outline-none transition-all placeholder:text-[#94a3b8] font-sans"
+                    className="w-full pl-11 pr-4 py-3.5 bg-white border border-[#e2e8f0] rounded-2xl text-[15px] focus:border-[#C9973A]/50 focus:bg-white outline-none transition-all placeholder:text-[#94a3b8] font-sans shadow-sm"
                   />
                 </div>
               )}
@@ -544,8 +578,9 @@ export default function CategorySelection({
                   <p className="text-[#94a3b8] font-medium font-sans">No subcategories found.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
-                  {(() => {
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {(() => {
                     // Group subcategories by baseName if they have variants
                     const groups: Record<string, Category[]> = {};
                     const ungrouped: Category[] = [];
@@ -595,7 +630,7 @@ export default function CategorySelection({
                                   </span>
                                 </div>
                                 <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all duration-200 ml-4 shrink-0 ${
-                                  isSelected ? 'bg-[#C9973A] border-[#C9973A]' : 'bg-white border-[#f1f5f9]'
+                                  isSelected ? 'bg-[#C9973A] border-[#C9973A]' : 'bg-white border-[#e2e8f0]'
                                 }`}>
                                   {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={4} />}
                                 </div>
@@ -679,19 +714,30 @@ export default function CategorySelection({
                       </>
                     );
                   })()}
-                </div>
+                  </div>
+
+                  <div className="mt-8 flex justify-end">
+                    <button
+                      onClick={() => {
+                        setActiveParent(null);
+                        if (onSubcategoryViewChange) onSubcategoryViewChange(false);
+                      }}
+                      disabled={currentParentSelectedCount === 0}
+                      style={{
+                        background: 'linear-gradient(to right, #C9973A, #b8861e)',
+                        boxShadow: '0 4px 18px rgba(201,151,58,0.38)',
+                      }}
+                      className={`flex items-center text-white font-[700] text-[13.5px] py-[13px] px-[36px] rounded-[40px] transition-all duration-300 ${
+                        currentParentSelectedCount === 0 ? 'opacity-45 cursor-not-allowed' : 'hover:scale-[1.02] active:scale-[0.98]'
+                      }`}
+                    >
+                      Done
+                      <Check className="w-4 h-4 ml-1.5" strokeWidth={3} />
+                    </button>
+                  </div>
+                </>
               )}
             </div>
-          </div>
-
-          {/* Sticky Footer */}
-          <div className="sticky bottom-0 p-6 bg-[#f5f2ed] border-t border-[#e2e8f0]">
-            <button
-              onClick={() => setActiveParent(null)}
-              className="w-full h-[58px] bg-[#C9973A] text-white text-[16px] font-bold rounded-[50px] shadow-xl shadow-[rgba(201,151,58,0.25)] hover:bg-brand-dark hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2"
-            >
-              Done {currentParentSelectedCount > 0 ? `(${currentParentSelectedCount})` : ''}
-            </button>
           </div>
         </div>
       ) : activeLabourGroup ? (() => {
@@ -717,30 +763,55 @@ export default function CategorySelection({
         ).length;
 
         return (
-          <div className="flex flex-col min-h-screen bg-[#f5f2ed] animate-in slide-in-from-right duration-300">
+          <div className={`flex flex-col animate-in slide-in-from-right duration-300 ${isStandalone ? 'min-h-screen bg-[#f5f2ed]' : 'bg-transparent'}`}>
             {/* Header */}
-            <div className="sticky top-0 bg-[#f5f2ed] z-20 px-6 pt-6 pb-5">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setActiveLabourGroup(isRoot ? null : 'ROOT')}
-                  className="w-10 h-10 -ml-2 flex items-center justify-center bg-white/50 rounded-full hover:bg-white transition-all"
-                >
-                  <ChevronLeft className="w-5 h-5 text-[#1a1a2e]" />
-                </button>
-                <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">
-                  {isRoot ? 'LABOUR & SKILLS' : 'SELECT SPECIALTY'}
-                </p>
-              </div>
-              <div className="mt-4">
-                <h1 className="font-serif text-[28px] font-bold text-[#1a1a2e] leading-tight">
-                  {isRoot ? 'Choose a Category' : currentGroup?.label}
-                </h1>
-              </div>
+            <div className={`sticky top-0 z-20 ${isStandalone ? 'px-6 pt-6 pb-5 bg-[#f5f2ed]' : 'bg-transparent mb-8 lg:mb-10'}`}>
+              {isStandalone ? (
+                <>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setActiveLabourGroup(isRoot ? null : 'ROOT')}
+                      className="w-10 h-10 -ml-2 flex items-center justify-center bg-white/50 rounded-full hover:bg-white transition-all"
+                    >
+                      <ChevronLeft className="w-5 h-5 text-[#1a1a2e]" />
+                    </button>
+                    <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">
+                      {isRoot ? 'LABOUR & SKILLS' : 'SELECT SPECIALTY'}
+                    </p>
+                  </div>
+                  <div className="mt-4">
+                    <h1 className="font-serif text-[28px] font-bold text-[#1a1a2e] leading-tight">
+                      {isRoot ? 'Choose a Category' : currentGroup?.label}
+                    </h1>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
+                    <h2 className="text-[28px] lg:text-[26px] font-serif font-bold text-brand-dark leading-tight whitespace-nowrap">
+                      {isRoot ? 'Choose a Category' : currentGroup?.label}
+                    </h2>
+                    <div className="text-[#C9973A] font-sans font-normal text-xs lg:text-sm leading-relaxed opacity-80 italic">
+                      {isRoot ? 'LABOUR & SKILLS' : 'SELECT SPECIALTY'}
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setActiveLabourGroup(isRoot ? null : 'ROOT');
+                      if (isRoot && onSubcategoryViewChange) onSubcategoryViewChange(false);
+                    }}
+                    className="hidden lg:flex items-center text-slate-400 hover:text-[#C9973A] transition-colors text-base w-fit group"
+                  >
+                    <ArrowLeft className="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform" />
+                    Back
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto scrollbar-hide">
-              <div className="p-6 flex flex-col gap-6">
+              <div className={`flex flex-col gap-6 ${isStandalone ? 'p-6' : ''}`}>
                 {isRoot ? (
                   /* Labour Group Grid */
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -827,7 +898,7 @@ export default function CategorySelection({
                           placeholder="Search specialties..."
                           value={labourSubSearch}
                           onChange={(e) => setLabourSubSearch(e.target.value)}
-                          className="w-full pl-11 pr-4 py-3.5 bg-white border border-[#f1f5f9] rounded-2xl text-[15px] focus:border-[#C9973A]/50 focus:bg-white outline-none transition-all placeholder:text-[#94a3b8] font-sans"
+                          className="w-full pl-11 pr-4 py-3.5 bg-white border border-[#e2e8f0] rounded-2xl text-[15px] focus:border-[#C9973A]/50 focus:bg-white outline-none transition-all placeholder:text-[#94a3b8] font-sans shadow-sm"
                         />
                       </div>
                     )}
@@ -855,7 +926,7 @@ export default function CategorySelection({
                               )}
                             </div>
                             <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all duration-200 ml-4 shrink-0 ${
-                              isSelected ? 'bg-[#C9973A] border-[#C9973A]' : 'bg-white border-[#f1f5f9]'
+                              isSelected ? 'bg-[#C9973A] border-[#C9973A]' : 'bg-white border-[#e2e8f0]'
                             }`}>
                               {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={4} />}
                             </div>
@@ -870,9 +941,12 @@ export default function CategorySelection({
 
             {/* Sticky Footer */}
             {!isRoot && (
-              <div className="sticky bottom-0 p-6 bg-[#f5f2ed] border-t border-[#e2e8f0]">
+              <div className={`sticky bottom-0 p-6 border-t border-[#e2e8f0] z-20 ${isStandalone ? 'bg-[#f5f2ed]' : 'bg-transparent'}`}>
                 <button
-                  onClick={() => setActiveLabourGroup('ROOT')}
+                  onClick={() => {
+                    setActiveLabourGroup('ROOT');
+                    if (onSubcategoryViewChange) onSubcategoryViewChange(false);
+                  }}
                   className="w-full h-[58px] bg-[#C9973A] text-white text-[16px] font-bold rounded-[50px] shadow-xl shadow-[rgba(201,151,58,0.25)] hover:bg-brand-dark hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2"
                 >
                   Done {selectedInGroup > 0 ? `(${selectedInGroup})` : ''}
@@ -923,7 +997,7 @@ export default function CategorySelection({
                 placeholder="Search categories..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-3.5 bg-white border border-[#f1f5f9] rounded-xl text-[15px] focus:border-[#C9973A]/50 focus:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] outline-none transition-all placeholder:text-[#94a3b8] font-sans"
+                className="w-full pl-11 pr-4 py-3.5 bg-white border border-[#e2e8f0] rounded-xl text-[15px] focus:border-[#C9973A]/50 focus:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] outline-none transition-all placeholder:text-[#94a3b8] font-sans shadow-sm"
               />
             </div>
 
@@ -947,7 +1021,7 @@ export default function CategorySelection({
                 {selectedCategories.map((c) => (
                   <span
                     key={c.id}
-                    className="bg-white border border-[#f1f5f9] text-[#1a1a2e] px-3 py-1.5 rounded-full text-[12px] font-medium flex items-center gap-2 shadow-sm"
+                    className="bg-white border border-[#e2e8f0] text-[#1a1a2e] px-3 py-1.5 rounded-full text-[12px] font-medium flex items-center gap-2 shadow-sm"
                   >
                     {c.name}
                     <button
@@ -967,7 +1041,7 @@ export default function CategorySelection({
                 <Loader2 className="w-8 h-8 animate-spin text-[#C9973A]" />
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              <div className={`grid grid-cols-2 sm:grid-cols-3 ${isStandalone ? 'md:grid-cols-4 lg:grid-cols-6' : 'md:grid-cols-4'} gap-4`}>
                 {filteredCategories.map((category) => {
                   const hasSelectedSub = selectedCategories.some((c) => c.parentId === category.id);
                   const { icon: CategoryIcon } = getCategoryStyles(category.id);
@@ -979,7 +1053,7 @@ export default function CategorySelection({
                       className={`relative h-[120px] rounded-[20px] overflow-hidden cursor-pointer group transition-all duration-300 border-[1.5px] ${
                         hasSelectedSub || (category.id === 'labour' && activeLabourGroup)
                           ? 'border-[#C9973A] bg-white shadow-[0_4px_16px_rgba(201,151,58,0.12)]'
-                          : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30 hover:shadow-[0_4px_16px_rgba(0,0,0,0.04)]'
+                          : 'border-[#e2e8f0] bg-white hover:border-[#C9973A]/30 hover:shadow-[0_4px_16px_rgba(0,0,0,0.04)] shadow-sm'
                       }`}
                     >
                       <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">

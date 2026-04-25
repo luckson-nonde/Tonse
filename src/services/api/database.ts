@@ -50,6 +50,16 @@ function transformQuote(quote: any): Quote {
   };
 }
 
+// Helper to normalize AuditLogs
+function transformAuditLog(log: any): AuditLog {
+  if (!log) return log;
+  return {
+    ...log,
+    actionType: log.action || log.actionType,
+    timestamp: log.createdAt ? new Date(log.createdAt).getTime() : log.timestamp || Date.now(),
+  };
+}
+
 // Table interfaces that mirror Dexie operations
 interface ITable<T> {
   add: (item: T | T[]) => Promise<number>;
@@ -280,7 +290,7 @@ export class AppDatabaseAPI {
     this.schedules = new Table<Schedule>('/schedules', 'schedules');
     this.calendarEvents = new Table<CalendarEvent>('/calendar-events', 'calendarEvents');
     this.venueSpaces = new Table<VenueSpace>('/venue-spaces', 'venueSpaces');
-    this.auditLogs = new Table<AuditLog>('/audit-logs', 'auditLogs');
+    this.auditLogs = new Table<AuditLog>('/audit', 'auditLogs', transformAuditLog);
     this.purchaseOrders = new Table<PurchaseOrder>('/orders', 'purchaseOrders');
     this.orderConfirmations = new Table<OrderConfirmation>('/orders', 'orderConfirmations');
     this.deliveryOrders = new Table<DeliveryOrder>('/orders', 'deliveryOrders');

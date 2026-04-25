@@ -193,6 +193,12 @@ export default function LocationDetails({
   };
 
   const handleComplete = () => {
+    // If user is in manual mode, clicking complete should first take them to GPS to verify
+    if (!useGps) {
+      handleUseMyLocation();
+      return;
+    }
+
     onComplete({
       province,
       city,
@@ -450,7 +456,7 @@ export default function LocationDetails({
             disabled={!useGps && (!province || !city)}
             className="w-full sm:w-auto sm:px-16 h-13.5 bg-[#C9973A] rounded-[50px] flex items-center justify-center gap-2.5 font-sans text-[15px] font-semibold text-white tracking-[0.02em] shadow-[0_4px_16_rgba(201,151,58,0.35)] disabled:opacity-50 transition-all active:scale-[0.98]"
           >
-            {submitLabel}
+            {!useGps ? 'Next: Capture GPS Location →' : submitLabel}
           </button>
         </div>
       </div>

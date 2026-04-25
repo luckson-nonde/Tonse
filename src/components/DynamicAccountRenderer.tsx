@@ -43,6 +43,7 @@ import ProviderOrdersView from './provider/ProviderOrdersView';
 import ProviderProductsView from './provider/ProviderProductsView';
 import ProviderScheduleView from './provider/ProviderScheduleView';
 import ProviderTeamView from './provider/ProviderTeamView';
+import VenueManagementView from './provider/VenueManagementView';
 import CollectionPage from '../pages/CollectionPage';
 import FinancialPage from '../pages/FinancialPage';
 import { Inquiry, Quote } from '../types';
@@ -159,7 +160,7 @@ export default function DynamicAccountRenderer({
 
                 <div className="flex flex-col gap-4">
                   <p className="text-white/60 font-mono tracking-[0.2em] text-xs">
-                    {user?.virtualAccountNumber || generateVirtualAccount(user?.phone)}
+                    {user?.phone}
                   </p>
                   
                   <div className="flex items-center gap-3">
@@ -413,28 +414,25 @@ export default function DynamicAccountRenderer({
                 </motion.div>
               ))
             ) : (
-              <div className="p-14 text-center">
+              <div className="p-16 text-center">
                 <motion.div
                   initial={{ scale: 0.8, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  className="w-24 h-24 bg-gradient-to-br from-slate-100 to-slate-50 rounded-full flex items-center justify-center mx-auto mb-7 shadow-premium"
+                  className="relative mb-10"
                 >
-                  <Clock className="w-12 h-12 text-slate-400" />
+                  <div className="absolute inset-0 bg-brand-gold/5 rounded-full blur-3xl scale-150 animate-pulse"></div>
+                  <img 
+                    src={defaultEmptyImage} 
+                    alt="Reading Owl" 
+                    className="w-40 h-40 object-contain relative z-10 mx-auto opacity-90 drop-shadow-lg"
+                  />
                 </motion.div>
-                <h3 className="text-lg font-serif font-bold text-slate-600 mb-2">
+                <h3 className="text-xl font-serif font-black text-brand-dark mb-3">
                   No activity yet
                 </h3>
-                <p className="text-slate-500 text-sm mb-8 max-w-xs mx-auto leading-relaxed">
-                  Your activity log will appear here once you create inquiries or receive quotes.
+                <p className="text-slate-500 text-sm max-w-xs mx-auto leading-relaxed font-medium">
+                  Your activity log will appear here once you create inquiries or receive quotes from our network.
                 </p>
-                <Button
-                  variant="primary"
-                  onClick={() => onAction('create_inquiry')}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-brand-gold hover:bg-brand-accent text-white rounded-2xl font-medium transition-all hover:shadow-lg"
-                >
-                  <Plus className="w-4 h-4" />
-                  Create Your First Inquiry
-                </Button>
               </div>
             )}
           </motion.div>
@@ -674,6 +672,8 @@ export default function DynamicAccountRenderer({
         return <ProviderScheduleView {...data?.scheduleProps} />;
       case 'provider_team':
         return <ProviderTeamView {...data?.teamProps} />;
+      case 'venue_spaces_renderer':
+        return <VenueManagementView />;
       case 'provider_collection':
         return <CollectionPage />;
       case 'labour_home':
