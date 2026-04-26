@@ -1,33 +1,61 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingBag, Store, Truck, Wrench, Check, Music, Calendar, Smartphone, Armchair, Shirt, Home, Car, Hammer, Tractor, Laptop, User, Building2, Package, Settings, Layers, FileText, Users } from 'lucide-react';
+import {
+  ShoppingBag,
+  Store,
+  Truck,
+  Wrench,
+  Check,
+  Music,
+  Calendar,
+  Smartphone,
+  Armchair,
+  Shirt,
+  Home,
+  Car,
+  Hammer,
+  Tractor,
+  Laptop,
+  User,
+  Building2,
+  Package,
+  Settings,
+  Layers,
+  FileText,
+  Users,
+} from 'lucide-react';
 import AuthSplitLayout from '../components/AuthSplitLayout';
 import Button from '../components/Button';
 import { motion, AnimatePresence } from 'motion/react';
 import { SubRole, HeroContent } from '../types';
-import { CATEGORIES_DB, getCategoryNature } from '../services/categories';
+import { CATEGORIES_DB, getCategoryNature, Category } from '../services/categories';
+import CategorySelection from '../components/CategorySelection';
 
 const HERO_CONTENT: Record<string, HeroContent> = {
   tier1: {
-    title: "Join the Gold Standard of Trade.",
-    image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=1920&h=1080",
-    bullets: ["Efficient Procurement", "Direct Messaging", "Verified Suppliers"]
+    title: 'Join the Gold Standard of Trade.',
+    image:
+      'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=1920&h=1080',
+    bullets: ['Efficient Procurement', 'Direct Messaging', 'Verified Suppliers'],
   },
   buyer: {
-    title: "Procure with Confidence.",
-    image: "https://images.unsplash.com/photo-1556740734-7f95834d0ff9?auto=format&fit=crop&q=80&w=1920&h=1080",
-    bullets: ["Access Global Markets", "Secure Transactions", "Quality Assurance"]
+    title: 'Procure with Confidence.',
+    image:
+      'https://images.unsplash.com/photo-1556740734-7f95834d0ff9?auto=format&fit=crop&q=80&w=1920&h=1080',
+    bullets: ['Access Global Markets', 'Secure Transactions', 'Quality Assurance'],
   },
   seller: {
-    title: "Scale Your Business Globally.",
-    image: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=1920&h=1080",
-    bullets: ["Reach Verified Buyers", "Streamlined Logistics", "Market Insights"]
+    title: 'Scale Your Business Globally.',
+    image:
+      'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=1920&h=1080',
+    bullets: ['Reach Verified Buyers', 'Streamlined Logistics', 'Market Insights'],
   },
   categories: {
-    title: "Tailored to Your Industry.",
-    image: "https://images.unsplash.com/photo-1513828583688-c52646db42da?auto=format&fit=crop&q=80&w=1920&h=1080",
-    bullets: ["Niche Specialization", "Relevant Connections", "Industry Standards"]
-  }
+    title: 'Tailored to Your Industry.',
+    image:
+      'https://images.unsplash.com/photo-1513828583688-c52646db42da?auto=format&fit=crop&q=80&w=1920&h=1080',
+    bullets: ['Niche Specialization', 'Relevant Connections', 'Industry Standards'],
+  },
 };
 
 interface RoleOption {
@@ -44,15 +72,15 @@ const buyerSubRoles: RoleOption[] = [
     title: 'Personal Account',
     description: 'Shop for yourself and your family.',
     icon: User,
-    subRole: 'INDIVIDUAL_BUYER'
+    subRole: 'INDIVIDUAL_BUYER',
   },
   {
     id: 'COMPANY_BUYER',
     title: 'Company Account',
     description: 'Procure materials and services for your business.',
     icon: Building2,
-    subRole: 'COMPANY_BUYER'
-  }
+    subRole: 'COMPANY_BUYER',
+  },
 ];
 
 const companySubRoles: RoleOption[] = [
@@ -61,29 +89,29 @@ const companySubRoles: RoleOption[] = [
     title: 'Procurement Officer',
     description: 'Manage purchasing and supplier relationships.',
     icon: ShoppingBag,
-    subRole: 'COMPANY_PROCUREMENT_OFFICER'
+    subRole: 'COMPANY_PROCUREMENT_OFFICER',
   },
   {
     id: 'COMPANY_SECRETARY',
     title: 'Secretary',
     description: 'Handle administrative tasks and communications.',
     icon: FileText,
-    subRole: 'COMPANY_SECRETARY'
+    subRole: 'COMPANY_SECRETARY',
   },
   {
     id: 'COMPANY_RECEPTIONIST',
     title: 'Receptionist',
     description: 'Manage front desk and initial inquiries.',
     icon: Users,
-    subRole: 'COMPANY_RECEPTIONIST'
+    subRole: 'COMPANY_RECEPTIONIST',
   },
   {
     id: 'COMPANY_MANAGER',
     title: 'Manager/Owner',
     description: 'Full access to company account and settings.',
     icon: Building2,
-    subRole: 'COMPANY_MANAGER'
-  }
+    subRole: 'COMPANY_MANAGER',
+  },
 ];
 
 const sellerSubRoles: RoleOption[] = [
@@ -92,22 +120,29 @@ const sellerSubRoles: RoleOption[] = [
     title: 'Products Only',
     description: 'Sell physical goods and inventory.',
     icon: Package,
-    subRole: 'PRODUCT_SELLER'
+    subRole: 'PRODUCT_SELLER',
   },
   {
     id: 'SERVICE_SELLER',
     title: 'Services Only',
     description: 'Offer professional skills and services.',
     icon: Settings,
-    subRole: 'SERVICE_SELLER'
+    subRole: 'SERVICE_SELLER',
   },
   {
     id: 'HYBRID_SELLER',
     title: 'Products & Services',
     description: 'Sell both goods and professional services.',
     icon: Layers,
-    subRole: 'HYBRID_SELLER'
-  }
+    subRole: 'HYBRID_SELLER',
+  },
+  {
+    id: 'SUPPLIER_SELLER',
+    title: 'Wholesale Supplier',
+    description: 'Supply goods in bulk to other businesses.',
+    icon: Truck,
+    subRole: 'SUPPLIER_SELLER',
+  },
 ];
 
 export default function RoleSelection() {
@@ -116,6 +151,7 @@ export default function RoleSelection() {
   const [selectedSubRole, setSelectedSubRole] = useState<SubRole | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isCompanyExpanded, setIsCompanyExpanded] = useState(false);
+  const [isViewingSubcategories, setIsViewingSubcategories] = useState(false);
   const navigate = useNavigate();
 
   const handleMasterSelect = (role: 'BUYER' | 'SELLER') => {
@@ -134,18 +170,18 @@ export default function RoleSelection() {
 
   const filteredCategories = React.useMemo(() => {
     if (!selectedSubRole) return [];
-    
+
     // Only root categories for selection
-    const rootCategories = CATEGORIES_DB.filter(c => !c.parentId);
+    const rootCategories = CATEGORIES_DB.filter((c) => !c.parentId);
 
     if (selectedSubRole === 'PRODUCT_SELLER') {
-      return rootCategories.filter(c => {
+      return rootCategories.filter((c) => {
         const nature = getCategoryNature(c.id);
         return nature === 'PRODUCT' || nature === 'BOTH';
       });
     }
     if (selectedSubRole === 'SERVICE_SELLER') {
-      return rootCategories.filter(c => {
+      return rootCategories.filter((c) => {
         const nature = getCategoryNature(c.id);
         return nature === 'SERVICE' || nature === 'BOTH';
       });
@@ -154,10 +190,8 @@ export default function RoleSelection() {
   }, [selectedSubRole]);
 
   const toggleCategory = (catId: string) => {
-    setSelectedCategories(prev => 
-      prev.includes(catId) 
-        ? prev.filter(id => id !== catId) 
-        : [...prev, catId]
+    setSelectedCategories((prev) =>
+      prev.includes(catId) ? prev.filter((id) => id !== catId) : [...prev, catId]
     );
   };
 
@@ -172,7 +206,28 @@ export default function RoleSelection() {
       }
     } else if (tier === 3 && selectedCategories.length > 0) {
       const categoriesParam = selectedCategories.join(',');
-      navigate(`/register?role=${masterRole}&subRole=${selectedSubRole}&categories=${categoriesParam}`);
+      
+      let actualRole = masterRole as string;
+      if (masterRole === 'SELLER') {
+        const isEvent = selectedCategories.some(catName => {
+          const matchingCats = CATEGORIES_DB.filter(c => c.id === catName || c.name === catName || c.baseName === catName);
+          return matchingCats.some(cat => cat.parentId === 'events' || cat.id === 'events');
+        });
+        const isEntertainment = selectedCategories.some(catName => {
+          const matchingCats = CATEGORIES_DB.filter(c => c.id === catName || c.name === catName || c.baseName === catName);
+          return matchingCats.some(cat => cat.parentId === 'entertainment' || cat.id === 'entertainment');
+        });
+
+        if (isEvent) {
+          actualRole = 'EVENTS';
+        } else if (isEntertainment) {
+          actualRole = 'ENTERTAINMENT';
+        }
+      }
+
+      navigate(
+        `/register?role=${actualRole}&subRole=${selectedSubRole}&categories=${categoriesParam}`
+      );
     }
   };
 
@@ -199,84 +254,120 @@ export default function RoleSelection() {
   }, [tier, masterRole]);
 
   return (
-    <AuthSplitLayout 
+    <AuthSplitLayout
       title={
-        tier === 1 ? "Select Your Role" : 
-        tier === 2 ? `Configure your ${masterRole === 'BUYER' ? 'Buyer' : 'Seller'} Account` :
-        "Business Categories"
+        isViewingSubcategories
+          ? null
+          : tier === 1
+            ? 'Select Your Role'
+            : tier === 2
+              ? `Configure your ${masterRole === 'BUYER' ? 'Buyer' : 'Seller'} Account`
+              : 'Business Categories'
       }
       subtitle={
-        <span className="text-[#1a1612]/60">
-          {tier === 1 
-            ? "Choose how you want to use TONSE" 
-            : tier === 2 
-            ? `Select the sub-role that best fits your ${masterRole === 'BUYER' ? 'needs' : 'business model'}`
-            : "Select the categories that best describe your business."
-          }
-        </span>
+        isViewingSubcategories
+          ? null
+          : <span className="text-[#1a1612]/60">
+              {tier === 1
+                ? 'Choose how you want to use TONSE'
+                : tier === 2
+                  ? `Select the sub-role that best fits your ${masterRole === 'BUYER' ? 'needs' : 'business model'}`
+                  : 'Select the categories that best describe your business.'}
+            </span>
       }
-      onBack={tier > 1 ? handleBack : () => navigate('/login')}
+      onBack={isViewingSubcategories ? undefined : (tier > 1 ? handleBack : () => navigate('/login'))}
       hero={currentHero}
     >
-      <div className="relative overflow-hidden min-h-[400px]">
+      <div className="relative overflow-hidden min-h-100">
         <AnimatePresence mode="wait">
           {tier === 1 ? (
-            <motion.div 
+            <motion.div
               key="tier1"
               initial={{ x: -20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -20, opacity: 0 }}
-              className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6"
+              className="flex flex-col gap-4 lg:gap-6"
             >
-              <button 
+              <button
+                type="button"
                 onClick={() => handleMasterSelect('BUYER')}
-                className={`group p-6 lg:p-8 rounded-[24px] lg:rounded-[32px] border text-left transition-all flex items-center gap-4 lg:gap-6 ${
-                  masterRole === 'BUYER' 
-                    ? 'border-[#C9973A] bg-[#C9973A]/5 shadow-lg' 
-                    : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/30'
+                aria-pressed={masterRole === 'BUYER'}
+                className={`group p-6 lg:p-8 rounded-3xl lg:rounded-4xl border text-left transition-all duration-200 flex items-center gap-4 lg:gap-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${
+                  masterRole === 'BUYER'
+                    ? 'border-[#C9973A] bg-[#C9973A]/10 shadow-[0_16px_40px_rgba(201,151,58,0.18)]'
+                    : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/30 hover:shadow-sm'
                 }`}
               >
-                <div className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl transition-colors shrink-0 ${masterRole === 'BUYER' ? 'bg-[#C9973A] text-white' : 'bg-[#f5f2ee] text-[#1e293b]'}`}>
+                <div
+                  className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl transition-colors shrink-0 ${masterRole === 'BUYER' ? 'bg-[#C9973A] text-white' : 'bg-[#f5f2ee] text-brand-dark'}`}
+                >
                   <ShoppingBag className="w-6 h-6 lg:w-8 lg:h-8" strokeWidth={1.5} />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg lg:text-xl font-serif font-bold text-[#1a1612]">I'm Looking For...</h3>
-                  <p className="text-[13px] lg:text-sm text-[#1a1612]/50 mt-1">Request products, services and skilled labour.</p>
+                  <h3 className="text-lg lg:text-xl font-serif font-bold text-[#1a1612]">
+                    I'm Looking For...
+                  </h3>
+                  <p className="text-[13px] lg:text-sm text-[#1a1612]/50 mt-1">
+                    Request products, services and skilled labour.
+                  </p>
                 </div>
+                {masterRole === 'BUYER' && (
+                  <div className="w-9 h-9 rounded-full bg-[#C9973A] text-white flex items-center justify-center">
+                    <Check className="w-4 h-4" strokeWidth={3} />
+                  </div>
+                )}
               </button>
 
-              <button 
+              <button
+                type="button"
                 onClick={() => handleMasterSelect('SELLER')}
-                className={`group p-6 lg:p-8 rounded-[24px] lg:rounded-[32px] border text-left transition-all flex items-center gap-4 lg:gap-6 ${
-                  masterRole === 'SELLER' 
-                    ? 'border-[#C9973A] bg-[#C9973A]/5 shadow-lg' 
-                    : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/30'
+                aria-pressed={masterRole === 'SELLER'}
+                className={`group p-6 lg:p-8 rounded-3xl lg:rounded-4xl border text-left transition-all duration-200 flex items-center gap-4 lg:gap-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${
+                  masterRole === 'SELLER'
+                    ? 'border-[#C9973A] bg-[#C9973A]/10 shadow-[0_16px_40px_rgba(201,151,58,0.18)]'
+                    : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/30 hover:shadow-sm'
                 }`}
               >
-                <div className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl transition-colors shrink-0 ${masterRole === 'SELLER' ? 'bg-[#C9973A] text-white' : 'bg-[#f5f2ee] text-[#1e293b]'}`}>
+                <div
+                  className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl transition-colors shrink-0 ${masterRole === 'SELLER' ? 'bg-[#C9973A] text-white' : 'bg-[#f5f2ee] text-brand-dark'}`}
+                >
                   <Store className="w-6 h-6 lg:w-8 lg:h-8" strokeWidth={1.5} />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg lg:text-xl font-serif font-bold text-[#1a1612]">We're Offering...</h3>
-                  <p className="text-[13px] lg:text-sm text-[#1a1612]/50 mt-1">Offer your products or business services.</p>
+                  <h3 className="text-lg lg:text-xl font-serif font-bold text-[#1a1612]">
+                    We're Offering...
+                  </h3>
+                  <p className="text-[13px] lg:text-sm text-[#1a1612]/50 mt-1">
+                    Offer your products or business services.
+                  </p>
                 </div>
+                {masterRole === 'SELLER' && (
+                  <div className="w-9 h-9 rounded-full bg-[#C9973A] text-white flex items-center justify-center">
+                    <Check className="w-4 h-4" strokeWidth={3} />
+                  </div>
+                )}
               </button>
 
-              <button 
+              <button
+                type="button"
                 onClick={() => navigate('/register/labour')}
-                className={`group p-6 lg:p-8 rounded-[24px] lg:rounded-[32px] border text-left transition-all flex items-center gap-4 lg:gap-6 border-[#e8e4dc] bg-white hover:border-[#C9973A]/30`}
+                className="group p-6 lg:p-8 rounded-2xl lg:rounded-4xl border text-left transition-all duration-200 flex items-center gap-4 lg:gap-6 border-[#e8e4dc] bg-white hover:border-[#C9973A]/30 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
               >
-                <div className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl transition-colors shrink-0 bg-[#f5f2ee] text-[#1e293b]`}>
+                <div className="p-3 lg:p-4 rounded-xl lg:rounded-2xl transition-colors shrink-0 bg-[#f5f2ee] text-brand-dark">
                   <Wrench className="w-6 h-6 lg:w-8 lg:h-8" strokeWidth={1.5} />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg lg:text-xl font-serif font-bold text-[#1a1612]">I Offer My Skills</h3>
-                  <p className="text-[13px] lg:text-sm text-[#1a1612]/50 mt-1">Offer your labour and expertise to employers.</p>
+                  <h3 className="text-lg lg:text-xl font-serif font-bold text-[#1a1612]">
+                    I Offer My Skills
+                  </h3>
+                  <p className="text-[13px] lg:text-sm text-[#1a1612]/50 mt-1">
+                    Offer your labour and expertise to employers.
+                  </p>
                 </div>
               </button>
             </motion.div>
           ) : tier === 2 ? (
-            <motion.div 
+            <motion.div
               key="tier2"
               initial={{ x: 20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
@@ -298,7 +389,9 @@ export default function RoleSelection() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="text-[15px] font-bold text-[#1a1612]">Company Account</h3>
-                      <p className="text-[13px] text-[#1a1612]/50 leading-snug mt-0.5">Select your role within the company.</p>
+                      <p className="text-[13px] text-[#1a1612]/50 leading-snug mt-0.5">
+                        Select your role within the company.
+                      </p>
                     </div>
                   </motion.div>
                 )}
@@ -306,38 +399,51 @@ export default function RoleSelection() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <AnimatePresence mode="popLayout">
-                  {(isCompanyExpanded ? companySubRoles : (masterRole === 'BUYER' ? buyerSubRoles : sellerSubRoles)).map((option) => {
+                  {(isCompanyExpanded
+                    ? companySubRoles
+                    : masterRole === 'BUYER'
+                      ? buyerSubRoles
+                      : sellerSubRoles
+                  ).map((option) => {
                     const isSelected = selectedSubRole === option.subRole;
                     const Icon = option.icon;
-                    
+
                     return (
-                      <motion.button 
+                      <motion.button
+                        type="button"
                         layoutId={option.id}
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         key={option.id}
                         onClick={() => handleSubRoleSelect(option.subRole)}
-                        className={`group p-5 rounded-[32px] border text-left transition-all flex items-center gap-4 ${
-                          isSelected 
-                            ? 'border-brand-yellow bg-brand-yellow/5 shadow-md' 
-                            : 'border-[#e8e4dc] bg-white hover:border-brand-yellow/30'
+                        aria-pressed={isSelected}
+                        className={`group p-5 rounded-4xl border text-left transition-all duration-200 flex items-center gap-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${
+                          isSelected
+                            ? 'border-[#C9973A] bg-[#C9973A]/10 shadow-[0_16px_40px_rgba(201,151,58,0.18)]'
+                            : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/30 hover:shadow-sm'
                         }`}
                       >
-                        <div className={`p-3 rounded-xl transition-colors shrink-0 ${isSelected ? 'bg-brand-yellow text-white' : 'bg-[#f5f2ee] text-[#1e293b]'}`}>
+                        <div
+                          className={`p-3 rounded-xl transition-colors shrink-0 ${isSelected ? 'bg-[#C9973A] text-white' : 'bg-[#f5f2ee] text-brand-dark'}`}
+                        >
                           <Icon className="w-5 h-5" strokeWidth={1.5} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className={`text-[15px] font-bold transition-colors ${isSelected ? 'text-[#1a1612]' : 'text-[#1a1612]/80'}`}>
+                          <h3
+                            className={`text-[15px] font-bold transition-colors ${isSelected ? 'text-[#1a1612]' : 'text-[#1a1612]/80'}`}
+                          >
                             {option.title}
                           </h3>
-                          <p className="text-[13px] text-[#1a1612]/50 leading-snug mt-0.5">{option.description}</p>
+                          <p className="text-[13px] text-[#1a1612]/50 leading-snug mt-0.5">
+                            {option.description}
+                          </p>
                         </div>
-                        {isSelected && (
-                          <div className="w-6 h-6 rounded-full bg-brand-yellow flex items-center justify-center">
-                            <Check className="w-4 h-4 text-[#1a1612]" strokeWidth={3} />
-                          </div>
-                        )}
+                        <div
+                          className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors duration-200 ${isSelected ? 'bg-[#C9973A] text-white' : 'bg-[#f5f2ee] text-transparent'}`}
+                        >
+                          {isSelected && <Check className="w-4 h-4" strokeWidth={3} />}
+                        </div>
                       </motion.button>
                     );
                   })}
@@ -345,60 +451,57 @@ export default function RoleSelection() {
               </div>
             </motion.div>
           ) : (
-            <motion.div 
+            <motion.div
               key="tier3"
               initial={{ x: 20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 20, opacity: 0 }}
               className="space-y-4"
             >
-              <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto p-1">
-                {filteredCategories.map((cat) => {
-                  const isSelected = selectedCategories.includes(cat.id);
-                  return (
-                    <button 
-                      key={cat.id}
-                      onClick={() => toggleCategory(cat.id)}
-                      className={`group p-4 rounded-[32px] border text-center transition-all flex flex-col items-center gap-3 relative ${
-                        isSelected 
-                          ? 'border-brand-yellow bg-brand-yellow/5 shadow-md' 
-                          : 'border-[#e8e4dc] bg-white hover:border-brand-yellow/30 shadow-sm'
-                      }`}
-                    >
-                      <div className="w-14 h-14 rounded-full overflow-hidden border border-[#e8e4dc] shadow-sm">
-                        <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      </div>
-                      <span className={`text-[13px] font-bold leading-tight ${isSelected ? 'text-[#1a1612]' : 'text-[#1e293b]'}`}>
-                        {cat.name}
-                      </span>
-                      {isSelected && (
-                        <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-brand-yellow flex items-center justify-center shadow-sm">
-                          <Check className="w-3 h-3 text-[#1a1612]" strokeWidth={3} />
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
+              <div className="h-full min-h-100">
+                <CategorySelection
+                  onChange={setSelectedCategories}
+                  hideHeader={true}
+                  hideSubmitButton={true}
+                  isStandalone={false}
+                  role={masterRole === 'SELLER' ? 'SELLER' : undefined}
+                  categoryFilter={(cat) => {
+                    if (selectedSubRole === 'PRODUCT_SELLER') {
+                      const nature = getCategoryNature(cat.id);
+                      return nature === 'PRODUCT' || nature === 'BOTH';
+                    }
+                    if (selectedSubRole === 'SERVICE_SELLER') {
+                      const nature = getCategoryNature(cat.id);
+                      return nature === 'SERVICE' || nature === 'BOTH';
+                    }
+                    return true;
+                  }}
+                  onSubcategoryViewChange={setIsViewingSubcategories}
+                />
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      <div className="pt-8">
-        <Button 
-          onClick={handleContinue}
-          disabled={
-            tier === 1 ? !masterRole : 
-            tier === 2 ? !selectedSubRole :
-            selectedCategories.length === 0
-          }
-          className="w-full py-5 px-4 shadow-lg flex justify-center items-center gap-3 text-[18px] font-serif font-bold disabled:opacity-50 rounded-[32px]"
-        >
-          {tier === 1 ? 'Next Step' : tier === 2 ? 'Continue' : 'Initialize Membership'}
-          <span className="text-xl leading-none">→</span>
-        </Button>
-      </div>
+      {!isViewingSubcategories && (
+        <div className="pt-8">
+          <Button
+            onClick={handleContinue}
+            disabled={
+              tier === 1
+                ? !masterRole
+                : tier === 2
+                  ? !selectedSubRole
+                  : selectedCategories.length === 0
+            }
+            className="w-full py-5 px-4 shadow-lg flex justify-center items-center gap-3 text-[18px] font-serif font-bold disabled:opacity-50 rounded-4xl"
+          >
+            {tier === 1 ? 'Next Step' : tier === 2 ? 'Continue' : 'Initialize Membership'}
+            <span className="text-xl leading-none">→</span>
+          </Button>
+        </div>
+      )}
     </AuthSplitLayout>
   );
 }

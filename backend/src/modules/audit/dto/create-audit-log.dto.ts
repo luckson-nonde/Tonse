@@ -5,6 +5,18 @@ export class CreateAuditLogDto {
   @IsUUID()
   userId?: string;
 
+  @IsOptional()
+  @IsUUID()
+  providerId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  staffId?: string;
+
+  @IsOptional()
+  @IsString()
+  staffName?: string;
+
   @IsString()
   @IsNotEmpty()
   action: string;
@@ -16,6 +28,21 @@ export class CreateAuditLogDto {
   @IsOptional()
   @IsUUID()
   entityId?: string;
+
+  @IsOptional()
+  @IsString()
+  targetTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  buyerName?: string;
+
+  @IsOptional()
+  amount?: number;
+
+  @IsOptional()
+  @IsString()
+  details?: string;
 
   @IsOptional()
   @IsString()

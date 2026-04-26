@@ -21,9 +21,14 @@ export class AuditLog {
   @Column({ type: 'uuid', nullable: true })
   userId: string;
 
-  @ManyToOne(() => User, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'userId' })
-  user: User;
+  @Column({ type: 'uuid', nullable: true })
+  providerId: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  staffId: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  staffName: string;
 
   @Column({ type: 'varchar', length: 50 })
   action: string;
@@ -33,6 +38,18 @@ export class AuditLog {
 
   @Column({ type: 'uuid', nullable: true })
   entityId: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  targetTitle: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  buyerName: string;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  amount: number;
+
+  @Column({ type: 'text', nullable: true })
+  details: string;
 
   @Column({ type: 'text', nullable: true })
   changes: string; // JSON stringified

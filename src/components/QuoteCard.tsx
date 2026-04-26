@@ -1,14 +1,14 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { 
-  Star, 
-  PackageOpen, 
-  Calendar, 
-  MessageSquare, 
-  ArrowRight, 
-  Printer, 
+import {
+  Star,
+  PackageOpen,
+  Calendar,
+  MessageSquare,
+  ArrowRight,
+  Printer,
   Archive,
-  Check
+  Check,
 } from 'lucide-react';
 import { Quote } from '../types';
 
@@ -21,10 +21,10 @@ interface QuoteCardProps {
 
 export default function QuoteCard({ quote, onView, onPrint, onArchive }: QuoteCardProps) {
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="group bg-white rounded-[24px] p-5 shadow-sm border border-slate-200 relative hover:shadow-md hover:border-[#C9973A]/30 transition-all duration-300 flex flex-col gap-4"
+      className="group bg-white rounded-2xl p-5 shadow-sm border border-slate-200 relative hover:shadow-md hover:border-[#C9973A]/30 transition-all duration-300 flex flex-col gap-4"
     >
       {/* Unread Indicator */}
       {!quote.isRead && (
@@ -38,7 +38,9 @@ export default function QuoteCard({ quote, onView, onPrint, onArchive }: QuoteCa
             {(quote.providerName || 'P').charAt(0)}
           </div>
           <div>
-            <h4 className="text-base font-bold text-[#1a1612] leading-tight">{quote.providerName || 'Provider'}</h4>
+            <h4 className="text-base font-bold text-[#1a1612] leading-tight">
+              {quote.providerName || 'Provider'}
+            </h4>
             <div className="flex items-center gap-1.5 mt-1">
               <div className="flex items-center gap-0.5 bg-[#fdf6e9] px-1.5 py-0.5 rounded text-[#C9973A]">
                 <Star className="w-3 h-3" fill="currentColor" />
@@ -48,10 +50,12 @@ export default function QuoteCard({ quote, onView, onPrint, onArchive }: QuoteCa
             </div>
           </div>
         </div>
-        
+
         {/* Price */}
         <div className="text-right shrink-0">
-          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Total Quote</p>
+          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">
+            Total Quote
+          </p>
           <div className="flex items-start justify-end">
             <span className="text-sm font-bold text-slate-400 mt-1 mr-0.5">k</span>
             <span className="text-2xl font-black text-[#1a1612] tracking-tight leading-none">
@@ -62,7 +66,7 @@ export default function QuoteCard({ quote, onView, onPrint, onArchive }: QuoteCa
       </div>
 
       {/* Divider */}
-      <div className="h-px w-full bg-gradient-to-r from-slate-100 via-slate-100 to-transparent"></div>
+      <div className="h-px w-full bg-linear-to-r from-slate-100 via-slate-100 to-transparent"></div>
 
       {/* Offer Details Grid */}
       <div className="grid grid-cols-2 gap-4">
@@ -71,18 +75,22 @@ export default function QuoteCard({ quote, onView, onPrint, onArchive }: QuoteCa
             <PackageOpen className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Condition</p>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">
+              Condition
+            </p>
             <p className="text-xs font-bold text-[#1a1612]">{quote.condition}</p>
           </div>
         </div>
-        
+
         {quote.expiryDuration && (
           <div className="flex items-start gap-2.5">
             <div className="mt-0.5 p-1.5 bg-rose-50 rounded-lg text-rose-500">
               <Calendar className="w-4 h-4" />
             </div>
             <div>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Expires In</p>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">
+                Expires In
+              </p>
               <p className="text-xs font-bold text-rose-600">{quote.expiryDuration}</p>
             </div>
           </div>
@@ -105,7 +113,9 @@ export default function QuoteCard({ quote, onView, onPrint, onArchive }: QuoteCa
         <div className="p-3 bg-emerald-50 rounded-xl flex items-center gap-2 text-emerald-700 border border-emerald-100">
           <Check className="w-4 h-4" />
           <span className="text-[10px] font-bold uppercase tracking-wider">
-            {quote.status === 'PAID' ? 'Paid - Awaiting Collection' : 'Collection Confirmed - Funds Released'}
+            {quote.status === 'PAID'
+              ? 'Paid - Awaiting Collection'
+              : 'Collection Confirmed - Funds Released'}
           </span>
         </div>
       )}
@@ -115,10 +125,10 @@ export default function QuoteCard({ quote, onView, onPrint, onArchive }: QuoteCa
         <div className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
           QID-{quote.id}
         </div>
-        
+
         <div className="flex items-center gap-2">
           {onPrint && (
-            <button 
+            <button
               onClick={(e) => {
                 e.stopPropagation();
                 onPrint();
@@ -130,7 +140,7 @@ export default function QuoteCard({ quote, onView, onPrint, onArchive }: QuoteCa
             </button>
           )}
           {onArchive && (
-            <button 
+            <button
               onClick={(e) => {
                 e.stopPropagation();
                 onArchive();
@@ -141,11 +151,11 @@ export default function QuoteCard({ quote, onView, onPrint, onArchive }: QuoteCa
               <Archive className="w-4 h-4" />
             </button>
           )}
-          <button 
+          <button
             onClick={onView}
             className={`px-5 py-2.5 text-sm font-bold rounded-xl transition-all flex items-center gap-2 ${
-              !quote.isRead 
-                ? 'bg-[#1a1612] text-white hover:bg-black shadow-md hover:shadow-lg hover:-translate-y-0.5' 
+              !quote.isRead
+                ? 'bg-[#1a1612] text-white hover:bg-black shadow-md hover:shadow-lg hover:-translate-y-0.5'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >

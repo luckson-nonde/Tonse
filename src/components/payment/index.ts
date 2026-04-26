@@ -1,5 +1,3 @@
 // Payment components exports
-export { default as PaymentForm } from './PaymentForm';
-export { default as PaymentHistory } from './PaymentHistory';
-export { default as TransactionList } from './TransactionList';
-export { default as WalletCard } from './WalletCard';
+// Payment functionality is handled via API calls and components at root level
+// Add component exports here as they are created

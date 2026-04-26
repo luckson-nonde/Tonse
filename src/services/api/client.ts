@@ -143,6 +143,11 @@ export const apiCall = async <T = any>(
       throw new Error('Unauthorized. Please login again.');
     }
 
+    // Handle 204 No Content
+    if (response.status === 204) {
+      return { data: undefined } as any;
+    }
+
     const data = await response.json();
 
     if (!response.ok) {

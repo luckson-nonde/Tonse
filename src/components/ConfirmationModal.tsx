@@ -10,7 +10,13 @@ interface ConfirmationModalProps {
   onCancel: () => void;
 }
 
-export default function ConfirmationModal({ isOpen, title, message, onConfirm, onCancel }: ConfirmationModalProps) {
+export default function ConfirmationModal({
+  isOpen,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+}: ConfirmationModalProps) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -25,14 +31,26 @@ export default function ConfirmationModal({ isOpen, title, message, onConfirm, o
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-[#fffaf5] rounded-[32px] p-8 max-w-sm w-full shadow-2xl border border-slate-100"
+            className="bg-brand-white rounded-4xl p-8 max-w-sm w-full shadow-2xl border border-slate-100"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-xl font-serif font-bold text-[#1e293b] mb-2">{title}</h3>
+            <h3 className="text-xl font-serif font-bold text-brand-dark mb-2">{title}</h3>
             <p className="text-slate-500 mb-8">{message}</p>
             <div className="flex gap-3">
-              <Button variant="outline" onClick={onCancel} className="flex-1 rounded-xl border-slate-200">Cancel</Button>
-              <Button variant="danger" onClick={onConfirm} className="flex-1 rounded-xl bg-rose-500 hover:bg-rose-600">Delete</Button>
+              <Button
+                variant="outline"
+                onClick={onCancel}
+                className="flex-1 rounded-xl border-slate-200"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={onConfirm}
+                className="flex-1 rounded-xl bg-rose-500 hover:bg-rose-600"
+              >
+                Delete
+              </Button>
             </div>
           </motion.div>
         </motion.div>

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { DeliveryOrder, PurchaseOrder } from '../types';
-import { db } from '../services/api/database';
 import { confirmCollection } from '../services/deliveryService';
 import Button from './Button';
 import QRCode from 'react-qr-code';
@@ -10,18 +9,21 @@ interface BuyerCollectionScreenProps {
   onComplete: () => void;
 }
 
-export default function BuyerCollectionScreen({ deliveryOrderId, onComplete }: BuyerCollectionScreenProps) {
+export default function BuyerCollectionScreen({
+  deliveryOrderId,
+  onComplete,
+}: BuyerCollectionScreenProps) {
   const [deliveryOrder, setDeliveryOrder] = useState<DeliveryOrder | null>(null);
   const [po, setPo] = useState<PurchaseOrder | null>(null);
 
   useEffect(() => {
     async function fetchData() {
-      const doOrder = await db.deliveryOrders.get(deliveryOrderId);
-      if (doOrder) {
-        setDeliveryOrder(doOrder);
-        const poData = await db.purchaseOrders.get(doOrder.purchaseOrderId);
-        if (poData) setPo(poData);
-      }
+      // TODO: Fetch from backend API
+      // const response = await apiClient.get(`/delivery-orders/${deliveryOrderId}`);
+      // setDeliveryOrder(response.data);
+      // const poResponse = await apiClient.get(`/purchase-orders/${response.data.purchaseOrderId}`);
+      // setPo(poResponse.data);
+      console.warn('BuyerCollectionScreen: Backend API not fully integrated yet');
     }
     fetchData();
   }, [deliveryOrderId]);
@@ -36,7 +38,7 @@ export default function BuyerCollectionScreen({ deliveryOrderId, onComplete }: B
   return (
     <div className="p-6 bg-white rounded-2xl shadow-sm border border-slate-100">
       <h2 className="text-2xl font-bold mb-6">Collection Details</h2>
-      
+
       <div className="flex justify-center mb-8">
         <QRCode value={deliveryOrder.qrCode} size={256} />
       </div>
@@ -45,13 +47,17 @@ export default function BuyerCollectionScreen({ deliveryOrderId, onComplete }: B
         <h3 className="font-semibold">Items to Collect:</h3>
         {po.lineItems.map((item, idx) => (
           <div key={`${item.name}-${idx}`} className="flex justify-between py-2 border-b">
-            <span>{item.name} x {item.quantity}</span>
+            <span>
+              {item.name} x {item.quantity}
+            </span>
           </div>
         ))}
-        <p className="font-bold text-lg">Total: ZMW {po.lineItems.reduce((sum, item) => sum + item.quotedPrice * item.quantity, 0)}</p>
+        <p className="font-bold text-lg">
+          Total: ZMW {po.lineItems.reduce((sum, item) => sum + item.quotedPrice * item.quantity, 0)}
+        </p>
       </div>
 
-      <Button 
+      <Button
         onClick={handleConfirm}
         disabled={deliveryOrder.status !== 'collection_started'}
         className="w-full py-4 text-lg"

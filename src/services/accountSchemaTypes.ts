@@ -13,7 +13,8 @@ export interface DashboardMetric {
   id: string;
   label: string;
   value: string | number;
-  trend?: { value: number; isPositive: boolean; };
+  unit?: string | number;
+  trend?: { value: number; isPositive: boolean };
   icon: string;
   permissions?: string[];
   roleFilter?: string[];
@@ -27,7 +28,35 @@ export interface ViewDefinition {
   metrics?: DashboardMetric[];
   showWalletCard?: boolean;
   showAnalyticsChart?: boolean;
-  componentType: 'dashboard_grid' | 'list_renderer' | 'details_renderer' | 'profile_renderer' | 'provider_placeholder' | 'provider_home' | 'provider_leads' | 'provider_quotes' | 'provider_orders' | 'provider_products' | 'provider_schedule' | 'provider_team' | 'provider_collection' | 'home_renderer' | 'leads_renderer' | 'paid_orders_renderer' | 'quotes_renderer' | 'products_renderer' | 'schedule_renderer' | 'team_renderer' | 'collection_renderer' | 'audit_trail_renderer' | 'venue_spaces_renderer' | 'labour_home' | 'labour_jobs' | 'labour_quotes' | 'labour_schedule';
+  componentType:
+    | 'dashboard_grid'
+    | 'list_renderer'
+    | 'details_renderer'
+    | 'profile_renderer'
+    | 'provider_placeholder'
+    | 'provider_home'
+    | 'provider_leads'
+    | 'provider_quotes'
+    | 'provider_orders'
+    | 'provider_products'
+    | 'provider_schedule'
+    | 'provider_team'
+    | 'provider_collection'
+    | 'home_renderer'
+    | 'leads_renderer'
+    | 'paid_orders_renderer'
+    | 'quotes_renderer'
+    | 'products_renderer'
+    | 'schedule_renderer'
+    | 'team_renderer'
+    | 'collection_renderer'
+    | 'audit_trail_renderer'
+    | 'venue_spaces_renderer'
+    | 'financial_renderer'
+    | 'labour_home'
+    | 'labour_jobs'
+    | 'labour_quotes'
+    | 'labour_schedule';
   dataKey?: string;
   permissions?: string[];
   roleFilter?: string[];
@@ -40,6 +69,7 @@ export interface NavigationItem {
   permissions?: string[];
   roleFilter?: string[];
   excludeRoles?: string[];
+  categoryFilter?: string[] | ((role: string, categories: string[]) => boolean);
 }
 
 export interface MasterAccountSchema {

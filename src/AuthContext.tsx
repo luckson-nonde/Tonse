@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from './services/auth/authService';
 import { tokenManager } from './services/api/client';
 import { SubRole, EntityType } from './types';
+import { generateVirtualAccount } from './utils/financeUtils';
 
 export type Role =
   | 'BUYER'
@@ -62,8 +63,10 @@ interface AuthContextType {
     name: string,
     phone: string,
     role: string,
-    identityData?: { dob?: string; nrc?: string; logo?: string }
+    nrc?: string,
+    profilePicture?: string
   ) => Promise<void>;
+  updateUser: (data: Record<string, any>) => Promise<void>;
   logout: () => Promise<void>;
   isLoading: boolean;
   isAuthenticated: boolean;
@@ -83,14 +86,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const accessToken = tokenManager.getAccessToken();
         if (accessToken && !tokenManager.isTokenExpired(accessToken)) {
-          // Try to fetch current user from API
-          const currentUser = await authService.getCurrentUser();
-          setUser({
-            id: currentUser.id,
-            email: currentUser.email,
-            name: currentUser.name || '',
-            role: (currentUser.role as Role) || 'BUYER',
-          });
+          try {
+            // Try to fetch current user from API
+            const currentUser = await authService.getCurrentUser();
+
+            if (!currentUser) {
+              throw new Error('Invalid user response');
+            }
+
+            let pendingProfile = {};
+            try {
+              const stored = localStorage.getItem('pendingProfile');
+              if (stored) pendingProfile = JSON.parse(stored);
+            } catch (e) {}
+
+            // Flatten metadata if it exists
+            const { metadata, ...userData } = currentUser as any;
+
+            const finalUser: User = {
+              ...pendingProfile,
+              ...userData,
+              ...(metadata || {}),
+              metadata,
+              id: currentUser.id || '',
+              email: currentUser.email || '',
+              name: currentUser.name || (pendingProfile as any).name || '',
+              role: (currentUser.role as Role) || (pendingProfile as any).role || 'BUYER',
+            };
+
+
+            setUser(finalUser);
+          } catch (apiError) {
+            console.warn('Failed to fetch current user from API:', apiError);
+            // Don't throw - let the app continue without initial user data
+            // Try to restore from pending profile if available
+            try {
+              const stored = localStorage.getItem('pendingProfile');
+              if (stored) {
+                const pendingProfile = JSON.parse(stored);
+                const finalPendingUser = {
+                  id: 'pending',
+                  email: pendingProfile.email || '',
+                  name: pendingProfile.name || '',
+                  role: (pendingProfile.role as Role) || 'BUYER',
+                  ...pendingProfile,
+                } as User;
+                
+                setUser(finalPendingUser);
+              }
+            } catch (e) {
+              console.warn('Could not restore pending profile:', e);
+            }
+          }
         } else if (accessToken) {
           // Token expired, clear it
           tokenManager.clearTokens();
@@ -110,12 +157,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setError(null);
       const response = await authService.login(email, password);
-      setUser({
+
+      let pendingProfile = {};
+      try {
+        const stored = localStorage.getItem('pendingProfile');
+        if (stored) pendingProfile = JSON.parse(stored);
+      } catch (e) {}
+
+      // Flatten metadata if it exists
+      const { metadata, ...userData } = response.user as any;
+
+      const finalUser: User = {
+        ...pendingProfile,
+        ...userData,
+        ...(metadata || {}),
+        metadata,
         id: response.user.id,
         email: response.user.email,
-        name: response.user.name,
-        role: (response.user.role as Role) || 'BUYER',
-      });
+        name: response.user.name || (pendingProfile as any).name || '',
+        role: (response.user.role as Role) || (pendingProfile as any).role || 'BUYER',
+      };
+
+
+      setUser(finalUser);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Login failed';
       setError(errorMessage);
@@ -130,19 +194,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       name: string,
       phone: string,
       role: string,
-      identityData?: { dob?: string; nrc?: string; logo?: string }
+      nrc: string = '',
+      profilePicture: string = ''
     ) => {
       try {
         setError(null);
+        // Register with identity verification fields (NRC and profile picture)
         await authService.register({
           email,
           password,
           name,
           phone,
           role,
-          dob: identityData?.dob,
-          nrc: identityData?.nrc,
-          logo: identityData?.logo,
+          nrc,
+          profilePicture,
         });
         // Auto-login after registration
         await login(email, password);
@@ -153,6 +218,73 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     },
     [login]
+  );
+
+  const updateUser = React.useCallback(
+    async (data: Record<string, any>) => {
+      if (!user) {
+        throw new Error('No user logged in');
+      }
+      try {
+        setError(null);
+
+        // Separate top-level fields from metadata
+        const topLevelKeys = [
+          'name',
+          'email',
+          'phone',
+          'nrc',
+          'profilePicture',
+          'location',
+          'role',
+          'categories',
+          'verificationStatus',
+          'businessLicenseId',
+          'socialLinks',
+          'isActive',
+          'pin',
+        ];
+
+        const topLevelData: Record<string, any> = {};
+        const metadata: Record<string, any> = { ...(user as any).metadata };
+
+        Object.keys(data).forEach((key) => {
+          if (topLevelKeys.includes(key)) {
+            topLevelData[key] = data[key];
+          } else {
+            metadata[key] = data[key];
+          }
+        });
+
+        // Send to backend
+        const payload = { ...topLevelData };
+        if (Object.keys(metadata).length > 0) {
+          payload.metadata = metadata;
+        }
+
+        const response = await authService.updateProfile(user.id, payload);
+
+        // Update local user state with flattened metadata
+        const { metadata: updatedMetadata, ...rest } = response;
+        setUser((prevUser) => {
+          if (!prevUser) return null;
+          const finalUser = { ...prevUser, ...rest, ...updatedMetadata, metadata: updatedMetadata };
+          return finalUser;
+        });
+
+        // Save to pendingProfile as well for redundancy
+        try {
+          const stored = localStorage.getItem('pendingProfile');
+          const pending = stored ? JSON.parse(stored) : {};
+          localStorage.setItem('pendingProfile', JSON.stringify({ ...pending, ...data }));
+        } catch (e) {}
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Profile update failed';
+        setError(errorMessage);
+        throw err;
+      }
+    },
+    [user]
   );
 
   const logout = React.useCallback(async () => {
@@ -173,12 +305,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       login,
       register,
+      updateUser,
       logout,
       isLoading,
       isAuthenticated: !!user && authService.isAuthenticated(),
       error,
     }),
-    [user, login, register, logout, isLoading, error]
+    [user, login, register, updateUser, logout, isLoading, error]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

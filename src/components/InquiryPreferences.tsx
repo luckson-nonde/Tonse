@@ -1,50 +1,215 @@
-import React, { useState } from 'react';
-import { ChevronDown, Check, Navigation, Settings, Clock, Building2, Store, ChevronLeft } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  Check,
+  Navigation,
+  Settings,
+  Clock,
+  Building2,
+  Store,
+  ChevronLeft,
+  CheckCircle2,
+  MapPin,
+  User,
+  Star,
+  Users,
+  Search,
+  Award,
+  Briefcase,
+  GraduationCap
+} from 'lucide-react';
+
+export type CategoryType = 'PRODUCTS' | 'SERVICES' | 'VENUES' | 'LABOR';
 
 interface InquiryPreferencesProps {
+  categoryType: CategoryType;
   onBack: () => void;
-  onNext: (preferences: {
-    destination: string;
-    validity: string;
-    maxQuotes: string;
-    isConfidential: boolean;
-    leadTime: string;
-  }) => void;
+  onNext: (preferences: any) => void;
 }
 
-export default function InquiryPreferences({ onBack, onNext }: InquiryPreferencesProps) {
-  const [destination, setDestination] = useState<'chain' | 'local' | 'service'>('chain');
-  const [validity, setValidity] = useState<'7' | '15' | '30'>('7');
-  const [maxQuotes, setMaxQuotes] = useState('10');
-  const [isConfidential, setIsConfidential] = useState(false);
-  const [leadTime, setLeadTime] = useState('1-2 weeks');
+const PREFERENCES_CONFIG = {
+  PRODUCTS: {
+    section1: {
+      title: "Target Destination",
+      description: "Where would you like to receive quotes from?",
+      icon: Navigation,
+      options: [
+        { id: "wholesale", label: "Wholesale Markets", icon: Building2 },
+        { id: "malls", label: "Shopping Malls", icon: Store },
+        { id: "local", label: "Local Shops", icon: Store },
+        { id: "distributors", label: "Verified Distributors", icon: CheckCircle2 },
+        { id: "any", label: "Any Shop", icon: MapPin }
+      ]
+    },
+    section2: {
+      title: "Quote Parameters",
+      description: "What's most important for this product?",
+      icon: Settings,
+      options: [
+        { id: "price", label: "Lowest Price" },
+        { id: "authenticity", label: "Brand Authenticity" },
+        { id: "delivery", label: "Fastest Delivery" },
+        { id: "warranty", label: "Warranty Included" }
+      ]
+    },
+    section3: {
+      title: "Timeline & Validity",
+      description: "How long should quotes remain valid?",
+      icon: Clock,
+      options: [
+        { id: "24h", label: "24 Hours" },
+        { id: "3d", label: "3 Days" },
+        { id: "1w", label: "1 Week" },
+        { id: "budget", label: "Until Budget Met" }
+      ]
+    }
+  },
+  SERVICES: {
+    section1: {
+      title: "Target Providers",
+      description: "Who do you want to hire?",
+      icon: Navigation,
+      options: [
+        { id: "freelancers", label: "Independent Freelancers", icon: User },
+        { id: "agencies", label: "Registered Agencies", icon: Building2 },
+        { id: "top_rated", label: "Top Rated Only", icon: Star },
+        { id: "any", label: "Any Provider", icon: Users }
+      ]
+    },
+    section2: {
+      title: "Quote Parameters",
+      description: "What's most important for this service?",
+      icon: Settings,
+      options: [
+        { id: "availability", label: "Fastest Availability" },
+        { id: "price", label: "Lowest Price" },
+        { id: "rating", label: "Highest Rating" },
+        { id: "experience", label: "Most Experience" }
+      ]
+    },
+    section3: {
+      title: "Timeline & Validity",
+      description: "How long should quotes remain valid?",
+      icon: Clock,
+      options: [
+        { id: "24h", label: "24 Hours" },
+        { id: "3d", label: "3 Days" },
+        { id: "1w", label: "1 Week" },
+        { id: "flexible", label: "Flexible" }
+      ]
+    }
+  },
+  VENUES: {
+    section1: {
+      title: "Target Venues",
+      description: "What type of establishment?",
+      icon: Navigation,
+      options: [
+        { id: "hotels", label: "Hotels & Lodges", icon: Building2 },
+        { id: "independent", label: "Independent Venues", icon: MapPin },
+        { id: "restaurants", label: "Restaurants & Clubs", icon: Store },
+        { id: "any", label: "Any Venue", icon: Search }
+      ]
+    },
+    section2: {
+      title: "Quote Parameters",
+      description: "What's most important for this booking?",
+      icon: Settings,
+      options: [
+        { id: "price", label: "Lowest Price" },
+        { id: "amenities", label: "Best Amenities" },
+        { id: "terms", label: "Most Flexible Terms" },
+        { id: "rating", label: "Highest Rating" }
+      ]
+    },
+    section3: {
+      title: "Timeline & Validity",
+      description: "How long should quotes remain valid?",
+      icon: Clock,
+      options: [
+        { id: "24h", label: "24 Hours" },
+        { id: "3d", label: "3 Days" },
+        { id: "1w", label: "1 Week" },
+        { id: "flexible", label: "Flexible" }
+      ]
+    }
+  },
+  LABOR: {
+    section1: {
+      title: "Target Staff",
+      description: "Who do you want to hire?",
+      icon: Navigation,
+      options: [
+        { id: "certified", label: "Certified Professionals", icon: Award },
+        { id: "experienced", label: "Experienced Workers", icon: Briefcase },
+        { id: "trainees", label: "Trainees/Juniors", icon: GraduationCap },
+        { id: "any", label: "Any Available", icon: Users }
+      ]
+    },
+    section2: {
+      title: "Quote Parameters",
+      description: "What's most important?",
+      icon: Settings,
+      options: [
+        { id: "availability", label: "Immediate Availability" },
+        { id: "rate", label: "Lowest Daily Rate" },
+        { id: "rating", label: "Highest Rating" },
+        { id: "references", label: "Verified References" }
+      ]
+    },
+    section3: {
+      title: "Timeline & Validity",
+      description: "How long should quotes remain valid?",
+      icon: Clock,
+      options: [
+        { id: "12h", label: "12 Hours" },
+        { id: "24h", label: "24 Hours" },
+        { id: "3d", label: "3 Days" },
+        { id: "flexible", label: "Flexible" }
+      ]
+    }
+  }
+};
+
+export default function InquiryPreferences({ categoryType, onBack, onNext }: InquiryPreferencesProps) {
+  // Ensure we fallback safely if categoryType is missing or invalid
+  const config = PREFERENCES_CONFIG[categoryType] || PREFERENCES_CONFIG.PRODUCTS;
+
+  const [targetOption, setTargetOption] = useState<string>(config.section1.options[0].id);
+  const [quoteParameter, setQuoteParameter] = useState<string>(config.section2.options[0].id);
+  const [validity, setValidity] = useState<string>(config.section3.options[0].id);
+
+  // When categoryType changes (if ever), reset the state to the first option of the new config
+  useEffect(() => {
+    setTargetOption(PREFERENCES_CONFIG[categoryType]?.section1.options[0].id || PREFERENCES_CONFIG.PRODUCTS.section1.options[0].id);
+    setQuoteParameter(PREFERENCES_CONFIG[categoryType]?.section2.options[0].id || PREFERENCES_CONFIG.PRODUCTS.section2.options[0].id);
+    setValidity(PREFERENCES_CONFIG[categoryType]?.section3.options[0].id || PREFERENCES_CONFIG.PRODUCTS.section3.options[0].id);
+  }, [categoryType]);
 
   const handleNext = () => {
     onNext({
-      destination,
-      validity: `${validity} Days`,
-      maxQuotes,
-      isConfidential,
-      leadTime
+      targetOption,
+      quoteParameter,
+      validity
     });
   };
 
-  const labelClasses = "block text-[10px] font-bold text-[#94a3b8] tracking-[0.1em] uppercase mb-2 ml-1 font-sans";
+  const Section1Icon = config.section1.icon;
+  const Section2Icon = config.section2.icon;
+  const Section3Icon = config.section3.icon;
 
   return (
-    <div className="max-w-[480px] mx-auto w-full bg-[#f5f2ed] min-h-screen">
+    <div className="max-w-4xl mx-auto w-full">
       {/* Sticky Header */}
-      <div className="sticky top-0 bg-[#f5f2ed] z-20 px-4 pt-4 pb-5">
+      <div className="sticky top-0 bg-[#f5f2ed]/80 backdrop-blur-md z-20 px-4 pt-4 pb-5">
         <div className="flex items-center gap-3">
-          <button 
-            onClick={onBack} 
-            className="w-10 h-10 -ml-2 flex items-center justify-center"
-          >
+          <button onClick={onBack} className="w-10 h-10 -ml-2 flex items-center justify-center">
             <ChevronLeft className="w-5 h-5 text-[#1a1a2e]" />
           </button>
-          <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">STEP 2</p>
+          <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">
+            STEP 2
+          </p>
         </div>
-        
+
         <div className="mt-2">
           <h1 className="font-serif text-[22px] font-bold text-[#1a1a2e] leading-tight">
             Preferences
@@ -52,145 +217,111 @@ export default function InquiryPreferences({ onBack, onNext }: InquiryPreference
         </div>
       </div>
 
-      <div className="p-[20px_16px_140px_16px] flex flex-col gap-6">
-        {/* Destination */}
+      <div className="p-[20px_16px_140px_16px] flex flex-col gap-8">
+        {/* Section 1: Target Option */}
         <div className="flex flex-col gap-5">
           <h3 className="font-sans font-bold text-[#1a1a2e] text-[13px] tracking-[0.05em] uppercase flex items-center gap-3 ml-1">
             <div className="w-8 h-8 rounded-full bg-[rgba(201,151,58,0.08)] flex items-center justify-center">
-              <Navigation className="w-4 h-4 text-[#C9973A]" />
+              <Section1Icon className="w-4 h-4 text-[#C9973A]" />
             </div>
-            Target Destination
+            {config.section1.title}
           </h3>
-          <div className="grid grid-cols-3 gap-3">
-            <div 
-              onClick={() => setDestination('chain')}
-              className={`p-4 rounded-2xl border-[1.5px] cursor-pointer transition-all relative flex flex-col items-center gap-2 text-center ${destination === 'chain' ? 'border-[#C9973A] bg-[rgba(201,151,58,0.03)]' : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'}`}
-            >
-              {destination === 'chain' && (
-                <div className="absolute top-2 right-2 w-4 h-4 bg-[#C9973A] rounded-full flex items-center justify-center shadow-sm">
-                  <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
-                </div>
-              )}
-              <Building2 className={`w-6 h-6 transition-colors ${destination === 'chain' ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`} />
-              <p className={`font-sans font-bold text-[11px] leading-tight transition-colors ${destination === 'chain' ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}>Chain Stores</p>
-            </div>
-            <div 
-              onClick={() => setDestination('local')}
-              className={`p-4 rounded-2xl border-[1.5px] cursor-pointer transition-all relative flex flex-col items-center gap-2 text-center ${destination === 'local' ? 'border-[#C9973A] bg-[rgba(201,151,58,0.03)]' : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'}`}
-            >
-              {destination === 'local' && (
-                <div className="absolute top-2 right-2 w-4 h-4 bg-[#C9973A] rounded-full flex items-center justify-center shadow-sm">
-                  <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
-                </div>
-              )}
-              <Store className={`w-6 h-6 transition-colors ${destination === 'local' ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`} />
-              <p className={`font-sans font-bold text-[11px] leading-tight transition-colors ${destination === 'local' ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}>Local Shops</p>
-            </div>
-            <div 
-              onClick={() => setDestination('service')}
-              className={`p-4 rounded-2xl border-[1.5px] cursor-pointer transition-all relative flex flex-col items-center gap-2 text-center ${destination === 'service' ? 'border-[#C9973A] bg-[rgba(201,151,58,0.03)]' : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'}`}
-            >
-              {destination === 'service' && (
-                <div className="absolute top-2 right-2 w-4 h-4 bg-[#C9973A] rounded-full flex items-center justify-center shadow-sm">
-                  <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
-                </div>
-              )}
-              <Settings className={`w-6 h-6 transition-colors ${destination === 'service' ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`} />
-              <p className={`font-sans font-bold text-[11px] leading-tight transition-colors ${destination === 'service' ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}>Service Providers</p>
-            </div>
-          </div>
-          <p className="text-[11px] font-medium text-[#94a3b8] ml-1 leading-relaxed font-sans">Choose between major retailers, independent local businesses, or specialized service providers.</p>
-        </div>
-
-        {/* Quote Settings */}
-        <div className="flex flex-col gap-5">
-          <h3 className="font-sans font-bold text-[#1a1a2e] text-[13px] tracking-[0.05em] uppercase flex items-center gap-3 ml-1">
-            <div className="w-8 h-8 rounded-full bg-[rgba(201,151,58,0.08)] flex items-center justify-center">
-              <Settings className="w-4 h-4 text-[#C9973A]" />
-            </div>
-            Quote Parameters
-          </h3>
-          <div className="space-y-5">
-            <div>
-              <label className={labelClasses}>Maximum Quotations</label>
-              <div className="relative">
-                <select 
-                  value={maxQuotes}
-                  onChange={(e) => setMaxQuotes(e.target.value)}
-                  className="w-full px-4 py-3.5 bg-white border border-[#f1f5f9] rounded-xl appearance-none font-sans font-bold text-[14px] text-[#1a1a2e] focus:border-[#C9973A]/50 outline-none transition-all"
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {config.section1.options.map((opt) => {
+              const Icon = opt.icon;
+              const isSelected = targetOption === opt.id;
+              return (
+                <div
+                  key={opt.id}
+                  onClick={() => setTargetOption(opt.id)}
+                  className={`p-4 rounded-2xl border-[1.5px] cursor-pointer transition-all relative flex flex-col items-center gap-2 text-center ${isSelected ? 'border-[#C9973A] bg-[rgba(201,151,58,0.03)]' : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'}`}
                 >
-                  <option value="5">Up to 5 quotes</option>
-                  <option value="10">Up to 10 quotes</option>
-                  <option value="20">Up to 20 quotes</option>
-                  <option value="50">Up to 50 quotes</option>
-                  <option value="unlimited">Unlimited quotes</option>
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#C9973A] pointer-events-none" />
-              </div>
-            </div>
-            <div 
-              onClick={() => setIsConfidential(!isConfidential)}
-              className="flex items-center justify-between p-4 bg-white border border-[#f1f5f9] rounded-xl cursor-pointer hover:bg-[#f1f5f9] transition-all"
-            >
-              <span className="font-sans font-bold text-[#1a1a2e] text-[13px]">Confidential Inquiry</span>
-              <div className={`w-11 h-6 rounded-full relative transition-colors ${isConfidential ? 'bg-[#C9973A]' : 'bg-[#e2e8f0]'}`}>
-                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${isConfidential ? 'left-6' : 'left-1'}`}></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Timeline */}
-        <div className="flex flex-col gap-5">
-          <h3 className="font-sans font-bold text-[#1a1a2e] text-[13px] tracking-[0.05em] uppercase flex items-center gap-3 ml-1">
-            <div className="w-8 h-8 rounded-full bg-[rgba(201,151,58,0.08)] flex items-center justify-center">
-              <Clock className="w-4 h-4 text-[#C9973A]" />
-            </div>
-            Timeline & Validity
-          </h3>
-          <div className="space-y-5">
-            <div>
-              <label className={labelClasses}>Required Lead Time</label>
-              <div className="relative">
-                <select 
-                  value={leadTime}
-                  onChange={(e) => setLeadTime(e.target.value)}
-                  className="w-full px-4 py-3.5 bg-white border border-[#f1f5f9] rounded-xl appearance-none font-sans font-bold text-[14px] text-[#1a1a2e] focus:border-[#C9973A]/50 outline-none transition-all"
-                >
-                  <option value="immediate">Immediate (ASAP)</option>
-                  <option value="1-2 weeks">1-2 weeks</option>
-                  <option value="1 month">1 month</option>
-                  <option value="3 months">3 months</option>
-                  <option value="flexible">Flexible</option>
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#C9973A] pointer-events-none" />
-              </div>
-            </div>
-            <div>
-              <label className={labelClasses}>Quote Validity Period</label>
-              <div className="flex gap-2">
-                {['7', '15', '30'].map((val) => (
-                  <button
-                    key={val}
-                    onClick={() => setValidity(val as any)}
-                    className={`flex-1 py-3.5 rounded-xl font-sans font-bold border-[1.5px] transition-all text-[13px] ${validity === val ? 'border-[#C9973A] bg-[rgba(201,151,58,0.05)] text-[#C9973A]' : 'border-[#f1f5f9] bg-white text-[#94a3b8] hover:border-[#C9973A]/30'}`}
+                  {isSelected && (
+                    <div className="absolute top-2 right-2 w-4 h-4 bg-[#C9973A] rounded-full flex items-center justify-center shadow-sm">
+                      <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
+                    </div>
+                  )}
+                  <Icon
+                    className={`w-6 h-6 transition-colors ${isSelected ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`}
+                  />
+                  <p
+                    className={`font-sans font-bold text-[11px] leading-tight transition-colors ${isSelected ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}
                   >
-                    {val} Days
-                  </button>
-                ))}
-              </div>
+                    {opt.label}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[11px] font-medium text-[#94a3b8] ml-1 leading-relaxed font-sans">
+            {config.section1.description}
+          </p>
+        </div>
+
+        {/* Section 2: Quote Parameters */}
+        <div className="flex flex-col gap-5">
+          <h3 className="font-sans font-bold text-[#1a1a2e] text-[13px] tracking-[0.05em] uppercase flex items-center gap-3 ml-1">
+            <div className="w-8 h-8 rounded-full bg-[rgba(201,151,58,0.08)] flex items-center justify-center">
+              <Section2Icon className="w-4 h-4 text-[#C9973A]" />
             </div>
+            {config.section2.title}
+          </h3>
+          <p className="text-[11px] font-medium text-[#94a3b8] ml-1 mb-1 leading-relaxed font-sans">
+            {config.section2.description}
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            {config.section2.options.map((opt) => {
+              const isSelected = quoteParameter === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => setQuoteParameter(opt.id)}
+                  className={`px-4 py-3.5 rounded-xl font-sans font-bold border-[1.5px] transition-all text-[12px] text-center ${isSelected ? 'border-[#C9973A] bg-[rgba(201,151,58,0.05)] text-[#C9973A]' : 'border-[#f1f5f9] bg-white text-[#94a3b8] hover:border-[#C9973A]/30'}`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Section 3: Timeline & Validity */}
+        <div className="flex flex-col gap-5">
+          <h3 className="font-sans font-bold text-[#1a1a2e] text-[13px] tracking-[0.05em] uppercase flex items-center gap-3 ml-1">
+            <div className="w-8 h-8 rounded-full bg-[rgba(201,151,58,0.08)] flex items-center justify-center">
+              <Section3Icon className="w-4 h-4 text-[#C9973A]" />
+            </div>
+            {config.section3.title}
+          </h3>
+          <p className="text-[11px] font-medium text-[#94a3b8] ml-1 mb-1 leading-relaxed font-sans">
+            {config.section3.description}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {config.section3.options.map((opt) => {
+              const isSelected = validity === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => setValidity(opt.id)}
+                  className={`flex-1 min-w-[100px] py-3.5 rounded-xl font-sans font-bold border-[1.5px] transition-all text-[12px] ${isSelected ? 'border-[#C9973A] bg-[rgba(201,151,58,0.05)] text-[#C9973A]' : 'border-[#f1f5f9] bg-white text-[#94a3b8] hover:border-[#C9973A]/30'}`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Submit Button */}
-        <div className="pt-4 pb-12">
-          <button 
+        <div className="pt-4 pb-12 flex justify-center sm:justify-end">
+          <button
             onClick={handleNext}
-            className="w-full h-[54px] bg-[#C9973A] rounded-[50px] flex flex-col items-center justify-center gap-[2px] font-sans text-white shadow-[0_4px_16_rgba(201,151,58,0.35)] transition-all active:scale-[0.98]"
+            className="w-full sm:w-auto sm:px-16 h-13.5 bg-[#C9973A] rounded-[50px] flex flex-col items-center justify-center gap-0.5 font-sans text-white shadow-[0_4px_16_rgba(201,151,58,0.35)] transition-all active:scale-[0.98]"
           >
             <span className="text-[15px] font-bold leading-none">Confirm & Continue</span>
-            <span className="text-[9px] font-bold uppercase tracking-[0.1em] opacity-70">Finalize Inquiry Preferences</span>
+            <span className="text-[9px] font-bold uppercase tracking-[0.1em] opacity-70">
+              Finalize Inquiry Preferences
+            </span>
           </button>
         </div>
       </div>

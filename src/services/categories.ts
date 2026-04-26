@@ -180,10 +180,10 @@ const entertainmentPerformersSchema: FieldSchema[] = [
 
 const venuesClubsSchema: FieldSchema[] = [
   { name: "images", label: "Reference Photos", type: "image_upload", required: false },
-  { name: "venueType", label: "Venue Type", type: "select", required: true, options: ["Nightclub", "Conference Hall", "Garden / Outdoor Venue", "Restaurant / Private Dining", "Hotel Ballroom", "Other"] },
-  { name: "eventType", label: "Event Type", type: "select", required: true, options: ["Wedding", "Birthday", "Corporate", "Conference", "Exhibition", "Private Party", "Other"] },
+  { name: "venueType", label: "Venue Type", type: "select", required: true, options: ["Nightclub", "Conference Hall", "Garden / Outdoor Venue", "Restaurant / Private Dining", "Hotel Ballroom", "Other"], placeholder: "Select Venue Type" },
+  { name: "eventType", label: "Event Type", type: "select", required: true, options: ["Wedding", "Birthday", "Corporate", "Conference", "Exhibition", "Private Party", "Other"], placeholder: "Select Event Type" },
   { name: "eventDate", label: "Event Date", type: "date", required: true },
-  { name: "quantity", label: "Expected Guests", type: "number", required: true, min: 1 },
+  { name: "quantity", label: "Expected Guests", type: "number", required: true, min: 1, placeholder: "e.g. 300" },
   { name: "amenitiesNeeded", label: "Amenities Needed", type: "textarea", required: false, placeholder: "e.g. Sound system, Projector, Catering, Bar service, Security" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, helpText: "Optional - leave blank to receive price offers from shops" },
   { name: "specialRequirements", label: "Special Requirements", type: "textarea", required: false, placeholder: "Parking, accessibility, early setup..." }
@@ -1247,7 +1247,7 @@ const BASE_CATEGORIES_DB: Category[] = [
 export type CategoryNature = 'PRODUCT' | 'SERVICE' | 'BOTH';
 
 export const getCategoryNature = (categoryId: string): CategoryNature => {
-  const productParents = ['fashion', 'groceries', 'beauty', 'home-decor', 'it-products'];
+  const productParents = ['fashion', 'groceries', 'beauty', 'home-decor', 'it-products', 'electronics', 'furniture'];
   const serviceParents = ['entertainment', 'events', 'telecommunications', 'it-services', 'drilling-services'];
   
   const category = CATEGORIES_DB.find(c => c.id === categoryId);

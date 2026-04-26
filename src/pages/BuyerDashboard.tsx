@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useLiveQuery } from '../hooks/useLiveQuery';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../AuthContext';
 import { useDashboard } from '../DashboardContext';
-import { db } from '../services/api/database';
+import { createInquiry, fetchUserInquiries, deleteInquiry } from '../services/api/inquiryService';
+import { useUserInquiries } from '../hooks/useInquiries';
+import { useUserQuotes } from '../hooks/useQuotes';
+import { markQuoteAsRead, archiveQuote } from '../services/api/quoteService';
 import { ViewType, MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
 import CategorySelection from '../components/CategorySelection';
@@ -16,52 +18,56 @@ import InquirySuccess from '../components/InquirySuccess';
 import ConfirmationModal from '../components/ConfirmationModal';
 import DashboardLayout from '../components/DashboardLayout';
 import { CATEGORIES_DB, GENERIC_FALLBACK_SCHEMA } from '../services/categories';
-import { Inquiry, InquiryItem } from '../types';
+import { Inquiry, InquiryItem, Quote } from '../types';
 import { getLabourInquirySchema } from '../services/labourSchemaRegistry';
+import FinancialPage from './FinancialPage';
 
 export default function BuyerDashboard() {
   const { user } = useAuth();
   const { activeTab, setActiveTab } = useDashboard();
   const navigate = useNavigate();
-  const [selectedInquiryId, setSelectedInquiryId] = useState<number | null>(null);
-  const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
-  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+  const { tab, inquiryId } = useParams<{ tab: string; inquiryId?: string }>();
+
+  // Synchronize URL tab parameter with Dashboard Context
+  useEffect((): void => {
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab);
+    }
+  }, [tab, activeTab, setActiveTab]);
+
+  // Redirect if not buyer
+  React.useEffect(() => {
+    if (user && user.role !== 'BUYER') {
+      navigate('/');
+    }
+  }, [user, navigate]);
+  const [selectedInquiryId, setSelectedInquiryId] = useState<string | null>(inquiryId || null);
+  const [selectedQuoteId, setSelectedQuoteId] = useState<string | number | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | number | null>(null);
   const [inquiryToDelete, setInquiryToDelete] = useState<any | null>(null);
 
-  // Data Fetching
-  const inquiries =
-    useLiveQuery(() => {
-      if (!user?.id) {
-        console.log('❌ No user ID - skipping inquiry fetch');
-        return [];
-      }
-      console.log('🔍 Fetching inquiries for user:', user.id);
-      return db.inquiries.where('buyerId').equals(user.id).reverse().sortBy('createdAt');
-    }, [user]) || [];
+  // Update selectedInquiryId when URL changes
+  useEffect(() => {
+    if (inquiryId) {
+      setSelectedInquiryId(inquiryId);
+    }
+  }, [inquiryId]);
 
-  const quotes =
-    useLiveQuery(async () => {
-      if (!user?.id) return [];
-      const userInquiries = await db.inquiries.where('buyerId').equals(user.id).toArray();
-      if (!Array.isArray(userInquiries) || userInquiries.length === 0) return [];
-      const inquiryIds = userInquiries.map((i) => i.id!).filter((id) => id !== undefined);
-      if (inquiryIds.length === 0) return [];
-      const quoteResults = await db.quotes.where('inquiryId').anyOf(inquiryIds).toArray();
-      if (!Array.isArray(quoteResults)) return [];
-      return quoteResults.sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-    }, [user]) || [];
+  // Fetch inquiries from PostgreSQL backend (NO IndexedDB)
+  const {
+    inquiries,
+    loading: inquiriesLoading,
+    refresh: refreshInquiries,
+  } = useUserInquiries(user?.id);
+
+  // Fetch quotes from PostgreSQL backend (NO IndexedDB)
+  const { quotes, loading: quotesLoading, refresh: refreshQuotes } = useUserQuotes(user?.id);
 
   const orders = useMemo(
     () => quotes.filter((q) => ['PAID', 'COMPLETED'].includes(q.status)),
     [quotes]
   );
 
-  // Debug logging for data updates
-  React.useEffect(() => {
-    console.log('📊 Dashboard data updated:', { inquiries, quotes, orders });
-  }, [inquiries, quotes, orders]);
 
   // TODO: Transactions endpoint not yet implemented on backend
   // const transactions = useLiveQuery(
@@ -75,7 +81,7 @@ export default function BuyerDashboard() {
   //   [user]
   // ) || [];
 
-  const transactions = []; // Empty until transactions endpoint is available
+  const transactions: any[] = []; // Empty until transactions endpoint is available
 
   const balance = useMemo(() => {
     return transactions
@@ -103,6 +109,18 @@ export default function BuyerDashboard() {
     attributes?: Record<string, any>;
     processType?: 'EXPRESS' | 'STANDARD';
   }>({ items: [] });
+
+  const categoryType = useMemo(() => {
+    if (pendingInquiry.isLabour) return 'LABOR';
+    const cats = pendingInquiry.categories || [];
+    const lowerCats = cats.map(c => c.toLowerCase());
+    const pathStr = lowerCats.join(' > ');
+    
+    if (pathStr.includes('venues') || pathStr.includes('clubs')) return 'VENUES';
+    if (pathStr.includes('rental') || pathStr.includes('catering') || pathStr.includes('planning') || pathStr.includes('management') || pathStr.includes('decor') || pathStr.includes('repair') || pathStr.includes('recovery') || pathStr.includes('services')) return 'SERVICES';
+    
+    return 'PRODUCTS';
+  }, [pendingInquiry.categories, pendingInquiry.isLabour]);
 
   const dashboardData = useMemo(
     () => ({
@@ -134,40 +152,63 @@ export default function BuyerDashboard() {
     [inquiries, quotes, orders, selectedInquiryId, selectedQuoteId, selectedOrderId]
   );
 
+  const handleTabChange = (tab: string, id?: string) => {
+    setActiveTab(tab);
+    const basePath = '/buyer';
+    // Include inquiry ID in URL for details pages
+    const path = id
+      ? `${basePath}/${tab}/${id}`
+      : tab === 'dashboard'
+        ? basePath
+        : `${basePath}/${tab}`;
+    navigate(path);
+  };
+
   const handleAction = async (actionId: string, payload?: any) => {
     switch (actionId) {
       case 'new_inquiry':
-        setActiveTab('process-selection');
+        handleTabChange('process-selection');
         break;
       case 'delete_inquiry':
         setInquiryToDelete(payload);
         break;
       case 'view_financial':
-        navigate('/buyer/financial');
+        handleTabChange('financial');
         break;
       case 'view_details':
         if (payload?.id) {
           setSelectedInquiryId(payload.id);
-          setActiveTab('inquiry_details');
+          handleTabChange('inquiries', payload.id);
         }
         break;
       case 'view_quote':
         if (payload?.id) {
           setSelectedQuoteId(payload.id);
-          setActiveTab('quote_details');
-          // Mark as read
-          await db.quotes.update(payload.id, { isRead: true });
+          handleTabChange('quote_details');
+          // Mark quote as read via API
+          try {
+            await markQuoteAsRead(payload.id);
+            refreshQuotes();
+          } catch (error) {
+            console.error('Failed to mark quote as read:', error);
+          }
         }
         break;
       case 'view_order':
         if (payload?.id) {
           setSelectedOrderId(payload.id);
-          setActiveTab('order_details');
+          handleTabChange('order_details');
         }
         break;
       case 'archive_quote':
         if (payload?.id) {
-          await db.quotes.update(payload.id, { status: 'ARCHIVED' });
+          // Archive quote via API
+          try {
+            await archiveQuote(payload.id);
+            refreshQuotes();
+          } catch (error) {
+            console.error('Failed to archive quote:', error);
+          }
         }
         break;
       case 'print_quote':
@@ -176,8 +217,8 @@ export default function BuyerDashboard() {
         break;
       case 'save_profile':
         if (user?.id) {
-          await db.users.update(user.id, payload);
-          // The auth context should ideally pick this up if it's watching the DB
+          // TODO: Update user profile via API
+          // await apiClient.patch(`/users/${user.id}`, payload);
         }
         break;
       default:
@@ -191,7 +232,7 @@ export default function BuyerDashboard() {
     } else {
       setPendingInquiry((prev) => ({ ...prev, categories: selectedCategories }));
     }
-    setActiveTab('create-inquiry');
+    handleTabChange('create-inquiry');
   };
 
   const handleLocationComplete = async (locationData: any) => {
@@ -207,18 +248,15 @@ export default function BuyerDashboard() {
         ? `${pendingInquiry.attributes.brand} ${pendingInquiry.attributes.model || ''} Request`
         : `${categoryName} Request`;
 
-      // Check for duplicate inquiry for the same product
-      const existingInquiry = await db.inquiries
-        .where('buyerId')
-        .equals(user.id)
-        .and((i) => i.title === title)
-        .first();
+      // TODO: Check for duplicate inquiry via API
+      // const response = await apiClient.get('/inquiries', { params: { title, buyerId: user.id } });
+      // const existingInquiry = response.data.data?.[0];
 
-      if (existingInquiry) {
-        alert('You already have an active inquiry for this product.');
-        setIsSubmitting(false);
-        return;
-      }
+      // if (existingInquiry) {
+      //   alert('You already have an active inquiry for this product.');
+      //   setIsSubmitting(false);
+      //   return;
+      // }
 
       // Prepare inquiry data - backend expects specific format
       const inquiryData = {
@@ -232,19 +270,20 @@ export default function BuyerDashboard() {
         latitude: locationData.latitude,
         longitude: locationData.longitude,
         radius: locationData.radius,
-        buyerId: user.id!,
         status: 'OPEN',
         preferences: JSON.stringify(pendingInquiry.preferences || {}), // Backend wants JSON string
         attributes: JSON.stringify(pendingInquiry.attributes || {}), // Backend wants JSON string
-        processType: pendingInquiry.processType,
+        processType: pendingInquiry.processType || 'STANDARD',
       };
 
-      await db.inquiries.add(inquiryData);
+      // Create inquiry via API (will also sync to local DB)
+      await createInquiry(inquiryData);
       console.log('✅ Inquiry created:', inquiryData.title);
+      refreshInquiries();
 
       // Force a data refresh
       setPendingInquiry({ items: [] });
-      setActiveTab('inquiry-success');
+      handleTabChange('inquiry-success');
     } catch (error) {
       console.error('Error creating inquiry:', error);
       alert('Failed to create inquiry. Please try again.');
@@ -263,15 +302,15 @@ export default function BuyerDashboard() {
                 ...prev,
                 processType: processType.toUpperCase() as 'EXPRESS' | 'STANDARD',
               }));
-              setActiveTab('category-selection');
+              handleTabChange('category-selection');
             }}
-            onBack={() => setActiveTab('dashboard')}
+            onBack={() => handleTabChange('dashboard')}
           />
         );
       case 'category-selection':
         return (
           <CategorySelection
-            onBack={() => setActiveTab('process-selection')}
+            onBack={() => handleTabChange('process-selection')}
             onComplete={handleInquiryComplete}
           />
         );
@@ -281,9 +320,10 @@ export default function BuyerDashboard() {
           ? pendingInquiry.category
           : pendingInquiry.categories?.[0] || 'Inquiry';
 
-        let schema;
+        let schema: any[] = [];
         if (isLabour) {
-          schema = getLabourInquirySchema(pendingInquiry.inquirySchemaKey)?.fields;
+          const labourSchema = getLabourInquirySchema(pendingInquiry.inquirySchemaKey || 'generic');
+          schema = labourSchema?.fields || [];
         } else {
           const selectedCategory = CATEGORIES_DB.find((cat) => cat.name === rawCategoryName);
           schema = selectedCategory?.formSchema ?? GENERIC_FALLBACK_SCHEMA;
@@ -303,33 +343,30 @@ export default function BuyerDashboard() {
             'itemType',
             'eventType',
           ];
-          schema = schema.filter((f) => f.required || coreFieldNames.includes(f.name));
+          schema = schema.filter((f: any) => f.required || coreFieldNames.includes(f.name));
         }
 
         return (
           <DynamicInquiryForm
             schema={schema}
-            categoryName={rawCategoryName}
+            categoryName={rawCategoryName || 'Inquiry'}
             processType={pendingInquiry.processType}
             isLoading={isSubmitting}
             onSubmit={(data) => {
               setPendingInquiry((prev) => ({ ...prev, attributes: data }));
-              if (pendingInquiry.processType === 'EXPRESS') {
-                setActiveTab('location-details');
-              } else {
-                setActiveTab('inquiry-preferences');
-              }
+              handleTabChange('inquiry-preferences');
             }}
-            onBack={() => setActiveTab('category-selection')}
+            onBack={() => handleTabChange('category-selection')}
           />
         );
       case 'inquiry-preferences':
         return (
           <InquiryPreferences
-            onBack={() => setActiveTab('create-inquiry')}
+            categoryType={categoryType as any}
+            onBack={() => handleTabChange('create-inquiry')}
             onNext={(prefs) => {
               setPendingInquiry((prev) => ({ ...prev, preferences: prefs }));
-              setActiveTab('location-details');
+              handleTabChange('location-details');
             }}
           />
         );
@@ -338,14 +375,16 @@ export default function BuyerDashboard() {
           <LocationDetails
             onBack={() =>
               pendingInquiry.processType === 'EXPRESS'
-                ? setActiveTab('create-inquiry')
-                : setActiveTab('inquiry-preferences')
+                ? handleTabChange('create-inquiry')
+                : handleTabChange('inquiry-preferences')
             }
             onComplete={handleLocationComplete}
           />
         );
       case 'inquiry-success':
-        return <InquirySuccess onGoToDashboard={() => setActiveTab('dashboard')} />;
+        return <InquirySuccess onGoToDashboard={() => handleTabChange('dashboard')} />;
+      case 'financial':
+        return <FinancialPage isInsideDashboard={true} />;
       default:
         return null;
     }
@@ -358,18 +397,25 @@ export default function BuyerDashboard() {
     'inquiry-preferences',
     'location-details',
     'inquiry-success',
+    'financial',
   ].includes(activeTab);
 
   return (
-    <DashboardLayout onTabChange={(tab) => setActiveTab(tab)} externalActiveTab={activeTab}>
-      <div className="w-full max-w-7xl mx-auto">
+    <DashboardLayout onTabChange={handleTabChange} externalActiveTab={activeTab}>
+      <div className="w-full">
         <ConfirmationModal
           isOpen={!!inquiryToDelete}
           title="Delete Inquiry"
           message="Are you sure you want to delete this inquiry? This action cannot be undone."
           onConfirm={async () => {
             if (inquiryToDelete?.id) {
-              await db.inquiries.delete(inquiryToDelete.id);
+              try {
+                await deleteInquiry(inquiryToDelete.id);
+                refreshInquiries();
+                refreshQuotes();
+              } catch (error) {
+                alert('Failed to delete inquiry');
+              }
             }
             setInquiryToDelete(null);
           }}
@@ -389,10 +435,16 @@ export default function BuyerDashboard() {
             <DynamicAccountRenderer
               key={activeTab}
               schema={MASTER_BUYER_ACCOUNT_SCHEMA}
-              view={activeTab === 'home' ? 'dashboard' : activeTab}
+              view={
+                activeTab === 'home'
+                  ? 'dashboard'
+                  : activeTab === 'inquiries' && selectedInquiryId
+                    ? 'inquiry_details'
+                    : activeTab
+              }
               data={dashboardData}
               onAction={handleAction}
-              onNavigate={(viewId) => setActiveTab(viewId)}
+              onNavigate={handleTabChange}
               user={user}
             />
           )}

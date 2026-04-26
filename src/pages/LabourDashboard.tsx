@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { useLiveQuery } from '../hooks/useLiveQuery';
 import { db } from '../services/api/database';
@@ -8,39 +9,53 @@ import DashboardLayout from '../components/DashboardLayout';
 
 export default function LabourDashboard() {
   const { user, updateUser } = useAuth();
-  const [activeView, setActiveView] = useState('dashboard');
-  
+  const { tab } = useParams<{ tab: string }>();
+  const [activeView, setActiveView] = useState(tab || 'dashboard');
+
+  useEffect(() => {
+    if (tab) {
+      setActiveView(tab);
+    }
+  }, [tab]);
+
   console.log('LABOUR USER:', JSON.stringify(user?.labourSubTypes));
   console.log('LABOUR CATEGORY:', user?.labourCategory);
 
   // Fetch data
-  const jobRequests = useLiveQuery(
-    () => db.inquiries
-      .filter(i =>
-        i.isLabour === true &&
-        !i.archivedBy?.includes(user?.id?.toString() || '') &&
-        (user?.labourSubTypes?.some(st => st === i.labourSubType) ?? true)
-      )
-      .reverse()
-      .toArray(),
-    [user?.id, user?.labourSubTypes]
-  ) || [];
+  const jobRequests =
+    useLiveQuery(async () => {
+      const allInquiries = await db.inquiries.toArray();
+      return allInquiries
+        .filter(
+          (i: any) =>
+            i.isLabour === true &&
+            !i.archivedBy?.includes(user?.id?.toString() || '') &&
+            (user?.labourSubTypes?.some((st: string) => st === i.labourSubType) ?? true)
+        )
+        .reverse();
+    }, [user?.id, user?.labourSubTypes]) || [];
 
-  const quotes = useLiveQuery(
-    () => db.quotes
-      .where('providerId').equals(user?.id || '')
-      .reverse()
-      .toArray(),
-    [user?.id]
-  ) || [];
+  const quotes =
+    useLiveQuery(
+      () =>
+        db.quotes
+          .where('providerId')
+          .equals(user?.id || '')
+          .reverse()
+          .toArray(),
+      [user?.id]
+    ) || [];
 
-  const schedules = useLiveQuery(
-    () => db.schedules
-      .where('providerId').equals(user?.id || '')
-      .reverse()
-      .toArray(),
-    [user?.id]
-  ) || [];
+  const schedules =
+    useLiveQuery(
+      () =>
+        db.schedules
+          .where('providerId')
+          .equals(user?.id || '')
+          .reverse()
+          .toArray(),
+      [user?.id]
+    ) || [];
 
   // Virtual account balance
   const availableBalance = user?.virtualAccountBalance || 0;
@@ -48,13 +63,16 @@ export default function LabourDashboard() {
   const handleAction = async (actionId: string, payload?: any) => {
     switch (actionId) {
       case 'navigate':
-        setActiveView(payload);
+        handleTabChange(payload);
+        break;
+      case 'view_financial':
+        handleTabChange('financial');
         break;
       case 'toggle_availability':
         if (user) {
           await updateUser({
             ...user,
-            availabilityStatus: payload.isAvailable ? 'AVAILABLE' : 'NOT_AVAILABLE'
+            availabilityStatus: payload.isAvailable ? 'AVAILABLE' : 'NOT_AVAILABLE',
           });
         }
         break;
@@ -70,10 +88,10 @@ export default function LabourDashboard() {
             status: 'PENDING',
             createdAt: new Date().toISOString(),
             type: 'LABOUR',
-            availabilityDate: payload.proposal.availabilityDate
+            availabilityDate: payload.proposal.availabilityDate,
           };
           await db.quotes.add(newQuote as any);
-          setActiveView('my_quotes');
+          handleTabChange('my_quotes');
         }
         break;
       case 'view_job':
@@ -97,6 +115,14 @@ export default function LabourDashboard() {
     }
   };
 
+  const navigate = useNavigate();
+
+  const handleTabChange = (tab: string) => {
+    setActiveView(tab);
+    const basePath = '/labour';
+    navigate(tab === 'dashboard' ? basePath : `${basePath}/${tab}`);
+  };
+
   const viewData = {
     homeProps: {
       user,
@@ -104,24 +130,21 @@ export default function LabourDashboard() {
       quotes,
       schedules,
       availableBalance,
-      onAction: handleAction
+      onAction: handleAction,
+      onNavigate: handleTabChange,
     },
     jobsProps: {
       jobRequests,
-      onAction: handleAction
+      onAction: handleAction,
     },
     quotesProps: {
       quotes,
-      onAction: handleAction
+      onAction: handleAction,
     },
     scheduleProps: {
       schedules,
-      onAction: handleAction
-    }
-  };
-
-  const handleTabChange = (tab: string) => {
-    setActiveView(tab);
+      onAction: handleAction,
+    },
   };
 
   return (

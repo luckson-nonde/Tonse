@@ -12,11 +12,16 @@ import {
   HttpStatus,
   HttpCode,
   ForbiddenException,
+  UseInterceptors,
+  UploadedFile,
+  UploadedFiles,
 } from '@nestjs/common';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { Request as ExpressRequest } from 'express';
 import { InquiriesService } from '../inquiries.service';
 import { CreateInquiryDto } from '../dto/create-inquiry.dto';
 import { UpdateInquiryDto } from '../dto/update-inquiry.dto';
+import { InquiryImagesService } from '../services/inquiry-images.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 
 interface AuthenticatedRequest extends ExpressRequest {
@@ -25,7 +30,10 @@ interface AuthenticatedRequest extends ExpressRequest {
 
 @Controller('inquiries')
 export class InquiriesController {
-  constructor(private readonly inquiriesService: InquiriesService) {}
+  constructor(
+    private readonly inquiriesService: InquiriesService,
+    private readonly inquiryImagesService: InquiryImagesService
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -41,15 +49,13 @@ export class InquiriesController {
   @UseGuards(JwtAuthGuard)
   async findAll(@Query() query: any, @Request() req: AuthenticatedRequest) {
     const filters = {
-      buyerId: req.user.id, // ENFORCE: User can only see their own inquiries
-      status: query.status,
-      category: query.category,
-      search: query.search,
-      page: query.page,
-      limit: query.limit,
-      sort: query.sort,
-      order: query.order,
+      ...query,
     };
+
+    // ENFORCE RBAC: Buyers strictly see their own inquiries
+    if (req.user.role === 'BUYER') {
+      filters.buyerId = req.user.id;
+    }
 
     return this.inquiriesService.findAll(filters);
   }
@@ -64,12 +70,103 @@ export class InquiriesController {
     return this.inquiriesService.findByBuyerId(buyerId);
   }
 
+  /**
+   * Get all images for an inquiry
+   * GET /inquiries/:id/images
+   * NOTE: Must come before @Get(':id') to avoid route conflict
+   */
+  @Get(':id/images')
+  @UseGuards(JwtAuthGuard)
+  async getImages(@Param('id') inquiryId: string) {
+    const images = await this.inquiryImagesService.getInquiryImages(inquiryId);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Images retrieved successfully',
+      data: images,
+    };
+  }
+
+  /**
+   * Upload a single image for an inquiry
+   * POST /inquiries/:id/images
+   */
+  @Post(':id/images')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('image'))
+  @HttpCode(HttpStatus.CREATED)
+  async uploadImage(
+    @Param('id') inquiryId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: AuthenticatedRequest
+  ) {
+    // Verify inquiry ownership
+    const inquiry = await this.inquiriesService.findOne(inquiryId);
+    if (inquiry.buyerId !== req.user.id) {
+      throw new ForbiddenException('You can only upload images to your own inquiries');
+    }
+
+    const image = await this.inquiryImagesService.uploadImage(inquiryId, file);
+    return {
+      statusCode: HttpStatus.CREATED,
+      message: 'Image uploaded successfully',
+      data: image,
+    };
+  }
+
+  /**
+   * Upload multiple images for an inquiry
+   * POST /inquiries/:id/images/multiple
+   */
+  @Post(':id/images/multiple')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FilesInterceptor('images', 10))
+  @HttpCode(HttpStatus.CREATED)
+  async uploadMultipleImages(
+    @Param('id') inquiryId: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Request() req: AuthenticatedRequest
+  ) {
+    // Verify inquiry ownership
+    const inquiry = await this.inquiriesService.findOne(inquiryId);
+    if (inquiry.buyerId !== req.user.id) {
+      throw new ForbiddenException('You can only upload images to your own inquiries');
+    }
+
+    const images = await this.inquiryImagesService.uploadMultipleImages(inquiryId, files);
+    return {
+      statusCode: HttpStatus.CREATED,
+      message: `${images.length} images uploaded successfully`,
+      data: images,
+    };
+  }
+
+  /**
+   * Delete an image from an inquiry
+   * DELETE /inquiries/:id/images/:imageId
+   */
+  @Delete(':id/images/:imageId')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteImage(
+    @Param('id') inquiryId: string,
+    @Param('imageId') imageId: string,
+    @Request() req: AuthenticatedRequest
+  ) {
+    // Verify inquiry ownership
+    const inquiry = await this.inquiriesService.findOne(inquiryId);
+    if (inquiry.buyerId !== req.user.id) {
+      throw new ForbiddenException('You can only delete images from your own inquiries');
+    }
+
+    await this.inquiryImagesService.deleteImage(inquiryId, imageId);
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   async findOne(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     const inquiry = await this.inquiriesService.findOne(id);
-    // ENFORCE: Users can only view their own inquiries
-    if (inquiry && inquiry.buyerId !== req.user.id) {
+    // ENFORCE RBAC: Buyers can only view their own inquiries
+    if (inquiry && inquiry.buyerId !== req.user.id && req.user.role === 'BUYER') {
       throw new ForbiddenException('You can only view your own inquiries');
     }
     return inquiry;
@@ -83,7 +180,7 @@ export class InquiriesController {
     @Request() req: AuthenticatedRequest
   ) {
     const inquiry = await this.inquiriesService.findOne(id);
-    // ENFORCE: Users can only update their own inquiries
+    // ENFORCE: Only the inquiry owner can update it
     if (inquiry.buyerId !== req.user.id) {
       throw new ForbiddenException('You can only update your own inquiries');
     }
@@ -98,7 +195,7 @@ export class InquiriesController {
     @Request() req: AuthenticatedRequest
   ) {
     const inquiry = await this.inquiriesService.findOne(id);
-    // ENFORCE: Users can only update their own inquiries
+    // ENFORCE: Only the inquiry owner can change its status
     if (inquiry.buyerId !== req.user.id) {
       throw new ForbiddenException('You can only update your own inquiries');
     }

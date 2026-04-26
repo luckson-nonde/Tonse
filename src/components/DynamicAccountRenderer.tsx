@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
+import defaultEmptyImage from '../assets/images/empty-states/owl_reading.png';
 import {
   LayoutDashboard,
   MessageSquare,
@@ -42,10 +43,13 @@ import ProviderOrdersView from './provider/ProviderOrdersView';
 import ProviderProductsView from './provider/ProviderProductsView';
 import ProviderScheduleView from './provider/ProviderScheduleView';
 import ProviderTeamView from './provider/ProviderTeamView';
+import VenueManagementView from './provider/VenueManagementView';
 import CollectionPage from '../pages/CollectionPage';
+import FinancialPage from '../pages/FinancialPage';
 import { Inquiry, Quote } from '../types';
 import { getLabourProfileSchema } from '../services/labourSchemaRegistry';
 import { getProfileSchema } from '../services/userSchemas';
+import { generateVirtualAccount, formatCurrency } from '../utils/financeUtils';
 import { uniqueKey } from '../utils/keyUtils';
 
 const ICON_MAP: Record<string, any> = {
@@ -94,12 +98,25 @@ export default function DynamicAccountRenderer({
 
   if (!viewSchema) {
     return (
-      <div className="p-12 text-center bg-white rounded-4xl border border-slate-200">
-        <h3 className="text-xl font-serif font-bold text-brand-dark mb-2">View Not Found</h3>
-        <p className="text-slate-400 mb-6">
-          The requested view "{view}" is not defined in the account schema.
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-12 text-center bg-white rounded-4xl border border-slate-200 shadow-sm animate-in fade-in duration-500">
+        <div className="relative mb-8">
+          <div className="absolute inset-0 bg-brand-gold/10 rounded-full blur-3xl scale-150 animate-pulse"></div>
+          <img 
+            src={defaultEmptyImage} 
+            alt="Reading Owl" 
+            className="w-48 h-48 sm:w-64 sm:h-64 object-contain relative z-10 drop-shadow-xl"
+          />
+        </div>
+        <h3 className="text-2xl font-serif font-black text-brand-dark mb-3">View Not Found</h3>
+        <p className="text-slate-500 mb-8 max-w-sm mx-auto leading-relaxed font-medium">
+          The requested view <span className="font-mono text-brand-gold bg-brand-gold/5 px-2 py-0.5 rounded">"{view}"</span> is not defined in your account schema.
         </p>
-        <Button onClick={() => onNavigate('dashboard')}>Back to Overview</Button>
+        <Button 
+          onClick={() => onNavigate('dashboard')}
+          className="px-10 py-4 bg-brand-dark text-white rounded-full font-bold shadow-xl hover:shadow-brand-gold/20 transition-all"
+        >
+          Return to Dashboard
+        </Button>
       </div>
     );
   }
@@ -116,99 +133,66 @@ export default function DynamicAccountRenderer({
 
   const renderDashboardGrid = () => {
     return (
-      <div className="space-y-10 lg:space-y-14">
+      <div className="space-y-6 lg:space-y-8">
         {/* Virtual Account Card */}
         {viewSchema.showWalletCard && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             onClick={() => onAction('view_financial')}
-            whileHover={{ y: -6 }}
-            className="bg-gradient-to-r from-brand-dark via-slate-700 to-slate-800 rounded-3xl p-12 shadow-premium-xl text-white relative overflow-hidden group cursor-pointer transition-shadow duration-300 hover:shadow-premium-xl"
+            className="bg-[#1B3068] rounded-4xl p-10 shadow-premium-xl text-white relative overflow-hidden group cursor-pointer transition-all duration-500"
           >
-            {/* Premium gradient overlays */}
-            <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-br from-brand-gold/30 via-brand-gold/12 to-transparent rounded-bl-full z-0 opacity-60 group-hover:opacity-80 transition-opacity duration-500 group-hover:scale-125 transform"></div>
-            <div className="absolute -bottom-10 -left-10 w-64 h-64 bg-gradient-to-tr from-brand-gold/15 to-transparent rounded-tr-full z-0 opacity-40"></div>
-            <div
-              className="absolute inset-0 opacity-25 group-hover:opacity-50 transition-opacity duration-300"
-              style={{
-                backgroundImage:
-                  'radial-gradient(circle at 20% 50%, rgba(201,151,58,0.12) 0%, transparent 50%)',
-              }}
-            ></div>
-
-            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+            {/* Subtle premium gradient/pattern overlays */}
+            <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 100% 0%, rgba(255,255,255,0.15) 0%, transparent 60%)' }}></div>
+            
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-10">
               <div className="flex-1 min-w-0">
-                <motion.div className="flex items-center gap-3 mb-3" whileHover={{ x: 5 }}>
-                  <div className="p-2 bg-brand-gold/20 rounded-lg backdrop-blur-sm">
-                    <Wallet className="w-5 h-5 text-brand-gold" />
-                  </div>
-                  <p className="text-brand-gold text-[11px] font-bold font-sans uppercase tracking-[0.3em]">
+                <div className="flex items-center gap-3 mb-6">
+                  <Wallet className="w-5 h-5 text-white" strokeWidth={2} />
+                  <p className="text-white/90 text-[11px] font-bold font-sans uppercase tracking-[0.25em]">
                     Virtual Account Balance
                   </p>
-                </motion.div>
-                <motion.h2
-                  className="text-5xl md:text-6xl font-serif font-black mb-4 truncate"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.2 }}
-                >
-                  ZMW {(data?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </motion.h2>
-                <div className="flex flex-wrap items-center gap-3">
-                  <p className="text-slate-300 font-mono tracking-[0.25em] text-xs">
-                    {user?.virtualAccountNumber
-                      ? user.virtualAccountNumber.match(/.{1,4}/g)?.join(' ')
-                      : `**** **** **** ${user?.id?.toString().padStart(4, '0') || '0000'}`}
+                </div>
+                
+                <h2 className="text-[64px] font-serif font-black mb-4 tracking-tight leading-none">
+                  ZMW {formatCurrency(data?.balance || 0)}
+                </h2>
+
+                <div className="flex flex-col gap-4">
+                  <p className="text-white/60 font-mono tracking-[0.2em] text-xs">
+                    {user?.phone}
                   </p>
-                  {data?.escrowBalance > 0 && (
-                    <motion.div
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 backdrop-blur-sm text-[10px] font-bold uppercase tracking-wider text-emerald-300"
-                      whileHover={{ scale: 1.05 }}
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      ZMW {(data.escrowBalance || 0).toLocaleString()} in Escrow
-                    </motion.div>
-                  )}
-                  <motion.div
-                    className="px-3 py-1 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm text-[10px] font-bold uppercase tracking-wider text-slate-200"
-                    whileHover={{ scale: 1.05 }}
-                  >
-                    {user?.role} ACCOUNT
-                  </motion.div>
+                  
+                  <div className="flex items-center gap-3">
+                    <div className="px-5 py-1.5 rounded-full bg-[#2a407a] border border-white/10 text-[10px] font-black uppercase tracking-[0.15em] text-white/90">
+                      {user?.role || 'BUYER'} ACCOUNT
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <motion.div className="flex items-center gap-4" whileHover={{ x: 5 }}>
-                <div className="hidden sm:flex -space-x-3 mr-2">
-                  <motion.div
-                    className="w-10 h-10 rounded-full bg-gradient-to-br from-rose-400 to-rose-600 border-3 border-slate-700 shadow-lg flex items-center justify-center text-white text-xs font-bold"
-                    whileHover={{ y: -4 }}
-                  >
+              <div className="flex items-center gap-6">
+                <div className="flex -space-x-3">
+                  <div className="w-10 h-10 rounded-full bg-[#E53E3E] border-2 border-[#1B3068] flex items-center justify-center text-white text-xs font-bold shadow-lg">
                     B
-                  </motion.div>
-                  <motion.div
-                    className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-gold to-amber-600 border-3 border-slate-700 shadow-lg flex items-center justify-center text-white text-xs font-bold"
-                    whileHover={{ y: -4 }}
-                    transition={{ delay: 0.1 }}
-                  >
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-[#B26A2D] border-2 border-[#1B3068] flex items-center justify-center text-white text-xs font-bold shadow-lg">
                     P
-                  </motion.div>
+                  </div>
                 </div>
-                <motion.div whileHover={{ scale: 1.05 }}>
-                  <Button
-                    variant="outline"
-                    className="border-2 border-white/30 text-white hover:bg-white/15 hover:border-white/50 rounded-2xl px-7 py-3 font-medium transition-all duration-300 backdrop-blur-sm"
-                  >
-                    Manage Account
-                  </Button>
-                </motion.div>
-              </motion.div>
+                
+                <Button
+                  variant="outline"
+                  className="border-white/40 text-white hover:bg-white/10 hover:border-white rounded-xl px-8 py-3.5 font-bold text-[14px] transition-all duration-300"
+                >
+                  Manage Account
+                </Button>
+              </div>
             </div>
           </motion.div>
         )}
 
-        {/* Metrics */}
+        {/* Metrics Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-7 lg:gap-8">
           {viewSchema.metrics?.map((metric, idx) => {
             let metricValue = metric.value;
@@ -259,18 +243,39 @@ export default function DynamicAccountRenderer({
                 }}
                 onClick={() => {
                   // Navigate to appropriate view based on metric type
+                  // Buyer metrics
                   if (metric.id === 'active_inquiries') {
                     onNavigate('inquiries');
                   } else if (metric.id === 'pending_quotes') {
                     onNavigate('quotes');
                   } else if (metric.id === 'completed_orders') {
+                    onNavigate('orders');
+                  }
+                  // Provider metrics
+                  else if (metric.id === 'inquiries_received' || metric.id === 'new_requests') {
+                    onNavigate('leads');
+                  } else if (metric.id === 'quotes_sent' || metric.id === 'total_quoted_value') {
+                    onNavigate('my-quotes');
+                  } else if (metric.id === 'pending_collection') {
                     onNavigate('paid-orders');
+                  } else if (metric.id === 'upcoming_events') {
+                    onNavigate('schedule');
+                  } else if (metric.id === 'inventory_items') {
+                    onNavigate('products');
+                  }
+                  // Labour metrics
+                  else if (metric.id === 'job_requests') {
+                    onNavigate('job_requests');
+                  } else if (metric.id === 'active_proposals') {
+                    onNavigate('my_quotes');
+                  } else if (metric.id === 'confirmed_jobs') {
+                    onNavigate('schedule');
                   }
                 }}
-                className={`${bgColor} p-8 rounded-3xl border-2 ${borderColor} shadow-premium hover:shadow-premium-lg transition-all duration-300 cursor-pointer relative overflow-hidden group`}
+                className={`${bgColor} p-6 rounded-3xl border-2 ${borderColor} shadow-premium hover:shadow-premium-lg transition-all duration-300 cursor-pointer relative overflow-hidden group`}
               >
                 {/* Animated background gradient */}
-                <div className="absolute inset-0 bg-gradient-to-br from-white/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-white/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
 
                 <div className="relative z-10">
                   <div className="flex justify-between items-start mb-6">
@@ -322,8 +327,8 @@ export default function DynamicAccountRenderer({
           whileHover={{ y: -2 }}
           className="bg-gradient-to-br from-white via-brand-white to-slate-50 p-12 rounded-3xl border-2 border-brand-gold/30 shadow-premium-lg hover:shadow-premium-xl transition-all duration-300 relative overflow-hidden group"
         >
-          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-brand-gold/15 via-brand-gold/8 to-transparent rounded-bl-full z-0 opacity-50 group-hover:opacity-70 group-hover:scale-110 transition-all duration-500"></div>
-          <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-gradient-to-tr from-brand-gold/8 to-transparent rounded-tr-full z-0 opacity-40"></div>
+          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-brand-gold/15 via-brand-gold/8 to-transparent rounded-bl-full z-0 opacity-50 group-hover:opacity-70 group-hover:scale-110 transition-all duration-500 pointer-events-none"></div>
+          <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-gradient-to-tr from-brand-gold/8 to-transparent rounded-tr-full z-0 opacity-40 pointer-events-none"></div>
 
           <div className="relative z-10">
             <div className="mb-3">
@@ -409,28 +414,25 @@ export default function DynamicAccountRenderer({
                 </motion.div>
               ))
             ) : (
-              <div className="p-14 text-center">
+              <div className="p-16 text-center">
                 <motion.div
                   initial={{ scale: 0.8, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  className="w-24 h-24 bg-gradient-to-br from-slate-100 to-slate-50 rounded-full flex items-center justify-center mx-auto mb-7 shadow-premium"
+                  className="relative mb-10"
                 >
-                  <Clock className="w-12 h-12 text-slate-400" />
+                  <div className="absolute inset-0 bg-brand-gold/5 rounded-full blur-3xl scale-150 animate-pulse"></div>
+                  <img 
+                    src={defaultEmptyImage} 
+                    alt="Reading Owl" 
+                    className="w-40 h-40 object-contain relative z-10 mx-auto opacity-90 drop-shadow-lg"
+                  />
                 </motion.div>
-                <h3 className="text-lg font-serif font-bold text-slate-600 mb-2">
+                <h3 className="text-xl font-serif font-black text-brand-dark mb-3">
                   No activity yet
                 </h3>
-                <p className="text-slate-500 text-sm mb-8 max-w-xs mx-auto leading-relaxed">
-                  Your activity log will appear here once you create inquiries or receive quotes.
+                <p className="text-slate-500 text-sm max-w-xs mx-auto leading-relaxed font-medium">
+                  Your activity log will appear here once you create inquiries or receive quotes from our network.
                 </p>
-                <Button
-                  variant="primary"
-                  onClick={() => onAction('create_inquiry')}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-brand-gold hover:bg-brand-accent text-white rounded-2xl font-medium transition-all hover:shadow-lg"
-                >
-                  <Plus className="w-4 h-4" />
-                  Create Your First Inquiry
-                </Button>
               </div>
             )}
           </motion.div>
@@ -451,15 +453,19 @@ export default function DynamicAccountRenderer({
             </h2>
             <p className="text-slate-500">{resolveValue(viewSchema.subtitle)}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="hidden md:flex gap-3">
             {viewSchema.actions?.map((action, idx) => (
               <Button
                 key={uniqueKey('action-top', action.id, idx)}
                 variant={action.variant}
                 onClick={() => onAction(action.id)}
-                className="flex items-center gap-2"
+                className={`flex items-center gap-2.5 px-6 py-3 rounded-full font-bold shadow-lg transition-all duration-300 hover:-translate-y-0.5 ${
+                  action.variant === 'primary' 
+                    ? '!bg-[#C9973A] !text-white hover:!bg-[#1e3a8a] shadow-[#C9973A]/30 hover:shadow-[#1e3a8a]/30' 
+                    : 'bg-white border-2 border-slate-200 text-slate-700 hover:border-[#1e3a8a] hover:text-[#1e3a8a]'
+                }`}
               >
-                {renderIcon(action.icon, 'w-4 h-4')}
+                {renderIcon(action.icon || 'Plus', 'w-4.5 h-4.5')}
                 {action.label}
               </Button>
             ))}
@@ -513,21 +519,30 @@ export default function DynamicAccountRenderer({
               );
             })
           ) : (
-            <div className="bg-white p-20 rounded-4xl border border-slate-200 shadow-sm text-center">
-              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                {renderIcon(
-                  view === 'inquiries' ? 'MessageSquare' : 'FileText',
-                  'w-10 h-10 text-slate-200'
-                )}
+            <div className="bg-white p-12 sm:p-20 rounded-4xl border border-slate-200 shadow-premium flex flex-col items-center justify-center text-center min-h-[60vh] animate-in fade-in duration-700">
+              <div className="relative mb-10">
+                <div className="absolute inset-0 bg-brand-gold/5 rounded-full blur-3xl scale-150 animate-pulse"></div>
+                <img 
+                  src={defaultEmptyImage} 
+                  alt="Empty state" 
+                  className="w-48 h-48 sm:w-64 sm:h-64 object-contain relative z-10 opacity-90 drop-shadow-lg"
+                />
               </div>
-              <h3 className="text-xl font-serif font-bold text-brand-dark mb-2">
+              <h3 className="text-2xl font-serif font-black text-brand-dark mb-3">
                 Nothing here yet
               </h3>
-              <p className="text-slate-400 mb-8">
-                Start by creating a new inquiry to see it listed here.
+              <p className="text-slate-500 mb-10 max-w-sm mx-auto text-lg leading-relaxed font-medium">
+                {view === 'inquiries' ? 'Start by creating a new inquiry to receive quotes from providers.' :
+                 view === 'quotes' ? 'No quotes received yet for your inquiries.' :
+                 view === 'orders' ? 'No completed orders yet.' :
+                 'There is no data to display here yet.'}
               </p>
               {viewSchema.actions?.[0] && (
-                <Button onClick={() => onAction(viewSchema.actions![0].id)}>
+                <Button 
+                  onClick={() => onAction(viewSchema.actions![0].id)}
+                  className="px-12 py-4 !bg-brand-dark hover:!bg-[#1e3a8a] !text-white rounded-full font-bold text-lg shadow-xl shadow-brand-dark/10 hover:shadow-[#1e3a8a]/20 hover:-translate-y-1 transition-all duration-300 flex items-center gap-3"
+                >
+                  {renderIcon(viewSchema.actions![0].icon || 'Plus', 'w-5 h-5')}
                   {viewSchema.actions![0].label}
                 </Button>
               )}
@@ -542,13 +557,21 @@ export default function DynamicAccountRenderer({
     const item = data?.[viewSchema.dataKey || ''];
     if (!item) return <div className="p-12 text-center text-slate-400">Item not found</div>;
 
+    // Map details view back to list view
+    const getBackView = () => {
+      if (view === 'inquiry_details') return 'inquiries';
+      if (view === 'quote_details') return 'quotes';
+      if (view === 'order_details') return 'orders';
+      return view.replace('_details', 's');
+    };
+
     return (
       <div className="space-y-8">
         <button
-          onClick={() => onNavigate(view.replace('_details', 's'))}
+          onClick={() => onNavigate(getBackView())}
           className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-brand-gold transition-colors"
         >
-          <ChevronLeft className="w-4 h-4" /> Back to {view.replace('_details', 's')}
+          <ChevronLeft className="w-4 h-4" /> Back to {getBackView()}
         </button>
 
         {view === 'inquiry_details' ? (
@@ -649,6 +672,8 @@ export default function DynamicAccountRenderer({
         return <ProviderScheduleView {...data?.scheduleProps} />;
       case 'provider_team':
         return <ProviderTeamView {...data?.teamProps} />;
+      case 'venue_spaces_renderer':
+        return <VenueManagementView />;
       case 'provider_collection':
         return <CollectionPage />;
       case 'labour_home':
@@ -657,6 +682,8 @@ export default function DynamicAccountRenderer({
         return <LabourJobsView {...data?.jobsProps} />;
       case 'labour_quotes':
         return <LabourQuotesView {...data?.quotesProps} />;
+      case 'financial_renderer':
+        return <FinancialPage isInsideDashboard={true} />;
       case 'labour_schedule':
         return <LabourScheduleView {...data?.scheduleProps} />;
       default:
@@ -670,7 +697,7 @@ export default function DynamicAccountRenderer({
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="max-w-5xl mx-auto"
+      className="w-full"
     >
       {renderContent()}
     </motion.div>

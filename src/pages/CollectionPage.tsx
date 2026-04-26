@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { QrCode, Search, Check, X, Loader2, Package, Clock, User, ArrowRight, ShieldCheck } from 'lucide-react';
+import {
+  QrCode,
+  Search,
+  Check,
+  X,
+  Loader2,
+  Package,
+  Clock,
+  User,
+  ArrowRight,
+  ShieldCheck,
+} from 'lucide-react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { useLiveQuery } from '../hooks/useLiveQuery';
 import { db } from '../services/api/database';
@@ -19,28 +30,25 @@ export default function CollectionPage() {
 
   const canViewFinancials = hasPermission(user, PERMISSIONS.VIEW_ANALYTICS);
 
-  const recentCollections = useLiveQuery(
-    async () => {
-      return await db.quotes
-        .where('status')
-        .equals('COMPLETED')
-        .reverse()
-        .sortBy('createdAt');
-    },
-    []
-  ) || [];
+  const recentCollections =
+    useLiveQuery(async () => {
+      return await db.quotes.where('status').equals('COMPLETED').reverse().sortBy('createdAt');
+    }, []) || [];
 
   useEffect(() => {
     if (isScanning) {
       const scanner = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: 250 }, false);
-      scanner.render((decodedText) => {
-        setCollectionCode(decodedText);
-        setIsScanning(false);
-        scanner.clear();
-        handleFindParcel(decodedText);
-      }, (err) => {
-        console.error(err);
-      });
+      scanner.render(
+        (decodedText) => {
+          setCollectionCode(decodedText);
+          setIsScanning(false);
+          scanner.clear();
+          handleFindParcel(decodedText);
+        },
+        (err) => {
+          console.error(err);
+        }
+      );
       return () => {
         scanner.clear();
       };
@@ -73,7 +81,7 @@ export default function CollectionPage() {
   const handleProcessCollection = async () => {
     if (!quote || !quote.id) return;
     await db.quotes.update(quote.id, { status: 'COMPLETED' });
-    
+
     if (user) {
       await logAuditAction(
         user,
@@ -96,16 +104,17 @@ export default function CollectionPage() {
     <div className="p-4 max-w-lg mx-auto">
       {/* Success Message Overlay */}
       {showSuccess && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-emerald-900/20 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white rounded-[32px] p-8 shadow-2xl border border-emerald-100 max-w-xs w-full text-center animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-emerald-900/20 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-4xl p-8 shadow-2xl border border-emerald-100 max-w-xs w-full text-center animate-in zoom-in-95 duration-300">
             <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 mx-auto mb-6">
               <ShieldCheck className="w-10 h-10" />
             </div>
             <h2 className="text-2xl font-black text-slate-900 mb-2">Transfer Successful</h2>
             <p className="text-slate-500 text-sm leading-relaxed mb-6">
-              The parcel has been handed over and funds have been securely transferred to the shop's account.
+              The parcel has been handed over and funds have been securely transferred to the shop's
+              account.
             </p>
-            <button 
+            <button
               onClick={() => setShowSuccess(false)}
               className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl"
             >
@@ -159,23 +168,37 @@ export default function CollectionPage() {
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-900">Parcel Found</h2>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ready for collection</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                Ready for collection
+              </p>
             </div>
           </div>
-          
+
           <div className="space-y-3 mb-6">
             <div className="flex justify-between items-center p-3 bg-slate-50 rounded-2xl border border-slate-100">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Quote ID</span>
-              <span className="text-sm font-black text-slate-900">#QT-{quote.id?.toString().padStart(4, '0')}</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Quote ID
+              </span>
+              <span className="text-sm font-black text-slate-900">
+                #QT-{quote.id?.toString().padStart(4, '0')}
+              </span>
             </div>
             <div className="flex justify-between items-center p-3 bg-slate-50 rounded-2xl border border-slate-100">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Buyer Name</span>
-              <span className="text-sm font-black text-slate-900">{quote.buyerContact?.name || 'N/A'}</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Buyer Name
+              </span>
+              <span className="text-sm font-black text-slate-900">
+                {quote.buyerContact?.name || 'N/A'}
+              </span>
             </div>
             {canViewFinancials && (
               <div className="flex justify-between items-center p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Amount Paid</span>
-                <span className="text-sm font-black text-emerald-600">ZMW {quote.price.toLocaleString()}</span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  Amount Paid
+                </span>
+                <span className="text-sm font-black text-emerald-600">
+                  ZMW {quote.price.toLocaleString()}
+                </span>
               </div>
             )}
           </div>
@@ -201,19 +224,24 @@ export default function CollectionPage() {
 
         <div className="space-y-3">
           {recentCollections.length === 0 ? (
-            <div className="bg-white rounded-[24px] p-8 text-center border border-slate-100">
+            <div className="bg-white rounded-2xl p-8 text-center border border-slate-100">
               <Package className="w-12 h-12 text-slate-200 mx-auto mb-4" />
               <p className="text-slate-500 font-medium italic">No parcels processed yet.</p>
             </div>
           ) : (
             recentCollections.slice(0, 5).map((item) => (
-              <div key={item.id} className="bg-white rounded-[24px] p-4 shadow-sm border border-slate-100 flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 flex-shrink-0">
+              <div
+                key={item.id}
+                className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100 flex items-center gap-4"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
                   <Check className="w-6 h-6" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-start mb-0.5">
-                    <h4 className="font-bold text-slate-900 text-sm truncate">#QT-{item.id?.toString().padStart(4, '0')}</h4>
+                    <h4 className="font-bold text-slate-900 text-sm truncate">
+                      #QT-{item.id?.toString().padStart(4, '0')}
+                    </h4>
                     <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
                       <Clock className="w-2.5 h-2.5" />
                       {new Date(item.createdAt).toLocaleDateString()}

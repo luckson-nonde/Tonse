@@ -101,20 +101,25 @@ export default function AuthSplitLayout({
             </div>
           )}
 
-          {/* Desktop Back Button */}
-          {onBack && (
-            <button 
-              onClick={onBack}
-              className="hidden lg:flex mb-8 items-center text-slate-400 hover:text-[#C9973A] transition-colors text-base"
-            >
-              <ArrowLeft className="w-5 h-5 mr-2" />
-              Back
-            </button>
-          )}
-          
-          <div className="mb-6 lg:mb-8 text-center lg:text-left">
-            <h2 className="text-[28px] lg:text-[30px] font-serif font-bold text-brand-dark leading-tight">{title}</h2>
-            <div className="mt-1.5 lg:mt-2 text-[#C9973A] font-sans font-normal text-xs lg:text-sm leading-relaxed">{subtitle}</div>
+          {/* Header Section: Title/Subtitle + Back Button */}
+          <div className="flex flex-col mb-8 lg:mb-10 gap-4">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
+              <h2 className="text-[28px] lg:text-[26px] font-serif font-bold text-brand-dark leading-tight whitespace-nowrap">
+                {title}
+              </h2>
+              <div className="text-[#C9973A] font-sans font-normal text-xs lg:text-sm leading-relaxed opacity-80 italic">
+                {subtitle}
+              </div>
+            </div>
+            {onBack && (
+              <button 
+                onClick={onBack}
+                className="hidden lg:flex items-center text-slate-400 hover:text-[#C9973A] transition-colors text-base w-fit group"
+              >
+                <ArrowLeft className="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform" />
+                Back
+              </button>
+            )}
           </div>
           
           {children}

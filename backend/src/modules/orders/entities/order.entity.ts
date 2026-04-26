@@ -24,7 +24,7 @@ export class Order {
   @Column({ type: 'uuid' })
   quoteId: string;
 
-  @ManyToOne(() => Quote)
+  @ManyToOne(() => Quote, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'quoteId' })
   quote: Quote;
 

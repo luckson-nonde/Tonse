@@ -2,7 +2,6 @@ import {
   IsString,
   IsOptional,
   IsUUID,
-  IsJSON,
   IsNumber,
   IsBoolean,
   IsEnum,
@@ -60,12 +59,10 @@ export class UpdateQuoteDto {
   isArchived?: boolean;
 
   @IsOptional()
-  @IsJSON()
-  itemPrices?: Record<string, any>[];
+  itemPrices?: any;
 
   @IsOptional()
-  @IsJSON()
-  buyerContact?: Record<string, any>;
+  buyerContact?: any;
 
   @IsOptional()
   @IsString()
@@ -73,8 +70,7 @@ export class UpdateQuoteDto {
   collectionCode?: string;
 
   @IsOptional()
-  @IsJSON()
-  requirements?: Record<string, any>[];
+  requirements?: any;
 
   @IsOptional()
   @IsUUID()
@@ -94,16 +90,14 @@ export class UpdateQuoteDto {
   cleaningFee?: number;
 
   @IsOptional()
-  @IsJSON()
-  dynamicFields?: Record<string, any>;
+  dynamicFields?: any;
 
   @IsOptional()
   @IsEnum(['EXPRESS', 'STANDARD'])
   processType?: string;
 
   @IsOptional()
-  @IsJSON()
-  delivery?: Record<string, any>;
+  delivery?: any;
 
   @IsOptional()
   @IsString()

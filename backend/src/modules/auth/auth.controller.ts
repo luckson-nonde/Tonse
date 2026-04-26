@@ -3,10 +3,14 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { UsersService } from '../users/users.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private usersService: UsersService,
+  ) {}
 
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
@@ -33,10 +37,11 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async getCurrentUser(@Request() req) {
-    return {
-      id: req.user.id,
-      email: req.user.email,
-      role: req.user.role,
-    };
+    const user = await this.usersService.findById(req.user.id);
+    if (user) {
+      delete user.password;
+      delete user.refreshToken;
+    }
+    return user;
   }
 }

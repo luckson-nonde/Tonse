@@ -7,44 +7,49 @@ import Logo from '../components/Logo';
 const SLIDES = [
   {
     id: 1,
-    title: "The Gold Standard of Trade.",
-    description: "Access a curated network of verified suppliers and premium buyers across the region.",
-    image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=800&h=1200",
+    title: 'The Gold Standard of Trade.',
+    description:
+      'Access a curated network of verified suppliers and premium buyers across the region.',
+    image:
+      'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=800&h=1200',
   },
   {
     id: 2,
-    title: "Efficient Procurement.",
-    description: "Streamline your sourcing process with direct messaging and real-time quotations.",
-    image: "https://images.unsplash.com/photo-1556740734-7f95834d0ff9?auto=format&fit=crop&q=80&w=800&h=1200",
+    title: 'Efficient Procurement.',
+    description: 'Streamline your sourcing process with direct messaging and real-time quotations.',
+    image:
+      'https://images.unsplash.com/photo-1556740734-7f95834d0ff9?auto=format&fit=crop&q=80&w=800&h=1200',
   },
   {
     id: 3,
-    title: "Verified & Secure.",
-    description: "Trade with confidence knowing every business on TONSE undergoes rigorous verification.",
-    image: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=800&h=1200",
-  }
+    title: 'Verified & Secure.',
+    description:
+      'Trade with confidence knowing every business on TONSE undergoes rigorous verification.',
+    image:
+      'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=800&h=1200',
+  },
 ];
 
 const variants = {
   enter: (direction: number) => ({
     x: direction > 0 ? '100%' : '-100%',
-    opacity: 0
+    opacity: 0,
   }),
   center: {
     zIndex: 1,
     x: 0,
-    opacity: 1
+    opacity: 1,
   },
   exit: (direction: number) => ({
     zIndex: 0,
     x: direction < 0 ? '100%' : '-100%',
-    opacity: 0
-  })
+    opacity: 0,
+  }),
 };
 
 const transition = {
   duration: 0.4,
-  ease: [0.32, 0.72, 0, 1] as const // Use as const for tuple type
+  ease: [0.32, 0.72, 0, 1] as const, // Use as const for tuple type
 };
 
 export default function Onboarding() {
@@ -59,7 +64,7 @@ export default function Onboarding() {
   const handleNext = () => {
     if (currentSlide < SLIDES.length - 1) {
       setDirection(1);
-      setCurrentSlide(prev => prev + 1);
+      setCurrentSlide((prev) => prev + 1);
     } else {
       handleFinish();
     }
@@ -68,7 +73,7 @@ export default function Onboarding() {
   const handleBack = () => {
     if (currentSlide > 0) {
       setDirection(-1);
-      setCurrentSlide(prev => prev - 1);
+      setCurrentSlide((prev) => prev - 1);
     }
   };
 
@@ -98,9 +103,9 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-[100dvh] bg-[#fdfaf6] flex flex-col lg:hidden overflow-hidden relative">
+    <div className="min-h-dvh bg-brand-white flex flex-col lg:hidden overflow-hidden relative">
       {/* Drag Container (z-50) */}
-      <motion.div 
+      <motion.div
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.2}
@@ -109,9 +114,9 @@ export default function Onboarding() {
       />
 
       {/* Top Half: Image Slider (z-10) */}
-      <div className="relative h-[60vh] w-full overflow-hidden bg-[#1e293b] z-10">
+      <div className="relative h-[60vh] w-full overflow-hidden bg-brand-dark z-10">
         <AnimatePresence initial={false} custom={direction} mode="popLayout">
-          <motion.div 
+          <motion.div
             key={currentSlide}
             custom={direction}
             variants={variants}
@@ -122,8 +127,8 @@ export default function Onboarding() {
             className="absolute inset-0 will-change-transform"
           >
             {/* Gradient Overlay (z-20) */}
-            <div className="absolute inset-0 bg-gradient-to-b from-[#1e293b]/80 via-transparent to-[#fdfaf6] z-20"></div>
-            <div 
+            <div className="absolute inset-0 bg-linear-to-b from-brand-dark/80 via-transparent to-brand-white z-20"></div>
+            <div
               className="absolute inset-0 bg-cover bg-center opacity-60"
               style={{ backgroundImage: `url('${SLIDES[currentSlide].image}')` }}
             ></div>
@@ -131,9 +136,9 @@ export default function Onboarding() {
         </AnimatePresence>
 
         {/* Top Header (z-60) */}
-        <div className="absolute top-0 left-0 right-0 z-[60] p-6 flex items-center justify-center">
+        <div className="absolute top-0 left-0 right-0 z-60 p-6 flex items-center justify-center">
           <Logo variant="light" className="text-2xl" />
-          <button 
+          <button
             onClick={handleFinish}
             className="absolute right-6 text-white/80 text-sm font-bold uppercase tracking-widest hover:text-white transition-colors"
           >
@@ -155,10 +160,10 @@ export default function Onboarding() {
               transition={transition}
               className="space-y-6"
             >
-              <h1 className="text-[36px] font-serif font-black text-[#1e293b] leading-[1.1] tracking-tight">
+              <h1 className="text-[36px] font-serif font-black text-brand-dark leading-[1.1] tracking-tight">
                 {SLIDES[currentSlide].title}
               </h1>
-              <p className="text-[#1a1612]/50 text-[16px] leading-relaxed max-w-[280px] mx-auto">
+              <p className="text-[#1a1612]/50 text-base leading-relaxed max-w-70 mx-auto">
                 {SLIDES[currentSlide].description}
               </p>
             </motion.div>
@@ -170,22 +175,22 @@ export default function Onboarding() {
           {/* Progress Dots */}
           <div className="flex gap-2.5 justify-center items-center">
             {SLIDES.map((_, idx) => (
-              <motion.div 
+              <motion.div
                 key={idx}
                 initial={false}
                 animate={{
                   width: idx === currentSlide ? 32 : 8,
                   backgroundColor: idx === currentSlide ? '#1e293b' : '#e2e8f0',
-                  opacity: idx === currentSlide ? 1 : 0.5
+                  opacity: idx === currentSlide ? 1 : 0.5,
                 }}
                 className="h-2 rounded-full"
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
               />
             ))}
           </div>
 
           {/* Swipe Hint */}
-          <motion.p 
+          <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1 }}
@@ -198,4 +203,3 @@ export default function Onboarding() {
     </div>
   );
 }
-

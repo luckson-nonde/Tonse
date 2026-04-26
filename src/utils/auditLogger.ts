@@ -5,7 +5,7 @@ import { AuditLog } from '../types';
 export async function logAuditAction(
   user: User,
   actionType: AuditLog['actionType'],
-  targetId: number,
+  targetId: string | number,
   targetTitle: string,
   buyerName: string,
   amount?: number,
@@ -14,20 +14,23 @@ export async function logAuditAction(
   if (!user.id) return;
 
   const providerId = user.role === 'PROVIDER_STAFF' ? user.parentProviderId : user.id;
-  
+
   if (!providerId) return;
 
-  const log: AuditLog = {
-    providerId,
-    staffId: user.id,
+  const log: any = {
+    providerId: typeof providerId === 'number' ? providerId : String(providerId),
+    staffId: typeof user.id === 'number' ? user.id : String(user.id),
     staffName: user.name,
     actionType,
+    action: actionType, // Backend field
+    entityType: 'AUDIT', // Backend field
+    entityId: typeof targetId === 'number' ? String(targetId) : targetId, // Backend field
     targetId,
     targetTitle,
     buyerName,
     amount,
     details,
-    timestamp: Date.now()
+    timestamp: Date.now(),
   };
 
   try {

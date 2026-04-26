@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { DeliveryOrder, PurchaseOrder } from '../types';
-import { db } from '../services/api/database';
 import { startCollection } from '../services/deliveryService';
 import Button from './Button';
 import { Html5QrcodeScanner } from 'html5-qrcode';
@@ -15,23 +14,28 @@ export default function SellerCollectionScreen({ deliveryOrderId }: SellerCollec
 
   const handleScan = async () => {
     const scanner = new Html5QrcodeScanner('reader', { fps: 10, qrbox: 250 }, false);
-    scanner.render(async (decodedText) => {
-      scanner.clear();
-      const data = JSON.parse(decodedText);
-      const doOrder = await db.deliveryOrders.get(deliveryOrderId);
-      if (doOrder && doOrder.inquiryId === data.inquiryId) {
-        setDeliveryOrder(doOrder);
-        const poData = await db.purchaseOrders.get(doOrder.purchaseOrderId);
-        if (poData) setPo(poData);
-      }
-    }, (err) => console.error(err));
+    scanner.render(
+      async (decodedText) => {
+        scanner.clear();
+        const data = JSON.parse(decodedText);
+        // TODO: Fetch from backend API instead of IndexedDB
+        // const response = await apiClient.get(`/delivery-orders/${deliveryOrderId}`);
+        // if (response.data.inquiryId === data.inquiryId) {
+        //   setDeliveryOrder(response.data);
+        //   const poResponse = await apiClient.get(`/purchase-orders/${response.data.purchaseOrderId}`);
+        //   setPo(poResponse.data);
+        // }
+        console.warn('SellerCollectionScreen: Backend API not fully integrated yet');
+      },
+      (err) => console.error(err)
+    );
   };
 
   const handleConfirmHandover = async () => {
     if (deliveryOrderId) {
       await startCollection(deliveryOrderId);
-      const doOrder = await db.deliveryOrders.get(deliveryOrderId);
-      if (doOrder) setDeliveryOrder(doOrder);
+      // TODO: Fetch updated delivery order from backend API
+      console.warn('handleConfirmHandover: Backend API not fully integrated yet');
     }
   };
 
@@ -59,11 +63,13 @@ export default function SellerCollectionScreen({ deliveryOrderId }: SellerCollec
   return (
     <div className="p-6 bg-white rounded-2xl shadow-sm border border-slate-100">
       <h2 className="text-2xl font-bold mb-6">Verify Items</h2>
-      
+
       <div className="space-y-4 mb-8">
         {po.lineItems.map((item, idx) => (
           <div key={`${item.name}-${idx}`} className="flex justify-between py-2 border-b">
-            <span>{item.name} x {item.quantity}</span>
+            <span>
+              {item.name} x {item.quantity}
+            </span>
           </div>
         ))}
       </div>

@@ -24,7 +24,7 @@ export class Quote {
   @Column({ type: 'uuid' })
   inquiryId: string;
 
-  @ManyToOne(() => Inquiry)
+  @ManyToOne(() => Inquiry, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'inquiryId' })
   inquiry: Inquiry;
 

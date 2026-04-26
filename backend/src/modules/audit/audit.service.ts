@@ -23,6 +23,20 @@ export class AuditService {
       queryBuilder.andWhere('auditLog.userId = :userId', { userId: filters.userId });
     }
 
+    if (filters.providerId) {
+      queryBuilder.andWhere('auditLog.providerId = :providerId', { providerId: filters.providerId });
+    }
+
+    if (filters.staffId) {
+      queryBuilder.andWhere('auditLog.staffId = :staffId', { staffId: filters.staffId });
+    }
+
+    if (filters.staffName) {
+      queryBuilder.andWhere('auditLog.staffName LIKE :staffName', {
+        staffName: `%${filters.staffName}%`,
+      });
+    }
+
     if (filters.action) {
       queryBuilder.andWhere('auditLog.action = :action', { action: filters.action });
     }

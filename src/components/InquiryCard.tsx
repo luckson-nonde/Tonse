@@ -46,19 +46,8 @@ export default function InquiryCard({
     paid: 'COMPLETED',
   };
 
-  // Parse attributes if it's a JSON string
-  let parsedAttributes: Record<string, any> = {};
-  if (inquiry.attributes) {
-    if (typeof inquiry.attributes === 'string') {
-      try {
-        parsedAttributes = JSON.parse(inquiry.attributes);
-      } catch {
-        parsedAttributes = {};
-      }
-    } else {
-      parsedAttributes = inquiry.attributes;
-    }
-  }
+  // Attributes are now normalized at the service layer
+  const parsedAttributes = inquiry.attributes || {};
 
   // Filter attributes to display (exclude images, title, budget_limit if handled separately)
   const displayAttributes = parsedAttributes
@@ -110,9 +99,9 @@ export default function InquiryCard({
 
   return (
     <div
-      className={`bg-[#fdfaf6] rounded-[24px] border border-slate-200 border-t-4 ${borderColors[state]} shadow-sm overflow-hidden flex flex-col`}
+      className={`bg-[#fdfaf6] rounded-3xl border border-slate-200 border-t-4 ${borderColors[state]} shadow-sm overflow-hidden flex flex-col`}
     >
-      <div className="p-6 flex-grow">
+      <div className="p-6 grow">
         <div className="flex justify-between items-start mb-2">
           <p className="text-[11px] font-bold text-[#d49b35] tracking-widest uppercase font-sans">
             {archetypeConfig.categoryName}
@@ -136,7 +125,7 @@ export default function InquiryCard({
           </div>
         </div>
 
-        <h3 className="text-2xl font-bold text-[#1e293b] font-serif mb-2 leading-tight">
+        <h3 className="text-2xl font-bold text-brand-dark font-serif mb-2 leading-tight">
           {(() => {
             const title =
               inquiry.title ||
@@ -170,7 +159,7 @@ export default function InquiryCard({
                 <p className="text-[10px] font-bold text-slate-400 tracking-wider uppercase font-sans mb-1">
                   {getLabel(key)}
                 </p>
-                <p className="text-sm text-[#1e293b] font-medium font-sans">
+                <p className="text-sm text-brand-dark font-medium font-sans">
                   {formatValue(key, value)}
                 </p>
               </div>
@@ -197,7 +186,7 @@ export default function InquiryCard({
               </p>
               <div className="flex items-baseline gap-1 mb-2">
                 <span className="text-sm font-bold text-slate-500 font-sans">ZMW</span>
-                <span className="text-3xl font-bold text-[#1e293b] font-serif">
+                <span className="text-3xl font-bold text-brand-dark font-serif">
                   {Number(paidQuote.price || 0).toLocaleString()}
                 </span>
               </div>
@@ -245,8 +234,8 @@ export default function InquiryCard({
           onClick={onAction}
           className={
             state === 'quoted'
-              ? 'bg-[#3b82f6] hover:bg-[#2563eb] text-white font-bold rounded-xl'
-              : 'bg-transparent border border-slate-200 hover:bg-slate-50 font-bold rounded-xl text-[#1e293b]'
+              ? 'bg-[#1B3068] hover:bg-[#142550] text-white font-bold rounded-xl'
+              : 'bg-transparent border border-slate-200 hover:bg-slate-50 font-bold rounded-xl text-brand-dark'
           }
         >
           {state === 'open' && 'View Details'}

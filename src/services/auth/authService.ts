@@ -22,6 +22,8 @@ export interface RegisterRequest {
   name: string;
   phone: string;
   role: string;
+  nrc?: string;
+  profilePicture?: string;
 }
 
 export interface RegisterResponse {
@@ -38,9 +40,16 @@ export interface CurrentUserResponse {
   name?: string;
 }
 
+export interface UpdateProfileRequest {
+  [key: string]: any;
+}
+
 export const authService = {
   /**
-   * Login with email and password
+   * Login with email and password only
+   *
+   * NRC and phone are used for identity verification during registration only,
+   * not for login credentials.
    */
   login: async (email: string, password: string): Promise<LoginResponse> => {
     const response = await apiClient.post<LoginResponse>('/auth/login', {
@@ -133,5 +142,18 @@ export const authService = {
       email: payload.email,
       role: payload.role,
     };
+  },
+
+  /**
+   * Update user profile
+   */
+  updateProfile: async (userId: string, data: UpdateProfileRequest): Promise<any> => {
+    const response = await apiClient.patch<any>(`/users/${userId}`, data);
+
+    if (response.data) {
+      return response.data;
+    }
+
+    throw new Error(response.message || 'Profile update failed');
   },
 };
