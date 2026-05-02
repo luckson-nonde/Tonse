@@ -24,6 +24,7 @@ import {
 import { hasPermission, PERMISSIONS } from '../../utils/rbac';
 import { uniqueKey } from '../../utils/keyUtils';
 import { generateVirtualAccount } from '../../utils/financeUtils';
+import { getBusinessType, BusinessType } from '../../services/categories';
 
 interface ProviderHomeViewProps {
   user: any;
@@ -64,7 +65,14 @@ export default function ProviderHomeView({
 }: ProviderHomeViewProps) {
   const navigate = useNavigate();
   const isBookingBased = user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS';
-  const isSupplier = user?.subRole === 'SUPPLIER_SELLER';
+
+  // The four-signal pipeline lands here: every dashboard surface that wants
+  // to differentiate a repair shop from a retail shop from a wholesaler reads
+  // this single value. See services/categories.ts → getBusinessType().
+  const businessType: BusinessType = React.useMemo(
+    () => getBusinessType(user as any),
+    [user]
+  );
 
   const displayQuotes = React.useMemo(() => {
     return myQuotes.filter((q) => !q.isArchived);
@@ -73,7 +81,7 @@ export default function ProviderHomeView({
   const salesStats = React.useMemo(() => {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    
+
     const todaysSales = displayQuotes
       .filter(q => (q.status === 'PAID' || q.status === 'COMPLETED') && new Date(q.updatedAt || q.createdAt).getTime() >= startOfToday)
       .reduce((sum, q) => sum + Number(q.price || 0), 0);
@@ -83,6 +91,235 @@ export default function ProviderHomeView({
 
     return { todaysSales, activeQuotes, pendingQuotes };
   }, [displayQuotes]);
+
+  // Derived metrics surfaced as Tile 3 / Tile 4 for non-retail business types.
+  // Computing them here (not inline in the JSX) lets the tiles config stay
+  // declarative and lets these reuse the existing displayQuotes filter.
+  const turnaroundDaysAvg = React.useMemo(() => {
+    const completed = displayQuotes.filter(
+      (q) => q.status === 'COMPLETED' || q.status === 'HANDED_OVER'
+    );
+    if (completed.length === 0) return null;
+    const totalDays = completed.reduce((sum, q) => {
+      const start = new Date(q.createdAt).getTime();
+      const end = new Date(q.updatedAt || q.createdAt).getTime();
+      return sum + Math.max(0, (end - start) / (1000 * 60 * 60 * 24));
+    }, 0);
+    return Math.round(totalDays / completed.length);
+  }, [displayQuotes]);
+
+  const hoursThisMonth = React.useMemo(() => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    return displayQuotes
+      .filter((q) => new Date(q.updatedAt || q.createdAt).getTime() >= startOfMonth)
+      .reduce((sum, q) => sum + Number((q as any).hoursBooked || 0), 0);
+  }, [displayQuotes]);
+
+  const totalQuotedValue = React.useMemo(
+    () => displayQuotes.reduce((sum, q) => sum + Number(q.price || 0), 0),
+    [displayQuotes]
+  );
+
+  const pendingPickupCount = React.useMemo(
+    () =>
+      displayQuotes.filter(
+        (q) => q.status === 'PAID' || q.status === 'PENDING_COLLECTION' || q.status === 'AWAITING_PICKUP'
+      ).length,
+    [displayQuotes]
+  );
+
+  const activeJobsCount = React.useMemo(
+    () => displayQuotes.filter((q) => q.status === 'ACCEPTED' || q.status === 'PAID').length,
+    [displayQuotes]
+  );
+
+  // Stat-tile config — one row per BusinessType. Each tile declares its
+  // label, the value to display, an optional trailing caption, and the tab
+  // it should jump to on click. Lets the JSX stay a flat .map() while the
+  // labels/metrics swap per business identity.
+  type Tile = {
+    label: string;
+    value: string;
+    caption: string;
+    tab: string;
+    /** lucide icon component */
+    icon: typeof MessageSquare;
+    /** color preset for the icon block */
+    palette: 'gold' | 'emerald' | 'gold-soft';
+  };
+
+  const fmtZMW = (n: number) =>
+    `ZMW ${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+  const statTiles: Tile[] = React.useMemo(() => {
+    const t1Common = {
+      value: leads.length.toString(),
+      tab: 'leads',
+      icon: MessageSquare,
+      palette: 'gold' as const,
+    };
+    const t2Common = {
+      value: displayQuotes.length.toString(),
+      caption: 'Track your submissions',
+      tab: 'my-quotes',
+      icon: Check,
+      palette: 'emerald' as const,
+    };
+
+    switch (businessType) {
+      case 'REPAIR_SERVICE':
+        return [
+          { ...t1Common, label: 'Repair Requests', caption: 'New repair leads' },
+          { ...t2Common, label: 'Quotes Sent' },
+          {
+            label: 'Active Repairs',
+            value: activeJobsCount.toString(),
+            caption: 'In progress now',
+            tab: 'paid-orders',
+            icon: TrendingUp,
+            palette: 'gold-soft',
+          },
+          {
+            label: 'Avg Turnaround',
+            value: turnaroundDaysAvg === null ? '—' : `${turnaroundDaysAvg}d`,
+            caption: 'Across completed jobs',
+            tab: 'paid-orders',
+            icon: Clock,
+            palette: 'gold',
+          },
+        ];
+      case 'WHOLESALE':
+        return [
+          { ...t1Common, label: 'Purchase Requests', caption: 'New supply leads' },
+          { ...t2Common, label: 'Bulk Quotes' },
+          {
+            label: 'Total Supply Value',
+            value: fmtZMW(totalQuotedValue),
+            caption: 'Across all quotes',
+            tab: 'my-quotes',
+            icon: TrendingUp,
+            palette: 'gold-soft',
+          },
+          {
+            label: 'Awaiting Pickup',
+            value: pendingPickupCount.toString(),
+            caption: 'Buyers ready to collect',
+            tab: 'paid-orders',
+            icon: Clock,
+            palette: 'gold',
+          },
+        ];
+      case 'PRO_SERVICES':
+        return [
+          { ...t1Common, label: 'Service Requests', caption: 'New client briefs' },
+          { ...t2Common, label: 'Quotes Sent' },
+          {
+            label: 'Active Engagements',
+            value: activeJobsCount.toString(),
+            caption: 'In delivery now',
+            tab: 'paid-orders',
+            icon: TrendingUp,
+            palette: 'gold-soft',
+          },
+          {
+            label: 'Hours This Month',
+            value: hoursThisMonth > 0 ? `${hoursThisMonth}h` : '—',
+            caption: 'Logged from quotes',
+            tab: 'my-quotes',
+            icon: Clock,
+            palette: 'gold',
+          },
+        ];
+      case 'PRODUCTS_AND_REPAIR':
+        return [
+          { ...t1Common, label: 'Mixed Requests', caption: 'Sales + repair leads' },
+          { ...t2Common, label: 'Quotes Sent' },
+          {
+            label: 'Pipeline Value',
+            value: fmtZMW(totalQuotedValue),
+            caption: 'Across all quotes',
+            tab: 'my-quotes',
+            icon: TrendingUp,
+            palette: 'gold-soft',
+          },
+          {
+            label: 'Active Jobs',
+            value: activeJobsCount.toString(),
+            caption: 'Sales + repairs in flight',
+            tab: 'paid-orders',
+            icon: Clock,
+            palette: 'gold',
+          },
+        ];
+      case 'RETAIL_PRODUCTS':
+      default:
+        return [
+          { ...t1Common, label: 'Booking Requests', caption: 'New requests available' },
+          { ...t2Common, label: 'Quotes Sent' },
+          {
+            label: 'Potential Revenue',
+            value: fmtZMW(totalQuotedValue),
+            caption: 'Potential revenue',
+            tab: 'my-quotes',
+            icon: TrendingUp,
+            palette: 'gold-soft',
+          },
+          {
+            label: isBookingBased ? 'Pending Completion' : 'Pending Pickup',
+            value: pendingPickupCount.toString(),
+            caption: isBookingBased ? 'Awaiting event date' : 'Awaiting buyer pickup',
+            tab: 'paid-orders',
+            icon: Clock,
+            palette: 'gold',
+          },
+        ];
+    }
+  }, [
+    businessType,
+    leads.length,
+    displayQuotes.length,
+    activeJobsCount,
+    turnaroundDaysAvg,
+    totalQuotedValue,
+    pendingPickupCount,
+    hoursThisMonth,
+    isBookingBased,
+  ]);
+
+  // Section header for the leads block + Sales Summary header — same
+  // vocabulary the sidebar is using via getLabel() in DashboardLayout.
+  const inboxHeading = React.useMemo(() => {
+    switch (businessType) {
+      case 'REPAIR_SERVICE':
+        return 'Repair Requests';
+      case 'PRODUCTS_AND_REPAIR':
+        return 'Sales & Repair Requests';
+      case 'WHOLESALE':
+        return 'Purchase Requests';
+      case 'PRO_SERVICES':
+        return 'Service Requests';
+      case 'EVENTS':
+        return 'Event Bookings';
+      case 'ENTERTAINMENT':
+        return 'Performance Bookings';
+      default:
+        return 'Booking Requests';
+    }
+  }, [businessType]);
+
+  const todaysSalesLabel = React.useMemo(() => {
+    switch (businessType) {
+      case 'REPAIR_SERVICE':
+        return "Today's Repairs Completed";
+      case 'PRO_SERVICES':
+        return "Today's Service Hours";
+      case 'WHOLESALE':
+        return "Today's Bulk Sales";
+      default:
+        return "Today's Sales";
+    }
+  }, [businessType]);
 
   const renderEventsHome = () => (
     <div className="space-y-6">
@@ -417,97 +654,58 @@ export default function ProviderHomeView({
         )}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <div
-            onClick={() => onTabClick('leads')}
-            className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-[#d49b35]/50 transition-all duration-300"
-          >
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#fdf6e9] rounded-xl sm:rounded-2xl flex items-center justify-center mb-3 sm:mb-4">
-              <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6 text-[#d49b35]" />
-            </div>
-            <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
-              {isSupplier ? 'PURCHASE REQUESTS' : 'BOOKING REQUESTS'}
-            </p>
-            <div className="flex items-end gap-3 mb-1 min-w-0">
-              <h2
-                className="text-[clamp(1.25rem,5vw,2.25rem)] font-black text-slate-900 leading-none truncate"
-                title={leads.length.toString()}
-              >
-                {leads.length}
-              </h2>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium">
-              {isSupplier ? 'New supply leads' : 'New requests available'}
-            </p>
-          </div>
+          {statTiles.map((tile, idx) => {
+            const TileIcon = tile.icon;
+            const palette = {
+              gold: {
+                hover: 'hover:border-[#d49b35]/50',
+                blockBg: 'bg-[#fdf6e9]',
+                blockExtra: '',
+                iconClass: 'text-[#d49b35]',
+                valueClass: 'text-slate-900',
+              },
+              emerald: {
+                hover: 'hover:border-emerald-500/50',
+                blockBg: 'bg-emerald-50',
+                blockExtra: '',
+                iconClass: 'text-emerald-600',
+                valueClass: 'text-emerald-600',
+              },
+              'gold-soft': {
+                hover: 'hover:border-[#d49b35]/50',
+                blockBg: 'bg-[#fffaf5]',
+                blockExtra: 'border border-[#d49b35]/10',
+                iconClass: 'text-[#d49b35]',
+                valueClass: 'text-[#d49b35]',
+              },
+            }[tile.palette];
 
-          <div
-            onClick={() => onTabClick('my-quotes')}
-            className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-emerald-500/50 transition-all duration-300"
-          >
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-50 rounded-xl sm:rounded-2xl flex items-center justify-center mb-3 sm:mb-4">
-              <Check className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
-            </div>
-            <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
-              {isSupplier ? 'QUOTATIONS SENT' : 'QUOTES SENT'}
-            </p>
-            <div className="flex items-end gap-3 mb-1 min-w-0">
-              <h2
-                className="text-[clamp(1.25rem,5vw,2.25rem)] font-black text-emerald-600 leading-none truncate"
-                title={displayQuotes.length.toString()}
+            return (
+              <div
+                key={`tile-${idx}-${tile.label}`}
+                onClick={() => onTabClick(tile.tab)}
+                className={`bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md ${palette.hover} transition-all duration-300`}
               >
-                {displayQuotes.length}
-              </h2>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium">Track your submissions</p>
-          </div>
-
-          <div
-            onClick={() => onTabClick('my-quotes')}
-            className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-[#d49b35]/50 transition-all duration-300"
-          >
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#fffaf5] rounded-xl sm:rounded-2xl flex items-center justify-center mb-3 sm:mb-4 border border-[#d49b35]/10">
-              <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-[#d49b35]" />
-            </div>
-            <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
-              {isSupplier ? 'TOTAL SUPPLY VALUE' : 'POTENTIAL REVENUE'}
-            </p>
-            <div className="flex items-end gap-3 mb-1 min-w-0">
-              <h2
-                className="text-[clamp(1.25rem,5vw,2.25rem)] font-black text-[#d49b35] leading-none truncate"
-                title={`ZMW ${displayQuotes.reduce((sum, q) => sum + Number(q.price || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-              >
-                ZMW {displayQuotes.reduce((sum, q) => sum + Number(q.price || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </h2>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium">Potential revenue</p>
-          </div>
-
-          <div
-            onClick={() => onTabClick('paid-orders')}
-            className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-[#d49b35]/50 transition-all duration-300"
-          >
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#fdf6e9] rounded-xl sm:rounded-2xl flex items-center justify-center mb-3 sm:mb-4">
-              <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-[#d49b35]" />
-            </div>
-            <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
-              {isSupplier
-                ? 'AWAITING PICKUP'
-                : isBookingBased
-                  ? 'PENDING COMPLETION'
-                  : 'PENDING COLLECTION'}
-            </p>
-            <div className="flex items-end gap-3 mb-1 min-w-0">
-              <h2
-                className="text-[clamp(1.25rem,5vw,2.25rem)] font-black text-[#d49b35] leading-none truncate"
-                title={displayQuotes
-                  .filter((q) => q.status === 'PAID' || q.status === 'PENDING_COLLECTION' || q.status === 'AWAITING_PICKUP')
-                  .length.toString()}
-              >
-                {displayQuotes.filter((q) => q.status === 'PAID' || q.status === 'PENDING_COLLECTION' || q.status === 'AWAITING_PICKUP').length}
-              </h2>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium">Awaiting event date</p>
-          </div>
+                <div
+                  className={`w-10 h-10 sm:w-12 sm:h-12 ${palette.blockBg} ${palette.blockExtra} rounded-xl sm:rounded-2xl flex items-center justify-center mb-3 sm:mb-4`}
+                >
+                  <TileIcon className={`w-5 h-5 sm:w-6 sm:h-6 ${palette.iconClass}`} />
+                </div>
+                <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
+                  {tile.label}
+                </p>
+                <div className="flex items-end gap-3 mb-1 min-w-0">
+                  <h2
+                    className={`text-[clamp(1.25rem,5vw,2.25rem)] font-black ${palette.valueClass} leading-none truncate`}
+                    title={tile.value}
+                  >
+                    {tile.value}
+                  </h2>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-500 font-medium">{tile.caption}</p>
+              </div>
+            );
+          })}
         </div>
 
         {/* Sales Summary Card - Only for Sellers with Analytics Permission */}
@@ -523,7 +721,7 @@ export default function ProviderHomeView({
             <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-6 sm:mb-8">
               <div className="bg-slate-50/50 rounded-2xl sm:rounded-3xl p-3 sm:p-6 border border-slate-100 min-w-0">
                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1 truncate">
-                  Today's Sales
+                  {todaysSalesLabel}
                 </p>
                 <h4
                   className="text-[clamp(1rem,4vw,1.5rem)] font-black text-slate-900 mb-1 truncate"
@@ -595,11 +793,12 @@ export default function ProviderHomeView({
           </div>
         )}
 
-        {/* Booking Requests Section */}
+        {/* Inbox Section — heading mirrors the sidebar label for this user's
+            business type, so a repair shop sees "Repair Requests" here too. */}
         <div>
           <div className="flex justify-between items-center mb-3 sm:mb-4 px-1">
             <h3 className="text-lg font-serif font-black text-slate-900">
-              {isSupplier ? 'Purchase Requests' : 'Booking Requests'}
+              {inboxHeading}
             </h3>
             <div className="flex items-center gap-2">
               {isSelectionMode && selectedInquiryIds.length > 0 && (
