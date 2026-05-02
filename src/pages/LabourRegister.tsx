@@ -87,15 +87,27 @@ export default function LabourRegister() {
       };
       localStorage.setItem('pendingProfile', JSON.stringify(labourProfileData));
 
-      // Register with identity fields collected from the form
+      // Register with identity fields, plus the labour-specific profile as
+      // extraProfile so it lands on the backend before the auto-login (was
+      // previously only stored in localStorage/pendingProfile, leaving the
+      // DB columns empty).
+      const extraProfile: Record<string, any> = {
+        labourCategory: formData.selectedGroup,
+        labourSubTypes: formData.selectedSubTypes,
+        // Mirror any profile fields collected by DynamicProfileForm into
+        // metadata so they survive a fresh login.
+        ...profileData,
+      };
       await register(
         formData.email,
         formData.password,
         formData.fullName,
         formData.phone,
         'LABOUR',
-        profileData.nrc || '', // nrc from form
-        profileData.profilePicture || '' // profilePicture from form
+        profileData.nrc || '',
+        profileData.profilePicture || '',
+        '',
+        extraProfile
       );
 
       navigate('/labour');

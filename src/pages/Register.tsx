@@ -282,31 +282,24 @@ export default function Register() {
 
           await updateUser(updateData);
         } else {
-          // Register new user with identity verification fields
-          await register(email, password, name, phone, role, nrc, logo, dob);
-
-          // After register, persist location AND the role-defining metadata
-          // captured upstream in RoleSelection (subRole + categories). Without
-          // these, the provider dashboard's category and nature filters fall
-          // back to "show everything" — which leaks unrelated leads (e.g. an
-          // Electronics seller seeing Event Venues inquiries). See
-          // ProviderDashboard.tsx — the `userCategories.length === 0` branch
-          // returns `true` for every lead.
-          const updateData: any = {
+          // Register new user — pass profile fields as extraProfile so they
+          // land on the backend SYNCHRONOUSLY before the auto-login fires.
+          // The previous separate updateUser() call hit a closure race
+          // (updateUser captured user=null from the pre-register render and
+          // threw "No user logged in"), silently dropping every new
+          // registration's categories, subRole, location, area, lat/lng.
+          const extraProfile: Record<string, any> = {
             province,
             city,
             area: address,
+            location: city && province ? `${city}, ${province}` : '',
             latitude,
             longitude,
             radius,
             categories: initialCategories,
             ...(subRole ? { subRole } : {}),
           };
-          try {
-            await updateUser(updateData);
-          } catch (e) {
-            console.warn('Failed to update profile after register:', e);
-          }
+          await register(email, password, name, phone, role, nrc, logo, dob, extraProfile);
         }
 
         if (isCompany) {
