@@ -3,6 +3,7 @@ import { Clock, MapPin, ChevronRight, X } from 'lucide-react';
 import { uniqueKey } from '../../utils/keyUtils';
 import emptyScheduleImage from '../../assets/images/empty-states/owl_reading.png';
 import DashboardCalendar from '../DashboardCalendar';
+import { getBusinessType } from '../../services/categories';
 
 interface ProviderScheduleViewProps {
   user: any;
@@ -31,13 +32,19 @@ export default function ProviderScheduleView({
   onSetRescheduleTime,
   onReschedule,
 }: ProviderScheduleViewProps) {
+  // Use the derived business type so a SELLER who picked Event Equipment
+  // Rental gets the rental-specific copy (was previously gated on the
+  // legacy raw role only).
+  const businessType = getBusinessType(user as any);
+  const isEventsBusiness = businessType === 'EVENTS';
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h2 className="text-2xl font-bold font-serif text-brand-dark">My Schedule</h2>
           <p className="text-sm text-slate-500 mt-1">
-            {user?.role === 'EVENTS'
+            {isEventsBusiness
               ? 'Manage your upcoming equipment rentals and bookings'
               : 'Manage your upcoming bookings and events'}
           </p>
@@ -48,10 +55,10 @@ export default function ProviderScheduleView({
         <div className="bg-white rounded-2xl border border-slate-200 p-10 sm:p-16 text-center flex flex-col items-center justify-center min-h-[50vh] shadow-sm">
           <img src={emptyScheduleImage} alt="No upcoming events" className="w-48 h-48 sm:w-56 sm:h-56 object-contain opacity-90 mb-8" />
           <h3 className="text-2xl font-serif font-bold text-slate-900 mb-3">
-            {user?.role === 'EVENTS' ? 'No Upcoming Rentals' : 'No Upcoming Events'}
+            {isEventsBusiness ? 'No Upcoming Rentals' : 'No Upcoming Events'}
           </h3>
           <p className="text-slate-500 text-lg">
-            {user?.role === 'EVENTS'
+            {isEventsBusiness
               ? "You don't have any scheduled rentals yet."
               : "You don't have any scheduled bookings yet."}
           </p>
