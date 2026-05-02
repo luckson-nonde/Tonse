@@ -217,27 +217,15 @@ export default function RoleSelection() {
       }
     } else if (tier === 3 && selectedCategories.length > 0) {
       const categoriesParam = selectedCategories.join(',');
-      
-      let actualRole = masterRole as string;
-      if (masterRole === 'SELLER') {
-        const isEvent = selectedCategories.some(catName => {
-          const matchingCats = CATEGORIES_DB.filter(c => c.id === catName || c.name === catName || c.baseName === catName);
-          return matchingCats.some(cat => cat.parentId === 'events' || cat.id === 'events');
-        });
-        const isEntertainment = selectedCategories.some(catName => {
-          const matchingCats = CATEGORIES_DB.filter(c => c.id === catName || c.name === catName || c.baseName === catName);
-          return matchingCats.some(cat => cat.parentId === 'entertainment' || cat.id === 'entertainment');
-        });
 
-        if (isEvent) {
-          actualRole = 'EVENTS';
-        } else if (isEntertainment) {
-          actualRole = 'ENTERTAINMENT';
-        }
-      }
-
+      // Don't rewrite role based on category. The four-signal architecture
+      // (role + subRole + categories + specification) carries the event-ness
+      // via the categories array; getBusinessType() reads them and resolves
+      // EVENTS / ENTERTAINMENT / RETAIL / REPAIR / etc. Rewriting role here
+      // collapses an Event Equipment Rental seller and an Event Venues seller
+      // into the identical EVENTS dashboard, destroying the subRole context.
       navigate(
-        `/register?role=${actualRole}&subRole=${selectedSubRole}&categories=${categoriesParam}`
+        `/register?role=${masterRole}&subRole=${selectedSubRole}&categories=${categoriesParam}`
       );
     }
   };

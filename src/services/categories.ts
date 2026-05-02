@@ -1387,6 +1387,22 @@ interface MinimalUserForBusinessType {
  *
  * Returns 'UNKNOWN' for users with no role set yet (e.g. mid-onboarding).
  */
+// Category-name predicates for events / entertainment trees. These match
+// against the *names* (the only data we have on user.categories — see
+// CategorySelection's onChange wiring). The patterns intentionally cover both
+// the master ("Events" / "Entertainment") and any of the registered
+// sub-categories ("Event Venues", "Event Equipment Rental", "Event Catering",
+// "DJs", "Live Bands", "MCs & Hosts", etc.) so a SELLER who picks any of these
+// resolves to the right businessType without needing role-rewriting upstream.
+const EVENT_CATEGORY_PATTERN =
+  /\b(events?|venues?|wedding|conference|stage)\b|^event\s|^events$/i;
+const ENTERTAINMENT_CATEGORY_PATTERN =
+  /\b(entertainment|dj|live\s?band|mc|host|dancer|comedian|spoken\s?word|performer|influencer|band|musician)\b/i;
+
+function categoriesMatch(categories: string[], pattern: RegExp): boolean {
+  return categories.some((c) => pattern.test(c));
+}
+
 export function getBusinessType(user: MinimalUserForBusinessType | null | undefined): BusinessType {
   if (!user || !user.role) return 'UNKNOWN';
 
@@ -1394,8 +1410,22 @@ export function getBusinessType(user: MinimalUserForBusinessType | null | undefi
   if (role === 'BUYER') return 'BUYER';
   if (role === 'LABOUR') return 'LABOUR';
   if (role === 'ADMIN') return 'ADMIN';
+
+  // Backwards-compat: legacy users registered with role='EVENTS' / 'ENTERTAINMENT'
+  // (before the role-remap was removed in RoleSelection) keep their existing
+  // dashboard. New users get here as role='SELLER' and the category-name
+  // patterns below pick up the events/entertainment specialty.
   if (role === 'EVENTS') return 'EVENTS';
   if (role === 'ENTERTAINMENT') return 'ENTERTAINMENT';
+
+  const categories = user.categories || [];
+
+  // Category-driven detection — checked BEFORE the seller subRole branches so
+  // a SELLER who picked "Event Equipment Rental" or "DJs" lands on the right
+  // dashboard rather than the generic RETAIL_PRODUCTS bucket. Events takes
+  // priority over entertainment when both match (rare but possible).
+  if (categoriesMatch(categories, EVENT_CATEGORY_PATTERN)) return 'EVENTS';
+  if (categoriesMatch(categories, ENTERTAINMENT_CATEGORY_PATTERN)) return 'ENTERTAINMENT';
 
   const subRole = (user.subRole || '').toUpperCase();
   if (subRole === 'SUPPLIER_SELLER' || role === 'SUPPLIER') return 'WHOLESALE';
@@ -1403,7 +1433,6 @@ export function getBusinessType(user: MinimalUserForBusinessType | null | undefi
   if (subRole === 'SERVICE_SELLER' || role === 'SERVICE_PROVIDER') return 'PRO_SERVICES';
 
   if (subRole === 'PRODUCT_SELLER' || role === 'SELLER') {
-    const categories = user.categories || [];
     const hasRepair = categories.some(isRepairVariant);
     // "buy new" is the implicit default — any non-repair entry counts as sales
     const hasSales = categories.some((c) => !isRepairVariant(c));

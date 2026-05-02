@@ -129,7 +129,15 @@ export default function ProviderDashboard() {
     }
   }, [user?.id, user?.permissions, activeTab, setActiveTab]);
 
-  const isBookingBased = user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS';
+  // Booking-based flow now keys off the derived businessType (which inspects
+  // categories), not just legacy roles, so a SELLER who picked Event Venues
+  // / DJs / Event Catering also gets the booking-style quote handling.
+  const _bizTypeForFlow = getBusinessType(user as any);
+  const isBookingBased =
+    user?.role === 'ENTERTAINMENT' ||
+    user?.role === 'EVENTS' ||
+    _bizTypeForFlow === 'EVENTS' ||
+    _bizTypeForFlow === 'ENTERTAINMENT';
 
   const isServiceOrEvent = (inquiry: Inquiry) => {
     return (
@@ -329,17 +337,25 @@ export default function ProviderDashboard() {
         // If the lead has no category, we can't reliably filter by nature here
         if (!lead.category) return true;
 
-        // Determine Provider Nature
+        // Determine Provider Nature — businessType wins because it already
+        // accounts for category-driven events/entertainment detection (a
+        // SELLER who picked DJs is functionally a SERVICE provider even
+        // though their stored role is SELLER).
         let providerNature: 'PRODUCT' | 'SERVICE' | 'BOTH' = 'BOTH';
-        if (user?.subRole === 'PRODUCT_SELLER' || user?.role === 'SUPPLIER')
-          providerNature = 'PRODUCT';
-        else if (
+        const natureBiz = getBusinessType(user as any);
+        if (
+          natureBiz === 'EVENTS' ||
+          natureBiz === 'ENTERTAINMENT' ||
+          natureBiz === 'PRO_SERVICES' ||
+          natureBiz === 'REPAIR_SERVICE' ||
           user?.subRole === 'SERVICE_SELLER' ||
           user?.role === 'EVENTS' ||
           user?.role === 'ENTERTAINMENT' ||
           user?.role === 'SERVICE_PROVIDER'
         )
           providerNature = 'SERVICE';
+        else if (user?.subRole === 'PRODUCT_SELLER' || user?.role === 'SUPPLIER')
+          providerNature = 'PRODUCT';
         else if (user?.subRole === 'HYBRID_SELLER') providerNature = 'BOTH';
         const leadCats = lead.category.split(',').map((c) => c.trim());
         const leadCatIds = leadCats

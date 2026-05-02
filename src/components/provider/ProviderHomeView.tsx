@@ -64,7 +64,14 @@ export default function ProviderHomeView({
   onDeleteSelected,
 }: ProviderHomeViewProps) {
   const navigate = useNavigate();
-  const isBookingBased = user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS';
+  // isBookingBased reads businessType so a SELLER who picked Event Catering /
+  // Event Venues / DJs flows into the booking-style home — not just legacy
+  // role='EVENTS' / 'ENTERTAINMENT' users.
+  const isBookingBased =
+    user?.role === 'ENTERTAINMENT' ||
+    user?.role === 'EVENTS' ||
+    getBusinessType(user as any) === 'EVENTS' ||
+    getBusinessType(user as any) === 'ENTERTAINMENT';
 
   // The four-signal pipeline lands here: every dashboard surface that wants
   // to differentiate a repair shop from a retail shop from a wholesaler reads
@@ -620,7 +627,10 @@ export default function ProviderHomeView({
   );
 
   const renderHome = () => {
-    if (user?.role === 'EVENTS') return renderEventsHome();
+    // Use the derived businessType, not raw role — a new SELLER who picked
+    // events-tree categories should also hit the events home, while a SELLER
+    // who picked Mobile Phones (Repair) absolutely should not.
+    if (businessType === 'EVENTS') return renderEventsHome();
 
     return (
       <div className="space-y-6">

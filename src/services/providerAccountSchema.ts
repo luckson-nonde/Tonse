@@ -31,13 +31,18 @@ export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'my-quotes', label: 'My Quotes', icon: 'MessageSquare', permissions: [PERMISSIONS.MANAGE_QUOTES] },
     { id: 'archived-leads', label: 'Archived Leads', icon: 'Archive', permissions: [PERMISSIONS.MANAGE_QUOTES] },
     { id: 'schedule', label: 'My Schedule', icon: 'Calendar', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
-    { 
-      id: 'venue-spaces', 
-      label: 'Venue Spaces', 
-      icon: 'MapPin', 
-      permissions: [PERMISSIONS.VIEW_ANALYTICS], 
-      roleFilter: ['EVENTS'],
-      categoryFilter: ['event venues']
+    {
+      id: 'venue-spaces',
+      label: 'Venue Spaces',
+      icon: 'MapPin',
+      permissions: [PERMISSIONS.VIEW_ANALYTICS],
+      // businessTypes-driven now (instead of roleFilter: ['EVENTS']) so a
+      // SELLER who picked "Event Venues" — and therefore resolves to
+      // businessType=EVENTS via category detection — also gets this nav item.
+      // The categoryFilter still narrows it to venue-specific sellers within
+      // the events bucket, so an Equipment Rental seller doesn't see it.
+      businessTypes: ['EVENTS'],
+      categoryFilter: ['event venues'],
     },
     { 
       id: 'paid-orders', 
