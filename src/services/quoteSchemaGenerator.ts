@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { generateZodSchema } from './quoteValidation';
+import { isRepairVariant } from './categories';
 
 export interface QuoteField {
   name: string;
@@ -16,11 +17,20 @@ export interface QuoteField {
 const VALIDITY_OPTIONS = ['1 Week', '2 Weeks', '1 Month', '2 Months', '3 Months', '6 Months'];
 
 const VENUE_AMENITIES = [
-  'Tables & Chairs', 'Sound System', 'Stage', 'Kitchen Access', 
+  'Tables & Chairs', 'Sound System', 'Stage', 'Kitchen Access',
   'Air Conditioning', 'WiFi', 'Parking', 'Security', 'Projector'
 ];
 
-const detectArchetype = (category: string): 'PRODUCT' | 'SERVICE' | 'VENUE' | 'LABOUR' | 'GENERIC' => {
+// REPAIR takes precedence over PRODUCT/SERVICE: a repair inquiry needs parts +
+// labour + turnaround + warranty fields, not the generic SERVICE template
+// (price + whatIsIncluded + availabilityDate). Detection reads the variant
+// suffix in the category name (the same suffix isRepairVariant checks for in
+// services/categories.ts), so the buyer-side specification flows directly into
+// the seller-side quote shape.
+const detectArchetype = (
+  category: string
+): 'REPAIR' | 'PRODUCT' | 'SERVICE' | 'VENUE' | 'LABOUR' | 'GENERIC' => {
+  if (isRepairVariant(category || '')) return 'REPAIR';
   const cat = (category || '').toLowerCase();
   if (cat.includes('venue') || cat.includes('hall') || cat.includes('garden') || cat.includes('space')) return 'VENUE';
   if (cat.includes('labour') || cat.includes('labor') || cat.includes('worker') || cat.includes('manpower')) return 'LABOUR';
@@ -37,7 +47,92 @@ export const generateQuoteSchema = (
   const archetype = detectArchetype(inquiryCategory);
   const schema: QuoteField[] = [];
 
-  if (archetype === 'PRODUCT') {
+  if (archetype === 'REPAIR') {
+    // Total quoted price — kept as `price` so downstream payment / quote-card
+    // rendering doesn't need a special case. The breakdown fields below give
+    // buyers and finance the visibility into what's parts vs labour.
+    schema.push({
+      name: 'price',
+      label: 'Total Quote (ZMW)',
+      type: 'currency',
+      required: true,
+      helpText: 'Diagnosis + parts + labour. Editable after entering the breakdown below.',
+      calculation: 'total',
+    });
+    schema.push({
+      name: 'diagnosisFee',
+      label: 'Diagnosis Fee (ZMW)',
+      type: 'currency',
+      required: false,
+      helpText: 'Charged whether you fix it or not. Often credited toward the repair if accepted.',
+    });
+    schema.push({
+      name: 'partsCost',
+      label: 'Parts Cost (ZMW)',
+      type: 'currency',
+      required: false,
+      helpText: 'Total cost of all replacement parts.',
+    });
+    schema.push({
+      name: 'partsDescription',
+      label: 'Parts Description',
+      type: 'textarea',
+      required: false,
+      placeholder: 'e.g. OEM display, battery, charging port',
+    });
+    schema.push({
+      name: 'labourHours',
+      label: 'Labour Hours',
+      type: 'number',
+      required: false,
+      placeholder: 'e.g. 2',
+    });
+    schema.push({
+      name: 'labourRate',
+      label: 'Labour Rate / Hour (ZMW)',
+      type: 'currency',
+      required: false,
+      helpText: 'Used to compute labour cost = hours × rate.',
+    });
+    schema.push({
+      name: 'turnaroundDays',
+      label: 'Turnaround (Days)',
+      type: 'number',
+      required: true,
+      placeholder: 'e.g. 2',
+      helpText: 'Working days from drop-off to ready-for-pickup.',
+    });
+    schema.push({
+      name: 'warrantyDays',
+      label: 'Warranty (Days)',
+      type: 'number',
+      required: false,
+      placeholder: 'e.g. 30',
+      helpText: 'How long the repair is guaranteed for.',
+    });
+    schema.push({
+      name: 'warrantyTerms',
+      label: 'Warranty Terms',
+      type: 'textarea',
+      required: false,
+      placeholder: 'What the warranty covers and excludes (e.g. parts only, water damage void).',
+    });
+    schema.push({
+      name: 'message',
+      label: 'Repair Notes',
+      type: 'textarea',
+      required: false,
+      placeholder: 'Additional notes for the buyer — diagnosis findings, recommendations…',
+    });
+    schema.push({
+      name: 'expiryDuration',
+      label: 'Quote Valid For',
+      type: 'select',
+      required: true,
+      options: VALIDITY_OPTIONS,
+    });
+
+  } else if (archetype === 'PRODUCT') {
     schema.push({
       name: 'price',
       label: inquiryAttributes?.quantity ? 'Unit Price (ZMW)' : 'Total Price (ZMW)',
