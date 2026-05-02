@@ -6,7 +6,7 @@ import { useDashboard } from '../DashboardContext';
 import { createInquiry, fetchUserInquiries, deleteInquiry } from '../services/api/inquiryService';
 import { useUserInquiries } from '../hooks/useInquiries';
 import { useUserQuotes } from '../hooks/useQuotes';
-import { markQuoteAsRead, archiveQuote } from '../services/api/quoteService';
+import { markQuoteAsRead, archiveQuote, deleteQuote } from '../services/api/quoteService';
 import { ViewType, MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
 import CategorySelection from '../components/CategorySelection';
@@ -14,6 +14,7 @@ import ProcessSelection from '../components/ProcessSelection';
 import DynamicInquiryForm from '../components/DynamicInquiryForm';
 import InquiryPreferences from '../components/InquiryPreferences';
 import LocationDetails from '../components/LocationDetails';
+import InquiryPayment, { type InquiryPaymentResult } from '../components/InquiryPayment';
 import InquirySuccess from '../components/InquirySuccess';
 import ConfirmationModal from '../components/ConfirmationModal';
 import DashboardLayout from '../components/DashboardLayout';
@@ -45,6 +46,7 @@ export default function BuyerDashboard() {
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | number | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | number | null>(null);
   const [inquiryToDelete, setInquiryToDelete] = useState<any | null>(null);
+  const [quoteToDelete, setQuoteToDelete] = useState<any | null>(null);
 
   // Update selectedInquiryId when URL changes
   useEffect(() => {
@@ -105,7 +107,14 @@ export default function BuyerDashboard() {
     labourGroup?: string;
     inquirySchemaKey?: string;
     preferences?: any;
-    location?: string;
+    location?: {
+      province: string;
+      city: string;
+      address?: string;
+      latitude?: number;
+      longitude?: number;
+      radius?: number;
+    };
     attributes?: Record<string, any>;
     processType?: 'EXPRESS' | 'STANDARD';
   }>({ items: [] });
@@ -125,7 +134,7 @@ export default function BuyerDashboard() {
   const dashboardData = useMemo(
     () => ({
       inquiries,
-      quotes,
+      quotes: quotes.filter((q) => !['PAID', 'COMPLETED'].includes(q.status) && !q.isArchived),
       orders,
       balance,
       escrowBalance,
@@ -140,7 +149,7 @@ export default function BuyerDashboard() {
           time: 'Recently',
           icon: 'MessageSquare',
         })),
-        ...quotes.slice(0, 2).map((q) => ({
+        ...quotes.slice(0, 2).filter(q => !q.isArchived).map((q) => ({
           id: `q-${q.id}`,
           title: `Quote from ${q.providerName}`,
           subtitle: `K${(q.price || 0).toLocaleString()}`,
@@ -149,7 +158,7 @@ export default function BuyerDashboard() {
         })),
       ],
     }),
-    [inquiries, quotes, orders, selectedInquiryId, selectedQuoteId, selectedOrderId]
+    [inquiries, quotes, orders, selectedInquiryId, selectedQuoteId, selectedOrderId, balance, escrowBalance]
   );
 
   const handleTabChange = (tab: string, id?: string) => {
@@ -174,6 +183,9 @@ export default function BuyerDashboard() {
         break;
       case 'view_financial':
         handleTabChange('financial');
+        break;
+      case 'delete_quote':
+        setQuoteToDelete(payload);
         break;
       case 'view_details':
         if (payload?.id) {
@@ -201,6 +213,7 @@ export default function BuyerDashboard() {
         }
         break;
       case 'archive_quote':
+      case 'delete_quote_silent': // Silent version of delete that just archives
         if (payload?.id) {
           // Archive quote via API
           try {
@@ -210,6 +223,11 @@ export default function BuyerDashboard() {
             console.error('Failed to archive quote:', error);
           }
         }
+        break;
+      case 'accept_quote':
+        // Refresh quotes and inquiries after acceptance/payment
+        refreshQuotes();
+        refreshInquiries();
         break;
       case 'print_quote':
         // Print logic would go here, maybe a helper function
@@ -235,8 +253,25 @@ export default function BuyerDashboard() {
     handleTabChange('create-inquiry');
   };
 
-  const handleLocationComplete = async (locationData: any) => {
+  const handleLocationComplete = (locationData: any) => {
+    // Stash location alongside the rest of the pending inquiry; payment step
+    // owns the actual create-inquiry call so we don't publish until the buyer
+    // has paid the service fee.
+    setPendingInquiry((prev) => ({ ...prev, location: locationData }));
+    handleTabChange('inquiry-payment');
+  };
+
+  const handlePaymentComplete = async (payment: InquiryPaymentResult) => {
     if (!user) return;
+    const locationData = pendingInquiry.location;
+    if (!locationData) {
+      alert('Missing location data. Please go back and re-enter your location.');
+      return;
+    }
+    if (locationData.latitude == null || locationData.longitude == null) {
+      alert('Location coordinates missing. Please re-capture GPS on the location step.');
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -248,45 +283,44 @@ export default function BuyerDashboard() {
         ? `${pendingInquiry.attributes.brand} ${pendingInquiry.attributes.model || ''} Request`
         : `${categoryName} Request`;
 
-      // TODO: Check for duplicate inquiry via API
-      // const response = await apiClient.get('/inquiries', { params: { title, buyerId: user.id } });
-      // const existingInquiry = response.data.data?.[0];
+      // Merge the payment receipt back into preferences so the backend can
+      // bill, audit, and enforce the auto-close cap.
+      const preferencesWithPayment = {
+        ...(pendingInquiry.preferences || {}),
+        payment: {
+          method: payment.method,
+          provider: payment.provider,
+          amount: payment.amount,
+          paidAt: new Date().toISOString(),
+        },
+      };
 
-      // if (existingInquiry) {
-      //   alert('You already have an active inquiry for this product.');
-      //   setIsSubmitting(false);
-      //   return;
-      // }
-
-      // Prepare inquiry data - backend expects specific format
       const inquiryData = {
         title,
         description: pendingInquiry.attributes?.description || 'No description provided.',
-        items: JSON.stringify([]), // Backend wants JSON string
+        items: JSON.stringify([]),
         category: isLabour
           ? pendingInquiry.category || ''
           : pendingInquiry.categories?.join(', ') || '',
         location: `${locationData.city}, ${locationData.province}`,
         latitude: locationData.latitude,
         longitude: locationData.longitude,
-        radius: locationData.radius,
+        radius: locationData.radius ?? 5,
         status: 'OPEN',
-        preferences: JSON.stringify(pendingInquiry.preferences || {}), // Backend wants JSON string
-        attributes: JSON.stringify(pendingInquiry.attributes || {}), // Backend wants JSON string
+        preferences: JSON.stringify(preferencesWithPayment),
+        attributes: JSON.stringify(pendingInquiry.attributes || {}),
         processType: pendingInquiry.processType || 'STANDARD',
       };
 
-      // Create inquiry via API (will also sync to local DB)
       await createInquiry(inquiryData);
-      console.log('✅ Inquiry created:', inquiryData.title);
+      console.log('✅ Inquiry created after payment:', inquiryData.title, payment);
       refreshInquiries();
 
-      // Force a data refresh
       setPendingInquiry({ items: [] });
       handleTabChange('inquiry-success');
     } catch (error) {
       console.error('Error creating inquiry:', error);
-      alert('Failed to create inquiry. Please try again.');
+      alert('Payment cleared but the inquiry failed to publish. Please contact support.');
     } finally {
       setIsSubmitting(false);
     }
@@ -381,6 +415,19 @@ export default function BuyerDashboard() {
             onComplete={handleLocationComplete}
           />
         );
+      case 'inquiry-payment': {
+        const fee = Number(pendingInquiry.preferences?.quoteFee ?? 10);
+        const quoteCount = Number(pendingInquiry.preferences?.quoteCount ?? 5);
+        return (
+          <InquiryPayment
+            amount={fee}
+            quoteCount={quoteCount}
+            onBack={() => handleTabChange('location-details')}
+            onComplete={handlePaymentComplete}
+            onTopUp={() => handleTabChange('financial')}
+          />
+        );
+      }
       case 'inquiry-success':
         return <InquirySuccess onGoToDashboard={() => handleTabChange('dashboard')} />;
       case 'financial':
@@ -396,6 +443,7 @@ export default function BuyerDashboard() {
     'create-inquiry',
     'inquiry-preferences',
     'location-details',
+    'inquiry-payment',
     'inquiry-success',
     'financial',
   ].includes(activeTab);
@@ -420,6 +468,28 @@ export default function BuyerDashboard() {
             setInquiryToDelete(null);
           }}
           onCancel={() => setInquiryToDelete(null)}
+        />
+        <ConfirmationModal
+          isOpen={!!quoteToDelete}
+          title="Delete Quotation"
+          message="Are you sure you want to delete this quotation? This action will hide it from your dashboard."
+          onConfirm={async () => {
+            if (quoteToDelete?.id) {
+              try {
+                // Use archive instead of delete to avoid 403 Forbidden errors
+                // as the backend restricts deletion to the quote owner (provider)
+                await archiveQuote(quoteToDelete.id);
+                refreshQuotes();
+                if (activeTab === 'quote_details') {
+                  handleTabChange('home');
+                }
+              } catch (error) {
+                alert('Failed to delete quotation');
+              }
+            }
+            setQuoteToDelete(null);
+          }}
+          onCancel={() => setQuoteToDelete(null)}
         />
         <AnimatePresence mode="wait">
           {isFlowTab ? (

@@ -45,7 +45,7 @@ export class AuthService {
    * - profilePicture: User profile picture
    */
   async register(registerDto: RegisterDto, ipAddress?: string, userAgent?: string) {
-    const { nrc, email, password, name, phone, role = 'BUYER', profilePicture } = registerDto;
+    const { nrc, email, password, name, phone, role = 'BUYER', profilePicture, dob } = registerDto;
 
     // Validate required NRC field
     if (!nrc || nrc.trim() === '') {
@@ -104,6 +104,8 @@ export class AuthService {
         phone,
         passwordHash,
         role,
+        profilePicture,
+        dob,
         ipAddress,
         userAgent
       );

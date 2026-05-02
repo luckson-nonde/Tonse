@@ -42,6 +42,10 @@ export function useUserInquiries(userId?: string, refetch?: boolean) {
     };
 
     loadInquiries();
+
+    // Poll every 30 seconds so buyer sees inquiry status changes (e.g. OPEN → QUOTED)
+    const interval = setInterval(loadInquiries, 30000);
+    return () => clearInterval(interval);
   }, [userId, refetchTrigger]);
 
   return { inquiries, loading, error, refresh };

@@ -44,17 +44,18 @@ export default function AuditTrailPage() {
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
       const matchesSearch =
-        log.targetTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.buyerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.staffName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.actionType.toLowerCase().includes(searchTerm.toLowerCase());
+        (log.targetTitle || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (log.buyerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (log.staffName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (log.action || log.actionType || '').toLowerCase().includes(searchTerm.toLowerCase());
 
       if (!matchesSearch) return false;
 
       if (dateFilter === 'all') return true;
 
       const now = Date.now();
-      const logDate = log.timestamp;
+      const dateValue = log.createdAt || log.timestamp;
+      const logDate = dateValue ? new Date(dateValue).getTime() : now;
       const oneDay = 24 * 60 * 60 * 1000;
 
       if (dateFilter === 'today') return now - logDate < oneDay;
@@ -66,10 +67,20 @@ export default function AuditTrailPage() {
   }, [logs, searchTerm, dateFilter]);
 
   const stats = useMemo(() => {
+    const quotesSent = filteredLogs.filter(
+      (l) => (l.action || l.actionType) === 'QUOTE_SENT'
+    ).length;
+    const collections = filteredLogs.filter(
+      (l) => (l.action || l.actionType) === 'COLLECTION_STARTED'
+    ).length;
+    const handovers = filteredLogs.filter(
+      (l) => (l.action || l.actionType) === 'HANDOVER_COMPLETED'
+    ).length;
+
     return {
-      totalQuotes: filteredLogs.filter((l) => l.actionType === 'QUOTE_SENT').length,
-      totalCollections: filteredLogs.filter((l) => l.actionType === 'COLLECTION_STARTED').length,
-      totalHandovers: filteredLogs.filter((l) => l.actionType === 'HANDOVER_COMPLETED').length,
+      totalQuotes: quotesSent,
+      totalCollections: collections,
+      totalHandovers: handovers,
     };
   }, [filteredLogs]);
 
@@ -196,30 +207,35 @@ export default function AuditTrailPage() {
                 className="bg-white p-4 rounded-[28px] border border-slate-100 shadow-sm flex items-start gap-4 hover:border-[#C9973A]/30 transition-colors group"
               >
                 <div
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${getActionColor(log.actionType)}`}
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${getActionColor(log.action || log.actionType || '')}`}
                 >
-                  {getActionIcon(log.actionType)}
+                  {getActionIcon(log.action || log.actionType || '')}
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-start mb-1">
                     <div className="flex flex-col">
                       <span className="text-[10px] font-black text-[#C9973A] uppercase tracking-widest mb-0.5">
-                        {log.actionType.replace('_', ' ')}
+                        {(log.action || log.actionType || '').replace('_', ' ')}
                       </span>
                       <h3 className="font-bold text-slate-900 text-sm truncate group-hover:text-[#C9973A] transition-colors">
-                        {log.targetTitle}
+                        {log.targetTitle || 'Unknown'}
                       </h3>
                     </div>
                     <div className="text-right">
                       <div className="text-[10px] font-bold text-slate-400">
-                        {new Date(log.timestamp).toLocaleDateString()}
+                        {new Date(
+                          log.createdAt || log.timestamp || Date.now()
+                        ).toLocaleDateString()}
                       </div>
                       <div className="text-[10px] text-slate-300 font-medium">
-                        {new Date(log.timestamp).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {new Date(log.createdAt || log.timestamp || Date.now()).toLocaleTimeString(
+                          [],
+                          {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          }
+                        )}
                       </div>
                     </div>
                   </div>
@@ -227,14 +243,16 @@ export default function AuditTrailPage() {
                   <div className="flex items-center flex-wrap gap-x-4 gap-y-2 mt-2">
                     <div className="flex items-center gap-1.5">
                       <User className="w-3 h-3 text-slate-400" />
-                      <span className="text-[11px] font-bold text-slate-600">{log.buyerName}</span>
+                      <span className="text-[11px] font-bold text-slate-600">
+                        {log.buyerName || 'Unknown Buyer'}
+                      </span>
                     </div>
 
                     {user?.role !== 'PROVIDER_STAFF' && (
                       <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded-lg">
                         <ShieldCheck className="w-3 h-3 text-[#C9973A]" />
                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight">
-                          Staff: {log.staffName}
+                          Staff: {log.staffName || 'Unknown'}
                         </span>
                       </div>
                     )}
@@ -244,7 +262,7 @@ export default function AuditTrailPage() {
                         hasPermission(user, PERMISSIONS.MANAGE_QUOTES)) && (
                         <div className="flex items-center gap-1 text-[11px] font-black text-emerald-600">
                           <TrendingUp className="w-3 h-3" />
-                          ZMW {log.amount.toLocaleString()}
+                          ZMW {(log.amount || 0).toLocaleString()}
                         </div>
                       )}
                   </div>

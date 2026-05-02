@@ -123,7 +123,7 @@ export async function getQuote(quoteId: string): Promise<QuoteResponse> {
  */
 export async function updateQuoteStatus(
   quoteId: string,
-  status: 'ACCEPTED' | 'REJECTED' | 'ARCHIVED' | 'PENDING' | 'PAID' | 'COMPLETED' | 'HANDED_OVER'
+  status: 'ACCEPTED' | 'REJECTED' | 'ARCHIVED' | 'PENDING' | 'PAID' | 'COMPLETED' | 'HANDED_OVER' | 'SUPERSEDED'
 ): Promise<QuoteResponse> {
   try {
     const response = await apiClient.patch<any>(`/quotes/${quoteId}/status`, { status });
@@ -171,6 +171,17 @@ export async function archiveQuote(quoteId: string): Promise<QuoteResponse> {
     return normalizeQuote(response.data);
   } catch (error) {
     console.error('Error archiving quote:', error);
+    throw error;
+  }
+}
+/**
+ * Delete a quote permanently
+ */
+export async function deleteQuote(quoteId: string | number): Promise<void> {
+  try {
+    await apiClient.delete(`/quotes/${quoteId}`);
+  } catch (error) {
+    console.error('Error deleting quote:', error);
     throw error;
   }
 }

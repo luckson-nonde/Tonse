@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { MapPin, Eye, ChevronDown, ChevronUp, Package } from 'lucide-react';
 import emptyLeadsImage from '../../assets/images/empty-states/owl_reading.png';
 import { uniqueKey } from '../../utils/keyUtils';
 import { PreferenceTags, ThumbnailGrid } from './LeadsHelpers';
 import QuoteSubmissionForm from './QuoteSubmissionForm';
+import { recordInquiryView } from '../../services/api/inquiryService';
 
 // ─── Collect all images from a lead ──────────────────────────────────────────
 function collectLeadImages(lead: any, parsedItems: any[]): string[] {
@@ -66,7 +67,7 @@ function InquiryDetails({
         {(lead.category || '').split(', ').map((cat: string, catIdx: number) => (
           <span
             key={uniqueKey('cat', undefined, `${lead.id}-${catIdx}`)}
-            className="px-4 py-1.5 bg-[#fdf6e9] text-[#d49b35] text-[12px] font-black rounded-xl uppercase tracking-widest border-2 border-[#d49b35]/20 shadow-sm"
+            className="px-3 py-1 bg-[#fdf6e9] text-[#d49b35] text-[10px] font-black rounded-lg uppercase tracking-[0.15em] border border-[#d49b35]/10 shadow-sm"
           >
             {cat}
           </span>
@@ -74,8 +75,8 @@ function InquiryDetails({
       </div>
 
       {lead.description && (
-        <div className="bg-slate-50/80 p-6 rounded-2xl border-2 border-slate-100 shadow-inner">
-          <p className="text-lg text-slate-900 leading-relaxed font-black">{lead.description}</p>
+        <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 shadow-sm">
+          <p className="text-[17px] text-slate-900 leading-relaxed font-bold">{lead.description}</p>
         </div>
       )}
 
@@ -108,8 +109,8 @@ function InquiryDetails({
 
       {parsedItems.length > 0 && (
         <div className="space-y-4 pt-4">
-          <p className="text-[13px] font-black text-slate-900 uppercase tracking-[0.25em] border-b-2 border-slate-200 pb-3 flex items-center gap-2">
-            <Package className="w-5 h-5 text-[#d49b35]" />
+          <p className="text-[12px] font-black text-slate-400 uppercase tracking-[0.25em] border-b border-slate-100 pb-3 flex items-center gap-2">
+            <Package className="w-4 h-4 text-[#d49b35]" />
             Requested Items ({parsedItems.length})
           </p>
           <div className="grid grid-cols-1 gap-4">
@@ -124,23 +125,23 @@ function InquiryDetails({
                     <span className="text-xs font-black text-white bg-[#d49b35] px-3 py-1.5 rounded-xl shrink-0 shadow-sm">×{item.quantity}</span>
                   </div>
                   {item.description && <p className="text-sm text-slate-700 font-bold line-clamp-3 leading-relaxed mb-3">{item.description}</p>}
-                  <div className="flex flex-wrap gap-x-8 gap-y-3">
+                  <div className="flex flex-wrap gap-x-8 gap-y-4">
                     {item.brand && (
                       <div className="flex flex-col">
-                        <span className="text-[11px] uppercase font-black text-slate-500 tracking-[0.2em] mb-0.5">Brand</span>
-                        <span className="text-base font-black text-[#d49b35]">{item.brand}</span>
+                        <span className="text-[10px] uppercase font-black text-slate-400 tracking-[0.15em] mb-1">Brand</span>
+                        <span className="text-[15px] font-black text-[#d49b35]">{item.brand}</span>
                       </div>
                     )}
                     {item.material && (
                       <div className="flex flex-col">
-                        <span className="text-[11px] uppercase font-black text-slate-500 tracking-[0.2em] mb-0.5">Material</span>
-                        <span className="text-base font-black text-slate-900">{item.material}</span>
+                        <span className="text-[10px] uppercase font-black text-slate-400 tracking-[0.15em] mb-1">Material</span>
+                        <span className="text-[15px] font-black text-slate-900">{item.material}</span>
                       </div>
                     )}
                     {item.dimensions && (
                       <div className="flex flex-col">
-                        <span className="text-[11px] uppercase font-black text-slate-500 tracking-[0.2em] mb-0.5">Size</span>
-                        <span className="text-base font-black text-slate-900">{item.dimensions}</span>
+                        <span className="text-[10px] uppercase font-black text-slate-400 tracking-[0.15em] mb-1">Size</span>
+                        <span className="text-[15px] font-black text-slate-900">{item.dimensions}</span>
                       </div>
                     )}
                   </div>
@@ -187,8 +188,10 @@ interface ProviderLeadsViewProps {
   onSetSelectedInquiryIds: (ids: number[]) => void;
   onSetItemPrices: (prices: Record<string, number>) => void;
   onSetQuotingInquiryId: (id: number | null) => void;
-  onQuoteSubmit: (inquiryId: number, quoteData: any) => void;
-  renderSpecifications: (specs: any, category?: string, title?: string) => React.ReactNode;
+  onQuoteSubmit: (leadId: any, data: any) => void;
+  renderSpecifications: (data: any, category: string, title: string) => React.ReactNode;
+  revisingQuote: any | null;
+  onSetRevisingQuote: (quote: any | null) => void;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -208,11 +211,55 @@ export default function ProviderLeadsView({
   onSetQuotingInquiryId,
   onQuoteSubmit,
   renderSpecifications,
+  revisingQuote,
+  onSetRevisingQuote,
 }: ProviderLeadsViewProps) {
   const [expandedLeadId, setExpandedLeadId] = useState<number | null>(null);
+  // Local viewCount overrides keyed by lead id so the UI bumps optimistically
+  // the moment a provider expands a row, even before the next leads refresh.
+  const [viewCounts, setViewCounts] = useState<Record<string, number>>({});
+  // Record each (provider, inquiry) at most once per session so re-expanding
+  // the same row doesn't pad the counter — the backend would no-op anyway,
+  // but skipping the call avoids unnecessary network chatter.
+  const trackedRef = useRef<Set<string>>(new Set());
+
+  const handleExpand = (leadId: number, currentCount: number) => {
+    setExpandedLeadId(leadId);
+    const key = String(leadId);
+    if (trackedRef.current.has(key)) return;
+    if (user?.role === 'BUYER' || user?.role === 'ADMIN') return;
+    trackedRef.current.add(key);
+    // Optimistic bump — the response will reconcile if the server didn't count it.
+    setViewCounts((prev) => ({ ...prev, [key]: (prev[key] ?? currentCount) + 1 }));
+    recordInquiryView(leadId).then((res) => {
+      if (!res) return;
+      setViewCounts((prev) => ({ ...prev, [key]: res.viewCount }));
+    });
+  };
+
+  const renderViewCount = (lead: any) => {
+    const key = String(lead.id);
+    return viewCounts[key] ?? lead.viewCount ?? 0;
+  };
+
+  // Dynamic layout calculations based on leads volume
+  const leadsCount = leads.length;
+  const isRelaxed = leadsCount > 0 && leadsCount <= 4;
+  const isCompact = leadsCount > 8;
+
+  const containerSpacing = isRelaxed ? 'space-y-6' : 'space-y-2';
+  const rowPadding = isRelaxed ? 'py-14' : isCompact ? 'py-2.5' : 'py-4';
+  const cardRadius = isRelaxed ? 'rounded-[32px]' : 'rounded-xl';
+  const titleTextSize = isRelaxed ? 'text-2xl' : isCompact ? 'text-sm' : 'text-base';
+  const tagTextSize = isRelaxed ? 'text-xs' : 'text-[9px]';
+  const tagPadding = isRelaxed ? 'px-4 py-2' : 'px-2 py-0.5';
+  const metaTextSize = isRelaxed ? 'text-sm' : 'text-[10px]';
+  const metaIconSize = isRelaxed ? 'w-5 h-5' : 'w-3 h-3';
+  const dateTextSize = isRelaxed ? 'text-sm' : 'text-[10px]';
+  const chevronSize = isRelaxed ? 'w-6 h-6' : 'w-4 h-4';
 
   return (
-    <div className="space-y-4">
+    <div className={containerSpacing}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -245,11 +292,26 @@ export default function ProviderLeadsView({
       </div>
 
       {/* List */}
-      <div className="space-y-2">
+      <div className={containerSpacing}>
         {leads.length === 0 ? (
           <div className="bg-white rounded-2xl p-10 text-center border border-slate-100 flex flex-col items-center justify-center min-h-[40vh] shadow-sm">
             <img src={emptyLeadsImage} alt="No leads" className="w-36 h-36 object-contain opacity-90 mb-6" />
-            <p className="text-slate-500 font-medium">No booking requests at the moment.</p>
+            {(!user?.categories || user.categories.length === 0) ? (
+              <>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A] mb-2">
+                  Profile Incomplete
+                </p>
+                <p className="text-[15px] font-bold text-[#1a1612] mb-1.5">
+                  Add your business categories
+                </p>
+                <p className="text-[13px] text-[#1a1612]/55 max-w-sm leading-snug">
+                  We match inquiries to your selected categories. Until you add at least one,
+                  we can't show you matched booking requests.
+                </p>
+              </>
+            ) : (
+              <p className="text-slate-500 font-medium">No booking requests at the moment.</p>
+            )}
           </div>
         ) : (
           leads.map((lead, idx) => {
@@ -269,12 +331,18 @@ export default function ProviderLeadsView({
             return (
               <div
                 key={uniqueKey('lead', lead.id, idx)}
-                className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-all duration-200 ${selectedInquiryIds.includes(lead.id!) ? 'border-[#d49b35]' : 'border-slate-100'}`}
+                className={`bg-white ${cardRadius} border shadow-sm overflow-hidden transition-all duration-200 ${selectedInquiryIds.includes(lead.id!) ? 'border-[#d49b35]' : 'border-slate-100'}`}
               >
                 {/* ── Compact row ── */}
                 <div
-                  className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50/70 transition-colors"
-                  onClick={() => setExpandedLeadId(isExpanded ? null : lead.id!)}
+                  className={`flex items-center gap-4 px-5 ${rowPadding} cursor-pointer hover:bg-slate-50/70 transition-colors`}
+                  onClick={() => {
+                    if (isExpanded) {
+                      setExpandedLeadId(null);
+                    } else {
+                      handleExpand(lead.id!, Number(lead.viewCount ?? 0));
+                    }
+                  }}
                 >
                   {isSelectionMode && (
                     <input
@@ -285,24 +353,24 @@ export default function ProviderLeadsView({
                         if (e.target.checked) onSetSelectedInquiryIds([...selectedInquiryIds, lead.id!]);
                         else onSetSelectedInquiryIds(selectedInquiryIds.filter((id) => id !== lead.id!));
                       }}
-                      className="w-4 h-4 accent-[#d49b35] shrink-0"
+                      className="w-5 h-5 accent-[#d49b35] shrink-0"
                     />
                   )}
-                  <span className="hidden sm:inline-block px-2 py-0.5 bg-[#fdf6e9] text-[#d49b35] text-[9px] font-bold rounded uppercase tracking-wider shrink-0 max-w-[110px] truncate">
+                  <span className={`hidden sm:inline-block ${tagPadding} bg-[#fdf6e9] text-[#d49b35] ${tagTextSize} font-black rounded-lg uppercase tracking-wider shrink-0 max-w-[120px] truncate border border-[#d49b35]/10`}>
                     {(lead.category || '').split(', ')[0]}
                   </span>
-                  <span className="flex-1 text-sm font-semibold text-slate-800 truncate">{lead.title}</span>
+                  <span className={`flex-1 ${titleTextSize} font-bold text-slate-900 truncate`}>{lead.title}</span>
                   {parsedItems.length > 0 && (
-                    <span className="hidden md:flex items-center gap-1 text-[10px] text-slate-400 shrink-0">
-                      <Package className="w-3 h-3" />{parsedItems.length} item{parsedItems.length !== 1 ? 's' : ''}
+                    <span className={`hidden md:flex items-center gap-1.5 ${metaTextSize} font-bold text-slate-500 shrink-0`}>
+                      <Package className={metaIconSize} />{parsedItems.length} item{parsedItems.length !== 1 ? 's' : ''}
                     </span>
                   )}
-                  <span className="hidden lg:block text-[11px] text-slate-500 shrink-0 max-w-[110px] truncate">{lead.buyerName}</span>
-                  <span className="hidden md:flex items-center gap-1 text-[10px] text-slate-400 shrink-0">
-                    <MapPin className="w-3 h-3" />{lead.location}
+                  <span className={`hidden lg:block ${metaTextSize} font-bold text-slate-500 shrink-0 max-w-[130px] truncate`}>{lead.buyerName}</span>
+                  <span className={`hidden md:flex items-center gap-1.5 ${metaTextSize} font-bold text-slate-500 shrink-0`}>
+                    <MapPin className={metaIconSize} />{lead.location}
                   </span>
-                  <span className="text-[10px] text-slate-400 shrink-0">{new Date(lead.createdAt).toLocaleDateString()}</span>
-                  {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+                  <span className={`${dateTextSize} font-bold text-slate-400 shrink-0`}>{new Date(lead.createdAt).toLocaleDateString()}</span>
+                  {isExpanded ? <ChevronUp className={`${chevronSize} text-slate-400 shrink-0`} /> : <ChevronDown className={`${chevronSize} text-slate-400 shrink-0`} />}
                 </div>
 
                 {/* ── Expanded panel — adaptive layout engine ── */}
@@ -314,7 +382,7 @@ export default function ProviderLeadsView({
                       <div>
                         <InquiryDetails lead={lead} parsedItems={parsedItems} quotingInquiryId={quotingInquiryId} itemPrices={itemPrices} onSetItemPrices={onSetItemPrices} renderSpecifications={renderSpecifications} idx={idx} />
                         <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
-                          <div className="flex items-center gap-1 text-slate-400 text-[10px]"><Eye className="w-3 h-3" />{lead.viewCount || 0} views</div>
+                          <div className="flex items-center gap-1 text-slate-400 text-[10px]"><Eye className="w-3 h-3" />{renderViewCount(lead)} views</div>
                           <button onClick={() => onSetQuotingInquiryId(lead.id!)} className="px-5 py-2 bg-[#d49b35] text-white text-xs font-bold rounded-xl hover:bg-[#a37d35] transition-all shadow-md active:scale-95">
                             {user?.subRole === 'SUPPLIER_SELLER' ? 'Quote for Supply' : 'Submit Quote'}
                           </button>
@@ -328,7 +396,7 @@ export default function ProviderLeadsView({
                         <div className="flex-[65] min-w-0">
                           <InquiryDetails lead={lead} parsedItems={parsedItems} quotingInquiryId={quotingInquiryId} itemPrices={itemPrices} onSetItemPrices={onSetItemPrices} renderSpecifications={renderSpecifications} idx={idx} />
                           <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
-                            <div className="flex items-center gap-1 text-slate-400 text-[10px]"><Eye className="w-3 h-3" />{lead.viewCount || 0} views</div>
+                            <div className="flex items-center gap-1 text-slate-400 text-[10px]"><Eye className="w-3 h-3" />{renderViewCount(lead)} views</div>
                             <button onClick={() => onSetQuotingInquiryId(lead.id!)} className="px-5 py-2 bg-[#d49b35] text-white text-xs font-bold rounded-xl hover:bg-[#a37d35] transition-all shadow-md active:scale-95">
                               {user?.subRole === 'SUPPLIER_SELLER' ? 'Quote for Supply' : 'Submit Quote'}
                             </button>
@@ -348,7 +416,7 @@ export default function ProviderLeadsView({
                         <div className="flex-[55] min-w-0">
                           <InquiryDetails lead={lead} parsedItems={parsedItems} quotingInquiryId={quotingInquiryId} itemPrices={itemPrices} onSetItemPrices={onSetItemPrices} renderSpecifications={renderSpecifications} idx={idx} />
                           <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
-                            <div className="flex items-center gap-1 text-slate-400 text-[10px]"><Eye className="w-3 h-3" />{lead.viewCount || 0} views</div>
+                            <div className="flex items-center gap-1 text-slate-400 text-[10px]"><Eye className="w-3 h-3" />{renderViewCount(lead)} views</div>
                             <button onClick={() => onSetQuotingInquiryId(null)} className="px-3 py-1.5 text-[10px] text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
                               Cancel Quote
                             </button>
@@ -356,7 +424,19 @@ export default function ProviderLeadsView({
                         </div>
                         <VDivider />
                         <div className="flex-[45] lg:max-h-[80vh] lg:overflow-y-auto">
-                          <QuoteSubmissionForm inquiry={lead} onSubmit={(data) => onQuoteSubmit(lead.id!, data)} onCancel={() => onSetQuotingInquiryId(null)} venueSpaces={venueSpaces} user={user} itemPricesTotal={itemPricesTotal} />
+                          <QuoteSubmissionForm
+                            inquiry={lead}
+                            onSubmit={(data) => onQuoteSubmit(lead.id!, data)}
+                            onCancel={() => {
+                              onSetQuotingInquiryId(null);
+                              onSetRevisingQuote(null);
+                            }}
+                            venueSpaces={venueSpaces}
+                            user={user}
+                            itemPricesTotal={itemPricesTotal}
+                            initialValues={revisingQuote?.dynamicFields}
+                            parentQuoteId={revisingQuote?.id}
+                          />
                         </div>
                       </div>
                     )}
@@ -368,7 +448,7 @@ export default function ProviderLeadsView({
                         <div className="lg:w-[45%] min-w-0 p-1 lg:pr-3">
                           <InquiryDetails lead={lead} parsedItems={parsedItems} quotingInquiryId={quotingInquiryId} itemPrices={itemPrices} onSetItemPrices={onSetItemPrices} renderSpecifications={renderSpecifications} idx={idx} />
                           <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
-                            <div className="flex items-center gap-1 text-slate-400 text-[10px]"><Eye className="w-3 h-3" />{lead.viewCount || 0} views</div>
+                            <div className="flex items-center gap-1 text-slate-400 text-[10px]"><Eye className="w-3 h-3" />{renderViewCount(lead)} views</div>
                             <button onClick={() => onSetQuotingInquiryId(null)} className="px-3 py-1.5 text-[10px] text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
                               Cancel
                             </button>
@@ -383,7 +463,19 @@ export default function ProviderLeadsView({
                         <VDivider />
                         {/* Zone 3 — quote form 35% */}
                         <div className="lg:w-[35%] shrink-0 pt-3 lg:pt-0 lg:pl-3 lg:max-h-[75vh] lg:overflow-y-auto border-t lg:border-t-0 border-slate-100">
-                          <QuoteSubmissionForm inquiry={lead} onSubmit={(data) => onQuoteSubmit(lead.id!, data)} onCancel={() => onSetQuotingInquiryId(null)} venueSpaces={venueSpaces} user={user} itemPricesTotal={itemPricesTotal} />
+                          <QuoteSubmissionForm
+                            inquiry={lead}
+                            onSubmit={(data) => onQuoteSubmit(lead.id!, data)}
+                            onCancel={() => {
+                              onSetQuotingInquiryId(null);
+                              onSetRevisingQuote(null);
+                            }}
+                            venueSpaces={venueSpaces}
+                            user={user}
+                            itemPricesTotal={itemPricesTotal}
+                            initialValues={revisingQuote?.dynamicFields}
+                            parentQuoteId={revisingQuote?.id}
+                          />
                         </div>
                       </div>
                     )}

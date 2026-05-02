@@ -73,7 +73,7 @@ export class Inquiry {
 
   @Column({
     type: 'enum',
-    enum: ['OPEN', 'CLOSED'],
+    enum: ['OPEN', 'QUOTED', 'CLOSED'],
     default: 'OPEN',
   })
   status: string;

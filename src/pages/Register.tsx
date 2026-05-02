@@ -1,28 +1,95 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth, type Role } from '../AuthContext';
-import { Key, Eye, EyeOff, User, Phone, Calendar, MapPin, Hash, ShieldCheck, Navigation, Globe, Map, Building2 } from 'lucide-react';
+import {
+  Key,
+  Eye,
+  EyeOff,
+  User,
+  Phone,
+  Calendar,
+  Hash,
+  ShieldCheck,
+  Mail,
+  Lock,
+} from 'lucide-react';
 import AuthSplitLayout from '../components/AuthSplitLayout';
 import Button from '../components/Button';
+import FloatingInput from '../components/FloatingInput';
 import { SubRole, EntityType } from '../types';
 import { getRegistrationSchema } from '../services/userSchemas';
 import DynamicProfileForm from '../components/DynamicProfileForm';
 import { HeroContent } from '../types';
-import CameraCapture from '../components/CameraCapture';
+import CompactIdentityCapture from '../components/CompactIdentityCapture';
 import LocationDetails from '../components/LocationDetails';
+
+// Zambian NRC format: XXXXXX/XX/X (6 digits / 2 digits / 1 digit)
+function formatNRC(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 9);
+  if (digits.length <= 6) return digits;
+  if (digits.length <= 8) return `${digits.slice(0, 6)}/${digits.slice(6)}`;
+  return `${digits.slice(0, 6)}/${digits.slice(6, 8)}/${digits.slice(8, 9)}`;
+}
+
+const NRC_REGEX = /^\d{6}\/\d{2}\/\d{1}$/;
+
+// Zambian mobile: 9 digits after country code, e.g. +260 9XX XXX XXX
+// Strips +260 / 260 / leading 0 — stores as raw 9 digits, displays formatted
+function formatPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  let local = digits;
+  if (local.startsWith('260')) local = local.slice(3);
+  if (local.startsWith('0')) local = local.slice(1);
+  local = local.slice(0, 9);
+  if (local.length === 0) return '';
+  if (local.length <= 3) return `+260 ${local}`;
+  if (local.length <= 6) return `+260 ${local.slice(0, 3)} ${local.slice(3)}`;
+  return `+260 ${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6, 9)}`;
+}
+
+function getPhoneDigits(formatted: string): string {
+  const digits = formatted.replace(/\D/g, '');
+  if (digits.startsWith('260')) return digits.slice(3);
+  return digits;
+}
+
+function calculateAge(dobString: string): number | null {
+  if (!dobString) return null;
+  const dob = new Date(dobString);
+  if (isNaN(dob.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age -= 1;
+  return age;
+}
+
+function getMaxDOB(): string {
+  const today = new Date();
+  const max = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
+  return max.toISOString().split('T')[0];
+}
 
 const REGISTER_HERO: Record<string, HeroContent> = {
   individual: {
-    title: 'Join the Luxury Community.',
+    title: 'Verify in Minutes. Trade for Years.',
     image:
-      'https://images.unsplash.com/photo-1556740734-7f95834d0ff9?auto=format&fit=crop&q=80&w=1920&h=1080',
-    bullets: ['Personalized Experience', 'Exclusive Access', 'Seamless Trading'],
+      'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1920&h=1080',
+    bullets: [
+      'NRC-matched identity check',
+      'Encrypted at rest, in transit',
+      'Trusted by 1,200+ Zambian businesses',
+    ],
   },
   business: {
-    title: 'Professional Network Registration.',
+    title: 'Register Your Business for Trade.',
     image:
-      'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=1920&h=1080',
-    bullets: ['B2B Opportunities', 'Verified Business Status', 'Enterprise Tools'],
+      'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=1920&h=1080',
+    bullets: [
+      'PACRA-verified business profile',
+      'TPIN-ready invoicing',
+      'Direct access to enterprise buyers',
+    ],
   },
 };
 
@@ -45,7 +112,7 @@ export default function Register() {
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
     const [dob, setDob] = useState('');
-    
+
     // Step 2: Location State
     const [province, setProvince] = useState('');
     const [city, setCity] = useState('');
@@ -65,7 +132,14 @@ export default function Register() {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    const isCompany = subRole?.startsWith('COMPANY_') || subRole?.includes('SELLER') || role === 'SELLER' || role === 'SUPPLIER' || role === 'SERVICE_PROVIDER' || role === 'ENTERTAINMENT' || role === 'EVENTS';
+    const isCompany =
+      subRole?.startsWith('COMPANY_') ||
+      subRole?.includes('SELLER') ||
+      role === 'SELLER' ||
+      role === 'SUPPLIER' ||
+      role === 'SERVICE_PROVIDER' ||
+      role === 'ENTERTAINMENT' ||
+      role === 'EVENTS';
 
     const steps = [
       { id: 1, label: 'Profile' },
@@ -82,28 +156,56 @@ export default function Register() {
       }
     }, [isCompany]);
 
+    const maxDOB = getMaxDOB();
+    const phoneDigits = getPhoneDigits(phone);
+    const nameError =
+      name.length > 0 && name.trim().length < 3 ? 'Enter your full name (min. 3 characters).' : '';
+    const nrcError =
+      nrc.length > 0 && !NRC_REGEX.test(nrc) ? 'Format: 123456/78/9 — six digits, two, one.' : '';
+    const phoneError =
+      phoneDigits.length > 0 && phoneDigits.length !== 9
+        ? 'Zambian mobile must be 9 digits (e.g. +260 977 123 456).'
+        : phoneDigits.length === 9 && !/^[79]/.test(phoneDigits)
+          ? 'Mobile numbers start with 7 or 9 in Zambia.'
+          : '';
+    const dobAge = calculateAge(dob);
+    const dobError =
+      dob && dobAge !== null && dobAge < 18 ? 'You must be 18 or older to register.' : '';
+
     // Validate Step 1: Personal Information
     const validateStep1 = (): boolean => {
       setError('');
 
-      if (!logo || logo.trim() === '') {
-        setError('Profile picture is required for account verification');
+      if (!name || name.trim().length < 3) {
+        setError('Full name is required (min. 3 characters).');
         return false;
       }
 
-      if (!nrc || nrc.trim() === '') {
-        setError('NRC number is required for account verification');
+      if (!nrc || !NRC_REGEX.test(nrc)) {
+        setError('Enter a valid NRC in the format 123456/78/9.');
         return false;
       }
 
-      if (!name || name.trim() === '') {
-        setError('Full name is required');
+      if (phoneDigits.length !== 9) {
+        setError('Phone number must be a valid 9-digit Zambian mobile.');
         return false;
       }
 
-      if (!phone || phone.trim() === '') {
-        setError('Phone number is required');
+      if (!/^[79]/.test(phoneDigits)) {
+        setError('Mobile numbers in Zambia start with 7 or 9 (e.g. 0977…).');
         return false;
+      }
+
+      if (role !== 'LABOUR') {
+        if (!dob) {
+          setError('Date of birth is required.');
+          return false;
+        }
+        const age = calculateAge(dob);
+        if (age === null || age < 18) {
+          setError('You must be 18 or older to register.');
+          return false;
+        }
       }
 
       return true;
@@ -181,9 +283,15 @@ export default function Register() {
           await updateUser(updateData);
         } else {
           // Register new user with identity verification fields
-          await register(email, password, name, phone, role, nrc, logo);
-          
-          // After register, update with location info
+          await register(email, password, name, phone, role, nrc, logo, dob);
+
+          // After register, persist location AND the role-defining metadata
+          // captured upstream in RoleSelection (subRole + categories). Without
+          // these, the provider dashboard's category and nature filters fall
+          // back to "show everything" — which leaks unrelated leads (e.g. an
+          // Electronics seller seeing Event Venues inquiries). See
+          // ProviderDashboard.tsx — the `userCategories.length === 0` branch
+          // returns `true` for every lead.
           const updateData: any = {
             province,
             city,
@@ -191,11 +299,13 @@ export default function Register() {
             latitude,
             longitude,
             radius,
+            categories: initialCategories,
+            ...(subRole ? { subRole } : {}),
           };
           try {
             await updateUser(updateData);
           } catch (e) {
-            console.warn('Failed to update location after register:', e);
+            console.warn('Failed to update profile after register:', e);
           }
         }
 
@@ -216,7 +326,7 @@ export default function Register() {
         title={
           currentStep === 1
             ? isCompany
-              ? 'Business Information'
+              ? 'Account Holder'
               : 'Your Profile'
             : currentStep === 2
               ? 'Your Location'
@@ -226,18 +336,20 @@ export default function Register() {
           <span className="text-[#1a1612]/60 font-medium">
             {currentStep === 1
               ? isCompany
-                ? 'Verify your business identity'
+                ? 'Verify the person behind the business'
                 : 'Complete your identity verification'
               : currentStep === 2
                 ? 'Set your service or delivery area'
                 : 'Secure your account access'}
           </span>
         }
-        onBack={() => (currentStep > 1 ? setCurrentStep(currentStep - 1) : navigate('/role-selection'))}
+        onBack={() =>
+          currentStep > 1 ? setCurrentStep(currentStep - 1) : navigate('/role-selection')
+        }
         stepper={{
           current: currentStep,
           total: steps.length,
-          labels: steps.map(s => s.label)
+          labels: steps.map((s) => s.label),
         }}
         hero={currentHero}
       >
@@ -251,268 +363,325 @@ export default function Register() {
           {/* SCREEN 1: PERSONAL INFORMATION & IDENTITY */}
           {currentStep === 1 && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {/* Identity Capture */}
-              <div className="bg-white p-2 rounded-4xl border border-[#e8e4dc]/60 shadow-sm overflow-hidden">
-                <CameraCapture 
-                  label="Live Identity Photo *" 
-                  onCapture={(img) => setLogo(img)}
-                  initialImage={logo}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Identity Field */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-[11px] font-black text-[#1a1612]/40 uppercase tracking-[0.2em] ml-1">
-                    <Hash size={12} className="text-[#C9973A]" />
-                    NRC Number *
-                  </label>
-                  <input
-                    type="text"
-                    value={nrc}
-                    onChange={(e) => setNrc(e.target.value)}
-                    placeholder="000000/00/0"
-                    className="block w-full px-6 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-2xl text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20"
-                  />
+              {/* Section 01 — Personal details */}
+              <section className="space-y-5">
+                <div className="flex items-center gap-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A]">
+                    Section 01
+                  </p>
+                  <div className="h-px flex-1 bg-[#e8e4dc]" />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#1a1612]/50">
+                    Personal Details
+                  </p>
                 </div>
 
-                {/* Name Field */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-[11px] font-black text-[#1a1612]/40 uppercase tracking-[0.2em] ml-1">
-                    <User size={12} className="text-[#C9973A]" />
-                    Full Name *
-                  </label>
-                  <input
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FloatingInput
+                    label="Full Name"
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="John Doe"
-                    className="block w-full px-6 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-2xl text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20"
+                    required
+                    icon={User}
+                    autoComplete="name"
+                    error={nameError}
                   />
-                </div>
-
-                {/* Phone Field */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-[11px] font-black text-[#1a1612]/40 uppercase tracking-[0.2em] ml-1">
-                    <Phone size={12} className="text-[#C9973A]" />
-                    Phone Number *
-                  </label>
-                  <input
+                  <FloatingInput
+                    label="NRC Number"
+                    type="text"
+                    value={nrc}
+                    onChange={(e) => setNrc(formatNRC(e.target.value))}
+                    required
+                    icon={Hash}
+                    inputMode="numeric"
+                    maxLength={11}
+                    placeholder="123456/78/9"
+                    error={nrcError}
+                    hint={!nrcError && nrc.length === 0 ? 'Format: 123456/78/9' : undefined}
+                  />
+                  <FloatingInput
+                    label="Phone Number"
                     type="tel"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+260..."
-                    className="block w-full px-6 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-2xl text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20"
+                    onChange={(e) => setPhone(formatPhone(e.target.value))}
+                    required
+                    icon={Phone}
+                    autoComplete="tel"
+                    inputMode="tel"
+                    maxLength={17}
+                    error={phoneError}
+                    hint={
+                      !phoneError && phoneDigits.length === 0
+                        ? '+260 9XX XXX XXX'
+                        : undefined
+                    }
                   />
+                  {role !== 'LABOUR' && (
+                    <div className="relative w-full">
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-20">
+                          <Calendar
+                            className={`h-5 w-5 ${
+                              dobError ? 'text-rose-400' : 'text-[#C9973A]/55'
+                            }`}
+                            strokeWidth={2}
+                          />
+                        </div>
+                        <input
+                          type="date"
+                          value={dob}
+                          onChange={(e) => setDob(e.target.value)}
+                          max={maxDOB}
+                          aria-invalid={dobError ? true : undefined}
+                          className={`block w-full pl-[52px] pr-4 h-[58px] bg-brand-white border rounded-2xl text-[15px] text-brand-dark shadow-[inset_0_1px_2px_rgba(26,22,18,0.04)] outline-none transition-all duration-200 font-medium ${
+                            dobError
+                              ? 'border-rose-300 focus:border-rose-500 focus:shadow-[0_0_0_4px_rgba(244,63,94,0.1),inset_0_1px_2px_rgba(26,22,18,0.02)]'
+                              : 'border-[#e8e0d0] hover:border-[#d6c8a8] focus:border-[#C9973A] focus:shadow-[0_0_0_4px_rgba(201,151,58,0.1),inset_0_1px_2px_rgba(26,22,18,0.02)]'
+                          }`}
+                        />
+                        <label
+                          className={`absolute top-0 left-[16px] -translate-y-1/2 px-1.5 bg-brand-white text-[12px] font-bold uppercase tracking-[0.08em] pointer-events-none ${
+                            dobError ? 'text-rose-500' : 'text-[#C9973A]'
+                          }`}
+                        >
+                          Date of Birth
+                        </label>
+                      </div>
+                      {(dobError || (!dob && true)) && (
+                        <p
+                          className={`text-[11px] mt-1.5 ml-1 leading-snug flex items-center gap-1.5 ${
+                            dobError ? 'text-rose-500 font-medium' : 'text-[#1a1612]/45'
+                          }`}
+                        >
+                          {dobError ? (
+                            <>
+                              <span className="inline-block w-3 h-3 rounded-full bg-rose-500 text-white text-[8px] font-black flex items-center justify-center">!</span>
+                              {dobError}
+                            </>
+                          ) : (
+                            <>You must be 18 or older to register.</>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Section 02 — Identity verification */}
+              <section className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A]">
+                    Section 02
+                  </p>
+                  <div className="h-px flex-1 bg-[#e8e4dc]" />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#1a1612]/50">
+                    Identity Verification
+                  </p>
                 </div>
 
-                {/* DOB Field */}
-                {role !== 'LABOUR' && (
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-[11px] font-black text-[#1a1612]/40 uppercase tracking-[0.2em] ml-1">
-                      <Calendar size={12} className="text-[#C9973A]" />
-                      Date of Birth
-                    </label>
-                    <input
-                      type="date"
-                      value={dob}
-                      onChange={(e) => setDob(e.target.value)}
-                      className="block w-full px-6 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-2xl text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all"
-                    />
-                  </div>
-                )}
-              </div>
+                <CompactIdentityCapture value={logo} onCapture={setLogo} />
 
-              {/* Next Button */}
-              <div className="pt-4">
-                <Button
-                  type="button"
-                  onClick={handleStep1Next}
-                  disabled={isLoading}
-                  className="w-full py-5 px-4 shadow-xl shadow-[#C9973A]/10 disabled:opacity-50 text-lg font-serif font-black rounded-full flex items-center justify-center gap-3"
-                >
-                  Continue to Location
-                  <ShieldCheck size={20} />
-                </Button>
-              </div>
+                <p className="text-[11px] text-[#1a1612]/45 flex items-center gap-2 ml-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#C9973A]/60" strokeWidth={2} />
+                  Optional · speeds up verification by 24h.
+                </p>
+              </section>
+
+              {/* Continue */}
+              <Button
+                type="button"
+                onClick={handleStep1Next}
+                disabled={isLoading}
+                className="w-full h-[58px] mt-2 shadow-[0_12px_28px_-8px_rgba(201,151,58,0.4)] disabled:opacity-50 disabled:shadow-none text-[13px] font-sans font-bold text-white bg-gradient-to-b from-[#D5A547] to-[#C9973A] hover:from-[#C9973A] hover:to-[#B08432] transition-all active:scale-[0.98] rounded-2xl uppercase tracking-[0.22em] flex justify-center items-center gap-2"
+              >
+                Continue to Location <span className="text-base leading-none">→</span>
+              </Button>
             </div>
           )}
 
           {/* SCREEN 2: LOCATION DETAILS */}
           {currentStep === 2 && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-               <div className="mb-6">
-                <h3 className="text-[13px] font-bold text-[#1a1612]/60 uppercase tracking-widest mb-1">
-                  Location Setup
-                </h3>
-                <p className="text-[11px] text-[#1a1612]/40">Set your service or delivery area</p>
-              </div>
-
-              <LocationDetails 
+              <LocationDetails
                 onComplete={handleLocationComplete}
                 isStandalone={false}
                 submitLabel="Continue to Credentials →"
-                showRadius={role !== 'BUYER'} // Only show radius for providers/labour
+                showRadius={role !== 'BUYER'}
               />
             </div>
           )}
 
           {/* SCREEN 3: ACCOUNT CREDENTIALS */}
           {currentStep === 3 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-              {/* Email Section */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-[#1a1612]/40 uppercase tracking-[0.2em] mb-3 ml-1">
-                    Email Address *
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@example.com"
-                    className="block w-full px-5 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-4xl text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20"
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+              {/* Section 01 — Sign-in email */}
+              <section className="space-y-5">
+                <div className="flex items-center gap-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A]">
+                    Section 01
+                  </p>
+                  <div className="h-px flex-1 bg-[#e8e4dc]" />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#1a1612]/50">
+                    Sign-in Email
+                  </p>
+                </div>
+
+                <FloatingInput
+                  label="Email Address"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  icon={Mail}
+                  autoComplete="email"
+                />
+              </section>
+
+              {/* Section 02 — Password */}
+              <section className="space-y-5">
+                <div className="flex items-center gap-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A]">
+                    Section 02
+                  </p>
+                  <div className="h-px flex-1 bg-[#e8e4dc]" />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#1a1612]/50">
+                    Password
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <FloatingInput
+                    label="Password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    icon={Lock}
+                    autoComplete="new-password"
+                    className={showPassword ? '' : 'tracking-widest'}
+                    rightElement={
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="text-[#C9973A]/70 hover:text-[#C9973A] transition-colors"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                        ) : (
+                          <Eye className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                        )}
+                      </button>
+                    }
                   />
-                </div>
-              </div>
 
-              {/* Password Section */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-[#1a1612]/40 uppercase tracking-[0.2em] mb-3 ml-1">
-                    Password *
-                  </label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-                      <Key
-                        className="h-4 w-4 text-[#C9973A]/40 group-focus-within:text-[#C9973A] transition-colors"
-                        strokeWidth={2}
-                      />
-                    </div>
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="block w-full pl-14 pr-14 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-4xl text-[15px] text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20 tracking-widest"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-5 flex items-center text-[#C9973A]/40 hover:text-[#C9973A] transition-colors"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" strokeWidth={2} />
-                      ) : (
-                        <Eye className="h-4 w-4" strokeWidth={2} />
-                      )}
-                    </button>
-                  </div>
-                </div>
+                  <FloatingInput
+                    label="Confirm Password"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    icon={Lock}
+                    autoComplete="new-password"
+                    className={showConfirmPassword ? '' : 'tracking-widest'}
+                    rightElement={
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="text-[#C9973A]/70 hover:text-[#C9973A] transition-colors"
+                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                        ) : (
+                          <Eye className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                        )}
+                      </button>
+                    }
+                  />
 
-                <div>
-                  <label className="block text-[11px] font-bold text-[#1a1612]/40 uppercase tracking-[0.2em] mb-3 ml-1">
-                    Confirm Password *
-                  </label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-                      <Key
-                        className="h-4 w-4 text-[#C9973A]/40 group-focus-within:text-[#C9973A] transition-colors"
-                        strokeWidth={2}
-                      />
-                    </div>
-                    <input
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="block w-full pl-14 pr-14 py-4 bg-[#fcfcfc] border border-[#e8e4dc] rounded-4xl text-base text-[#1a1612] focus:ring-4 focus:ring-[#C9973A]/10 focus:border-[#C9973A] outline-none transition-all placeholder:text-[#1a1612]/20 tracking-widest"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute inset-y-0 right-0 pr-5 flex items-center text-[#C9973A]/40 hover:text-[#C9973A] transition-colors"
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff className="h-4 w-4" strokeWidth={2} />
-                      ) : (
-                        <Eye className="h-4 w-4" strokeWidth={2} />
-                      )}
-                    </button>
-                  </div>
+                  <p className="text-[11px] text-[#1a1612]/45 flex items-center gap-2 ml-1">
+                    <Key className="w-3.5 h-3.5 text-[#C9973A]/60" strokeWidth={2} />
+                    Minimum 8 characters · use a mix of letters, numbers, and symbols.
+                  </p>
                 </div>
-              </div>
+              </section>
 
-              {/* Terms Section */}
-              <div className="space-y-4">
-                <div className="flex items-start gap-4">
-                  <div className="relative flex items-center pt-1">
-                    <input
-                      type="checkbox"
-                      id="terms"
-                      checked={agreeToTerms}
-                      onChange={(e) => setAgreeToTerms(e.target.checked)}
-                      className="sr-only"
-                    />
-                    <label
-                      htmlFor="terms"
-                      className={`w-5 h-5 rounded-md border flex items-center justify-center cursor-pointer transition-all shrink-0 ${
-                        agreeToTerms
-                          ? 'bg-[#C9973A] border-[#C9973A]'
-                          : 'bg-[#fdfaf6] border-[#d49b35]'
-                      }`}
-                    >
-                      {agreeToTerms && (
-                        <svg
-                          className="w-3.5 h-3.5 text-[#1a1612]"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={4}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </label>
-                  </div>
-                  <label
-                    htmlFor="terms"
-                    className="text-[13px] text-[#1a1612]/60 leading-relaxed cursor-pointer"
-                  >
-                    I agree to the{' '}
-                    <a href="#" className="font-bold text-[#C9973A] hover:underline">
-                      Terms of Service
-                    </a>{' '}
-                    and{' '}
-                    <a href="#" className="font-bold text-[#C9973A] hover:underline">
-                      Privacy Policy
-                    </a>
-                  </label>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="pt-4 space-y-3">
-                <Button
-                  type="button"
-                  onClick={handleRegister}
-                  disabled={isLoading}
-                  className="w-full py-5 px-4 shadow-md disabled:opacity-50 text-lg font-serif font-normal rounded-4xl"
+              {/* Terms */}
+              <div className="flex items-start gap-3 p-4 rounded-2xl border border-[#e8e4dc] bg-brand-white">
+                <input
+                  type="checkbox"
+                  id="terms"
+                  checked={agreeToTerms}
+                  onChange={(e) => setAgreeToTerms(e.target.checked)}
+                  className="sr-only"
+                />
+                <label
+                  htmlFor="terms"
+                  className={`w-5 h-5 rounded-md border-2 flex items-center justify-center cursor-pointer transition-all shrink-0 mt-0.5 ${
+                    agreeToTerms
+                      ? 'bg-[#C9973A] border-[#C9973A]'
+                      : 'bg-white border-[#d6c8a8] hover:border-[#C9973A]'
+                  }`}
                 >
-                  {isLoading
-                    ? 'Creating Account...'
-                    : isCompany
-                      ? 'Next: Documents →'
-                      : 'Complete Registration'}
-                </Button>
+                  {agreeToTerms && (
+                    <svg
+                      className="w-3 h-3 text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={4}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </label>
+                <label
+                  htmlFor="terms"
+                  className="text-[12px] text-[#1a1612]/65 leading-relaxed cursor-pointer flex-1"
+                >
+                  I agree to the{' '}
+                  <a href="#" className="font-bold text-[#C9973A] hover:underline">
+                    Terms of Service
+                  </a>{' '}
+                  and{' '}
+                  <a href="#" className="font-bold text-[#C9973A] hover:underline">
+                    Privacy Policy
+                  </a>
+                </label>
               </div>
+
+              {/* Submit */}
+              <Button
+                type="button"
+                onClick={handleRegister}
+                disabled={isLoading}
+                className="w-full h-[58px] shadow-[0_12px_28px_-8px_rgba(201,151,58,0.4)] disabled:opacity-50 disabled:shadow-none text-[13px] font-sans font-bold text-white bg-gradient-to-b from-[#D5A547] to-[#C9973A] hover:from-[#C9973A] hover:to-[#B08432] transition-all active:scale-[0.98] rounded-2xl uppercase tracking-[0.22em] flex justify-center items-center gap-2"
+              >
+                {isLoading
+                  ? 'Creating Account…'
+                  : isCompany
+                    ? (
+                      <>
+                        Next · Business Documents
+                        <span className="text-base leading-none">→</span>
+                      </>
+                    )
+                    : (
+                      <>
+                        Complete Registration
+                        <span className="text-base leading-none">→</span>
+                      </>
+                    )}
+              </Button>
             </div>
           )}
         </div>
 
         {currentStep === 3 && (
-          <div className="mt-10 text-center">
-            <p className="text-[13px] font-medium text-[#1a1612]/40">
+          <div className="mt-8 text-center">
+            <p className="text-[13px] font-medium text-[#1a1612]/55">
               Already a member?{' '}
               <button
                 type="button"

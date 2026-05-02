@@ -51,6 +51,7 @@ export class CreateQuoteDto {
     'AWAITING_PICKUP',
     'COMPLETED',
     'HANDED_OVER',
+    'SUPERSEDED',
   ])
   status?: string = 'PENDING';
 
@@ -108,4 +109,12 @@ export class CreateQuoteDto {
   @IsString()
   @MaxLength(255)
   pickupLocation?: string;
+
+  @IsOptional()
+  @IsEnum(['ORIGINAL', 'REVISION'])
+  quoteType?: string = 'ORIGINAL';
+
+  @IsOptional()
+  @IsUUID()
+  parentQuoteId?: string;
 }

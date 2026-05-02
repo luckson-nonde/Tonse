@@ -13,6 +13,11 @@ import {
   ShoppingBasket,
   Check,
   ArrowRight,
+  Sparkles,
+  Camera,
+  Target,
+  Clock,
+  Wallet,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useForm, Controller, FieldValues } from 'react-hook-form';
@@ -664,7 +669,7 @@ export default function DynamicInquiryForm({
   });
 
   return (
-    <div className="max-w-[1280px] mx-auto w-full min-h-screen bg-[#f5f2ed]">
+    <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto w-full min-h-screen bg-[#f5f2ed]">
       {/* Mobile-only Header */}
       <div className="md:hidden sticky top-0 z-30 px-4 pt-4 pb-5 bg-[#f5f2ed]">
         <div className="flex items-center gap-3">
@@ -692,7 +697,7 @@ export default function DynamicInquiryForm({
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(onFormSubmit)} className="p-4 md:p-8 lg:p-12">
+      <form onSubmit={handleSubmit(onFormSubmit)} className="p-4 md:p-8 lg:p-10 xl:p-12">
         <div className="flex flex-col md:flex-row gap-8 lg:gap-16 items-start">
           {/* Desktop Left-side Context - Sticky */}
           <div className="hidden md:flex flex-col gap-8 w-full md:w-[320px] lg:w-[400px] shrink-0 sticky top-12">
@@ -734,6 +739,52 @@ export default function DynamicInquiryForm({
               </div>
             </div>
 
+            {/* Why details matter — primes the buyer that richer detail = sharper provider quotes */}
+            <div className="bg-gradient-to-br from-[#fdf6e9]/70 to-[#fdf6e9]/30 border border-[#C9973A]/15 rounded-[32px] p-7">
+              <div className="flex items-start gap-3 mb-5">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div className="pt-0.5">
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#C9973A] mb-1">
+                    Tonse Tip
+                  </p>
+                  <h3 className="font-serif text-[18px] font-bold text-[#1a1a2e] leading-snug">
+                    Why details matter
+                  </h3>
+                </div>
+              </div>
+              <p className="text-[13px] text-[#1a1a2e]/65 leading-relaxed font-medium mb-5">
+                Providers quote based on what you share. The richer your details, the closer their offers will land to what you actually need.
+              </p>
+              <ul className="space-y-3">
+                <li className="flex items-start gap-3">
+                  <Camera className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
+                  <p className="text-[12px] text-[#1a1a2e]/80 leading-relaxed">
+                    <span className="font-bold text-[#1a1a2e]">Photos</span> let providers identify your exact item — no guesswork.
+                  </p>
+                </li>
+                <li className="flex items-start gap-3">
+                  <Target className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
+                  <p className="text-[12px] text-[#1a1a2e]/80 leading-relaxed">
+                    <span className="font-bold text-[#1a1a2e]">Brand &amp; specs</span> unlock accurate pricing instead of wide ranges.
+                  </p>
+                </li>
+                <li className="flex items-start gap-3">
+                  <Clock className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
+                  <p className="text-[12px] text-[#1a1a2e]/80 leading-relaxed">
+                    <span className="font-bold text-[#1a1a2e]">Urgency</span> helps providers prioritize and quote realistic timelines.
+                  </p>
+                </li>
+                <li className="flex items-start gap-3">
+                  <Wallet className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
+                  <p className="text-[12px] text-[#1a1a2e]/80 leading-relaxed">
+                    <span className="font-bold text-[#1a1a2e]">A budget hint</span> filters offers to your range — optional but useful.
+                  </p>
+                </li>
+              </ul>
+            </div>
+
             <div className="px-4">
               <div className="flex items-center gap-3 text-[12px] font-medium text-[#1a1a2e]/40 italic">
                 <AlertCircle className="w-4 h-4" />
@@ -748,14 +799,22 @@ export default function DynamicInquiryForm({
             animate={{ opacity: 1, x: 0 }}
             className="flex-1 w-full space-y-8"
           >
-            <div className="bg-white border border-[#f1f5f9] rounded-[32px] p-6 md:p-10 shadow-sm shadow-[#1a1a2e]/[0.02]">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-10">
+            <div className="bg-white border border-[#f1f5f9] rounded-[32px] p-6 md:p-8 xl:p-10 shadow-sm shadow-[#1a1a2e]/[0.02]">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-6 md:gap-x-8 gap-y-8 md:gap-y-10">
                 {ungroupedFields.map((field, idx) => (
                   <div
                     key={field.name || `field-${idx}`}
                     className={
-                      field.type === 'textarea' || field.type === 'image_upload'
-                        ? 'md:col-span-2'
+                      // Full-row when content needs horizontal room: long-form text,
+                      // image dropzones, and any select rendered as chips (≤4 opts)
+                      // or multiselect — keeps the chips on one line instead of wrapping.
+                      field.type === 'textarea' ||
+                      field.type === 'image_upload' ||
+                      field.type === 'multiselect' ||
+                      (field.type === 'select' &&
+                        field.options &&
+                        field.options.length <= 4)
+                        ? 'col-span-full'
                         : ''
                     }
                   >
@@ -764,18 +823,23 @@ export default function DynamicInquiryForm({
                 ))}
 
                 {Object.entries(groupedFields).map(([groupName, fields], gIdx) => (
-                  <div key={`group-${groupName}-${gIdx}`} className="md:col-span-2 space-y-10">
+                  <div key={`group-${groupName}-${gIdx}`} className="col-span-full space-y-10">
                     <div className="pt-4">
                       <p className="font-sans text-[11px] uppercase tracking-[0.2em] text-[#C9973A] font-bold pb-2 border-b border-[#C9973A]/20 mb-10">
                         {groupName}
                       </p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-10">
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-6 md:gap-x-8 gap-y-8 md:gap-y-10">
                         {fields.map((field, fIdx) => (
                           <div
                             key={field.name || `group-field-${fIdx}`}
                             className={
-                              field.type === 'textarea' || field.type === 'image_upload'
-                                ? 'md:col-span-2'
+                              field.type === 'textarea' ||
+                              field.type === 'image_upload' ||
+                              field.type === 'multiselect' ||
+                              (field.type === 'select' &&
+                                field.options &&
+                                field.options.length <= 4)
+                                ? 'col-span-full'
                                 : ''
                             }
                           >

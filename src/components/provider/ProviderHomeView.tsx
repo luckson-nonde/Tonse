@@ -70,6 +70,20 @@ export default function ProviderHomeView({
     return myQuotes.filter((q) => !q.isArchived);
   }, [myQuotes]);
 
+  const salesStats = React.useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    
+    const todaysSales = displayQuotes
+      .filter(q => (q.status === 'PAID' || q.status === 'COMPLETED') && new Date(q.updatedAt || q.createdAt).getTime() >= startOfToday)
+      .reduce((sum, q) => sum + Number(q.price || 0), 0);
+
+    const activeQuotes = displayQuotes.filter(q => q.status === 'PENDING' || q.status === 'ACCEPTED').length;
+    const pendingQuotes = displayQuotes.filter(q => q.status === 'PENDING').length;
+
+    return { todaysSales, activeQuotes, pendingQuotes };
+  }, [displayQuotes]);
+
   const renderEventsHome = () => (
     <div className="space-y-6">
       {/* Virtual Account Card - Only for Admins/Managers with Wallet Permission */}
@@ -114,7 +128,7 @@ export default function ProviderHomeView({
           </div>
           <div className="h-[250px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
+              <AreaChart data={chartData} width={800} height={250}>
                 <defs>
                   <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#d49b35" stopOpacity={0.1} />
@@ -202,15 +216,15 @@ export default function ProviderHomeView({
           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#fffaf5] rounded-xl sm:rounded-2xl flex items-center justify-center mb-3 sm:mb-4 border border-[#d49b35]/10">
             <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-[#d49b35]" />
           </div>
-          <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
-            TOTAL QUOTED VALUE
+            <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
+            POTENTIAL REVENUE
           </p>
           <div className="flex items-end gap-3 mb-1 min-w-0">
             <h2
               className="text-[clamp(1.25rem,5vw,2.25rem)] font-black text-[#d49b35] leading-none truncate"
-              title={`ZMW ${displayQuotes.reduce((sum, q) => sum + q.price, 0).toLocaleString()}`}
+              title={`ZMW ${displayQuotes.reduce((sum, q) => sum + Number(q.price || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
             >
-              ZMW {displayQuotes.reduce((sum, q) => sum + q.price, 0).toLocaleString()}
+              ZMW {displayQuotes.reduce((sum, q) => sum + Number(q.price || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </h2>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 font-medium">Potential revenue</p>
@@ -285,9 +299,7 @@ export default function ProviderHomeView({
       {/* Booking Requests Section */}
       <div>
         <div className="flex justify-between items-center mb-3 sm:mb-4 px-1">
-          <h3 className="text-lg font-serif font-black text-slate-900">
-            Booking Requests
-          </h3>
+          <h3 className="text-lg font-serif font-black text-slate-900">Booking Requests</h3>
           <div className="flex items-center gap-2">
             {isSelectionMode && selectedInquiryIds.length > 0 && (
               <>
@@ -457,14 +469,14 @@ export default function ProviderHomeView({
               <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-[#d49b35]" />
             </div>
             <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
-              {isSupplier ? 'TOTAL SUPPLY VALUE' : 'TOTAL QUOTED VALUE'}
+              {isSupplier ? 'TOTAL SUPPLY VALUE' : 'POTENTIAL REVENUE'}
             </p>
             <div className="flex items-end gap-3 mb-1 min-w-0">
               <h2
                 className="text-[clamp(1.25rem,5vw,2.25rem)] font-black text-[#d49b35] leading-none truncate"
-                title={`ZMW ${displayQuotes.reduce((sum, q) => sum + q.price, 0).toLocaleString()}`}
+                title={`ZMW ${displayQuotes.reduce((sum, q) => sum + Number(q.price || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
               >
-                ZMW {displayQuotes.reduce((sum, q) => sum + q.price, 0).toLocaleString()}
+                ZMW {displayQuotes.reduce((sum, q) => sum + Number(q.price || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </h2>
             </div>
             <p className="text-xs sm:text-sm text-slate-500 font-medium">Potential revenue</p>
@@ -478,16 +490,20 @@ export default function ProviderHomeView({
               <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-[#d49b35]" />
             </div>
             <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1">
-              {isSupplier ? 'AWAITING PICKUP' : isBookingBased ? 'PENDING COMPLETION' : 'PENDING COLLECTION'}
+              {isSupplier
+                ? 'AWAITING PICKUP'
+                : isBookingBased
+                  ? 'PENDING COMPLETION'
+                  : 'PENDING COLLECTION'}
             </p>
             <div className="flex items-end gap-3 mb-1 min-w-0">
               <h2
                 className="text-[clamp(1.25rem,5vw,2.25rem)] font-black text-[#d49b35] leading-none truncate"
                 title={displayQuotes
-                  .filter((q) => q.status === 'PAID' || q.status === 'PENDING')
+                  .filter((q) => q.status === 'PAID' || q.status === 'PENDING_COLLECTION' || q.status === 'AWAITING_PICKUP')
                   .length.toString()}
               >
-                {displayQuotes.filter((q) => q.status === 'PAID' || q.status === 'PENDING').length}
+                {displayQuotes.filter((q) => q.status === 'PAID' || q.status === 'PENDING_COLLECTION' || q.status === 'AWAITING_PICKUP').length}
               </h2>
             </div>
             <p className="text-xs sm:text-sm text-slate-500 font-medium">Awaiting event date</p>
@@ -511,13 +527,13 @@ export default function ProviderHomeView({
                 </p>
                 <h4
                   className="text-[clamp(1rem,4vw,1.5rem)] font-black text-slate-900 mb-1 truncate"
-                  title="$1,240.00"
+                  title={`ZMW ${salesStats.todaysSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
                 >
-                  $1,240.00
+                  ZMW {salesStats.todaysSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </h4>
                 <div className="flex items-center gap-1 text-emerald-500 text-[10px] font-bold">
                   <TrendingUp className="w-3 h-3" />
-                  12.5%
+                  Live Data
                 </div>
               </div>
               <div className="bg-slate-50/50 rounded-2xl sm:rounded-3xl p-3 sm:p-6 border border-slate-100 min-w-0">
@@ -526,19 +542,19 @@ export default function ProviderHomeView({
                 </p>
                 <h4
                   className="text-[clamp(1rem,4vw,1.5rem)] font-black text-slate-900 mb-1 truncate"
-                  title="18"
+                  title={salesStats.activeQuotes.toString()}
                 >
-                  18
+                  {salesStats.activeQuotes}
                 </h4>
                 <div className="flex items-center gap-1 text-[#d49b35] text-[10px] font-bold">
-                  <Zap className="w-3 h-3" />4 pending
+                  <Zap className="w-3 h-3" />{salesStats.pendingQuotes} pending
                 </div>
               </div>
             </div>
 
             <div className="h-[200px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
+                <AreaChart data={chartData} width={800} height={200}>
                   <defs>
                     <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#d49b35" stopOpacity={0.1} />

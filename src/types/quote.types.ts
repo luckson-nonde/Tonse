@@ -16,6 +16,9 @@ export interface Quote {
   delivery?: any; // Stringified or object
   processType?: 'EXPRESS' | 'STANDARD';
   
+  quoteType?: 'ORIGINAL' | 'REVISION';
+  parentQuoteId?: string;
+  
   // Category-specific fields (flattened for convenience)
   securityDeposit?: number;
   maxCapacity?: number;
@@ -37,6 +40,7 @@ export enum QuoteStatus {
   REJECTED = 'REJECTED',
   PAID = 'PAID',
   COMPLETED = 'COMPLETED',
+  SUPERSEDED = 'SUPERSEDED',
 }
 
 export interface QuoteFilter {

@@ -9,17 +9,20 @@ import {
   Printer,
   Archive,
   Check,
+  Sparkles,
+  X,
 } from 'lucide-react';
-import { Quote } from '../types';
+import { Quote } from '../types.ts';
 
 interface QuoteCardProps {
   quote: Quote;
   onView: () => void;
   onPrint?: () => void;
   onArchive?: () => void;
+  onDelete?: () => void;
 }
 
-export default function QuoteCard({ quote, onView, onPrint, onArchive }: QuoteCardProps) {
+export default function QuoteCard({ quote, onView, onPrint, onArchive, onDelete }: QuoteCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -51,8 +54,20 @@ export default function QuoteCard({ quote, onView, onPrint, onArchive }: QuoteCa
           </div>
         </div>
 
-        {/* Price */}
+        {/* Price & Status */}
         <div className="text-right shrink-0">
+          {quote.status === 'PAID' && (
+            <div className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-500 text-white rounded-full text-[9px] font-black uppercase tracking-tighter mb-2 shadow-sm shadow-emerald-500/20">
+              <Check className="w-2.5 h-2.5" />
+              PAID
+            </div>
+          )}
+          {quote.quoteType === 'REVISION' && (
+            <div className="inline-flex items-center gap-1 px-2 py-1 bg-blue-500 text-white rounded-full text-[9px] font-black uppercase tracking-tighter mb-2 shadow-sm shadow-blue-500/20">
+              <Sparkles className="w-2.5 h-2.5" />
+              REVISED
+            </div>
+          )}
           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">
             Total Quote
           </p>
@@ -145,10 +160,22 @@ export default function QuoteCard({ quote, onView, onPrint, onArchive }: QuoteCa
                 e.stopPropagation();
                 onArchive();
               }}
-              className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+              className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all"
               title="Archive Quote"
             >
               <Archive className="w-4 h-4" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+              title="Delete Quote"
+            >
+              <X className="w-4 h-4" />
             </button>
           )}
           <button

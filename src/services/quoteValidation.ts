@@ -9,6 +9,11 @@ export const generateZodSchema = (fields: QuoteField[]) => {
 
     switch (field.type) {
       case 'currency':
+        // Currency fields must be positive numbers if required
+        zodType = z.coerce.number().refine((val) => (field.required ? val > 0 : true), {
+          message: `${field.label} must be greater than 0`,
+        });
+        break;
       case 'number':
         zodType = z.coerce.number();
         break;

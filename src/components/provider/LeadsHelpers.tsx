@@ -35,16 +35,16 @@ export function PreferenceTags({
   const entries = Object.entries(preferences).filter(([, v]) => v !== null && v !== undefined && v !== '');
   if (!entries.length) return null;
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-4">
+    <div className="grid grid-cols-2 gap-x-8 gap-y-6 mb-6">
       {entries.map(([key, value]) => (
         <div
           key={key}
-          className="flex flex-col gap-0.5"
+          className="flex flex-col"
         >
-          <span className="text-[11px] font-black text-slate-600 uppercase tracking-widest">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5">
             {formatPrefKey(key)}
           </span>
-          <span className="text-sm font-black text-slate-900">
+          <span className="text-[15px] font-black text-slate-900 leading-tight">
             {formatPrefValue(String(value))}
           </span>
         </div>

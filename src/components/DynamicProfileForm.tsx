@@ -245,9 +245,9 @@ export default function DynamicProfileForm({
                         onClick={() => document.getElementById(`file-input-${field.name}`)?.click()}
                         className="w-full h-32 rounded-2xl bg-[#fffef9] border-2 border-dashed border-[#e8e0d0] flex flex-col items-center justify-center overflow-hidden transition-all group-hover:border-[#C9973A]/30 cursor-pointer"
                       >
-                        {value ? (
+                        {value && typeof value === 'string' ? (
                           <img
-                            src={value as string}
+                            src={String(value)}
                             alt={field.label}
                             className="w-full h-full object-cover"
                             referrerPolicy="no-referrer"
@@ -275,7 +275,7 @@ export default function DynamicProfileForm({
                           className="hidden"
                         />
                       </div>
-                      {value && (
+                      {value && typeof value === 'string' ? (
                         <button
                           type="button"
                           onClick={() => onChange('')}
@@ -283,7 +283,7 @@ export default function DynamicProfileForm({
                         >
                           <X className="w-4 h-4" />
                         </button>
-                      )}
+                      ) : null}
                     </div>
                     <div className="flex gap-2 text-xs">
                       <button

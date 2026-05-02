@@ -44,8 +44,8 @@ const mobilePhonesBuySchema: FieldSchema[] = [
   { name: "colorPreference", label: "Color Preference", type: "text", required: false, placeholder: "e.g. Midnight Black, Any color" },
   { name: "condition", label: "Condition", type: "select", required: true, options: ["Brand New", "Used - Excellent", "Used - Good", "Used - Fair", "Any"] },
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, helpText: "Optional - leave blank to receive price offers from shops" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] },
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, helpText: "Optional - leave blank to receive price offers from shops" },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific requirements, accessories needed, etc." }
 ];
 
@@ -1310,3 +1310,140 @@ export const getCategorySchema = (categoryName: string): FieldSchema[] => {
   const category = CATEGORIES_DB.find(c => c.name.toLowerCase() === categoryName.toLowerCase() || c.id === categoryName);
   return category?.formSchema || GENERIC_FALLBACK_SCHEMA;
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Business-type derivation
+//
+// Tonse's onboarding captures four signals about a seller:
+//   1. role     — auth identity (BUYER / SELLER / SUPPLIER / SERVICE_PROVIDER…)
+//   2. subRole  — variant within the role (PRODUCT_SELLER / SERVICE_SELLER /
+//                 HYBRID_SELLER / SUPPLIER_SELLER…)
+//   3. categories — what they trade in (Electronics / Mobile Phones / …) where
+//                   each entry is a sub-category whose name carries the
+//                   action variant in parentheses, e.g.
+//                   "Mobile Phones & Accessories (Repair)" or
+//                   "Mobile Phones & Accessories (Buy New)"
+//   4. specification — derived from the action variant in (3)
+//
+// The combination of the four resolves to a single BusinessType which every
+// dashboard surface (sidebar, stat tiles, lead filters, form schemas) keys
+// off of, so an Electronics retail shop and an Electronics repair shop see
+// genuinely different UIs even though they share role+subRole+category name.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type BusinessType =
+  | 'BUYER'
+  | 'LABOUR'
+  | 'EVENTS'
+  | 'ENTERTAINMENT'
+  | 'WHOLESALE'
+  | 'HYBRID'                // sells both products & services as a brand model
+  | 'PRO_SERVICES'          // service-only seller (consulting, design, etc.)
+  | 'REPAIR_SERVICE'        // sells the act of repairing things
+  | 'PRODUCTS_AND_REPAIR'   // sells new + repairs (e.g. phone shop + tech bench)
+  | 'RETAIL_PRODUCTS'       // sells new products only
+  | 'ADMIN'
+  | 'UNKNOWN';
+
+export const REPAIR_ACTION_PATTERN =
+  /\((repair|restoration|upholstery|recovery|service|maintenance|fix)\b[^)]*\)/i;
+export const BUY_NEW_ACTION_PATTERN =
+  /\((buy new|new|purchase|sell|sale|retail)\b[^)]*\)/i;
+
+export function isRepairVariant(categoryName: string): boolean {
+  return REPAIR_ACTION_PATTERN.test(categoryName);
+}
+
+export function isBuyNewVariant(categoryName: string): boolean {
+  return BUY_NEW_ACTION_PATTERN.test(categoryName);
+}
+
+/**
+ * Extract the action variant ("Buy New", "Repair", etc.) from a sub-category
+ * name. Returns null if the name has no variant suffix in parentheses.
+ */
+export function getCategoryVariant(categoryName: string): string | null {
+  const match = categoryName.match(/\(([^)]+)\)\s*$/);
+  return match ? match[1].trim() : null;
+}
+
+interface MinimalUserForBusinessType {
+  role?: string;
+  subRole?: string;
+  categories?: string[];
+}
+
+/**
+ * Resolve the four onboarding signals into a single BusinessType.
+ *
+ * Priority order:
+ *   1. Top-level roles that bypass the seller hierarchy (BUYER, LABOUR, ADMIN,
+ *      EVENTS, ENTERTAINMENT) win first — they don't depend on subRole.
+ *   2. Within the seller hierarchy, subRole resolves WHOLESALE / HYBRID /
+ *      PRO_SERVICES directly.
+ *   3. PRODUCT_SELLER (or bare SELLER) inspects the categories' action
+ *      variants to pick between RETAIL_PRODUCTS, REPAIR_SERVICE, and the mixed
+ *      PRODUCTS_AND_REPAIR.
+ *
+ * Returns 'UNKNOWN' for users with no role set yet (e.g. mid-onboarding).
+ */
+export function getBusinessType(user: MinimalUserForBusinessType | null | undefined): BusinessType {
+  if (!user || !user.role) return 'UNKNOWN';
+
+  const role = user.role.toUpperCase();
+  if (role === 'BUYER') return 'BUYER';
+  if (role === 'LABOUR') return 'LABOUR';
+  if (role === 'ADMIN') return 'ADMIN';
+  if (role === 'EVENTS') return 'EVENTS';
+  if (role === 'ENTERTAINMENT') return 'ENTERTAINMENT';
+
+  const subRole = (user.subRole || '').toUpperCase();
+  if (subRole === 'SUPPLIER_SELLER' || role === 'SUPPLIER') return 'WHOLESALE';
+  if (subRole === 'HYBRID_SELLER') return 'HYBRID';
+  if (subRole === 'SERVICE_SELLER' || role === 'SERVICE_PROVIDER') return 'PRO_SERVICES';
+
+  if (subRole === 'PRODUCT_SELLER' || role === 'SELLER') {
+    const categories = user.categories || [];
+    const hasRepair = categories.some(isRepairVariant);
+    // "buy new" is the implicit default — any non-repair entry counts as sales
+    const hasSales = categories.some((c) => !isRepairVariant(c));
+
+    if (hasRepair && hasSales) return 'PRODUCTS_AND_REPAIR';
+    if (hasRepair) return 'REPAIR_SERVICE';
+    return 'RETAIL_PRODUCTS';
+  }
+
+  return 'UNKNOWN';
+}
+
+/**
+ * Human-friendly label for a BusinessType — used in admin tools and headers.
+ */
+export function getBusinessTypeLabel(type: BusinessType): string {
+  switch (type) {
+    case 'BUYER':
+      return 'Buyer';
+    case 'LABOUR':
+      return 'Skilled Labour';
+    case 'EVENTS':
+      return 'Events Provider';
+    case 'ENTERTAINMENT':
+      return 'Entertainment Provider';
+    case 'WHOLESALE':
+      return 'Wholesale Supplier';
+    case 'HYBRID':
+      return 'Hybrid Seller';
+    case 'PRO_SERVICES':
+      return 'Service Provider';
+    case 'REPAIR_SERVICE':
+      return 'Repair Service';
+    case 'PRODUCTS_AND_REPAIR':
+      return 'Sales & Repair';
+    case 'RETAIL_PRODUCTS':
+      return 'Retail Shop';
+    case 'ADMIN':
+      return 'Admin';
+    default:
+      return 'Unverified';
+  }
+}

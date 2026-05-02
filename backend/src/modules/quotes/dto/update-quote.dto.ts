@@ -42,6 +42,7 @@ export class UpdateQuoteDto {
     'AWAITING_PICKUP',
     'COMPLETED',
     'HANDED_OVER',
+    'SUPERSEDED',
   ])
   status?: string;
 
@@ -103,4 +104,12 @@ export class UpdateQuoteDto {
   @IsString()
   @MaxLength(255)
   pickupLocation?: string;
+
+  @IsOptional()
+  @IsEnum(['ORIGINAL', 'REVISION'])
+  quoteType?: string;
+
+  @IsOptional()
+  @IsUUID()
+  parentQuoteId?: string;
 }

@@ -108,19 +108,19 @@ export default function DynamicDataDisplay({ schema, attributes }: DynamicDataDi
       );
     }
 
-    return <span className="text-slate-900">{String(item.value)}</span>;
+    return <span className="text-slate-900 font-black">{String(item.value)}</span>;
   };
 
   return (
     <div className="space-y-8">
       {ungroupedData.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-7">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-8">
           {ungroupedData.map((item, idx) => (
-            <div key={`ungrouped-${item.label}-${idx}`} className="flex flex-col gap-2">
-              <span className="text-[12px] uppercase tracking-[0.2em] text-slate-600 font-black">
+            <div key={`ungrouped-${item.label}-${idx}`} className="flex flex-col">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5">
                 {item.label}
               </span>
-              <div className="text-base font-black text-slate-900 leading-tight">
+              <div className="text-[15px] font-black text-slate-900 leading-tight">
                 {renderValue(item)}
               </div>
             </div>
@@ -129,20 +129,20 @@ export default function DynamicDataDisplay({ schema, attributes }: DynamicDataDi
       )}
 
       {Object.entries(groupedData).map(([groupName, items]) => (
-        <div key={groupName} className="space-y-6">
-          <h4 className="text-[13px] font-black text-[#d49b35] uppercase tracking-[0.25em] border-b-2 border-[#d49b35]/30 pb-3">
+        <div key={groupName} className="space-y-8">
+          <h4 className="text-[13px] font-black text-[#d49b35] uppercase tracking-[0.25em] border-b-2 border-[#d49b35]/10 pb-4 mb-8">
             {groupName}
           </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-9">
             {items.map((item, idx) => (
               <div
                 key={`grouped-${groupName}-${item.label}-${idx}`}
-                className="flex flex-col gap-2.5"
+                className="flex flex-col"
               >
-                <span className="text-[12px] uppercase tracking-[0.2em] text-slate-700 font-black">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5">
                   {item.label}
                 </span>
-                <div className="text-lg font-black text-slate-900 leading-tight">
+                <div className="text-[16px] font-black text-slate-900 leading-tight">
                   {renderValue(item)}
                 </div>
               </div>

@@ -87,6 +87,28 @@ export class InquiriesService {
     return await this.update(id, { status } as UpdateInquiryDto);
   }
 
+  /**
+   * Atomically bumps the view counter. The frontend fires this when a
+   * provider expands an inquiry detail in their leads feed. Atomic UPDATE
+   * avoids the read/write race that a `findOne` + `+1` + `update` would have
+   * if multiple providers click at the same instant.
+   *
+   * Returns the post-increment value so the caller can echo it back to the
+   * client without a follow-up SELECT.
+   */
+  async incrementViewCount(id: string): Promise<number> {
+    const result = await this.inquiriesRepository
+      .createQueryBuilder()
+      .update(Inquiry)
+      .set({ viewCount: () => '"viewCount" + 1' })
+      .where('id = :id', { id })
+      .returning('"viewCount"')
+      .execute();
+
+    const row = (result.raw && (result.raw[0] as { viewCount: number })) || null;
+    return row ? Number(row.viewCount) : 0;
+  }
+
   async findByDisplayId(displayId: string): Promise<Inquiry> {
     return await this.inquiriesRepository.findOne({
       where: { displayId },

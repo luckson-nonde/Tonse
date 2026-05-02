@@ -199,7 +199,7 @@ export default function DynamicAccountRenderer({
             if (metric.id === 'active_inquiries') {
               metricValue =
                 data?.inquiries?.filter(
-                  (i: any) => i.status !== 'CLOSED' && i.status !== 'CANCELLED'
+                  (i: any) => !['CLOSED', 'CANCELLED', 'PAID'].includes(i.status)
                 ).length || 0;
             } else if (metric.id === 'pending_quotes') {
               metricValue = data?.quotes?.filter((q: any) => q.status === 'PENDING').length || 0;
@@ -494,6 +494,7 @@ export default function DynamicAccountRenderer({
                     onView={() => onAction('view_quote', item)}
                     onPrint={() => onAction('print_quote', item)}
                     onArchive={() => onAction('archive_quote', item)}
+                    onDelete={() => onAction('delete_quote', item)}
                   />
                 );
               }

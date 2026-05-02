@@ -41,6 +41,10 @@ export function useUserQuotes(userId?: string, refetch?: boolean) {
     };
 
     loadQuotes();
+
+    // Poll every 30 seconds so buyer sees new quotations without manual refresh
+    const interval = setInterval(loadQuotes, 30000);
+    return () => clearInterval(interval);
   }, [userId, refetchTrigger]);
 
   return { quotes, loading, error, refresh };

@@ -49,6 +49,43 @@ body {
   scrollbar-width: none;
 }
 
+/* Tonse-branded slim scrollbar — used in scrollable pickers (category grid, etc.) */
+.tonse-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201, 151, 58, 0.35) transparent;
+}
+.tonse-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.tonse-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.tonse-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(201, 151, 58, 0.3);
+  border-radius: 999px;
+}
+.tonse-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(201, 151, 58, 0.55);
+}
+
+/* Kill Chrome/Safari autofill yellow/blue wash so inputs keep design colors */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: #1B3068;
+  -webkit-box-shadow: 0 0 0 1000px #fffaf5 inset;
+  caret-color: #1B3068;
+  transition: background-color 9999s ease-in-out 0s;
+  font-weight: 500;
+}
+
 .noise-bg::before {
   content: '';
   position: fixed;

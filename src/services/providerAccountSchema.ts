@@ -45,7 +45,24 @@ export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       icon: 'Truck', 
       permissions: [PERMISSIONS.VIEW_ANALYTICS] 
     },
-    { id: 'collection', label: 'Collection', icon: 'QrCode', permissions: [PERMISSIONS.MANAGE_COLLECTIONS] },
+    {
+      id: 'collection',
+      label: 'Collection',
+      icon: 'QrCode',
+      permissions: [PERMISSIONS.MANAGE_COLLECTIONS],
+      // Pure service businesses don't have physical handover, so the QR
+      // collection flow doesn't apply. Repair shops DO need it (parts /
+      // device handoff), so we keep them in.
+      excludeRoles: undefined,
+      businessTypes: [
+        'RETAIL_PRODUCTS',
+        'WHOLESALE',
+        'HYBRID',
+        'PRODUCTS_AND_REPAIR',
+        'REPAIR_SERVICE',
+        'EVENTS',
+      ],
+    },
     { 
       id: 'products', 
       label: (role) => role === 'EVENTS' ? 'Inventory' : 'My Products', 

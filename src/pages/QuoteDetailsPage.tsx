@@ -10,9 +10,12 @@ import {
   QrCode,
   ShieldCheck,
   Printer,
+  FileText,
+  X,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import VerificationModal from '../components/VerificationModal';
+import QuoteInvoice from '../components/QuoteInvoice';
 import { QRCodeSVG } from 'qrcode.react';
 import { apiClient } from '../services/api/client';
 import { Quote, Inquiry } from '../types';
@@ -27,6 +30,7 @@ export default function QuoteDetailsPage() {
   const [selectedItem, setSelectedItem] = useState('');
   const [quoteData, setQuoteData] = useState<QuoteData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -64,6 +68,10 @@ export default function QuoteDetailsPage() {
     window.print();
   };
 
+  const handleViewInvoice = () => {
+    setIsInvoiceModalOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
       {/* Header Bar */}
@@ -77,13 +85,23 @@ export default function QuoteDetailsPage() {
           </button>
           <h1 className="text-lg font-bold text-slate-900">Quotation Details</h1>
         </div>
-        <button
-          onClick={handlePrint}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors text-sm"
-        >
-          <Printer className="w-4 h-4" />
-          Print
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleViewInvoice}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-700 font-bold rounded-xl hover:bg-slate-100 transition-colors text-sm border border-slate-200"
+            title="View complete invoice with all details"
+          >
+            <FileText className="w-4 h-4" />
+            Invoice
+          </button>
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors text-sm"
+          >
+            <Printer className="w-4 h-4" />
+            Print
+          </button>
+        </div>
       </div>
 
       <div className="p-4 max-w-3xl mx-auto mt-2 print:p-0 print:max-w-none">
@@ -396,6 +414,70 @@ export default function QuoteDetailsPage() {
         onClose={() => setIsModalOpen(false)}
         itemName={selectedItem}
       />
+
+      {/* Invoice Modal */}
+      {isInvoiceModalOpen && quoteData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl max-h-[90vh] overflow-y-auto w-full">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between z-10">
+              <h2 className="text-xl font-bold text-slate-900">Complete Invoice</h2>
+              <button
+                onClick={() => setIsInvoiceModalOpen(false)}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6 text-slate-600" />
+              </button>
+            </div>
+
+            {/* Invoice Content */}
+            <div className="p-8">
+              <QuoteInvoice quote={quoteData} inquiry={quoteData.inquiry} isPreview={true} />
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="border-t border-slate-200 px-6 py-4 bg-slate-50 flex gap-3 sticky bottom-0">
+              <button
+                onClick={() => {
+                  // Create a new window for printing
+                  const printWindow = window.open('', '', 'height=600,width=900');
+                  if (printWindow) {
+                    printWindow.document.write(`
+                      <!DOCTYPE html>
+                      <html>
+                        <head>
+                          <title>Quote Invoice</title>
+                          <style>
+                            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; margin: 0; padding: 20px; }
+                            @media print { body { margin: 0; padding: 0; } }
+                          </style>
+                        </head>
+                        <body>
+                          ${document.querySelector('[role="document"]')?.innerHTML || 'Unable to generate invoice'}
+                          <script>
+                            window.onload = function() { window.print(); }
+                          </script>
+                        </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                  }
+                }}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                <Printer className="w-4 h-4" />
+                Print Invoice
+              </button>
+              <button
+                onClick={() => setIsInvoiceModalOpen(false)}
+                className="flex-1 px-4 py-2 bg-slate-700 text-white font-bold rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

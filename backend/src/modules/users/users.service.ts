@@ -144,6 +144,8 @@ export class UsersService {
     phone: string,
     passwordHash: string,
     role: string = 'BUYER',
+    profilePicture?: string,
+    dateOfBirth?: string,
     ipAddress?: string,
     userAgent?: string
   ): Promise<User> {
@@ -176,6 +178,8 @@ export class UsersService {
       phone,
       password: passwordHash,
       role,
+      profilePicture: profilePicture || null,
+      dateOfBirth: dateOfBirth || null,
       verificationStatus: 'PENDING',
       isActive: true,
     });

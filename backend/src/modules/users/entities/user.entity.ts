@@ -98,6 +98,13 @@ export class User {
   phone: string;
 
   /**
+   * Date of Birth
+   * Captured during registration, stored as DATE type
+   */
+  @Column({ type: 'date', nullable: true })
+  dateOfBirth: string;
+
+  /**
    * Hashed Password
    * Never selected in queries by default for security
    */

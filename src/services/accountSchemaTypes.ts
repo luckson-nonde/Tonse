@@ -70,6 +70,11 @@ export interface NavigationItem {
   roleFilter?: string[];
   excludeRoles?: string[];
   categoryFilter?: string[] | ((role: string, categories: string[]) => boolean);
+  // Limit this nav item to specific BusinessType values (e.g.
+  // ['REPAIR_SERVICE', 'PRODUCTS_AND_REPAIR']). When omitted, the item is
+  // shown regardless of business type. Resolved via getBusinessType(user)
+  // in services/categories.ts.
+  businessTypes?: string[];
 }
 
 export interface MasterAccountSchema {

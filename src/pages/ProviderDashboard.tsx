@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import owlTriumphant from '../assets/images/empty-states/owl_triumphant.png';
 import { type Inquiry, type Quote } from '../types';
 import { useDashboard } from '../DashboardContext';
 import {
@@ -48,6 +49,8 @@ import {
   getCategorySchema,
   getCategoryNature,
   CATEGORIES_DB,
+  getBusinessType,
+  isRepairVariant,
 } from '../services/categories';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';
 import { logAuditAction } from '../utils/auditLogger';
@@ -75,8 +78,8 @@ const renderSpecifications = (
   const schema = getCategorySchema(category);
 
   return (
-    <div className="space-y-4">
-      <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">
+    <div className="space-y-6">
+      <h5 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.25em] border-b border-slate-100 pb-3 mb-4">
         {title}
       </h5>
       <DynamicDataDisplay schema={schema} attributes={parsedData} />
@@ -246,18 +249,32 @@ export default function ProviderDashboard() {
       const inquiries = await db.inquiries.where('status').equals('OPEN').toArray();
       const userCategories = user?.categories || [];
 
-      // If user has no categories, we show everything (Default)
-      // but if they HAVE categories, we strictly filter using isRelatedCategory
+      // STRICT: a provider with no categories has nothing matched to them, so
+      // they see zero leads — not all of them. The previous "show everything"
+      // fallback caused unrelated leads (e.g. Event Venues) to leak into an
+      // Electronics seller's inbox whenever categories failed to persist on
+      // registration. Provider must complete their profile to receive matched
+      // leads.
+      if (!userCategories || userCategories.length === 0) {
+        if (user?.id) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            '[ProviderDashboard] No categories on user — leads hidden. ' +
+              'User must complete profile (categories) to receive matched inquiries.'
+          );
+        }
+        return [];
+      }
+
       const filtered = inquiries.filter((lead) => {
-        if (!userCategories || userCategories.length === 0) return true;
         const leadCats = (lead.category || '').split(', ').map((c: string) => c.trim());
-        return leadCats.some((leadCat) => 
-          userCategories.some(userCat => isRelatedCategory(userCat, leadCat))
+        return leadCats.some((leadCat) =>
+          userCategories.some((userCat) => isRelatedCategory(userCat, leadCat))
         );
       });
 
       return filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    }, [user?.categories]) || [];
+    }, [user?.categories, user?.id]) || [];
 
   const availableBalance = displayQuotes
     .filter((q) => q.status === 'COMPLETED' || q.status === 'PAID')
@@ -275,6 +292,14 @@ export default function ProviderDashboard() {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedInquiryIds, setSelectedInquiryIds] = useState<number[]>([]);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [quoteSuccessModal, setQuoteSuccessModal] = useState<{ title: string; price: number; expiry: string } | null>(null);
+  const [revisingQuote, setRevisingQuote] = useState<Quote | null>(null);
+
+  const handleReviseQuote = useCallback((quote: Quote) => {
+    setRevisingQuote(quote);
+    setQuotingInquiryId(quote.inquiryId as any);
+    handleTabClick('leads');
+  }, [handleTabClick]);
 
   // Filter leads by provider categories AND exclude already quoted ones
   const leads = React.useMemo(() => {
@@ -292,16 +317,29 @@ export default function ProviderDashboard() {
     filtered = filtered.filter((lead) => !lead.deletedBy?.includes(providerId));
 
     // Filter by Role/SubRole Nature (Strictly block Product vs Service leakage)
-    const isProviderRole = ['SELLER', 'SUPPLIER', 'SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS'].includes(user?.role || '');
+    const isProviderRole = [
+      'SELLER',
+      'SUPPLIER',
+      'SERVICE_PROVIDER',
+      'ENTERTAINMENT',
+      'EVENTS',
+    ].includes(user?.role || '');
     if (isProviderRole) {
       filtered = filtered.filter((lead) => {
         // If the lead has no category, we can't reliably filter by nature here
         if (!lead.category) return true;
-        
+
         // Determine Provider Nature
         let providerNature: 'PRODUCT' | 'SERVICE' | 'BOTH' = 'BOTH';
-        if (user?.subRole === 'PRODUCT_SELLER' || user?.role === 'SUPPLIER') providerNature = 'PRODUCT';
-        else if (user?.subRole === 'SERVICE_SELLER' || user?.role === 'EVENTS' || user?.role === 'ENTERTAINMENT' || user?.role === 'SERVICE_PROVIDER') providerNature = 'SERVICE';
+        if (user?.subRole === 'PRODUCT_SELLER' || user?.role === 'SUPPLIER')
+          providerNature = 'PRODUCT';
+        else if (
+          user?.subRole === 'SERVICE_SELLER' ||
+          user?.role === 'EVENTS' ||
+          user?.role === 'ENTERTAINMENT' ||
+          user?.role === 'SERVICE_PROVIDER'
+        )
+          providerNature = 'SERVICE';
         else if (user?.subRole === 'HYBRID_SELLER') providerNature = 'BOTH';
         const leadCats = lead.category.split(',').map((c) => c.trim());
         const leadCatIds = leadCats
@@ -309,9 +347,15 @@ export default function ProviderDashboard() {
           .filter(Boolean) as string[];
 
         // If we can't find the category in DB, we use a string-based guess for nature
-        const natures = leadCatIds.length > 0 
-          ? leadCatIds.map((id) => getCategoryNature(id))
-          : [lead.category.toLowerCase().includes('phone') || lead.category.toLowerCase().includes('laptop') ? 'PRODUCT' : 'SERVICE'];
+        const natures =
+          leadCatIds.length > 0
+            ? leadCatIds.map((id) => getCategoryNature(id))
+            : [
+                lead.category.toLowerCase().includes('phone') ||
+                lead.category.toLowerCase().includes('laptop')
+                  ? 'PRODUCT'
+                  : 'SERVICE',
+              ];
 
         if (providerNature === 'PRODUCT') {
           return natures.some((n) => n === 'PRODUCT' || n === 'BOTH');
@@ -327,7 +371,7 @@ export default function ProviderDashboard() {
       filtered = filtered.filter((lead) => {
         // If it's targeted directly to this provider, always show it
         if (lead.targetedProviderId === effectiveProviderId) return true;
-        
+
         if (!lead.category) return false; // Hide uncategorized leads from providers to prevent leakage
 
         const leadCats = lead.category.split(',').map((c) => c.trim());
@@ -339,8 +383,28 @@ export default function ProviderDashboard() {
       });
     }
 
+    // Variant-level filter — REPAIR_SERVICE shop only sees repair-tagged
+    // inquiries; RETAIL_PRODUCTS shop only sees buy-new inquiries; mixed
+    // and other types fall through unchanged. Resolves the user's
+    // architectural rule: specification (sells new vs repairs) drives
+    // which leads they actually receive.
+    const businessType = getBusinessType(user as any);
+    if (businessType === 'REPAIR_SERVICE' || businessType === 'RETAIL_PRODUCTS') {
+      const wantRepair = businessType === 'REPAIR_SERVICE';
+      filtered = filtered.filter((lead) => {
+        // Direct-targeted leads bypass variant filtering
+        if (lead.targetedProviderId === effectiveProviderId) return true;
+        if (!lead.category) return false;
+        const leadCats = lead.category.split(',').map((c) => c.trim());
+        // A lead is "repair" if any category name carries a repair variant.
+        // Otherwise we treat it as a buy-new inquiry.
+        const leadIsRepair = leadCats.some((c) => isRepairVariant(c));
+        return wantRepair ? leadIsRepair : !leadIsRepair;
+      });
+    }
+
     return filtered;
-  }, [user?.categories, user?.role, user?.subRole, allLeads, myQuotes, effectiveProviderId]);
+  }, [user, allLeads, myQuotes, effectiveProviderId]);
 
   // Collection Handshake State
   const [scanningQuoteId, setScanningQuoteId] = useState<number | null>(null);
@@ -519,93 +583,96 @@ export default function ProviderDashboard() {
     setChecklistSteps((prev) => ({ ...prev, photo: true }));
   };
 
-  const handleDynamicQuoteSubmit = async (submittedQuoteData: any) => {
-    if (!quotingInquiryId || !user) return;
+  // EXPLICIT two-param signature — ProviderLeadsView calls this as (leadId, formData)
+  const handleDynamicQuoteSubmit = async (leadId: any, submittedQuoteData: any) => {
+    if (!leadId || !user) return;
 
-    const lead = leads.find((l) => l.id === quotingInquiryId);
+    console.log('[Quote] leadId:', leadId, '| data:', submittedQuoteData);
 
-    // Calculate total from item prices if they exist, otherwise use the manual price
-    const itemPricesArray = lead?.items
-      .map((item, idx) => ({
-        itemId: item.id || `${lead.id}-item-${idx}`,
-        price: Number(itemPrices[`${quotingInquiryId}-${idx}`] || 0),
-      }))
-      .filter((ip) => ip.price > 0);
+    try {
+      // Fetch the inquiry directly from DB so we are never stale
+      const lead = await db.inquiries.get(leadId) || leads.find((l) => l.id === leadId);
+      if (!lead) throw new Error('Inquiry not found: ' + leadId);
 
-    const totalPrice =
-      itemPricesArray && itemPricesArray.length > 0
-        ? itemPricesArray.reduce((sum, ip) => sum + ip.price, 0)
-        : Number(submittedQuoteData.calculatedTotal || submittedQuoteData.price || submittedQuoteData.venueHireFee || 0);
+      // Parse items (may be array, JSON string, or missing)
+      const leadItems: any[] = Array.isArray(lead.items)
+        ? lead.items
+        : typeof lead.items === 'string'
+        ? (() => { try { return JSON.parse(lead.items); } catch { return []; } })()
+        : [];
 
-    const adminUser = user.parentProviderId ? await db.users.get(user.parentProviderId) : user;
+      const itemPricesArray = leadItems
+        .map((item: any, idx: number) => ({
+          itemId: item.id || `${lead.id}-item-${idx}`,
+          price: Number(itemPrices[`${leadId}-${idx}`] || 0),
+        }))
+        .filter((ip: { itemId: string; price: number }) => ip.price > 0);
 
-    const newQuote: any = {
-      inquiryId: quotingInquiryId,
-      inquiryTitle: lead?.title || 'Inquiry',
-      price: totalPrice,
-      condition: submittedQuoteData.condition || 'N/A',
-      message:
-        (submittedQuoteData.message || '').length >= 10
+      // Price waterfall: item totals → calculatedTotal → price → venueHireFee → serviceFee
+      const totalPrice =
+        itemPricesArray.length > 0
+          ? itemPricesArray.reduce((s: number, ip: { itemId: string; price: number }) => s + ip.price, 0)
+          : Number(submittedQuoteData.calculatedTotal ?? submittedQuoteData.price ?? submittedQuoteData.venueHireFee ?? submittedQuoteData.serviceFee ?? 0);
+
+      console.log('[Quote] totalPrice:', totalPrice, '| expiry:', submittedQuoteData.expiryDuration);
+
+      const adminUser = user.parentProviderId ? await db.users.get(user.parentProviderId) : user;
+
+      // IMPORTANT: Send raw objects/arrays — backend stores as JSON columns.
+      // Do NOT JSON.stringify() these; the backend parseJsonFields() would double-parse them.
+      const newQuote: any = {
+        inquiryId: String(lead.id),                     // Must be the backend UUID string
+        inquiryTitle: lead.title || 'Inquiry',
+        price: totalPrice,
+        condition: submittedQuoteData.condition || 'N/A',
+        message: (submittedQuoteData.message || '').trim().length >= 10
           ? submittedQuoteData.message
-          : (
-              submittedQuoteData.message ||
-              'Thank you for your inquiry. We are pleased to provide this quotation for your review.'
-            ).padEnd(10, ' '),
-      expiryDuration: submittedQuoteData.expiryDuration || '1 Month',
-      status: 'PENDING' as const,
-      providerId: effectiveProviderId, // Keep as UUID string
-      providerName: adminUser?.name || user.name,
-      // createdAt removed - backend should handle it
-      itemPrices:
-        itemPricesArray && itemPricesArray.length > 0 ? JSON.stringify(itemPricesArray) : undefined,
-      requirements: JSON.stringify([]), // Must be a JSON string
-      dynamicFields: JSON.stringify(submittedQuoteData), // Must be a JSON string
-      ...(submittedQuoteData.venueSpaceId
-        ? {
-            venueSpaceId: Number(submittedQuoteData.venueSpaceId),
-            venueSpaceName: venueSpaces.find(
-              (v) => v.id === Number(submittedQuoteData.venueSpaceId)
-            )?.name,
-            damageDeposit: submittedQuoteData.damageDeposit
-              ? Number(submittedQuoteData.damageDeposit)
-              : undefined,
-            cleaningFee: submittedQuoteData.cleaningFee
-              ? Number(submittedQuoteData.cleaningFee)
-              : undefined,
-          }
-        : {}),
-      delivery: JSON.stringify({
-        offered:
-          submittedQuoteData.optionalDeliveryOffer === true || !!submittedQuoteData.deliveryFee,
-        fee: Number(submittedQuoteData.optionalDeliveryFee || submittedQuoteData.deliveryFee || 0),
-        method:
-          submittedQuoteData.optionalDeliveryOffer === true || !!submittedQuoteData.deliveryFee
-            ? 'SELLER_DELIVERY'
-            : 'PICKUP',
-        pickupInstructions: submittedQuoteData.pickupInstructions || '',
-      }),
-      // pickupInstructions removed from top level
-      processType: submittedQuoteData.processType,
-    };
+          : 'Thank you for your inquiry. We are pleased to provide this quotation for your review.',
+        expiryDuration: submittedQuoteData.expiryDuration || '1 Month',
+        status: 'PENDING' as const,
+        providerId: String(effectiveProviderId),
+        providerName: adminUser?.name || user.name,
+        itemPrices: itemPricesArray.length > 0 ? itemPricesArray : undefined,  // raw array
+        requirements: [],
+        dynamicFields: submittedQuoteData,              // raw object, not stringified
+        ...(submittedQuoteData.venueSpaceId ? {
+          venueSpaceId: String(submittedQuoteData.venueSpaceId), // UUID string, not number
+          venueSpaceName: venueSpaces.find((v) => v.id === Number(submittedQuoteData.venueSpaceId))?.name,
+          damageDeposit: submittedQuoteData.damageDeposit ? Number(submittedQuoteData.damageDeposit) : undefined,
+          cleaningFee: submittedQuoteData.cleaningFee ? Number(submittedQuoteData.cleaningFee) : undefined,
+        } : {}),
+        delivery: {                                     // raw object, not stringified
+          offered: submittedQuoteData.optionalDeliveryOffer === true || !!submittedQuoteData.deliveryFee,
+          fee: Number(submittedQuoteData.optionalDeliveryFee || submittedQuoteData.deliveryFee || 0),
+          method: submittedQuoteData.optionalDeliveryOffer === true || !!submittedQuoteData.deliveryFee ? 'SELLER_DELIVERY' : 'PICKUP',
+          pickupInstructions: submittedQuoteData.pickupInstructions || '',
+        },
+        processType: submittedQuoteData.processType || 'STANDARD',
+      };
 
-    console.log('ProviderDashboard: Adding new quote:', newQuote);
-    const quoteId = await db.quotes.add(newQuote);
-    console.log('ProviderDashboard: Quote added successfully');
+      const quoteId = await db.quotes.add(newQuote);
+      console.log('[Quote] saved with id:', quoteId);
 
-    // Log Audit Action
-    await logAuditAction(
-      user,
-      'QUOTE_SENT',
-      quoteId,
-      newQuote.inquiryTitle,
-      lead?.buyerName || 'Unknown Buyer',
-      newQuote.price,
-      `Quote sent for ${newQuote.inquiryTitle}`
-    );
+      // Update the inquiry status to QUOTED so buyer sees the state change immediately
+      try {
+        await db.inquiries.update(String(lead.id), { status: 'QUOTED' });
+        console.log('[Quote] inquiry', lead.id, 'marked as QUOTED');
+      } catch (e) {
+        console.warn('[Quote] could not update inquiry status to QUOTED:', e);
+      }
 
-    setQuotingInquiryId(null);
-    setItemPrices({});
-    handleTabClick('my-quotes');
+      try {
+        await logAuditAction(user, 'QUOTE_SENT', quoteId, newQuote.inquiryTitle, lead.buyerName || 'Unknown Buyer', newQuote.price, `Quote sent for ${newQuote.inquiryTitle}`);
+      } catch { /* audit failures are non-fatal */ }
+
+      setQuotingInquiryId(null);
+      setItemPrices({});
+      setQuoteSuccessModal({ title: lead.title || 'Inquiry', price: totalPrice, expiry: submittedQuoteData.expiryDuration || '1 Month' });
+      handleTabClick('my-quotes');
+    } catch (error) {
+      console.error('[Quote] submit error:', error);
+      alert(`Failed to submit quotation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   const toggleExpand = async (id: number) => {
@@ -857,6 +924,8 @@ export default function ProviderDashboard() {
               onSetQuotingInquiryId: setQuotingInquiryId,
               onQuoteSubmit: handleDynamicQuoteSubmit,
               renderSpecifications,
+              revisingQuote,
+              onSetRevisingQuote: setRevisingQuote,
             },
           }}
           onAction={handleAction}
@@ -894,6 +963,7 @@ export default function ProviderDashboard() {
               onToggleExpand: toggleExpand,
               onPrintQuote: handlePrintQuote,
               onArchiveQuote: handleArchiveQuote,
+              onReviseQuote: handleReviseQuote,
               renderSpecifications,
             },
           }}
@@ -1050,6 +1120,85 @@ export default function ProviderDashboard() {
             </div>
           </motion.div>
         )}
+        {/* ── Quote Success Celebration Modal ── */}
+        {quoteSuccessModal && (
+          <motion.div
+            key="quoteSuccessModal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[200] flex items-end sm:items-center justify-center p-4"
+            onClick={() => setQuoteSuccessModal(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 60 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 60 }}
+              transition={{ type: 'spring', damping: 16, stiffness: 200 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white w-full max-w-sm rounded-[36px] overflow-hidden shadow-2xl"
+            >
+              {/* Golden header */}
+              <div className="bg-gradient-to-br from-[#d49b35] via-[#e8b84b] to-[#c4892c] p-8 flex flex-col items-center relative overflow-hidden">
+                <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 70% 20%, white 0%, transparent 60%)' }} />
+                {/* Confetti dots */}
+                {[...Array(8)].map((_, i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute w-2 h-2 rounded-full"
+                    style={{ backgroundColor: ['#fff', '#fde68a', '#fff', '#fef3c7', '#fff', '#fbbf24', '#fff', '#fde68a'][i], top: `${[10, 20, 60, 80, 15, 70, 40, 55][i]}%`, left: `${[10, 85, 5, 90, 50, 20, 70, 45][i]}%` }}
+                    animate={{ y: [-4, 4, -4], rotate: [0, 180, 360] }}
+                    transition={{ duration: 2 + i * 0.3, repeat: Infinity, ease: 'easeInOut' }}
+                  />
+                ))}
+                <motion.img
+                  src={owlTriumphant}
+                  alt="Celebrating Owl"
+                  className="w-36 h-36 object-contain drop-shadow-2xl relative z-10"
+                  initial={{ scale: 0, rotate: -15 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: 'spring', damping: 10, stiffness: 180, delay: 0.1 }}
+                />
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-center mt-2 relative z-10"
+                >
+                  <p className="text-white/80 text-xs font-bold uppercase tracking-widest">Quotation Sent!</p>
+                  <h3 className="text-2xl font-serif font-black text-white mt-1">You're on it! 🎉</h3>
+                </motion.div>
+              </div>
+
+              {/* Details */}
+              <div className="p-6 space-y-3">
+                <div className="bg-slate-50 rounded-2xl p-4 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Inquiry</span>
+                    <span className="text-sm font-black text-slate-800 truncate max-w-[180px]">{quoteSuccessModal.title}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Your Price</span>
+                    <span className="text-lg font-black text-[#d49b35]">ZMW {quoteSuccessModal.price.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Valid For</span>
+                    <span className="text-sm font-bold text-slate-600">{quoteSuccessModal.expiry}</span>
+                  </div>
+                </div>
+                <p className="text-center text-xs text-slate-400 font-medium leading-relaxed">
+                  The buyer will be notified. You'll be alerted once they respond.
+                </p>
+                <button
+                  onClick={() => setQuoteSuccessModal(null)}
+                  className="w-full py-3.5 bg-[#1e293b] text-white font-black text-sm rounded-2xl hover:bg-[#0f172a] transition-all shadow-lg active:scale-[0.98]"
+                >
+                  View My Quotes →
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
 
         {/* Buyer Verification Modal */}
         {verifyingQuote && (
@@ -1111,8 +1260,9 @@ export default function ProviderDashboard() {
                         Budget (ZMW)
                       </p>
                       <p className="text-sm font-black text-[#d49b35]">
-                        {((verifyingQuote as any).inquiry?.attributes?.budget && (verifyingQuote as any).inquiry.attributes.budget > 0) 
-                          ? `ZMW ${(verifyingQuote as any).inquiry.attributes.budget.toLocaleString()}` 
+                        {(verifyingQuote as any).inquiry?.attributes?.budget &&
+                        (verifyingQuote as any).inquiry.attributes.budget > 0
+                          ? `ZMW ${(verifyingQuote as any).inquiry.attributes.budget.toLocaleString()}`
                           : 'Not specified'}
                       </p>
                     </div>

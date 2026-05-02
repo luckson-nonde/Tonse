@@ -60,6 +60,7 @@ const HERO_CONTENT: Record<string, HeroContent> = {
 
 interface RoleOption {
   id: string;
+  eyebrow: string;
   title: string;
   description: string;
   icon: any;
@@ -69,6 +70,7 @@ interface RoleOption {
 const buyerSubRoles: RoleOption[] = [
   {
     id: 'INDIVIDUAL_BUYER',
+    eyebrow: 'Individual · Personal',
     title: 'Personal Account',
     description: 'Shop for yourself and your family.',
     icon: User,
@@ -76,6 +78,7 @@ const buyerSubRoles: RoleOption[] = [
   },
   {
     id: 'COMPANY_BUYER',
+    eyebrow: 'Business · Corporate',
     title: 'Company Account',
     description: 'Procure materials and services for your business.',
     icon: Building2,
@@ -86,6 +89,7 @@ const buyerSubRoles: RoleOption[] = [
 const companySubRoles: RoleOption[] = [
   {
     id: 'COMPANY_PROCUREMENT_OFFICER',
+    eyebrow: 'Procurement',
     title: 'Procurement Officer',
     description: 'Manage purchasing and supplier relationships.',
     icon: ShoppingBag,
@@ -93,6 +97,7 @@ const companySubRoles: RoleOption[] = [
   },
   {
     id: 'COMPANY_SECRETARY',
+    eyebrow: 'Administration',
     title: 'Secretary',
     description: 'Handle administrative tasks and communications.',
     icon: FileText,
@@ -100,6 +105,7 @@ const companySubRoles: RoleOption[] = [
   },
   {
     id: 'COMPANY_RECEPTIONIST',
+    eyebrow: 'Front Desk',
     title: 'Receptionist',
     description: 'Manage front desk and initial inquiries.',
     icon: Users,
@@ -107,7 +113,8 @@ const companySubRoles: RoleOption[] = [
   },
   {
     id: 'COMPANY_MANAGER',
-    title: 'Manager/Owner',
+    eyebrow: 'Leadership',
+    title: 'Manager / Owner',
     description: 'Full access to company account and settings.',
     icon: Building2,
     subRole: 'COMPANY_MANAGER',
@@ -117,28 +124,32 @@ const companySubRoles: RoleOption[] = [
 const sellerSubRoles: RoleOption[] = [
   {
     id: 'PRODUCT_SELLER',
-    title: 'Products Only',
-    description: 'Sell physical goods and inventory.',
+    eyebrow: 'Goods · Inventory',
+    title: 'Products',
+    description: 'Sell physical goods and stocked inventory.',
     icon: Package,
     subRole: 'PRODUCT_SELLER',
   },
   {
     id: 'SERVICE_SELLER',
-    title: 'Services Only',
+    eyebrow: 'Services · Skills',
+    title: 'Services',
     description: 'Offer professional skills and services.',
     icon: Settings,
     subRole: 'SERVICE_SELLER',
   },
   {
     id: 'HYBRID_SELLER',
-    title: 'Products & Services',
+    eyebrow: 'Goods + Services',
+    title: 'Hybrid',
     description: 'Sell both goods and professional services.',
     icon: Layers,
     subRole: 'HYBRID_SELLER',
   },
   {
     id: 'SUPPLIER_SELLER',
-    title: 'Wholesale Supplier',
+    eyebrow: 'Bulk · Wholesale',
+    title: 'Wholesale',
     description: 'Supply goods in bulk to other businesses.',
     icon: Truck,
     subRole: 'SUPPLIER_SELLER',
@@ -257,21 +268,31 @@ export default function RoleSelection() {
     <AuthSplitLayout
       title={
         isViewingSubcategories
-          ? null
+          ? tier === 3 && masterRole === 'SELLER'
+            ? 'Choose Specialty'
+            : null
           : tier === 1
             ? 'Select Your Role'
             : tier === 2
-              ? `Configure your ${masterRole === 'BUYER' ? 'Buyer' : 'Seller'} Account`
+              ? isCompanyExpanded
+                ? 'Your Position'
+                : masterRole === 'BUYER'
+                  ? 'Buyer Setup'
+                  : 'Seller Setup'
               : 'Business Categories'
       }
       subtitle={
         isViewingSubcategories
-          ? null
+          ? tier === 3 && masterRole === 'SELLER'
+            ? <span className="text-[#1a1612]/60">Pick exactly what you sell or repair</span>
+            : null
           : <span className="text-[#1a1612]/60">
               {tier === 1
                 ? 'Choose how you want to use TONSE'
                 : tier === 2
-                  ? `Select the sub-role that best fits your ${masterRole === 'BUYER' ? 'needs' : 'business model'}`
+                  ? isCompanyExpanded
+                    ? 'Select your role within the company'
+                    : `Tell us how you'll ${masterRole === 'BUYER' ? 'buy' : 'sell'} on Tonse`
                   : 'Select the categories that best describe your business.'}
             </span>
       }
@@ -286,85 +307,94 @@ export default function RoleSelection() {
               initial={{ x: -20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -20, opacity: 0 }}
-              className="flex flex-col gap-4 lg:gap-6"
+              className="flex flex-col gap-3"
             >
-              <button
-                type="button"
-                onClick={() => handleMasterSelect('BUYER')}
-                aria-pressed={masterRole === 'BUYER'}
-                className={`group p-6 lg:p-8 rounded-3xl lg:rounded-4xl border text-left transition-all duration-200 flex items-center gap-4 lg:gap-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${
-                  masterRole === 'BUYER'
-                    ? 'border-[#C9973A] bg-[#C9973A]/10 shadow-[0_16px_40px_rgba(201,151,58,0.18)]'
-                    : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/30 hover:shadow-sm'
-                }`}
-              >
-                <div
-                  className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl transition-colors shrink-0 ${masterRole === 'BUYER' ? 'bg-[#C9973A] text-white' : 'bg-[#f5f2ee] text-brand-dark'}`}
-                >
-                  <ShoppingBag className="w-6 h-6 lg:w-8 lg:h-8" strokeWidth={1.5} />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg lg:text-xl font-serif font-bold text-[#1a1612]">
-                    I'm Looking For...
-                  </h3>
-                  <p className="text-[13px] lg:text-sm text-[#1a1612]/50 mt-1">
-                    Request products, services and skilled labour.
-                  </p>
-                </div>
-                {masterRole === 'BUYER' && (
-                  <div className="w-9 h-9 rounded-full bg-[#C9973A] text-white flex items-center justify-center">
-                    <Check className="w-4 h-4" strokeWidth={3} />
-                  </div>
-                )}
-              </button>
+              {[
+                {
+                  id: 'BUYER' as const,
+                  eyebrow: 'Buyer · Sourcing',
+                  title: "I'm Buying",
+                  description:
+                    'Source products, services and skilled labour from verified providers.',
+                  icon: ShoppingBag,
+                  selectable: true,
+                  onClick: () => handleMasterSelect('BUYER'),
+                },
+                {
+                  id: 'SELLER' as const,
+                  eyebrow: 'Seller · Commerce',
+                  title: "I'm Selling",
+                  description:
+                    'Offer products or business services on the Tonse marketplace.',
+                  icon: Store,
+                  selectable: true,
+                  onClick: () => handleMasterSelect('SELLER'),
+                },
+                {
+                  id: 'LABOUR' as const,
+                  eyebrow: 'Labour · Gig',
+                  title: 'I Offer Skills',
+                  description:
+                    'Get hired for trades, expertise, and short-term work.',
+                  icon: Wrench,
+                  selectable: false,
+                  onClick: () => navigate('/register/labour'),
+                },
+              ].map(({ id, eyebrow, title, description, icon: Icon, selectable, onClick }) => {
+                const isSelected = selectable && masterRole === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={onClick}
+                    aria-pressed={selectable ? isSelected : undefined}
+                    className={`group relative p-5 lg:p-6 pl-6 rounded-2xl border text-left transition-all duration-200 flex items-center gap-4 lg:gap-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-white ${
+                      isSelected
+                        ? 'border-[#C9973A] bg-white shadow-[0_8px_28px_-14px_rgba(201,151,58,0.45)]'
+                        : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/40 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)]'
+                    }`}
+                  >
+                    {/* Left-edge gold accent — matches input focus system */}
+                    <div
+                      className={`absolute left-0 top-4 bottom-4 w-[2px] bg-[#C9973A] rounded-full origin-center transition-all duration-300 ${
+                        isSelected ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'
+                      }`}
+                    />
 
-              <button
-                type="button"
-                onClick={() => handleMasterSelect('SELLER')}
-                aria-pressed={masterRole === 'SELLER'}
-                className={`group p-6 lg:p-8 rounded-3xl lg:rounded-4xl border text-left transition-all duration-200 flex items-center gap-4 lg:gap-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${
-                  masterRole === 'SELLER'
-                    ? 'border-[#C9973A] bg-[#C9973A]/10 shadow-[0_16px_40px_rgba(201,151,58,0.18)]'
-                    : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/30 hover:shadow-sm'
-                }`}
-              >
-                <div
-                  className={`p-3 lg:p-4 rounded-xl lg:rounded-2xl transition-colors shrink-0 ${masterRole === 'SELLER' ? 'bg-[#C9973A] text-white' : 'bg-[#f5f2ee] text-brand-dark'}`}
-                >
-                  <Store className="w-6 h-6 lg:w-8 lg:h-8" strokeWidth={1.5} />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg lg:text-xl font-serif font-bold text-[#1a1612]">
-                    We're Offering...
-                  </h3>
-                  <p className="text-[13px] lg:text-sm text-[#1a1612]/50 mt-1">
-                    Offer your products or business services.
-                  </p>
-                </div>
-                {masterRole === 'SELLER' && (
-                  <div className="w-9 h-9 rounded-full bg-[#C9973A] text-white flex items-center justify-center">
-                    <Check className="w-4 h-4" strokeWidth={3} />
-                  </div>
-                )}
-              </button>
+                    {/* Uniform icon block — only color changes on selection */}
+                    <div
+                      className={`w-12 h-12 lg:w-14 lg:h-14 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
+                        isSelected ? 'bg-[#C9973A] text-white' : 'bg-[#f5f2ee] text-brand-dark'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 lg:w-6 lg:h-6" strokeWidth={1.75} />
+                    </div>
 
-              <button
-                type="button"
-                onClick={() => navigate('/register/labour')}
-                className="group p-6 lg:p-8 rounded-2xl lg:rounded-4xl border text-left transition-all duration-200 flex items-center gap-4 lg:gap-6 border-[#e8e4dc] bg-white hover:border-[#C9973A]/30 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-              >
-                <div className="p-3 lg:p-4 rounded-xl lg:rounded-2xl transition-colors shrink-0 bg-[#f5f2ee] text-brand-dark">
-                  <Wrench className="w-6 h-6 lg:w-8 lg:h-8" strokeWidth={1.5} />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg lg:text-xl font-serif font-bold text-[#1a1612]">
-                    I Offer My Skills
-                  </h3>
-                  <p className="text-[13px] lg:text-sm text-[#1a1612]/50 mt-1">
-                    Offer your labour and expertise to employers.
-                  </p>
-                </div>
-              </button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#C9973A] mb-1">
+                        {eyebrow}
+                      </p>
+                      <h3 className="text-[17px] lg:text-[19px] font-serif font-bold text-[#1a1612] leading-tight">
+                        {title}
+                      </h3>
+                      <p className="text-[12px] text-[#1a1612]/55 mt-1 leading-snug">
+                        {description}
+                      </p>
+                    </div>
+
+                    {/* Top-right check badge on selection */}
+                    {isSelected && (
+                      <motion.div
+                        initial={{ scale: 0, rotate: -45 }}
+                        animate={{ scale: 1, rotate: 0 }}
+                        className="absolute top-3 right-3 w-6 h-6 rounded-full bg-[#C9973A] text-white flex items-center justify-center shadow-md shadow-[#C9973A]/30"
+                      >
+                        <Check className="w-3 h-3" strokeWidth={3} />
+                      </motion.div>
+                    )}
+                  </button>
+                );
+              })}
             </motion.div>
           ) : tier === 2 ? (
             <motion.div
@@ -382,73 +412,125 @@ export default function RoleSelection() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
-                    className="group p-5 rounded-2xl border border-brand-yellow bg-brand-yellow/5 shadow-md text-left flex items-center gap-4 mb-4"
+                    className="group relative p-4 pl-5 rounded-2xl border border-[#C9973A]/40 bg-white shadow-[0_6px_18px_-14px_rgba(201,151,58,0.3)] text-left flex items-center gap-3 mb-3"
                   >
-                    <div className="p-3 rounded-xl shrink-0 bg-brand-yellow text-white">
-                      <Building2 className="w-5 h-5" strokeWidth={1.5} />
+                    <div className="absolute left-0 top-3 bottom-3 w-[2px] bg-[#C9973A] rounded-full" />
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-[#C9973A] text-white">
+                      <Building2 className="w-4 h-4" strokeWidth={1.75} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-[15px] font-bold text-[#1a1612]">Company Account</h3>
-                      <p className="text-[13px] text-[#1a1612]/50 leading-snug mt-0.5">
-                        Select your role within the company.
+                      <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#C9973A] mb-0.5">
+                        Company Account
                       </p>
+                      <h3 className="text-[14px] font-bold text-[#1a1612] leading-tight">
+                        Select your role within the company
+                      </h3>
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <AnimatePresence mode="popLayout">
-                  {(isCompanyExpanded
-                    ? companySubRoles
-                    : masterRole === 'BUYER'
-                      ? buyerSubRoles
-                      : sellerSubRoles
-                  ).map((option) => {
-                    const isSelected = selectedSubRole === option.subRole;
-                    const Icon = option.icon;
+              {(() => {
+                const items = isCompanyExpanded
+                  ? companySubRoles
+                  : masterRole === 'BUYER'
+                    ? buyerSubRoles
+                    : sellerSubRoles;
+                const isStacked = items.length <= 2;
+                return (
+                  <div
+                    className={
+                      isStacked
+                        ? 'flex flex-col gap-3'
+                        : 'grid grid-cols-1 md:grid-cols-2 gap-3'
+                    }
+                  >
+                    <AnimatePresence mode="popLayout">
+                      {items.map((option) => {
+                        const isSelected = selectedSubRole === option.subRole;
+                        const Icon = option.icon;
 
-                    return (
-                      <motion.button
-                        type="button"
-                        layoutId={option.id}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        key={option.id}
-                        onClick={() => handleSubRoleSelect(option.subRole)}
-                        aria-pressed={isSelected}
-                        className={`group p-5 rounded-4xl border text-left transition-all duration-200 flex items-center gap-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${
-                          isSelected
-                            ? 'border-[#C9973A] bg-[#C9973A]/10 shadow-[0_16px_40px_rgba(201,151,58,0.18)]'
-                            : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/30 hover:shadow-sm'
-                        }`}
-                      >
-                        <div
-                          className={`p-3 rounded-xl transition-colors shrink-0 ${isSelected ? 'bg-[#C9973A] text-white' : 'bg-[#f5f2ee] text-brand-dark'}`}
-                        >
-                          <Icon className="w-5 h-5" strokeWidth={1.5} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3
-                            className={`text-[15px] font-bold transition-colors ${isSelected ? 'text-[#1a1612]' : 'text-[#1a1612]/80'}`}
+                        return (
+                          <motion.button
+                            type="button"
+                            layoutId={option.id}
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            key={option.id}
+                            onClick={() => handleSubRoleSelect(option.subRole)}
+                            aria-pressed={isSelected}
+                            className={`group relative ${
+                              isStacked ? 'p-5 lg:p-6 pl-6' : 'p-4 pl-5'
+                            } rounded-2xl border text-left transition-all duration-200 flex items-center ${
+                              isStacked ? 'gap-4 lg:gap-5' : 'gap-3'
+                            } focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-white ${
+                              isSelected
+                                ? 'border-[#C9973A] bg-white shadow-[0_8px_28px_-14px_rgba(201,151,58,0.45)]'
+                                : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/40 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)]'
+                            }`}
                           >
-                            {option.title}
-                          </h3>
-                          <p className="text-[13px] text-[#1a1612]/50 leading-snug mt-0.5">
-                            {option.description}
-                          </p>
-                        </div>
-                        <div
-                          className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors duration-200 ${isSelected ? 'bg-[#C9973A] text-white' : 'bg-[#f5f2ee] text-transparent'}`}
-                        >
-                          {isSelected && <Check className="w-4 h-4" strokeWidth={3} />}
-                        </div>
-                      </motion.button>
-                    );
-                  })}
-                </AnimatePresence>
-              </div>
+                            <div
+                              className={`absolute left-0 ${
+                                isStacked ? 'top-4 bottom-4' : 'top-3 bottom-3'
+                              } w-[2px] bg-[#C9973A] rounded-full origin-center transition-all duration-300 ${
+                                isSelected ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'
+                              }`}
+                            />
+                            <div
+                              className={`${
+                                isStacked ? 'w-12 h-12 lg:w-14 lg:h-14 rounded-xl' : 'w-10 h-10 rounded-lg'
+                              } flex items-center justify-center transition-colors shrink-0 ${
+                                isSelected ? 'bg-[#C9973A] text-white' : 'bg-[#f5f2ee] text-brand-dark'
+                              }`}
+                            >
+                              <Icon
+                                className={isStacked ? 'w-5 h-5 lg:w-6 lg:h-6' : 'w-4 h-4'}
+                                strokeWidth={1.75}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#C9973A] mb-1">
+                                {option.eyebrow}
+                              </p>
+                              <h3
+                                className={`${
+                                  isStacked ? 'text-[17px] lg:text-[19px] font-serif' : 'text-[14px]'
+                                } font-bold leading-tight transition-colors ${
+                                  isSelected ? 'text-[#1a1612]' : 'text-[#1a1612]/85'
+                                }`}
+                              >
+                                {option.title}
+                              </h3>
+                              <p
+                                className={`${
+                                  isStacked ? 'text-[12px] mt-1' : 'text-[12px] mt-0.5'
+                                } text-[#1a1612]/55 leading-snug`}
+                              >
+                                {option.description}
+                              </p>
+                            </div>
+                            {isSelected && (
+                              <motion.div
+                                initial={{ scale: 0, rotate: -45 }}
+                                animate={{ scale: 1, rotate: 0 }}
+                                className={`absolute ${
+                                  isStacked ? 'top-3 right-3 w-6 h-6' : 'top-2.5 right-2.5 w-5 h-5'
+                                } rounded-full bg-[#C9973A] text-white flex items-center justify-center shadow-md shadow-[#C9973A]/30`}
+                              >
+                                <Check
+                                  className={isStacked ? 'w-3 h-3' : 'w-2.5 h-2.5'}
+                                  strokeWidth={3}
+                                />
+                              </motion.div>
+                            )}
+                          </motion.button>
+                        );
+                      })}
+                    </AnimatePresence>
+                  </div>
+                );
+              })()}
             </motion.div>
           ) : (
             <motion.div
@@ -484,24 +566,57 @@ export default function RoleSelection() {
         </AnimatePresence>
       </div>
 
-      {!isViewingSubcategories && (
-        <div className="pt-8">
-          <Button
-            onClick={handleContinue}
-            disabled={
-              tier === 1
-                ? !masterRole
+      {(() => {
+        // Hide the outer Continue button on the buyer subcategory view (the
+        // CategorySelection component has its own "Complete Selection" CTA
+        // there). For sellers we keep it visible across master AND specialty
+        // views so they have a single, predictable continue affordance.
+        const showButton = !isViewingSubcategories || (tier === 3 && masterRole === 'SELLER');
+        if (!showButton) return null;
+
+        // For sellers in tier-3 specialty view, we require at least one
+        // VARIANT (not just the master) to be selected — that's what carries
+        // the Buy New / Repair specification downstream.
+        const sellerHasVariantPicked =
+          tier === 3 &&
+          masterRole === 'SELLER' &&
+          isViewingSubcategories &&
+          selectedCategories.some((c: any) => {
+            // Variants live in CategorySelection's selection model with
+            // parentId !== id. The master pseudo-entry has parentId === id.
+            // But here we only have category names from onChange — so we
+            // detect variant by the "(...)" suffix in the name.
+            return /\([^)]+\)\s*$/.test(c);
+          });
+
+        const disabled =
+          tier === 1
+            ? !masterRole
+            : tier === 2
+              ? !selectedSubRole
+              : tier === 3 && masterRole === 'SELLER' && isViewingSubcategories
+                ? !sellerHasVariantPicked
+                : selectedCategories.length === 0;
+
+        return (
+          <div className="pt-7">
+            <Button
+              onClick={handleContinue}
+              disabled={disabled}
+              className="w-full h-[58px] shadow-[0_12px_28px_-8px_rgba(201,151,58,0.4)] disabled:from-[#e8e4dc] disabled:to-[#e0dccf] disabled:text-[#1a1612]/30 disabled:shadow-none disabled:cursor-not-allowed text-[13px] font-sans font-bold text-white bg-gradient-to-b from-[#D5A547] to-[#C9973A] hover:from-[#C9973A] hover:to-[#B08432] transition-all active:scale-[0.98] rounded-2xl uppercase tracking-[0.22em] flex justify-center items-center gap-2"
+            >
+              {tier === 1
+                ? 'Next Step'
                 : tier === 2
-                  ? !selectedSubRole
-                  : selectedCategories.length === 0
-            }
-            className="w-full py-5 px-4 shadow-lg flex justify-center items-center gap-3 text-[18px] font-serif font-bold disabled:opacity-50 rounded-4xl"
-          >
-            {tier === 1 ? 'Next Step' : tier === 2 ? 'Continue' : 'Initialize Membership'}
-            <span className="text-xl leading-none">→</span>
-          </Button>
-        </div>
-      )}
+                  ? 'Continue'
+                  : isViewingSubcategories && masterRole === 'SELLER'
+                    ? 'Initialize Membership'
+                    : 'Continue'}
+              <span className="text-base leading-none">→</span>
+            </Button>
+          </div>
+        );
+      })()}
     </AuthSplitLayout>
   );
 }

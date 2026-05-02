@@ -34,6 +34,7 @@ import DashboardCalendar from './DashboardCalendar';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useDashboard } from '../DashboardContext';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';
+import { getBusinessType, BusinessType } from '../services/categories';
 import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useMemo, useEffect } from 'react';
@@ -151,6 +152,11 @@ export default function DashboardLayout({
     setNotificationCounts({ inquiries: 0, quotes: 0, activeInquiry: null });
   }, [user]);
 
+  // Single source of truth for what kind of seller/buyer/etc this user is —
+  // derived from role + subRole + categories (incl. specification variants).
+  // See services/categories.ts → getBusinessType().
+  const businessType: BusinessType = useMemo(() => getBusinessType(user), [user]);
+
   const navItems = useMemo(() => {
     if (!user) return [];
     let schema;
@@ -168,26 +174,80 @@ export default function DashboardLayout({
       }
       if (item.roleFilter && !item.roleFilter.includes(user.role)) return false;
       if (item.excludeRoles && item.excludeRoles.includes(user.role)) return false;
-      
+
       if (item.categoryFilter && user.categories) {
         if (typeof item.categoryFilter === 'function') {
           if (!item.categoryFilter(user.role, user.categories)) return false;
         } else {
           const userCategoriesLower = user.categories.map((c: string) => c.toLowerCase());
-          const hasMatchingCategory = item.categoryFilter.some((filterCat) => 
+          const hasMatchingCategory = item.categoryFilter.some((filterCat) =>
             userCategoriesLower.some((userCat: string) => userCat.includes(filterCat.toLowerCase()))
           );
           if (!hasMatchingCategory) return false;
         }
       }
-      
+
+      // BusinessType-based filtering — lets a schema item declare "only show
+      // for repair shops" or "only show for wholesale" without needing
+      // separate role/subRole conditionals.
+      if (item.businessTypes && item.businessTypes.length > 0) {
+        if (!item.businessTypes.includes(businessType)) return false;
+      }
+
       return true;
     });
-  }, [user]);
+  }, [user, businessType]);
 
-  const getLabel = (label: string | ((role: string) => string)) => {
-    if (typeof label === 'function') return label(user?.role || '');
-    return label;
+  // Adapt the label of universal nav items based on businessType. The schema
+  // declares "Booking Requests" generically; for a REPAIR_SERVICE shop we
+  // surface "Repair Requests", for a WHOLESALE supplier "Purchase Requests",
+  // etc. Keeps the schema declarative while the UI stays role-aware.
+  const getLabel = (label: string | ((role: string) => string), itemId?: string) => {
+    const baseLabel = typeof label === 'function' ? label(user?.role || '') : label;
+    if (!itemId) return baseLabel;
+
+    // Per-tab translations based on businessType
+    if (itemId === 'leads') {
+      switch (businessType) {
+        case 'REPAIR_SERVICE':
+          return 'Repair Requests';
+        case 'PRODUCTS_AND_REPAIR':
+          return 'Sales & Repair Requests';
+        case 'WHOLESALE':
+          return 'Purchase Requests';
+        case 'PRO_SERVICES':
+          return 'Service Requests';
+        case 'EVENTS':
+          return 'Event Bookings';
+        case 'ENTERTAINMENT':
+          return 'Performance Bookings';
+        default:
+          return baseLabel;
+      }
+    }
+    if (itemId === 'products') {
+      switch (businessType) {
+        case 'REPAIR_SERVICE':
+          return 'Service Catalog';
+        case 'PRO_SERVICES':
+          return 'Service Catalog';
+        case 'WHOLESALE':
+          return 'Stock & Pricing';
+        default:
+          return baseLabel;
+      }
+    }
+    if (itemId === 'paid-orders') {
+      switch (businessType) {
+        case 'REPAIR_SERVICE':
+          return 'Active Repairs';
+        case 'PRO_SERVICES':
+          return 'Active Engagements';
+        default:
+          return baseLabel;
+      }
+    }
+    return baseLabel;
   };
 
   const handleTabClick = React.useCallback(
@@ -399,7 +459,7 @@ export default function DashboardLayout({
                     >
                       <div className="flex items-center">
                         <FileText className="w-4.5 h-4.5 mr-4 stroke-[1.8]" />{' '}
-                        {getLabel(item.label)}
+                        {getLabel(item.label, item.id)}
                       </div>
                       {isDropdownOpen ? (
                         <ChevronDown className="w-4 h-4" />
@@ -467,7 +527,7 @@ export default function DashboardLayout({
                   key={item.id}
                   tab={item.id}
                   icon={Icon}
-                  label={getLabel(item.label)}
+                  label={getLabel(item.label, item.id)}
                   isActive={
                     activeTab === item.id ||
                     (item.id === 'inquiries' &&

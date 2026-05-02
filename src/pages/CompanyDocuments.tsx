@@ -1,187 +1,470 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { CheckCircle2, Loader2, ShieldCheck, FileText, Globe } from 'lucide-react';
+import {
+  CheckCircle2,
+  Loader2,
+  ShieldCheck,
+  FileText,
+  Hash,
+  Building2,
+  Upload,
+  X,
+  AlertCircle,
+  Wrench,
+  Award,
+} from 'lucide-react';
 import AuthSplitLayout from '../components/AuthSplitLayout';
-import Button from '../components/Button';
-import DynamicProfileForm from '../components/DynamicProfileForm';
-import { ProfileSchema } from '../services/userSchemas';
+import FloatingInput from '../components/FloatingInput';
+import { HeroContent } from '../types';
+import { getBusinessType, BusinessType } from '../services/categories';
 
-const DOCUMENTS_SCHEMA: ProfileSchema = {
-  sections: [
-    {
-      title: 'Company Registration',
-      sectionHeader: 'Business Verification',
-      type: 'fields',
-      fields: [
-        {
-          name: 'companyName',
-          label: 'Company Legal Name',
-          type: 'text',
-          required: true,
-          placeholder: 'As it appears on PACRA',
-        },
-        {
-          name: 'tpin',
-          label: 'TPIN Number',
-          type: 'text',
-          required: true,
-          placeholder: '10-digit TPIN',
-        },
-        {
-          name: 'incorporationCertUrl',
-          label: 'PACRA Certificate',
-          type: 'image_upload',
-          required: true,
-          helpText: 'Upload your Certificate of Incorporation (PDF or Image)',
-        },
-      ],
-    },
+// Zambian TPIN is 10 digits, e.g. 1234567890
+function formatTPIN(raw: string): string {
+  return raw.replace(/\D/g, '').slice(0, 10);
+}
+const TPIN_REGEX = /^\d{10}$/;
+
+// Per-businessType configuration — controls which fields render, which are
+// required, the section labels, and the hero copy. Phase 3 of the
+// architectural rule (role + subRole + category + specification → BusinessType
+// → tailored UX).
+interface DocsConfig {
+  hero: HeroContent;
+  brandLabel: string;
+  brandHint: string;
+  brandIcon: typeof Building2;
+  /** Whether PACRA Certificate of Incorporation is required. */
+  requiresPACRA: boolean;
+  /** Whether TPIN is required. (When false, the TPIN input still renders so
+   *  the user can opt-in, but validation skips it if empty.) */
+  requiresTPIN: boolean;
+  /** Section 02 heading + tile copy. */
+  docTitle: string;
+  docTileHeadline: string;
+  docTileSubcopy: string;
+  /** Activation tile copy. */
+  activationCopy: string;
+}
+
+const FORMAL_HERO: HeroContent = {
+  title: 'Verified in 48 Hours.',
+  image:
+    'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=1920&h=1080',
+  bullets: [
+    'PACRA-issued certificate match',
+    'ZRA-registered TPIN on every invoice',
+    'Visible to enterprise buyers',
   ],
 };
+
+const REPAIR_HERO: HeroContent = {
+  title: 'Activate Your Repair Bench.',
+  image:
+    'https://images.unsplash.com/photo-1581092334651-ddf26d9a09d0?auto=format&fit=crop&q=80&w=1920&h=1080',
+  bullets: [
+    'Skill verified by Tonse compliance',
+    'No corporate paperwork required',
+    'Listed in nearby-shops searches',
+  ],
+};
+
+const SERVICES_HERO: HeroContent = {
+  title: 'List Your Services.',
+  image:
+    'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&q=80&w=1920&h=1080',
+  bullets: [
+    'Service rate card displayed to clients',
+    'Tax registration optional for sole providers',
+    'Direct booking from the service catalog',
+  ],
+};
+
+function getDocsConfig(type: BusinessType): DocsConfig {
+  switch (type) {
+    case 'REPAIR_SERVICE':
+    case 'PRODUCTS_AND_REPAIR':
+      return {
+        hero: type === 'PRODUCTS_AND_REPAIR' ? FORMAL_HERO : REPAIR_HERO,
+        brandLabel: type === 'PRODUCTS_AND_REPAIR' ? 'Company Legal Name' : 'Repair Shop Name',
+        brandHint:
+          type === 'PRODUCTS_AND_REPAIR'
+            ? 'Exactly as registered with PACRA.'
+            : 'The name customers will see on the marketplace.',
+        brandIcon: type === 'PRODUCTS_AND_REPAIR' ? Building2 : Wrench,
+        requiresPACRA: type === 'PRODUCTS_AND_REPAIR',
+        requiresTPIN: type === 'PRODUCTS_AND_REPAIR',
+        docTitle: type === 'PRODUCTS_AND_REPAIR' ? 'PACRA Certificate' : 'Trade License (Optional)',
+        docTileHeadline:
+          type === 'PRODUCTS_AND_REPAIR'
+            ? 'Certificate of Incorporation'
+            : 'Trade license or technician certificate',
+        docTileSubcopy: 'PDF, JPG, PNG · max 5MB',
+        activationCopy:
+          type === 'PRODUCTS_AND_REPAIR'
+            ? 'Verification typically takes 24–48 working hours. Both sides of your business activate together.'
+            : 'Skill review takes ~24h. You can list your services right away while we verify.',
+      };
+
+    case 'PRO_SERVICES':
+      return {
+        hero: SERVICES_HERO,
+        brandLabel: 'Service Brand Name',
+        brandHint: 'The name clients will see when booking your service.',
+        brandIcon: Award,
+        requiresPACRA: false,
+        requiresTPIN: false,
+        docTitle: 'Credentials (Optional)',
+        docTileHeadline: 'Certifications, licenses, or portfolio',
+        docTileSubcopy: 'PDF, JPG, PNG · max 5MB',
+        activationCopy:
+          'Sole providers can start listing immediately. Add credentials to qualify for verified-pro badging.',
+      };
+
+    case 'WHOLESALE':
+      return {
+        hero: FORMAL_HERO,
+        brandLabel: 'Company Legal Name',
+        brandHint: 'Exactly as registered with PACRA.',
+        brandIcon: Building2,
+        requiresPACRA: true,
+        requiresTPIN: true,
+        docTitle: 'PACRA Certificate',
+        docTileHeadline: 'Certificate of Incorporation',
+        docTileSubcopy: 'PDF, JPG, PNG · max 5MB',
+        activationCopy:
+          'Wholesale verification takes 24–48 working hours. Bulk pricing tools unlock once verified.',
+      };
+
+    case 'EVENTS':
+    case 'ENTERTAINMENT':
+      return {
+        hero: FORMAL_HERO,
+        brandLabel: 'Brand / Stage Name',
+        brandHint: 'The name your audience knows you by.',
+        brandIcon: Building2,
+        requiresPACRA: false,
+        requiresTPIN: false,
+        docTitle: 'Portfolio (Optional)',
+        docTileHeadline: 'Past-event portfolio or showreel',
+        docTileSubcopy: 'PDF, JPG, PNG · max 5MB',
+        activationCopy:
+          'Performers can list bookings immediately. Verified portfolios surface higher in search.',
+      };
+
+    case 'HYBRID':
+    case 'RETAIL_PRODUCTS':
+    default:
+      return {
+        hero: FORMAL_HERO,
+        brandLabel: 'Company Legal Name',
+        brandHint: 'Exactly as registered with PACRA.',
+        brandIcon: Building2,
+        requiresPACRA: true,
+        requiresTPIN: true,
+        docTitle: 'PACRA Certificate',
+        docTileHeadline: 'Certificate of Incorporation',
+        docTileSubcopy: 'PDF, JPG, PNG · max 5MB',
+        activationCopy:
+          'Verification typically takes 24–48 working hours. You can build your shop profile while we review.',
+      };
+  }
+}
 
 export default function CompanyDocuments() {
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const businessType = useMemo(() => getBusinessType(user as any), [user]);
+  const cfg = useMemo(() => getDocsConfig(businessType), [businessType]);
+
+  const [companyName, setCompanyName] = useState(user?.companyName || '');
+  const [tpin, setTpin] = useState(user?.tpin || '');
+  const [certUrl, setCertUrl] = useState(user?.incorporationCertUrl || '');
+  const [certName, setCertName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const initialData = useMemo(
-    () => ({
-      companyName: user?.companyName || '',
-      tpin: user?.tpin || '',
-      incorporationCertUrl: user?.incorporationCertUrl || '',
-    }),
-    [user]
-  );
+  const tpinError =
+    tpin.length > 0 && !TPIN_REGEX.test(tpin) ? 'TPIN must be exactly 10 digits.' : '';
+  const companyNameError =
+    companyName.length > 0 && companyName.trim().length < 3
+      ? `${cfg.brandLabel} should be at least 3 characters.`
+      : '';
 
-  const handleSubmit = async (data: any) => {
-    setIsLoading(true);
+  const handleFileSelect = async (file: File) => {
     setError('');
-    try {
-      // Store company-specific fields in localStorage (backend doesn't support these yet)
-      localStorage.setItem(
-        'companyProfile',
-        JSON.stringify({
-          companyName: data.companyName,
-          tpin: data.tpin,
-          incorporationCertUrl: data.incorporationCertUrl,
-        })
-      );
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File too large — max 5MB.');
+      return;
+    }
+    if (!/\.(pdf|jpe?g|png|webp)$/i.test(file.name)) {
+      setError('Only PDF, JPG, PNG or WEBP files are accepted.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCertUrl(reader.result as string);
+      setCertName(file.name);
+    };
+    reader.readAsDataURL(file);
+  };
 
-      // Only send allowed fields to backend
+  const validate = (): boolean => {
+    setError('');
+    if (companyName.trim().length < 3) {
+      setError(`${cfg.brandLabel} is required (min. 3 characters).`);
+      return false;
+    }
+    if (cfg.requiresTPIN && !TPIN_REGEX.test(tpin)) {
+      setError('TPIN must be exactly 10 digits.');
+      return false;
+    }
+    if (!cfg.requiresTPIN && tpin.length > 0 && !TPIN_REGEX.test(tpin)) {
+      setError('TPIN must be exactly 10 digits, or leave it blank.');
+      return false;
+    }
+    if (cfg.requiresPACRA && !certUrl) {
+      setError('Upload your PACRA Certificate of Incorporation.');
+      return false;
+    }
+    return true;
+  };
+
+  const navigateAfter = () => {
+    if (user?.role === 'BUYER') navigate('/buyer');
+    else if (user?.role === 'LABOUR') navigate('/labour');
+    else navigate('/provider');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate()) return;
+    setIsLoading(true);
+    try {
       await updateUser({
+        companyName,
+        tpin,
+        incorporationCertUrl: certUrl,
         verificationStatus: 'PENDING',
-      });
-      if (user?.role === 'BUYER') {
-        navigate('/buyer');
-      } else if (user?.role === 'LABOUR') {
-        navigate('/labour');
-      } else {
-        navigate('/provider');
-      }
+      } as any);
+      navigateAfter();
     } catch (err: any) {
-      setError(err.message || 'Failed to update documents');
+      setError(err.message || 'Failed to submit documents.');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSkip = async () => {
+    setIsLoading(true);
     try {
-      await updateUser({
-        verificationStatus: 'INCOMPLETE',
-      });
-      if (user?.role === 'BUYER') {
-        navigate('/buyer');
-      } else if (user?.role === 'LABOUR') {
-        navigate('/labour');
-      } else {
-        navigate('/provider');
-      }
+      await updateUser({ verificationStatus: 'INCOMPLETE' } as any);
+      navigateAfter();
     } catch (err: any) {
-      setError(err.message || 'Failed to skip');
+      setError(err.message || 'Failed to skip.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const heroContent = {
-    title: 'Trust & Verification',
-    image: 'https://images.unsplash.com/photo-1454165833767-027ffea9e77b?auto=format&fit=crop&q=80&w=1920&h=1080',
-    bullets: [
-      'Official PACRA verification',
-      'Boost business credibility',
-      'Safe and secure environment',
-      'Priority support for verified shops'
-    ]
-  };
+  const certUploaded = !!certUrl;
+  const BrandIcon = cfg.brandIcon;
 
   return (
     <AuthSplitLayout
-      title="Company Verification"
-      subtitle="Upload your PACRA Certificate of Incorporation to activate your business account"
+      title="Business Documents"
+      subtitle={
+        <span className="text-[#1a1612]/60">
+          {cfg.requiresPACRA
+            ? 'Verify your business with PACRA & ZRA records'
+            : 'Tell us a bit about your business — paperwork is optional'}
+        </span>
+      }
       onBack={() => navigate(-1)}
-      stepper={{ current: 4, total: 4, labels: ['ROLE', 'LOCATION', 'BUSINESS', 'VERIFY'] }}
-      hero={heroContent}
+      stepper={{
+        current: 4,
+        total: 4,
+        labels: ['Profile', 'Location', 'Credentials', 'Business'],
+      }}
+      hero={cfg.hero}
     >
-      <div className="space-y-10">
+      <form onSubmit={handleSubmit} className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         {error && (
-          <div className="p-4 bg-red-50 border border-red-100 text-red-600 text-[13px] rounded-xl font-medium">
-            {error}
+          <div className="flex items-start gap-3 p-3.5 rounded-2xl border border-rose-200 bg-rose-50/60">
+            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" strokeWidth={2.5} />
+            <p className="text-[12px] text-rose-600 font-medium leading-snug">{error}</p>
           </div>
         )}
 
-        <DynamicProfileForm
-          schema={DOCUMENTS_SCHEMA}
-          initialData={initialData}
-          onSubmit={handleSubmit}
-          isSubmitting={isLoading}
-        >
-          <div className="space-y-8 mt-8">
-            {/* Status Message */}
-            <div className="bg-[#fffef9] border border-[#C9973A]/20 rounded-2xl p-6 flex flex-col md:flex-row items-center md:items-start gap-5 shadow-sm">
-              <div className="w-14 h-14 bg-[#C9973A]/10 rounded-2xl flex items-center justify-center shrink-0">
-                <ShieldCheck className="w-7 h-7 text-[#C9973A]" />
+        {/* Section 01 — Business Identity */}
+        <section className="space-y-5">
+          <div className="flex items-center gap-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A]">
+              Section 01
+            </p>
+            <div className="h-px flex-1 bg-[#e8e4dc]" />
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#1a1612]/50">
+              Business Identity
+            </p>
+          </div>
+
+          <FloatingInput
+            label={cfg.brandLabel}
+            type="text"
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            required
+            icon={BrandIcon}
+            autoComplete="organization"
+            error={companyNameError}
+            hint={
+              !companyNameError && companyName.length === 0 ? cfg.brandHint : undefined
+            }
+          />
+
+          <FloatingInput
+            label={cfg.requiresTPIN ? 'TPIN Number' : 'TPIN Number (Optional)'}
+            type="text"
+            value={tpin}
+            onChange={(e) => setTpin(formatTPIN(e.target.value))}
+            required={cfg.requiresTPIN}
+            icon={Hash}
+            inputMode="numeric"
+            maxLength={10}
+            placeholder="1234567890"
+            error={tpinError}
+            hint={
+              !tpinError && tpin.length === 0
+                ? cfg.requiresTPIN
+                  ? '10-digit Tax Payer Identification Number from ZRA.'
+                  : 'Add it later from settings if you register with ZRA.'
+                : undefined
+            }
+          />
+        </section>
+
+        {/* Section 02 — Documents */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A]">
+              Section 02
+            </p>
+            <div className="h-px flex-1 bg-[#e8e4dc]" />
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#1a1612]/50">
+              {cfg.docTitle}
+            </p>
+          </div>
+
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFileSelect(f);
+            }}
+          />
+
+          {certUploaded ? (
+            <div className="flex items-center gap-3 p-3.5 rounded-2xl border border-[#C9973A]/35 bg-white shadow-[0_4px_18px_-14px_rgba(201,151,58,0.5)]">
+              <div className="w-12 h-12 rounded-xl bg-[#C9973A]/10 text-[#C9973A] flex items-center justify-center shrink-0">
+                <FileText className="w-5 h-5" strokeWidth={2} />
               </div>
-              <div className="space-y-2 text-center md:text-left">
-                <p className="text-[15px] font-sans font-bold text-brand-dark">Account Activation Pending</p>
-                <p className="text-[13px] text-brand-dark/60 leading-relaxed font-sans">
-                  Document verification typically takes{' '}
-                  <span className="font-bold text-brand-dark">24–48 working hours</span>. 
-                  You can browse and set up your shop profile while we verify your credentials.
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600 mb-0.5 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3 h-3" strokeWidth={3} /> Document Attached
+                </p>
+                <p className="text-[12px] font-medium text-[#1a1612] truncate">
+                  {certName || 'document.pdf'}
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setCertUrl('');
+                  setCertName('');
+                  if (fileRef.current) fileRef.current.value = '';
+                }}
+                className="w-8 h-8 rounded-full bg-[#f5f2ee] hover:bg-[#e8e4dc] text-[#1a1612]/50 flex items-center justify-center transition-colors shrink-0"
+                aria-label="Remove file"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-
-            {/* Actions */}
-            <div className="pt-6">
-              <div className="flex flex-col gap-5">
-                <Button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full h-15 shadow-[0_12px_30px_rgba(201,151,58,0.3)] text-base font-sans font-bold text-brand-dark bg-[#C9973A] hover:bg-[#B08432] transition-all rounded-2xl uppercase tracking-widest flex items-center justify-center gap-3"
-                >
-                  {isLoading ? (
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                  ) : (
-                    <>
-                      Submit for Verification
-                      <CheckCircle2 className="w-5 h-5" />
-                    </>
-                  )}
-                </Button>
-
-                  <button
-                    type="button"
-                    onClick={handleSkip}
-                    className="w-full py-4 text-[13px] font-bold text-[#1a1612]/40 hover:text-[#C9973A] transition-colors uppercase tracking-[0.15em] border border-transparent hover:border-[#C9973A]/10 rounded-xl"
-                  >
-                    I'll do this later
-                  </button>
-                </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="w-full flex items-center gap-3 p-3.5 rounded-2xl border border-[#e8e4dc] bg-brand-white hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)] transition-all duration-200 text-left"
+            >
+              <div className="w-11 h-11 rounded-xl bg-[#C9973A]/10 text-[#C9973A] flex items-center justify-center shrink-0">
+                <Upload className="w-5 h-5" strokeWidth={2} />
               </div>
-            </div>
-          </DynamicProfileForm>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-bold text-[#1a1612] leading-tight">
+                  {cfg.docTileHeadline}
+                </p>
+                <p className="text-[11px] text-[#1a1612]/55 mt-0.5">{cfg.docTileSubcopy}</p>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#C9973A] shrink-0">
+                Upload →
+              </span>
+            </button>
+          )}
+
+          <p className="text-[11px] text-[#1a1612]/45 flex items-center gap-2 ml-1">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#C9973A]/60" strokeWidth={2} />
+            Stored encrypted · only Tonse compliance reviewers can read.
+          </p>
+        </section>
+
+        {/* Activation status tile */}
+        <div className="flex items-start gap-3 p-3.5 rounded-2xl border border-[#e8e4dc] bg-brand-white">
+          <div className="w-9 h-9 rounded-lg bg-[#C9973A]/10 text-[#C9973A] flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-4 h-4" strokeWidth={2} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] font-bold text-[#1a1612] leading-tight">
+              {cfg.requiresPACRA ? 'Activation pending review' : 'Activate now, verify later'}
+            </p>
+            <p className="text-[11px] text-[#1a1612]/55 mt-0.5 leading-snug">
+              {cfg.activationCopy}
+            </p>
+          </div>
         </div>
-      </AuthSplitLayout>
+
+        {/* Submit + Skip */}
+        <div className="space-y-3">
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full h-[58px] shadow-[0_12px_28px_-8px_rgba(201,151,58,0.4)] disabled:shadow-none text-[13px] font-sans font-bold text-white bg-gradient-to-b from-[#D5A547] to-[#C9973A] hover:from-[#C9973A] hover:to-[#B08432] disabled:from-[#e8e4dc] disabled:to-[#e0dccf] disabled:text-[#1a1612]/30 disabled:cursor-not-allowed transition-all active:scale-[0.98] rounded-2xl uppercase tracking-[0.22em] flex justify-center items-center gap-2"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Submitting…
+              </>
+            ) : (
+              <>
+                {cfg.requiresPACRA ? 'Submit for Verification' : 'Activate Account'}{' '}
+                <span className="text-base leading-none">→</span>
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSkip}
+            disabled={isLoading}
+            className="w-full h-12 text-[11px] font-sans font-bold text-[#1a1612]/45 hover:text-[#C9973A] transition-colors uppercase tracking-[0.18em]"
+          >
+            I'll do this later
+          </button>
+        </div>
+      </form>
+    </AuthSplitLayout>
   );
 }

@@ -24,6 +24,7 @@ export interface RegisterRequest {
   role: string;
   nrc?: string;
   profilePicture?: string;
+  dob?: string;
 }
 
 export interface RegisterResponse {
@@ -70,7 +71,13 @@ export const authService = {
    * Register a new user
    */
   register: async (userData: RegisterRequest): Promise<RegisterResponse> => {
-    const response = await apiClient.post<RegisterResponse>('/auth/register', userData);
+    // Sanitize data: remove empty dob if it's not a valid date string to avoid ISO 8601 validation errors
+    const sanitizedData = { ...userData };
+    if (!sanitizedData.dob || sanitizedData.dob === '') {
+      delete sanitizedData.dob;
+    }
+
+    const response = await apiClient.post<RegisterResponse>('/auth/register', sanitizedData);
 
     if (response.data) {
       return response.data;
@@ -148,7 +155,20 @@ export const authService = {
    * Update user profile
    */
   updateProfile: async (userId: string, data: UpdateProfileRequest): Promise<any> => {
-    const response = await apiClient.patch<any>(`/users/${userId}`, data);
+    // Sanitize data: remove empty dob to avoid validation errors
+    const sanitizedData = { ...data };
+    if (!sanitizedData.dob || sanitizedData.dob === '') {
+      delete sanitizedData.dob;
+    }
+
+    // Also check inside metadata if it exists
+    if (sanitizedData.metadata && (!sanitizedData.metadata.dob || sanitizedData.metadata.dob === '')) {
+      const sanitizedMetadata = { ...sanitizedData.metadata };
+      delete sanitizedMetadata.dob;
+      sanitizedData.metadata = sanitizedMetadata;
+    }
+
+    const response = await apiClient.patch<any>(`/users/${userId}`, sanitizedData);
 
     if (response.data) {
       return response.data;

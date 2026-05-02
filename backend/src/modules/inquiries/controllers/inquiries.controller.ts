@@ -172,6 +172,31 @@ export class InquiriesController {
     return inquiry;
   }
 
+  /**
+   * Records a provider view on this inquiry.
+   *
+   * Counted ONLY when the viewer is a non-buyer AND not the inquiry owner —
+   * mirrors the user's intent that the counter reflects external interest
+   * from the provider/service-provider audience, not the buyer reopening
+   * their own request. Returns the new count for optimistic UI sync.
+   */
+  @Post(':id/view')
+  @UseGuards(JwtAuthGuard)
+  async recordView(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    const inquiry = await this.inquiriesService.findOne(id);
+    if (!inquiry) {
+      return { id, viewCount: 0, counted: false, reason: 'inquiry-not-found' };
+    }
+    const role = req.user?.role;
+    const isOwner = inquiry.buyerId === req.user?.id;
+    if (role === 'BUYER' || role === 'ADMIN' || isOwner) {
+      // No-op: don't pollute the counter with owner re-opens or admin audits.
+      return { id, viewCount: inquiry.viewCount, counted: false };
+    }
+    const newCount = await this.inquiriesService.incrementViewCount(id);
+    return { id, viewCount: newCount, counted: true };
+  }
+
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
   async update(

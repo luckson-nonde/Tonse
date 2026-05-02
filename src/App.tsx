@@ -35,6 +35,7 @@ import VenueSpacesManager from './pages/VenueSpacesManager';
 import ForcePasswordChange from './pages/ForcePasswordChange';
 import AuditTrailPage from './pages/AuditTrailPage';
 import ArchivedLeadsPage from './pages/ArchivedLeadsPage';
+import AdminDashboard from './pages/admin/AdminDashboard';
 
 function ProtectedRoute({
   children,
@@ -92,6 +93,7 @@ function RootRedirect() {
 
   if (!user) return <Navigate to="/login" replace />;
   if (user.mustChangePassword) return <Navigate to="/force-password-change" replace />;
+  if (user.role === 'ADMIN') return <Navigate to="/admin" replace />;
   if (user.role === 'BUYER') return <Navigate to="/buyer" replace />;
   if (user.role === 'LABOUR') return <Navigate to="/labour" replace />;
   return <Navigate to="/provider" replace />;
@@ -346,6 +348,15 @@ export default function App() {
                 element={
                   <ProtectedRoute allowedRoles={['LABOUR']}>
                     <LabourDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/admin" element={<Navigate to="/admin/overview" replace />} />
+              <Route
+                path="/admin/:tab"
+                element={
+                  <ProtectedRoute allowedRoles={['ADMIN']}>
+                    <AdminDashboard />
                   </ProtectedRoute>
                 }
               />

@@ -16,7 +16,7 @@ import { Inquiry } from '../../inquiries/entities/inquiry.entity';
 @Index('idx_quotes_provider_id', ['providerId'])
 @Index('idx_quotes_status', ['status'])
 @Index('idx_quotes_created_at', ['createdAt'])
-@Index('idx_quotes_inquiry_provider', ['inquiryId', 'providerId'], { unique: true })
+@Index('idx_quotes_inquiry_provider', ['inquiryId', 'providerId']) // Removed unique: true to allow revisions
 export class Quote {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -62,6 +62,7 @@ export class Quote {
       'AWAITING_PICKUP',
       'COMPLETED',
       'HANDED_OVER',
+      'SUPERSEDED', // Added for original quotes that were revised and accepted
     ],
     default: 'PENDING',
   })
@@ -115,6 +116,16 @@ export class Quote {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   pickupLocation: string;
+
+  @Column({
+    type: 'enum',
+    enum: ['ORIGINAL', 'REVISION'],
+    default: 'ORIGINAL',
+  })
+  quoteType: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  parentQuoteId: string;
 
   @CreateDateColumn()
   createdAt: Date;

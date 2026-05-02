@@ -1,4 +1,12 @@
-import { IsEmail, IsString, MinLength, IsEnum, IsNotEmpty, IsOptional } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  MinLength,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  Matches,
+} from 'class-validator';
 
 export class RegisterDto {
   @IsEmail()
@@ -36,4 +44,11 @@ export class RegisterDto {
   @IsString()
   @IsOptional()
   profilePicture?: string; // Optional - Base64 encoded image or URL from front camera
+
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'Date of Birth must be in ISO 8601 format (YYYY-MM-DD)',
+  })
+  @IsOptional()
+  dob?: string; // Date of Birth - Optional, ISO 8601 format (YYYY-MM-DD)
 }

@@ -66,7 +66,7 @@ export class CreateInquiryDto {
   processType?: string = 'STANDARD';
 
   @IsOptional()
-  @IsEnum(['OPEN', 'CLOSED'])
+  @IsEnum(['OPEN', 'QUOTED', 'CLOSED'])
   status?: string = 'OPEN';
 
   @IsOptional()

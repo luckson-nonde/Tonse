@@ -105,7 +105,7 @@ export interface Inquiry {
   buyerName: string;
   buyerId: number;
   createdAt: number;
-  status: 'OPEN' | 'CLOSED';
+  status: 'OPEN' | 'QUOTED' | 'CLOSED';
   viewCount?: number;
   latitude?: number;
   longitude?: number;
@@ -153,7 +153,10 @@ export interface Quote {
     | 'PENDING_COLLECTION'
     | 'AWAITING_PICKUP'
     | 'COMPLETED'
-    | 'HANDED_OVER';
+    | 'HANDED_OVER'
+    | 'SUPERSEDED';
+  quoteType?: 'ORIGINAL' | 'REVISION';
+  parentQuoteId?: string | number;
   createdAt: number | string | Date;
   expiryDuration?: string;
   isRead?: boolean;
@@ -280,17 +283,22 @@ export interface Schedule {
 }
 
 export interface AuditLog {
-  id?: number;
-  providerId: number;
-  staffId: number;
-  staffName: string;
-  actionType: 'QUOTE_SENT' | 'COLLECTION_STARTED' | 'HANDOVER_COMPLETED';
-  targetId: number; // inquiryId or quoteId
-  targetTitle: string;
-  buyerName: string;
+  id?: number | string;
+  providerId?: string | number;
+  staffId?: string | number;
+  staffName?: string;
+  action?: string;
+  entityType?: string;
+  entityId?: string | number;
+  targetTitle?: string;
+  buyerName?: string;
   amount?: number;
   details?: string;
-  timestamp: number;
+  // For responses from backend:
+  actionType?: 'QUOTE_SENT' | 'COLLECTION_STARTED' | 'HANDOVER_COMPLETED' | string;
+  targetId?: number | string;
+  timestamp?: number;
+  createdAt?: string | Date;
 }
 
 export interface PurchaseOrder {

@@ -12,7 +12,8 @@ export type Role =
   | 'ENTERTAINMENT'
   | 'EVENTS'
   | 'PROVIDER_STAFF'
-  | 'LABOUR';
+  | 'LABOUR'
+  | 'ADMIN';
 
 export interface User {
   id: string;
@@ -64,7 +65,8 @@ interface AuthContextType {
     phone: string,
     role: string,
     nrc?: string,
-    profilePicture?: string
+    profilePicture?: string,
+    dob?: string
   ) => Promise<void>;
   updateUser: (data: Record<string, any>) => Promise<void>;
   logout: () => Promise<void>;
@@ -195,11 +197,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       phone: string,
       role: string,
       nrc: string = '',
-      profilePicture: string = ''
+      profilePicture: string = '',
+      dob: string = ''
     ) => {
       try {
         setError(null);
-        // Register with identity verification fields (NRC and profile picture)
+        // Register with identity verification fields (NRC, profile picture, and DOB)
         await authService.register({
           email,
           password,
@@ -208,6 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role,
           nrc,
           profilePicture,
+          dob,
         });
         // Auto-login after registration
         await login(email, password);

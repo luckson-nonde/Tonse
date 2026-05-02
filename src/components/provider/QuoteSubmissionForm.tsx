@@ -13,6 +13,8 @@ interface QuoteSubmissionFormProps {
   venueSpaces: any[];
   user: any;
   itemPricesTotal: number;
+  initialValues?: any;
+  parentQuoteId?: string;
 }
 
 const inputClass =
@@ -27,8 +29,10 @@ export default function QuoteSubmissionForm({
   venueSpaces,
   user,
   itemPricesTotal,
+  initialValues,
+  parentQuoteId,
 }: QuoteSubmissionFormProps) {
-  const [referencePhotos, setReferencePhotos] = useState<string[]>([]);
+  const [referencePhotos, setReferencePhotos] = useState<string[]>(initialValues?.referencePhotos || []);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -41,10 +45,16 @@ export default function QuoteSubmissionForm({
   const { control, handleSubmit, watch, formState: { errors } } = useForm({
     resolver: zodResolver(zodSchema),
     defaultValues: {
-      condition: (inquiry.category || '').toLowerCase().includes('product') ? 'Brand New' : 'N/A',
-      rateUnit: 'Per Hour',
-      venueAmenities: [],
-      ...Object.fromEntries(quoteSchema.map((f) => [f.name, f.type === 'toggle' ? false : f.type === 'multiselect' ? [] : ''])),
+      condition: initialValues?.condition || ((inquiry.category || '').toLowerCase().includes('product') ? 'Brand New' : 'N/A'),
+      rateUnit: initialValues?.rateUnit || 'Per Hour',
+      venueAmenities: initialValues?.venueAmenities || [],
+      ...Object.fromEntries(quoteSchema.map((f) => [
+        f.name, 
+        initialValues?.[f.name] !== undefined 
+          ? initialValues[f.name] 
+          : (f.type === 'toggle' ? false : f.type === 'multiselect' ? [] : '')
+      ])),
+      ...initialValues, // Spread all initial values if any
     },
   });
 
@@ -134,7 +144,8 @@ export default function QuoteSubmissionForm({
       ...data, 
       calculatedTotal, 
       processType: inquiry.processType,
-      referencePhotos 
+      referencePhotos,
+      parentQuoteId
     });
   };
 
@@ -385,7 +396,7 @@ export default function QuoteSubmissionForm({
             type="submit"
             className="flex-2 py-2.5 bg-[#1e293b] text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-all shadow-md"
           >
-            Send Quotation
+            {parentQuoteId ? 'Send Revised Quotation' : 'Submit Quotation'}
           </button>
         </div>
       </form>

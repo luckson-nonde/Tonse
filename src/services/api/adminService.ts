@@ -1,0 +1,198 @@
+/**
+ * Admin API Service
+ *
+ * Thin wrappers over the backend `/admin/*` endpoints. Every call goes through
+ * `apiClient` which returns `{ data?: T, message?, statusCode? }` — these
+ * helpers unwrap that envelope so dashboard code can work with plain payloads.
+ */
+
+import { apiClient } from './client';
+
+export interface AdminStats {
+  users: { total: number; byRole: Record<string, number> };
+  inquiries: { total: number; byStatus: Record<string, number> };
+  quotes: { total: number; byStatus: Record<string, number>; paidVolumeZmw: number };
+  payments: { total: number; byStatus: Record<string, number>; totalCollectedZmw: number };
+  generatedAt: string;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+}
+
+export interface AdminUser {
+  id: string;
+  displayId?: string;
+  name?: string;
+  primaryEmail?: string;
+  phone?: string;
+  role?: string;
+  isActive?: boolean;
+  verificationStatus?: string;
+  createdAt?: string;
+  lastLoginAt?: string;
+  [key: string]: any;
+}
+
+export interface AdminInquiry {
+  id: string;
+  title: string;
+  description?: string;
+  category?: string;
+  status?: string;
+  processType?: string;
+  buyerId?: string;
+  buyerName?: string;
+  location?: string;
+  createdAt?: string;
+  [key: string]: any;
+}
+
+export interface AdminQuote {
+  id: string;
+  inquiryId?: string;
+  inquiryTitle?: string;
+  providerId?: string;
+  providerName?: string;
+  price?: number;
+  status?: string;
+  createdAt?: string;
+  [key: string]: any;
+}
+
+export interface AdminTransaction {
+  id: string;
+  userId?: string;
+  amount?: number;
+  type?: string;
+  status?: string;
+  reference?: string;
+  createdAt?: string;
+  [key: string]: any;
+}
+
+export interface AdminAuditLog {
+  id: string | number;
+  userId?: string;
+  action?: string;
+  entityType?: string;
+  entityId?: string | number;
+  details?: any;
+  createdAt?: string;
+  timestamp?: number;
+  [key: string]: any;
+}
+
+const buildQuery = (params: Record<string, any>) => {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') search.set(k, String(v));
+  });
+  const qs = search.toString();
+  return qs ? `?${qs}` : '';
+};
+
+const emptyPage = <T>(): PaginatedResponse<T> => ({ data: [], total: 0 });
+
+export const adminService = {
+  async getStats(): Promise<AdminStats | null> {
+    const res = await apiClient.get<AdminStats>('/admin/stats');
+    return res.data ?? null;
+  },
+
+  async listUsers(params: Record<string, any> = {}): Promise<PaginatedResponse<AdminUser>> {
+    const res = await apiClient.get<PaginatedResponse<AdminUser>>(
+      `/admin/users${buildQuery(params)}`
+    );
+    return res.data ?? emptyPage<AdminUser>();
+  },
+
+  async suspendUser(id: string): Promise<AdminUser | null> {
+    const res = await apiClient.patch<AdminUser>(`/admin/users/${id}/suspend`);
+    return res.data ?? null;
+  },
+
+  async unsuspendUser(id: string): Promise<AdminUser | null> {
+    const res = await apiClient.patch<AdminUser>(`/admin/users/${id}/unsuspend`);
+    return res.data ?? null;
+  },
+
+  async deleteUser(id: string): Promise<{ id: string; deleted: boolean } | null> {
+    const res = await apiClient.delete<{ id: string; deleted: boolean }>(`/admin/users/${id}`);
+    return res.data ?? null;
+  },
+
+  async listInquiries(
+    params: Record<string, any> = {}
+  ): Promise<PaginatedResponse<AdminInquiry>> {
+    const res = await apiClient.get<PaginatedResponse<AdminInquiry>>(
+      `/admin/inquiries${buildQuery(params)}`
+    );
+    return res.data ?? emptyPage<AdminInquiry>();
+  },
+
+  async listQuotes(params: Record<string, any> = {}): Promise<PaginatedResponse<AdminQuote>> {
+    const res = await apiClient.get<PaginatedResponse<AdminQuote>>(
+      `/admin/quotes${buildQuery(params)}`
+    );
+    return res.data ?? emptyPage<AdminQuote>();
+  },
+
+  async listTransactions(
+    params: Record<string, any> = {}
+  ): Promise<PaginatedResponse<AdminTransaction>> {
+    const res = await apiClient.get<PaginatedResponse<AdminTransaction>>(
+      `/admin/transactions${buildQuery(params)}`
+    );
+    return res.data ?? emptyPage<AdminTransaction>();
+  },
+
+  async listAudit(params: Record<string, any> = {}): Promise<PaginatedResponse<AdminAuditLog>> {
+    const res = await apiClient.get<PaginatedResponse<AdminAuditLog>>(
+      `/admin/audit${buildQuery(params)}`
+    );
+    return res.data ?? emptyPage<AdminAuditLog>();
+  },
+
+  // ───── Verification queue ─────────────────────────────────────────────────
+
+  async listVerifications(
+    params: Record<string, any> = {}
+  ): Promise<PaginatedResponse<AdminUser>> {
+    const res = await apiClient.get<PaginatedResponse<AdminUser>>(
+      `/admin/verifications${buildQuery(params)}`
+    );
+    return res.data ?? emptyPage<AdminUser>();
+  },
+
+  async getUserDetail(id: string): Promise<AdminUser | null> {
+    const res = await apiClient.get<AdminUser>(`/admin/users/${id}`);
+    return res.data ?? null;
+  },
+
+  async verifyUser(id: string): Promise<AdminUser | null> {
+    const res = await apiClient.patch<AdminUser>(`/admin/users/${id}/verify`);
+    return res.data ?? null;
+  },
+
+  async rejectUser(id: string, reason?: string): Promise<AdminUser | null> {
+    const res = await apiClient.patch<AdminUser>(`/admin/users/${id}/reject`, { reason });
+    return res.data ?? null;
+  },
+};
+
+/**
+ * Roles eligible for the verification badge. Buyers and admins are excluded.
+ * Mirrors the backend constant in `AdminService.VERIFIABLE_ROLES`.
+ */
+export const VERIFIABLE_ROLES = [
+  'SELLER',
+  'SUPPLIER',
+  'SERVICE_PROVIDER',
+  'ENTERTAINMENT',
+  'EVENTS',
+  'LABOUR',
+] as const;
+
+export type VerifiableRole = (typeof VERIFIABLE_ROLES)[number];

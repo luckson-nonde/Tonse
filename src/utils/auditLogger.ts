@@ -1,11 +1,10 @@
 import { db } from '../services/api/database';
 import { User } from '../AuthContext';
-import { AuditLog } from '../types';
 
 export async function logAuditAction(
   user: User,
-  actionType: AuditLog['actionType'],
-  targetId: string | number,
+  action: string,
+  entityId: string | number,
   targetTitle: string,
   buyerName: string,
   amount?: number,
@@ -17,25 +16,25 @@ export async function logAuditAction(
 
   if (!providerId) return;
 
-  const log: any = {
-    providerId: typeof providerId === 'number' ? providerId : String(providerId),
-    staffId: typeof user.id === 'number' ? user.id : String(user.id),
-    staffName: user.name,
-    actionType,
-    action: actionType, // Backend field
-    entityType: 'AUDIT', // Backend field
-    entityId: typeof targetId === 'number' ? String(targetId) : targetId, // Backend field
-    targetId,
-    targetTitle,
-    buyerName,
-    amount,
-    details,
-    timestamp: Date.now(),
+  // Strictly typed audit log - only include fields that match DTO
+  const auditLogData = {
+    providerId: typeof providerId === 'number' ? String(providerId) : providerId,
+    staffId: typeof user.id === 'number' ? String(user.id) : user.id,
+    staffName: user.name || '',
+    action, // This matches 'action' field in DTO
+    entityType: 'QUOTE',
+    entityId: typeof entityId === 'number' ? String(entityId) : entityId,
+    targetTitle: targetTitle || '',
+    buyerName: buyerName || '',
+    ...(amount !== undefined && { amount }),
+    ...(details && { details }),
   };
 
   try {
-    await db.auditLogs.add(log);
+    console.log('Sending audit log:', auditLogData);
+    await db.auditLogs.add(auditLogData);
   } catch (error) {
     console.error('Failed to log audit action:', error);
+    // Don't throw - just log the error
   }
 }

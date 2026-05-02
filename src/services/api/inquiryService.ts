@@ -171,6 +171,36 @@ export async function deleteInquiry(inquiryId: string): Promise<void> {
   }
 }
 
+/**
+ * Records a "provider opened this inquiry" view event.
+ *
+ * Backend ignores the call when the viewer is a buyer/admin or the inquiry
+ * owner — see `InquiriesController.recordView`. So it's safe to call even
+ * for non-provider routes; the server is the source of truth for whether to
+ * actually count it.
+ *
+ * Returns the post-increment view count (or the unchanged count if the
+ * server decided not to count this hit). Errors are swallowed because view
+ * tracking is best-effort and shouldn't block the UI.
+ */
+export async function recordInquiryView(
+  inquiryId: string | number
+): Promise<{ viewCount: number; counted: boolean } | null> {
+  try {
+    const response = await apiClient.post<{ viewCount: number; counted: boolean }>(
+      `/inquiries/${inquiryId}/view`
+    );
+    if (!response.data) return null;
+    return {
+      viewCount: Number(response.data.viewCount ?? 0),
+      counted: Boolean(response.data.counted),
+    };
+  } catch (error) {
+    console.warn('recordInquiryView failed (non-fatal):', error);
+    return null;
+  }
+}
+
 
 export interface CreateInquiryPayload {
   title: string;
