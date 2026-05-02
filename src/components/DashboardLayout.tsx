@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import Logo from './Logo';
 import ConfirmModal from './ConfirmModal';
-import DashboardCalendar from './DashboardCalendar';
+import DashboardCalendar, { CalendarTone } from './DashboardCalendar';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useDashboard } from '../DashboardContext';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';
@@ -42,11 +42,43 @@ import { useUserInquiries } from '../hooks/useInquiries';
 import { useUserQuotes } from '../hooks/useQuotes';
 import { Inquiry } from '../types';
 
+// Map a derived BusinessType (one source of truth — see services/categories.ts)
+// to the CalendarPanel "tone" — controls the headline counter labels and how
+// each event in the upcoming list is described. Lets a phone-repair shop see
+// "OPEN REPAIRS / THIS WEEK" with "Repair Request" entries while an events
+// provider keeps "TOTAL EVENTS / THIS MONTH" — same widget, same data shape,
+// different vocabulary.
+function businessTypeToCalendarTone(type: ReturnType<typeof getBusinessType>): CalendarTone {
+  switch (type) {
+    case 'REPAIR_SERVICE':
+      return 'repair';
+    case 'RETAIL_PRODUCTS':
+    case 'PRODUCTS_AND_REPAIR':
+      return 'retail';
+    case 'WHOLESALE':
+      return 'wholesale';
+    case 'PRO_SERVICES':
+      return 'services';
+    case 'EVENTS':
+    case 'ENTERTAINMENT':
+      return 'events';
+    case 'BUYER':
+      return 'buyer';
+    default:
+      return 'generic';
+  }
+}
+
 // Calendar panel shown in right sidebar on dashboard/home tabs
 const CalendarPanel = () => {
   const { user } = useAuth();
   const { inquiries } = useUserInquiries(user?.id);
   const { quotes } = useUserQuotes(user?.id);
+
+  const tone = useMemo<CalendarTone>(
+    () => businessTypeToCalendarTone(getBusinessType(user as any)),
+    [user]
+  );
 
   const events = useMemo(() => {
     const evts: any[] = [];
@@ -55,7 +87,10 @@ const CalendarPanel = () => {
       inquiries.forEach((inq) => {
         evts.push({
           date: new Date(inq.createdAt),
-          title: inq.title || 'New Inquiry',
+          // Title falls back to the toned label when the inquiry has no
+          // explicit title — DashboardCalendar's typeLabel uses the same
+          // tone, so titles + type-tags read coherently.
+          title: inq.title || 'Inquiry',
           type: 'inquiry',
           color: 'amber',
         });
@@ -67,14 +102,14 @@ const CalendarPanel = () => {
         if (quote.status === 'PAID' || quote.status === 'COMPLETED' || quote.status === 'HANDED_OVER') {
           evts.push({
             date: new Date(quote.updatedAt),
-            title: `Order: ${quote.inquiryTitle || 'Unknown'}`,
+            title: quote.inquiryTitle || 'Order',
             type: 'order',
             color: 'emerald',
           });
         } else {
           evts.push({
             date: new Date(quote.createdAt),
-            title: `Quote: ${quote.inquiryTitle || 'Unknown'}`,
+            title: quote.inquiryTitle || 'Quote',
             type: 'quote',
             color: 'purple',
           });
@@ -85,7 +120,7 @@ const CalendarPanel = () => {
     return evts;
   }, [inquiries, quotes]);
 
-  return <DashboardCalendar events={events} />;
+  return <DashboardCalendar events={events} tone={tone} />;
 };
 
 // Map icon names to components

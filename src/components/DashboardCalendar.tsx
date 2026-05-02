@@ -9,13 +9,100 @@ interface Event {
   color: 'amber' | 'purple' | 'emerald' | 'blue';
 }
 
+// Calendar copy tone — derived from getBusinessType in CalendarPanel and
+// passed in. Lets the same calendar widget say "OPEN REPAIRS / THIS WEEK"
+// for a repair shop and "TOTAL EVENTS / THIS MONTH" for an events provider
+// without per-role component variants.
+export type CalendarTone =
+  | 'repair'
+  | 'retail'
+  | 'wholesale'
+  | 'services'
+  | 'events'
+  | 'buyer'
+  | 'generic';
+
 interface DashboardCalendarProps {
   events?: Event[];
   className?: string;
+  tone?: CalendarTone;
 }
 
-export default function DashboardCalendar({ events = [], className = '' }: DashboardCalendarProps) {
+interface ToneConfig {
+  primary: { label: string; bg: string; text: string };
+  secondary: { label: string; bg: string; text: string; mode: 'this-week' | 'this-month' };
+  inquiryEmoji: string;
+  inquiryLabel: string;
+  quoteLabel: string;
+  orderLabel: string;
+}
+
+const TONE_CONFIG: Record<CalendarTone, ToneConfig> = {
+  repair: {
+    primary: { label: 'Open Repairs', bg: 'bg-amber-50', text: 'text-amber-600' },
+    secondary: { label: 'This Week', bg: 'bg-blue-50', text: 'text-blue-600', mode: 'this-week' },
+    inquiryEmoji: '🔧',
+    inquiryLabel: 'Repair Request',
+    quoteLabel: 'Repair Quote',
+    orderLabel: 'Active Repair',
+  },
+  retail: {
+    primary: { label: 'Open Orders', bg: 'bg-amber-50', text: 'text-amber-600' },
+    secondary: { label: 'This Month', bg: 'bg-blue-50', text: 'text-blue-600', mode: 'this-month' },
+    inquiryEmoji: '📋',
+    inquiryLabel: 'Inquiry',
+    quoteLabel: 'Quote',
+    orderLabel: 'Order',
+  },
+  wholesale: {
+    primary: { label: 'Open RFQs', bg: 'bg-amber-50', text: 'text-amber-600' },
+    secondary: { label: 'This Month', bg: 'bg-blue-50', text: 'text-blue-600', mode: 'this-month' },
+    inquiryEmoji: '📦',
+    inquiryLabel: 'Purchase Request',
+    quoteLabel: 'Bulk Quote',
+    orderLabel: 'Bulk Order',
+  },
+  services: {
+    primary: { label: 'Active Engagements', bg: 'bg-amber-50', text: 'text-amber-600' },
+    secondary: { label: 'This Month', bg: 'bg-blue-50', text: 'text-blue-600', mode: 'this-month' },
+    inquiryEmoji: '💼',
+    inquiryLabel: 'Service Request',
+    quoteLabel: 'Service Quote',
+    orderLabel: 'Active Engagement',
+  },
+  events: {
+    primary: { label: 'Total Events', bg: 'bg-amber-50', text: 'text-amber-600' },
+    secondary: { label: 'This Month', bg: 'bg-blue-50', text: 'text-blue-600', mode: 'this-month' },
+    inquiryEmoji: '🎉',
+    inquiryLabel: 'New Booking',
+    quoteLabel: 'Event Quote',
+    orderLabel: 'Confirmed Event',
+  },
+  buyer: {
+    primary: { label: 'My Inquiries', bg: 'bg-amber-50', text: 'text-amber-600' },
+    secondary: { label: 'This Month', bg: 'bg-blue-50', text: 'text-blue-600', mode: 'this-month' },
+    inquiryEmoji: '📋',
+    inquiryLabel: 'My Inquiry',
+    quoteLabel: 'Quote Received',
+    orderLabel: 'My Order',
+  },
+  generic: {
+    primary: { label: 'Total Events', bg: 'bg-amber-50', text: 'text-amber-600' },
+    secondary: { label: 'This Month', bg: 'bg-blue-50', text: 'text-blue-600', mode: 'this-month' },
+    inquiryEmoji: '📋',
+    inquiryLabel: 'Inquiry',
+    quoteLabel: 'Quote',
+    orderLabel: 'Order',
+  },
+};
+
+export default function DashboardCalendar({
+  events = [],
+  className = '',
+  tone = 'generic',
+}: DashboardCalendarProps) {
   const [currentDate, setCurrentDate] = React.useState(new Date());
+  const toneCfg = TONE_CONFIG[tone] ?? TONE_CONFIG.generic;
 
   const getDaysInMonth = (date: Date) =>
     new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -73,11 +160,24 @@ export default function DashboardCalendar({ events = [], className = '' }: Dashb
   };
 
   const typeLabel = {
-    inquiry: '📋 Inquiry',
-    quote: '📊 Quote',
-    order: '📦 Order',
+    inquiry: `${toneCfg.inquiryEmoji} ${toneCfg.inquiryLabel}`,
+    quote: `📊 ${toneCfg.quoteLabel}`,
+    order: `📦 ${toneCfg.orderLabel}`,
     meeting: '🎯 Meeting',
   };
+
+  // Secondary counter: events in the current calendar month, OR events
+  // landing within the next 7 days for "this week" tones.
+  const secondaryCount =
+    toneCfg.secondary.mode === 'this-week'
+      ? events.filter((e) => {
+          const start = new Date();
+          start.setHours(0, 0, 0, 0);
+          const end = new Date(start);
+          end.setDate(end.getDate() + 7);
+          return e.date >= start && e.date < end;
+        }).length
+      : events.filter((e) => e.date.getMonth() === currentDate.getMonth()).length;
 
   return (
     <motion.div
@@ -203,15 +303,17 @@ export default function DashboardCalendar({ events = [], className = '' }: Dashb
       {/* Stats Footer */}
       <div className="mt-5 pt-5 border-t border-slate-100">
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-amber-50 rounded-xl p-4 text-center">
-            <p className="text-3xl font-black text-amber-600">{events.length}</p>
-            <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mt-1">Total Events</p>
-          </div>
-          <div className="bg-blue-50 rounded-xl p-4 text-center">
-            <p className="text-3xl font-black text-blue-600">
-              {events.filter((e) => e.date.getMonth() === currentDate.getMonth()).length}
+          <div className={`${toneCfg.primary.bg} rounded-xl p-4 text-center`}>
+            <p className={`text-3xl font-black ${toneCfg.primary.text}`}>{events.length}</p>
+            <p className={`text-[10px] font-bold ${toneCfg.primary.text} uppercase tracking-wider mt-1`}>
+              {toneCfg.primary.label}
             </p>
-            <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mt-1">This Month</p>
+          </div>
+          <div className={`${toneCfg.secondary.bg} rounded-xl p-4 text-center`}>
+            <p className={`text-3xl font-black ${toneCfg.secondary.text}`}>{secondaryCount}</p>
+            <p className={`text-[10px] font-bold ${toneCfg.secondary.text} uppercase tracking-wider mt-1`}>
+              {toneCfg.secondary.label}
+            </p>
           </div>
         </div>
       </div>
