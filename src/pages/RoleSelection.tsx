@@ -574,28 +574,23 @@ export default function RoleSelection() {
         const showButton = !isViewingSubcategories || (tier === 3 && masterRole === 'SELLER');
         if (!showButton) return null;
 
-        // For sellers in tier-3 specialty view, we require at least one
-        // VARIANT (not just the master) to be selected — that's what carries
-        // the Buy New / Repair specification downstream.
-        const sellerHasVariantPicked =
-          tier === 3 &&
-          masterRole === 'SELLER' &&
-          isViewingSubcategories &&
-          selectedCategories.some((c: any) => {
-            // Variants live in CategorySelection's selection model with
-            // parentId !== id. The master pseudo-entry has parentId === id.
-            // But here we only have category names from onChange — so we
-            // detect variant by the "(...)" suffix in the name.
-            return /\([^)]+\)\s*$/.test(c);
-          });
+        // For sellers in tier-3, require at least one sub-category to be
+        // picked — not just the master. CategorySelection's seller flow
+        // stores the master pseudo-entry first, then appends real subs as
+        // the user toggles them, so length >= 2 means "master + at least
+        // one specialty". This rule is suffix-agnostic, so it works for
+        // categories whose subs carry a variant ("Mobile Phones (Repair)")
+        // and ones whose subs don't ("MCs & Hosts", "Event Catering").
+        const sellerHasSubPicked =
+          tier === 3 && masterRole === 'SELLER' && selectedCategories.length >= 2;
 
         const disabled =
           tier === 1
             ? !masterRole
             : tier === 2
               ? !selectedSubRole
-              : tier === 3 && masterRole === 'SELLER' && isViewingSubcategories
-                ? !sellerHasVariantPicked
+              : tier === 3 && masterRole === 'SELLER'
+                ? !sellerHasSubPicked
                 : selectedCategories.length === 0;
 
         return (
