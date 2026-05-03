@@ -2,6 +2,12 @@ import { MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import { MASTER_LABOUR_ACCOUNT_SCHEMA } from '../services/labourAccountSchema';
 import { MASTER_PROVIDER_ACCOUNT_SCHEMA } from '../services/providerAccountSchema';
 import { MASTER_RETAIL_ACCOUNT_SCHEMA } from '../services/retailAccountSchema';
+import { MASTER_REPAIR_ACCOUNT_SCHEMA } from '../services/repairAccountSchema';
+import { MASTER_RENTAL_ACCOUNT_SCHEMA } from '../services/rentalAccountSchema';
+import { MASTER_BOOKING_ACCOUNT_SCHEMA } from '../services/bookingAccountSchema';
+import { MASTER_SERVICE_ACCOUNT_SCHEMA } from '../services/serviceAccountSchema';
+import { MASTER_EVENTS_ACCOUNT_SCHEMA } from '../services/eventsAccountSchema';
+import { MASTER_ENTERTAINMENT_ACCOUNT_SCHEMA } from '../services/entertainmentAccountSchema';
 import { MASTER_SUPPLIER_ACCOUNT_SCHEMA } from '../services/supplierAccountSchema';
 import { NavigationItem } from '../services/accountSchemaTypes';
 import {
@@ -229,14 +235,22 @@ export default function DashboardLayout({
     // junction tables that field can be empty on a flatten path, so we
     // route via getBusinessType() which already prefers the cached
     // archetype over name regex.
+    // Schema selection — order matters. Labour and wholesale are checked
+    // first because LABOUR/WHOLESALE wins regardless of any other archetype
+    // in the seller's set. After that, the primary archetype (priority-
+    // ranked via BUSINESS_TYPE_PRIORITY) drives a 1:1 mapping to its
+    // dedicated schema. PROVIDER is a true fallback (no real archetype
+    // routes to it now — only UNKNOWN sellers mid-onboarding).
     if (user.role === 'BUYER') schema = MASTER_BUYER_ACCOUNT_SCHEMA;
     else if (businessType === 'LABOUR') schema = MASTER_LABOUR_ACCOUNT_SCHEMA;
     else if (businessTypes.includes('WHOLESALE')) schema = MASTER_SUPPLIER_ACCOUNT_SCHEMA;
+    else if (businessType === 'REPAIR') schema = MASTER_REPAIR_ACCOUNT_SCHEMA;
     else if (businessType === 'RETAIL') schema = MASTER_RETAIL_ACCOUNT_SCHEMA;
-    // TODO: author MASTER_RENTAL_ACCOUNT_SCHEMA — RENTAL falls through to
-    //       MASTER_PROVIDER_ACCOUNT_SCHEMA (the generic booking-shaped
-    //       fallback). Aliasing to EVENTS would be a lossy collapse.
-    // TODO: author MASTER_BOOKING_ACCOUNT_SCHEMA — same situation as RENTAL.
+    else if (businessType === 'EVENTS') schema = MASTER_EVENTS_ACCOUNT_SCHEMA;
+    else if (businessType === 'ENTERTAINMENT') schema = MASTER_ENTERTAINMENT_ACCOUNT_SCHEMA;
+    else if (businessType === 'BOOKING') schema = MASTER_BOOKING_ACCOUNT_SCHEMA;
+    else if (businessType === 'RENTAL') schema = MASTER_RENTAL_ACCOUNT_SCHEMA;
+    else if (businessType === 'SERVICE') schema = MASTER_SERVICE_ACCOUNT_SCHEMA;
     else schema = MASTER_PROVIDER_ACCOUNT_SCHEMA;
 
     return schema.navigation.filter((item) => {
