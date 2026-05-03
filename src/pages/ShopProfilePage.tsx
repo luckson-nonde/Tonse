@@ -78,8 +78,12 @@ export default function ShopProfilePage() {
 
       await updateUser(updates);
 
-      // Update shop entry if it exists
-      if (user?.role !== 'BUYER' && user?.role !== 'PROVIDER_STAFF' && user?.id) {
+      // Update shop entry if it exists. Phase 2: PROVIDER_STAFF dropped
+      // from the role enum. Staff users (if reintroduced) carry
+      // parentProviderId — they shouldn't own their own shop row, so we
+      // exclude them via that field instead of role.
+      const isStaff = !!user?.parentProviderId;
+      if (user?.role !== 'BUYER' && !isStaff && user?.id) {
         const effectiveProviderId = user.parentProviderId || user.id;
         const shop = await db.shops.where('providerId').equals(effectiveProviderId).first();
 
@@ -154,14 +158,14 @@ export default function ShopProfilePage() {
         <h1 className="text-[26px] font-serif font-bold text-brand-dark leading-tight">
           {user.role === 'BUYER'
             ? 'My Profile'
-            : user.role === 'PROVIDER_STAFF'
+            : user.parentProviderId
               ? 'Personal Profile'
               : 'Shop Profile'}
         </h1>
         <p className="text-[14px] font-sans text-[#64748b] mt-1">
           {user.role === 'BUYER'
             ? 'Manage your account and personal details'
-            : user.role === 'PROVIDER_STAFF'
+            : user.parentProviderId
               ? 'Manage your personal account details'
               : 'Manage your account and shop details'}
         </p>

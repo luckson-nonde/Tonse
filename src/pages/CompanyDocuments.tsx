@@ -233,8 +233,8 @@ export default function CompanyDocuments() {
   };
 
   const navigateAfter = () => {
+    // Phase 2: LABOUR was demoted into SERVICE_PROVIDER which lives at /provider.
     if (user?.role === 'BUYER') navigate('/buyer');
-    else if (user?.role === 'LABOUR') navigate('/labour');
     else navigate('/provider');
   };
 

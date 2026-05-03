@@ -87,15 +87,20 @@ export default function LabourRegister() {
       };
       localStorage.setItem('pendingProfile', JSON.stringify(labourProfileData));
 
-      // Register with identity fields, plus the labour-specific profile as
-      // extraProfile so it lands on the backend before the auto-login (was
-      // previously only stored in localStorage/pendingProfile, leaving the
-      // DB columns empty).
+      // Phase 2: LABOUR is no longer a top-level role. Labour users register
+      // as SERVICE_PROVIDER with their labour categories carried in
+      // categories[]. labourCategory and labourSubTypes still persist as
+      // their own typed columns (Phase 1) for the labour-specific UI to read,
+      // so the dashboard can still show labour-specialty fields.
+      const labourCats = [
+        formData.selectedGroup ? `Skilled Labour - ${formData.selectedGroup}` : null,
+        ...(formData.selectedSubTypes || []),
+      ].filter(Boolean) as string[];
+
       const extraProfile: Record<string, any> = {
         labourCategory: formData.selectedGroup,
         labourSubTypes: formData.selectedSubTypes,
-        // Mirror any profile fields collected by DynamicProfileForm into
-        // metadata so they survive a fresh login.
+        categories: labourCats,
         ...profileData,
       };
       await register(
@@ -103,7 +108,7 @@ export default function LabourRegister() {
         formData.password,
         formData.fullName,
         formData.phone,
-        'LABOUR',
+        'SERVICE_PROVIDER',
         profileData.nrc || '',
         profileData.profilePicture || '',
         '',

@@ -1571,10 +1571,16 @@ function ReviewDrawer({
     }
   };
 
-  const meta: Record<string, any> = (user as any)?.metadata ?? {};
-  const isLabour = (user?.role || '') === 'LABOUR';
-  const isShopOrSupplier = ['SELLER', 'SUPPLIER'].includes(user?.role || '');
-  const isService = ['SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS'].includes(user?.role || '');
+  // Phase 1+2: metadata jsonb is gone, every field is a typed column on the
+  // user row. We alias `meta` to the user object so the existing `meta.X`
+  // call sites keep working — companyName / tpin / incorporationCertUrl
+  // / labourCategory etc. are all real columns now. Fields that haven't
+  // been promoted (businessDocs, storePhotos) read as undefined and the
+  // surrounding null-checks gate them out.
+  const meta: Record<string, any> = (user as any) ?? {};
+  const isLabour = !!(user as any)?.labourCategory;
+  const isShopOrSupplier = (user?.role || '') === 'SELLER';
+  const isService = (user?.role || '') === 'SERVICE_PROVIDER';
 
   return (
     <div className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-md flex items-stretch justify-end">

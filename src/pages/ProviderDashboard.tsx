@@ -120,24 +120,21 @@ export default function ProviderDashboard() {
 
   const effectiveProviderId = user?.parentProviderId || user?.id;
 
-  // RBAC Redirect Logic
+  // RBAC Redirect Logic — Phase 2 dropped PROVIDER_STAFF from the role enum;
+  // staff users (if reintroduced later) would be a SELLER subRole, not a
+  // top-level role. The team-tab guard remains, just gated by permissions.
   useEffect(() => {
-    if (user && user.role === 'PROVIDER_STAFF') {
-      if (activeTab === 'team' && !hasPermission(user, PERMISSIONS.MANAGE_TEAM)) {
-        setActiveTab('leads');
-      }
+    if (user && activeTab === 'team' && !hasPermission(user, PERMISSIONS.MANAGE_TEAM)) {
+      setActiveTab('leads');
     }
   }, [user?.id, user?.permissions, activeTab, setActiveTab]);
 
-  // Booking-based flow now keys off the derived businessType (which inspects
-  // categories), not just legacy roles, so a SELLER who picked Event Venues
-  // / DJs / Event Catering also gets the booking-style quote handling.
+  // Booking-based flow keys off the derived businessType. Phase 2 dropped
+  // role==='EVENTS'/'ENTERTAINMENT' — those are now category strings on a
+  // SELLER row.
   const _bizTypeForFlow = getBusinessType(user as any);
   const isBookingBased =
-    user?.role === 'ENTERTAINMENT' ||
-    user?.role === 'EVENTS' ||
-    _bizTypeForFlow === 'EVENTS' ||
-    _bizTypeForFlow === 'ENTERTAINMENT';
+    _bizTypeForFlow === 'EVENTS' || _bizTypeForFlow === 'ENTERTAINMENT';
 
   const isServiceOrEvent = (inquiry: Inquiry) => {
     return (
@@ -324,14 +321,9 @@ export default function ProviderDashboard() {
     // Filter by Delete Status
     filtered = filtered.filter((lead) => !lead.deletedBy?.includes(providerId));
 
-    // Filter by Role/SubRole Nature (Strictly block Product vs Service leakage)
-    const isProviderRole = [
-      'SELLER',
-      'SUPPLIER',
-      'SERVICE_PROVIDER',
-      'ENTERTAINMENT',
-      'EVENTS',
-    ].includes(user?.role || '');
+    // Filter by Role/SubRole Nature (strictly block Product vs Service leakage).
+    // Phase 2: only two provider-side roles remain in the enum.
+    const isProviderRole = ['SELLER', 'SERVICE_PROVIDER'].includes(user?.role || '');
     if (isProviderRole) {
       filtered = filtered.filter((lead) => {
         // If the lead has no category, we can't reliably filter by nature here
@@ -348,13 +340,12 @@ export default function ProviderDashboard() {
           natureBiz === 'ENTERTAINMENT' ||
           natureBiz === 'PRO_SERVICES' ||
           natureBiz === 'REPAIR_SERVICE' ||
+          natureBiz === 'LABOUR' ||
           user?.subRole === 'SERVICE_SELLER' ||
-          user?.role === 'EVENTS' ||
-          user?.role === 'ENTERTAINMENT' ||
           user?.role === 'SERVICE_PROVIDER'
         )
           providerNature = 'SERVICE';
-        else if (user?.subRole === 'PRODUCT_SELLER' || user?.role === 'SUPPLIER')
+        else if (user?.subRole === 'PRODUCT_SELLER' || user?.subRole === 'SUPPLIER_SELLER')
           providerNature = 'PRODUCT';
         else if (user?.subRole === 'HYBRID_SELLER') providerNature = 'BOTH';
         const leadCats = lead.category.split(',').map((c) => c.trim());
@@ -445,8 +436,10 @@ export default function ProviderDashboard() {
 
   const venueSpaces =
     useLiveQuery(async () => {
-      // Temporarily disabled to stop 404 logs until backend route /venue-spaces is implemented
-      if (!effectiveProviderId || user?.role !== 'EVENTS') return [];
+      // Temporarily disabled to stop 404 logs until backend route
+      // /venue-spaces is implemented. Phase 2: gate by businessType (EVENTS
+      // is now a derived value on a SELLER row, not a top-level role).
+      if (!effectiveProviderId || _bizTypeForFlow !== 'EVENTS') return [];
       return [] as any[];
       /* 
       try {

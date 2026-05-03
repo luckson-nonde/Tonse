@@ -12,7 +12,10 @@ export async function logAuditAction(
 ) {
   if (!user.id) return;
 
-  const providerId = user.role === 'PROVIDER_STAFF' ? user.parentProviderId : user.id;
+  // Phase 2: PROVIDER_STAFF dropped from the role enum. Resolve the parent
+  // provider purely by presence of parentProviderId — staff (if reintroduced
+  // later as a SELLER subRole) just sets that field.
+  const providerId = user.parentProviderId ?? user.id;
 
   if (!providerId) return;
 

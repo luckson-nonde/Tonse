@@ -25,7 +25,11 @@ export default function AuditTrailPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
 
-  const providerId = user?.role === 'PROVIDER_STAFF' ? user.parentProviderId : user?.id;
+  // Phase 2: PROVIDER_STAFF dropped from the role enum. Staff identity is
+  // now signalled solely by parentProviderId being set — the parent owns the
+  // tenant; if it's set, this user is a staff member of that tenant.
+  const isStaff = !!user?.parentProviderId;
+  const providerId = isStaff ? user.parentProviderId : user?.id;
 
   const logs =
     useLiveQuery(async () => {
@@ -34,7 +38,7 @@ export default function AuditTrailPage() {
       let query = db.auditLogs.where('providerId').equals(providerId);
 
       // If staff, only show their own logs
-      if (user?.role === 'PROVIDER_STAFF') {
+      if (isStaff) {
         return await db.auditLogs.where('staffId').equals(user.id!).reverse().sortBy('timestamp');
       }
 
@@ -116,7 +120,7 @@ export default function AuditTrailPage() {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold text-slate-900 font-serif">Audit Trail</h1>
         <p className="text-sm text-slate-500">
-          {user?.role === 'PROVIDER_STAFF'
+          {isStaff
             ? 'Chronological record of your professional activities.'
             : 'Complete visibility into team performance and shop operations.'}
         </p>
@@ -248,7 +252,7 @@ export default function AuditTrailPage() {
                       </span>
                     </div>
 
-                    {user?.role !== 'PROVIDER_STAFF' && (
+                    {!isStaff && (
                       <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded-lg">
                         <ShieldCheck className="w-3 h-3 text-[#C9973A]" />
                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight">

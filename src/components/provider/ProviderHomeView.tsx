@@ -65,11 +65,9 @@ export default function ProviderHomeView({
 }: ProviderHomeViewProps) {
   const navigate = useNavigate();
   // isBookingBased reads businessType so a SELLER who picked Event Catering /
-  // Event Venues / DJs flows into the booking-style home — not just legacy
-  // role='EVENTS' / 'ENTERTAINMENT' users.
+  // Event Venues / DJs flows into the booking-style home. Phase 2 dropped
+  // role='EVENTS'/'ENTERTAINMENT' from the enum — those are category strings.
   const isBookingBased =
-    user?.role === 'ENTERTAINMENT' ||
-    user?.role === 'EVENTS' ||
     getBusinessType(user as any) === 'EVENTS' ||
     getBusinessType(user as any) === 'ENTERTAINMENT';
 

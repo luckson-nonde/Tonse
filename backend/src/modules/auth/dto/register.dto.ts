@@ -24,18 +24,11 @@ export class RegisterDto {
   @MinLength(10)
   phone: string;
 
-  @IsEnum([
-    'BUYER',
-    'SELLER',
-    'SUPPLIER',
-    'SERVICE_PROVIDER',
-    'ENTERTAINMENT',
-    'EVENTS',
-    'LABOUR',
-    'ADMIN',
-  ])
+  @IsEnum(['BUYER', 'SELLER', 'SERVICE_PROVIDER', 'ADMIN'])
   @IsOptional()
-  role?: string; // Optional, defaults to BUYER
+  role?: string; // Phase 2: legacy values (EVENTS, ENTERTAINMENT, SUPPLIER,
+  // LABOUR) are now category strings, not roles. Backfill SQL already
+  // collapsed existing rows.
 
   @IsString()
   @IsNotEmpty()

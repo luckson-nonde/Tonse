@@ -8,7 +8,7 @@ import Onboarding from './pages/Onboarding';
 import RoleSelection from './pages/RoleSelection';
 import Register from './pages/Register';
 import LabourRegister from './pages/LabourRegister';
-import LabourDashboard from './pages/LabourDashboard';
+// Phase 2: LabourDashboard import removed — /labour/* now redirects to /provider.
 import BusinessVerification from './pages/BusinessVerification';
 import SellerCategorySelection from './pages/SellerCategorySelection';
 import SellerLocationDetails from './pages/SellerLocationDetails';
@@ -95,7 +95,10 @@ function RootRedirect() {
   if (user.mustChangePassword) return <Navigate to="/force-password-change" replace />;
   if (user.role === 'ADMIN') return <Navigate to="/admin" replace />;
   if (user.role === 'BUYER') return <Navigate to="/buyer" replace />;
-  if (user.role === 'LABOUR') return <Navigate to="/labour" replace />;
+  // Phase 2: SERVICE_PROVIDER (incl. former LABOUR users) and SELLER (incl.
+  // former EVENTS / ENTERTAINMENT / SUPPLIER) all land on the unified
+  // provider dashboard. Sub-experiences are differentiated downstream by
+  // getBusinessType() reading subRole + categories.
   return <Navigate to="/provider" replace />;
 }
 
@@ -297,7 +300,11 @@ export default function App() {
               <Route
                 path="/provider/venue-spaces"
                 element={
-                  <ProtectedRoute allowedRoles={['EVENTS', 'PROVIDER_STAFF']}>
+                  // Phase 2: gate by SELLER role — businessType-driven UI
+                  // (the venue-spaces nav item already filters by
+                  // businessTypes: ['EVENTS'] + categoryFilter: ['event venues'])
+                  // does the per-business filtering downstream.
+                  <ProtectedRoute allowedRoles={['SELLER']}>
                     <DashboardLayout>
                       <VenueSpacesManager />
                     </DashboardLayout>
@@ -342,15 +349,11 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
-              <Route path="/labour" element={<Navigate to="/labour/dashboard" replace />} />
-              <Route
-                path="/labour/:tab"
-                element={
-                  <ProtectedRoute allowedRoles={['LABOUR']}>
-                    <LabourDashboard />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Phase 2: LABOUR is no longer a role — labour users now land
+                  in the SERVICE_PROVIDER bucket and use /provider. /labour/*
+                  redirects keep any old links / bookmarks alive. */}
+              <Route path="/labour" element={<Navigate to="/provider" replace />} />
+              <Route path="/labour/:tab" element={<Navigate to="/provider" replace />} />
               <Route path="/admin" element={<Navigate to="/admin/overview" replace />} />
               <Route
                 path="/admin/:tab"

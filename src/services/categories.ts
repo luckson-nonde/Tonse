@@ -1408,29 +1408,35 @@ export function getBusinessType(user: MinimalUserForBusinessType | null | undefi
 
   const role = user.role.toUpperCase();
   if (role === 'BUYER') return 'BUYER';
-  if (role === 'LABOUR') return 'LABOUR';
   if (role === 'ADMIN') return 'ADMIN';
 
-  // Backwards-compat: legacy users registered with role='EVENTS' / 'ENTERTAINMENT'
-  // (before the role-remap was removed in RoleSelection) keep their existing
-  // dashboard. New users get here as role='SELLER' and the category-name
-  // patterns below pick up the events/entertainment specialty.
-  if (role === 'EVENTS') return 'EVENTS';
-  if (role === 'ENTERTAINMENT') return 'ENTERTAINMENT';
-
+  // Phase 2 tightened the role enum to BUYER / SELLER / SERVICE_PROVIDER /
+  // ADMIN. Legacy values (EVENTS, ENTERTAINMENT, SUPPLIER, LABOUR) were
+  // backfilled into the categories array, so detection happens entirely
+  // through category-name predicates below.
   const categories = user.categories || [];
+  const subRole = (user.subRole || '').toUpperCase();
 
-  // Category-driven detection — checked BEFORE the seller subRole branches so
-  // a SELLER who picked "Event Equipment Rental" or "DJs" lands on the right
-  // dashboard rather than the generic RETAIL_PRODUCTS bucket. Events takes
-  // priority over entertainment when both match (rare but possible).
+  // Category-driven specialty detection — checked BEFORE the seller subRole
+  // branches so a SELLER who picked "Event Equipment Rental" or "DJs" lands
+  // on the right dashboard rather than the generic RETAIL_PRODUCTS bucket.
+  // Events takes priority over entertainment when both match (rare).
   if (categoriesMatch(categories, EVENT_CATEGORY_PATTERN)) return 'EVENTS';
   if (categoriesMatch(categories, ENTERTAINMENT_CATEGORY_PATTERN)) return 'ENTERTAINMENT';
 
-  const subRole = (user.subRole || '').toUpperCase();
-  if (subRole === 'SUPPLIER_SELLER' || role === 'SUPPLIER') return 'WHOLESALE';
+  // SERVICE_PROVIDER includes labour, repair-only services, and pro services.
+  if (role === 'SERVICE_PROVIDER') {
+    if (categories.some(isRepairVariant)) return 'REPAIR_SERVICE';
+    // labour categories carry "Skilled Labour" prefix from Phase 2 backfill
+    if (categoriesMatch(categories, /\bskilled\s?labour\b|\blabour\b|\bworker\b|\bgig\b/i))
+      return 'LABOUR';
+    return 'PRO_SERVICES';
+  }
+
+  // SELLER branch — products, hybrid, wholesale, sales-with-repair.
+  if (subRole === 'SUPPLIER_SELLER') return 'WHOLESALE';
   if (subRole === 'HYBRID_SELLER') return 'HYBRID';
-  if (subRole === 'SERVICE_SELLER' || role === 'SERVICE_PROVIDER') return 'PRO_SERVICES';
+  if (subRole === 'SERVICE_SELLER') return 'PRO_SERVICES';
 
   if (subRole === 'PRODUCT_SELLER' || role === 'SELLER') {
     const hasRepair = categories.some(isRepairVariant);

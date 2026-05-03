@@ -970,11 +970,12 @@ export function getRegistrationSchema(role: string, subRole?: string): ProfileSc
 }
 
 export function getProfileSchema(role?: string, subRole?: string): ProfileSchema {
-  // First check role for providers
-  if (role === 'SELLER' || role === 'SUPPLIER') return SELLER_SUPPLIER_SCHEMA;
+  // Phase 2: role enum tightened to BUYER / SELLER / SERVICE_PROVIDER /
+  // ADMIN. EVENTS / ENTERTAINMENT / SUPPLIER / LABOUR / PROVIDER_STAFF are
+  // no longer roles; events/entertainment sellers fall under SELLER and
+  // their categories carry the specialty.
+  if (role === 'SELLER') return SELLER_SUPPLIER_SCHEMA;
   if (role === 'SERVICE_PROVIDER') return SERVICE_PROVIDER_SCHEMA;
-  if (role === 'ENTERTAINMENT' || role === 'EVENTS') return ENTERTAINMENT_EVENTS_SCHEMA;
-  if (role === 'PROVIDER_STAFF') return STAFF_SCHEMA;
 
   // Fallback to subRole for buyers
   if (subRole?.startsWith('COMPANY_')) {

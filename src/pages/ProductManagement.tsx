@@ -5,9 +5,13 @@ import { db } from '../services/api/database';
 import { Product } from '../types';
 import { Plus, Trash2, Edit2, Package, Image as ImageIcon, Loader2, X } from 'lucide-react';
 import { uniqueKey } from '../utils/keyUtils';
+import { getBusinessType } from '../services/categories';
 
 export default function ProductManagement() {
   const { user } = useAuth();
+  // Phase 2: EVENTS is no longer a role. Drive the labels off the derived
+  // businessType — same single source of truth used by every other surface.
+  const isEventsBusiness = getBusinessType(user as any) === 'EVENTS';
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
@@ -106,7 +110,7 @@ export default function ProductManagement() {
           className="bg-[#d49b35] hover:brightness-95 text-slate-900 px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-[#d49b35]/20"
         >
           <Plus className="w-5 h-5" />
-          {user?.role === 'EVENTS' ? 'Add Item' : 'Add Product'}
+          {isEventsBusiness ? 'Add Item' : 'Add Product'}
         </button>
       </div>
 
@@ -116,10 +120,10 @@ export default function ProductManagement() {
             <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
               <h3 className="text-xl font-black text-slate-900">
                 {isEditing
-                  ? user?.role === 'EVENTS'
+                  ? isEventsBusiness
                     ? 'Edit Equipment'
                     : 'Edit Product'
-                  : user?.role === 'EVENTS'
+                  : isEventsBusiness
                     ? 'Add New Equipment'
                     : 'Add New Product'}
               </h3>
@@ -146,7 +150,7 @@ export default function ProductManagement() {
               <form onSubmit={handleAddProduct} className="p-8 space-y-4">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-                    {user?.role === 'EVENTS' ? 'Equipment Name' : 'Product Name'}
+                    {isEventsBusiness ? 'Equipment Name' : 'Product Name'}
                   </label>
                   <input
                     type="text"
@@ -155,7 +159,7 @@ export default function ProductManagement() {
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] outline-none"
                     placeholder={
-                      user?.role === 'EVENTS'
+                      isEventsBusiness
                         ? 'e.g. Professional Sound System'
                         : 'e.g. Minimalist Smart Watch'
                     }
@@ -177,7 +181,7 @@ export default function ProductManagement() {
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-                      {user?.role === 'EVENTS' ? 'Stock Quantity' : 'Quantity'}
+                      {isEventsBusiness ? 'Stock Quantity' : 'Quantity'}
                     </label>
                     <input
                       type="number"
@@ -199,12 +203,12 @@ export default function ProductManagement() {
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] outline-none"
-                    placeholder={user?.role === 'EVENTS' ? 'e.g. Plastic' : 'e.g. Electronics'}
+                    placeholder={isEventsBusiness ? 'e.g. Plastic' : 'e.g. Electronics'}
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-                    {user?.role === 'EVENTS' ? 'Equipment Description' : 'Description'}
+                    {isEventsBusiness ? 'Equipment Description' : 'Description'}
                   </label>
                   <textarea
                     required
@@ -212,7 +216,7 @@ export default function ProductManagement() {
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] outline-none resize-none"
                     placeholder={
-                      user?.role === 'EVENTS'
+                      isEventsBusiness
                         ? 'Describe the equipment...'
                         : 'Describe your product...'
                     }
@@ -221,7 +225,7 @@ export default function ProductManagement() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-                    {user?.role === 'EVENTS' ? 'Equipment Image' : 'Product Image'}
+                    {isEventsBusiness ? 'Equipment Image' : 'Product Image'}
                   </label>
                   <div
                     onClick={() => document.getElementById('product-image-input')?.click()}
@@ -285,10 +289,10 @@ export default function ProductManagement() {
                     <Plus className="w-5 h-5" />
                   )}
                   {isEditing
-                    ? user?.role === 'EVENTS'
+                    ? isEventsBusiness
                       ? 'Update Equipment'
                       : 'Update Product'
-                    : user?.role === 'EVENTS'
+                    : isEventsBusiness
                       ? 'List Equipment'
                       : 'List Product'}
                 </button>
@@ -303,13 +307,13 @@ export default function ProductManagement() {
           <div className="bg-white rounded-4xl p-12 text-center border border-slate-100">
             <Package className="w-12 h-12 text-slate-200 mx-auto mb-4" />
             <p className="text-slate-500 font-medium">
-              {user?.role === 'EVENTS' ? 'No equipment listed yet.' : 'No products listed yet.'}
+              {isEventsBusiness ? 'No equipment listed yet.' : 'No products listed yet.'}
             </p>
             <button
               onClick={() => setIsAdding(true)}
               className="text-[#d49b35] font-bold mt-2 hover:underline"
             >
-              {user?.role === 'EVENTS' ? 'Add your first item' : 'Add your first product'}
+              {isEventsBusiness ? 'Add your first item' : 'Add your first product'}
             </button>
           </div>
         ) : (

@@ -11,16 +11,12 @@ import { generateVirtualAccount } from './utils/financeUtils';
 // single source of truth for what's accepted. updateUser/register simply
 // pass the data through.
 
-export type Role =
-  | 'BUYER'
-  | 'SELLER'
-  | 'SUPPLIER'
-  | 'SERVICE_PROVIDER'
-  | 'ENTERTAINMENT'
-  | 'EVENTS'
-  | 'PROVIDER_STAFF'
-  | 'LABOUR'
-  | 'ADMIN';
+// Phase 2 of the users-table restructure tightened the role enum to four
+// canonical values. Business descriptors that used to live in role
+// (EVENTS, ENTERTAINMENT, SUPPLIER, LABOUR) are now categories — they
+// describe what the user trades in, not who they are. PROVIDER_STAFF is
+// also gone; team members live as related rows under their parent provider.
+export type Role = 'BUYER' | 'SELLER' | 'SERVICE_PROVIDER' | 'ADMIN';
 
 export interface User {
   id: string;

@@ -133,20 +133,23 @@ export class User {
   location: string;
 
   /**
-   * User's Primary Role/Category
+   * User's Primary Auth Role.
+   *
+   * Phase 2 of the users-table restructure tightened this to four canonical
+   * values. Business descriptors that used to live here (EVENTS,
+   * ENTERTAINMENT, SUPPLIER) are now in the `categories` array — they're
+   * what the user trades in, not who they are. LABOUR was demoted into
+   * SERVICE_PROVIDER (per spec default — "events / entertainment / labour
+   * are not roles, they're categories").
+   *
+   *   BUYER             — consumer side
+   *   SELLER            — commerce side (products + sales-with-repair)
+   *   SERVICE_PROVIDER  — services, repairs, labour, performances
+   *   ADMIN             — internal
    */
   @Column({
     type: 'enum',
-    enum: [
-      'BUYER',
-      'SELLER',
-      'SUPPLIER',
-      'SERVICE_PROVIDER',
-      'ENTERTAINMENT',
-      'EVENTS',
-      'LABOUR',
-      'ADMIN',
-    ],
+    enum: ['BUYER', 'SELLER', 'SERVICE_PROVIDER', 'ADMIN'],
     default: 'BUYER',
   })
   role: string;

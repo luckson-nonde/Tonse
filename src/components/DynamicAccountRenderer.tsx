@@ -618,10 +618,13 @@ export default function DynamicAccountRenderer({
       case 'details_renderer':
         return renderDetails();
       case 'profile_renderer':
-        const profileSchema =
-          user?.role === 'LABOUR'
-            ? getLabourProfileSchema(user?.labourSubTypes?.[0] ?? 'generic')
-            : getProfileSchema(user?.role, user?.subRole);
+        // Phase 2: LABOUR is no longer a top-level role. Labour users
+        // register as SERVICE_PROVIDER but still carry labourCategory /
+        // labourSubTypes as typed columns — detect by labourCategory
+        // presence and route to the labour profile schema.
+        const profileSchema = user?.labourCategory
+          ? getLabourProfileSchema(user?.labourSubTypes?.[0] ?? 'generic')
+          : getProfileSchema(user?.role, user?.subRole);
 
         console.log('PROFILE SCHEMA:', JSON.stringify(profileSchema));
         console.log('PROFILE SCHEMA TYPE:', typeof profileSchema);

@@ -26,7 +26,11 @@ export default function BusinessVerification() {
 
   const isShopOwner = user?.role === 'SELLER';
   const isServiceProvider = user?.role === 'SERVICE_PROVIDER';
-  const isEntertainment = user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS';
+  // Phase 2: ENTERTAINMENT/EVENTS are now category strings on a SELLER, not
+  // separate roles. Detect via category-name patterns.
+  const isEntertainment = (user?.categories || []).some((c: string) =>
+    /\b(events?|venues?|wedding|conference|stage|entertainment|dj|live\s?band|mc|host|dancer|comedian|performer|influencer)\b/i.test(c)
+  );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'generic' | 'identity' | 'business' = 'generic') => {
     const selectedFiles = e.target.files;

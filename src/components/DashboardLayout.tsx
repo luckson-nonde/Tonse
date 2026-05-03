@@ -196,7 +196,16 @@ export default function DashboardLayout({
     if (!user) return [];
     let schema;
     if (user.role === 'BUYER') schema = MASTER_BUYER_ACCOUNT_SCHEMA;
-    else if (user.role === 'LABOUR') schema = MASTER_LABOUR_ACCOUNT_SCHEMA;
+    // Phase 2: SERVICE_PROVIDER (incl. former LABOUR) routes through the
+    // labour schema if their categories carry labour markers; otherwise
+    // through the generic provider schema. SUPPLIER_SELLER subRole keeps
+    // the supplier schema. Any future business-type-specific schemas can
+    // dispatch from here without touching the enum.
+    else if (
+      user.role === 'SERVICE_PROVIDER' &&
+      (user.categories || []).some((c) => /\bskilled\s?labour\b|\blabour\b/i.test(c))
+    )
+      schema = MASTER_LABOUR_ACCOUNT_SCHEMA;
     else if (user.subRole === 'SUPPLIER_SELLER') schema = MASTER_SUPPLIER_ACCOUNT_SCHEMA;
     else schema = MASTER_PROVIDER_ACCOUNT_SCHEMA;
 
@@ -287,7 +296,10 @@ export default function DashboardLayout({
 
   const handleTabClick = React.useCallback(
     (tab: string) => {
-      if ((user?.role === 'LABOUR' || user?.role === 'BUYER') && onTabChange) {
+      // Phase 2: LABOUR is no longer a role — former labour users now route
+      // via /provider as SERVICE_PROVIDER. Buyers still get the
+      // onTabChange-driven tab swap.
+      if (user?.role === 'BUYER' && onTabChange) {
         onTabChange(tab);
         setIsMobileMenuOpen(false);
         return;
@@ -297,8 +309,7 @@ export default function DashboardLayout({
       setIsMobileMenuOpen(false);
 
       const isBuyer = user?.role === 'BUYER';
-      const isLabour = user?.role === 'LABOUR';
-      const basePath = isBuyer ? '/buyer' : isLabour ? '/labour' : '/provider';
+      const basePath = isBuyer ? '/buyer' : '/provider';
       const activeInquiry = notificationCounts?.activeInquiry;
 
       if (['quotation', 'purchase_order', 'order_confirmation', 'delivery_order'].includes(tab)) {
@@ -324,7 +335,7 @@ export default function DashboardLayout({
       } else if (tab === 'profile') {
         navigate(`${basePath}/profile`);
       } else if (tab === 'schedule') {
-        navigate(isLabour ? '/labour/schedule' : '/schedule');
+        navigate('/schedule');
       } else if (tab === 'venue-spaces') {
         navigate('/provider/venue-spaces');
       } else if (tab === 'audit-trail') {
@@ -338,7 +349,11 @@ export default function DashboardLayout({
 
 
   const getPageTitle = () => {
-    const isBookingBased = user?.role === 'ENTERTAINMENT' || user?.role === 'EVENTS';
+    // Phase 2: legacy roles (EVENTS / ENTERTAINMENT) collapsed into the
+    // category-driven businessType. The page-title copy keys off
+    // businessType the same way the sidebar / home tiles already do.
+    const isBookingBased =
+      businessType === 'EVENTS' || businessType === 'ENTERTAINMENT';
     switch (activeTab) {
       case 'home':
       case 'dashboard':
@@ -358,13 +373,13 @@ export default function DashboardLayout({
       case 'suppliers':
         return 'VERIFIED SUPPLIERS';
       case 'paid-orders':
-        if (user?.role === 'EVENTS') return 'PAID RENTALS';
+        if (businessType === 'EVENTS') return 'PAID RENTALS';
         return isBookingBased ? 'PAID BOOKINGS' : 'PAID ORDERS (ESCROW)';
       case 'collection':
         return 'PARCEL COLLECTION';
       case 'products':
         if (user?.subRole === 'SUPPLIER_SELLER') return 'SUPPLY INVENTORY';
-        return user?.role === 'EVENTS' ? 'INVENTORY' : 'MY PRODUCTS';
+        return businessType === 'EVENTS' ? 'INVENTORY' : 'MY PRODUCTS';
       case 'venue-spaces':
         return 'VENUE SPACES';
       case 'archived':
