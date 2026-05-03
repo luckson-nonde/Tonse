@@ -61,9 +61,19 @@ export class SellerProfile {
   @Column({ type: 'varchar', length: 50, nullable: true })
   subRole: string;
 
-  /** Categories of goods sold (with variant suffixes like "(Buy New)"). */
-  @Column({ type: 'simple-array', default: '' })
-  categories: string[];
+  /**
+   * Cached archetype derived from the union of this seller's
+   * `seller_profile_categories` rows (recomputed on every category
+   * write by ArchetypeResolver). Drives dashboard variant — labels,
+   * sidebar items, stat tiles. The seller's actual categories live
+   * in the join table; this column is a pre-computed projection.
+   */
+  @Column({
+    type: 'enum',
+    enum: ['RETAIL', 'RENTAL', 'BOOKING', 'LABOUR', 'REPAIR', 'SERVICE', 'EVENTS', 'ENTERTAINMENT'],
+    nullable: true,
+  })
+  archetype: string;
 
   // ===== Business identity (PACRA / ZRA registration) =====
 

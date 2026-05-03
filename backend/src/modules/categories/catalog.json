@@ -1,0 +1,653 @@
+[
+  {
+    "id": "electronics",
+    "name": "Electronics",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "furniture",
+    "name": "Furniture",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "fashion",
+    "name": "Fashion",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "home-decor",
+    "name": "Home Decor",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "automotive",
+    "name": "Automotive",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "groceries",
+    "name": "Groceries",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "beauty",
+    "name": "Beauty",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "construction",
+    "name": "Construction",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "entertainment",
+    "name": "Entertainment",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "events",
+    "name": "Events",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "telecommunications",
+    "name": "Telecommunications",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "it-services",
+    "name": "IT Services",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "it-products",
+    "name": "IT Products",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "drilling-services",
+    "name": "Drilling Services",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "agriculture",
+    "name": "Agriculture & Agro-Dealers",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "mobile-phones-buy",
+    "name": "Mobile Phones & Accessories (Buy New)",
+    "parentId": "electronics",
+    "baseName": "Mobile Phones & Accessories",
+    "type": "buy"
+  },
+  {
+    "id": "mobile-phones-repair",
+    "name": "Mobile Phones & Accessories (Repair)",
+    "parentId": "electronics",
+    "baseName": "Mobile Phones & Accessories",
+    "type": "repair"
+  },
+  {
+    "id": "laptops-buy",
+    "name": "Laptops & Computers (Buy New)",
+    "parentId": "electronics",
+    "baseName": "Laptops & Computers",
+    "type": "buy"
+  },
+  {
+    "id": "laptops-repair",
+    "name": "Laptops & Computers (Repair)",
+    "parentId": "electronics",
+    "baseName": "Laptops & Computers",
+    "type": "repair"
+  },
+  {
+    "id": "home-appliances-buy",
+    "name": "Home Appliances (Buy New)",
+    "parentId": "electronics",
+    "baseName": "Home Appliances",
+    "type": "buy"
+  },
+  {
+    "id": "home-appliances-repair",
+    "name": "Home Appliances (Repair)",
+    "parentId": "electronics",
+    "baseName": "Home Appliances",
+    "type": "repair"
+  },
+  {
+    "id": "audio-video-buy",
+    "name": "Audio & Video Equipment (Buy New)",
+    "parentId": "electronics",
+    "baseName": "Audio & Video Equipment",
+    "type": "buy"
+  },
+  {
+    "id": "audio-video-repair",
+    "name": "Audio & Video Equipment (Repair)",
+    "parentId": "electronics",
+    "baseName": "Audio & Video Equipment",
+    "type": "repair"
+  },
+  {
+    "id": "gaming-buy",
+    "name": "Gaming Consoles & Accessories (Buy)",
+    "parentId": "electronics",
+    "baseName": "Gaming Consoles & Accessories",
+    "type": "buy"
+  },
+  {
+    "id": "living-room-buy",
+    "name": "Living Room Furniture (Buy / Custom)",
+    "parentId": "furniture",
+    "baseName": "Living Room Furniture",
+    "type": "buy"
+  },
+  {
+    "id": "living-room-repair",
+    "name": "Living Room Furniture (Repair / Upholstery)",
+    "parentId": "furniture",
+    "baseName": "Living Room Furniture",
+    "type": "repair"
+  },
+  {
+    "id": "bedroom-buy",
+    "name": "Bedroom Furniture (Buy / Custom)",
+    "parentId": "furniture",
+    "baseName": "Bedroom Furniture",
+    "type": "buy"
+  },
+  {
+    "id": "bedroom-repair",
+    "name": "Bedroom Furniture (Repair / Restoration)",
+    "parentId": "furniture",
+    "baseName": "Bedroom Furniture",
+    "type": "restore"
+  },
+  {
+    "id": "office-buy",
+    "name": "Office Furniture (Buy / Custom)",
+    "parentId": "furniture",
+    "baseName": "Office Furniture",
+    "type": "buy"
+  },
+  {
+    "id": "office-repair",
+    "name": "Office Furniture (Repair)",
+    "parentId": "furniture",
+    "baseName": "Office Furniture",
+    "type": "repair"
+  },
+  {
+    "id": "outdoor-buy",
+    "name": "Outdoor & Patio (Buy / Custom)",
+    "parentId": "furniture",
+    "baseName": "Outdoor & Patio",
+    "type": "buy"
+  },
+  {
+    "id": "outdoor-repair",
+    "name": "Outdoor & Patio (Repair)",
+    "parentId": "furniture",
+    "baseName": "Outdoor & Patio",
+    "type": "repair"
+  },
+  {
+    "id": "mens-clothing",
+    "name": "Men's Clothing",
+    "parentId": "fashion",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "womens-clothing",
+    "name": "Women's Clothing",
+    "parentId": "fashion",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "shoes-footwear",
+    "name": "Shoes & Footwear",
+    "parentId": "fashion",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "accessories-jewelry",
+    "name": "Accessories & Jewelry",
+    "parentId": "fashion",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "lighting-lamps",
+    "name": "Lighting & Lamps",
+    "parentId": "home-decor",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "wall-art-mirrors",
+    "name": "Wall Art & Mirrors",
+    "parentId": "home-decor",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "rugs-carpets",
+    "name": "Rugs & Carpets",
+    "parentId": "home-decor",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "curtains-blinds",
+    "name": "Curtains & Blinds",
+    "parentId": "home-decor",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "car-parts-new",
+    "name": "Car Parts & Spares (Buy New)",
+    "parentId": "automotive",
+    "baseName": "Car Parts & Spares",
+    "type": "buy"
+  },
+  {
+    "id": "car-parts-breakers",
+    "name": "Car Parts & Spares (Buy from Car Breakers)",
+    "parentId": "automotive",
+    "baseName": "Car Parts & Spares",
+    "type": "buy"
+  },
+  {
+    "id": "car-accessories",
+    "name": "Car Accessories",
+    "parentId": "automotive",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "car-breakdown-recovery",
+    "name": "Car Breakdown & Recovery",
+    "parentId": "automotive",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "motorcycles-parts",
+    "name": "Motorcycles & Parts",
+    "parentId": "automotive",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "automotive-tools",
+    "name": "Automotive Tools",
+    "parentId": "automotive",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "fresh-produce",
+    "name": "Fresh Produce",
+    "parentId": "groceries",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "pantry-staples",
+    "name": "Pantry Staples",
+    "parentId": "groceries",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "beverages",
+    "name": "Beverages",
+    "parentId": "groceries",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "snacks-sweets",
+    "name": "Snacks & Sweets",
+    "parentId": "groceries",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "skincare",
+    "name": "Skincare",
+    "parentId": "beauty",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "makeup-cosmetics",
+    "name": "Makeup & Cosmetics",
+    "parentId": "beauty",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "haircare",
+    "name": "Haircare",
+    "parentId": "beauty",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "fragrances",
+    "name": "Fragrances",
+    "parentId": "beauty",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "building-materials",
+    "name": "Building Materials",
+    "parentId": "construction",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "plumbing-fixtures",
+    "name": "Plumbing & Fixtures",
+    "parentId": "construction",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "electrical-supplies",
+    "name": "Electrical Supplies",
+    "parentId": "construction",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "hardware-tools",
+    "name": "Hardware & Tools",
+    "parentId": "construction",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "construction-machinery",
+    "name": "Construction Machinery",
+    "parentId": "construction",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "djs",
+    "name": "DJs",
+    "parentId": "entertainment",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "live-bands",
+    "name": "Live Bands",
+    "parentId": "entertainment",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "mc-hosts",
+    "name": "MCs & Hosts",
+    "parentId": "entertainment",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "dancers",
+    "name": "Dancers",
+    "parentId": "entertainment",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "public-speaker",
+    "name": "Public Speaker",
+    "parentId": "entertainment",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "comedians",
+    "name": "Comedians",
+    "parentId": "entertainment",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "influencers",
+    "name": "Influencers",
+    "parentId": "entertainment",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "spoken-word",
+    "name": "Spoken Word Artists",
+    "parentId": "entertainment",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "event-equipment-rental",
+    "name": "Event Equipment Rental",
+    "parentId": "events",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "event-management",
+    "name": "Event Management",
+    "parentId": "events",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "event-catering",
+    "name": "Event Catering",
+    "parentId": "events",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "event-planning",
+    "name": "Event Planning",
+    "parentId": "events",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "event-venues",
+    "name": "Event Venues",
+    "parentId": "events",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "event-decor",
+    "name": "Event Decor",
+    "parentId": "events",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "internet-service-providers",
+    "name": "Internet Service Providers (ISP)",
+    "parentId": "telecommunications",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "mobile-network-services",
+    "name": "Mobile Network Services",
+    "parentId": "telecommunications",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "satellite-vsat-installation",
+    "name": "Satellite & VSAT Installation",
+    "parentId": "telecommunications",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "software-web-development",
+    "name": "Software & Web Development",
+    "parentId": "it-services",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "networking-security",
+    "name": "Networking & Security",
+    "parentId": "it-services",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "it-support-maintenance",
+    "name": "IT Support & Maintenance",
+    "parentId": "it-services",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "business-computers",
+    "name": "Computers & Laptops (Business)",
+    "parentId": "it-products",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "servers-storage",
+    "name": "Servers & Storage",
+    "parentId": "it-products",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "networking-hardware",
+    "name": "Networking Hardware",
+    "parentId": "it-products",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "software-licenses",
+    "name": "Software Licenses",
+    "parentId": "it-products",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "printers-office-equipment",
+    "name": "Printers & Office Equipment",
+    "parentId": "it-products",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "borehole-drilling",
+    "name": "Borehole Drilling",
+    "parentId": "drilling-services",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "mining-exploration",
+    "name": "Mining Exploration",
+    "parentId": "drilling-services",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "geotechnical-drilling",
+    "name": "Geotechnical Drilling",
+    "parentId": "drilling-services",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "poultry-farming",
+    "name": "Poultry Farming",
+    "parentId": "agriculture",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "aquaculture",
+    "name": "Aquaculture (Fish)",
+    "parentId": "agriculture",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "crop-production",
+    "name": "Crop Production",
+    "parentId": "agriculture",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "livestock-veterinary",
+    "name": "Livestock & Veterinary",
+    "parentId": "agriculture",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "irrigation-hardware",
+    "name": "Irrigation & Hardware",
+    "parentId": "agriculture",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "agro-tech-services",
+    "name": "Agro-Tech & Services",
+    "parentId": "agriculture",
+    "baseName": null,
+    "type": null
+  }
+]

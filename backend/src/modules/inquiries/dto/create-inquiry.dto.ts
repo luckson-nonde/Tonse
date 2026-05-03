@@ -7,6 +7,8 @@ import {
   IsNumber,
   IsBoolean,
   IsEnum,
+  IsArray,
+  ArrayNotEmpty,
   MinLength,
   MaxLength,
 } from 'class-validator';
@@ -27,10 +29,19 @@ export class CreateInquiryDto {
   @IsUUID()
   buyerId?: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(50)
-  category: string;
+  /**
+   * Category IDs the inquiry is tagged with. Replaces the previous
+   * comma-joined `category: string` blob — every entry is a stable
+   * id from the categories table (e.g. 'mobile-phones-buy'), and
+   * each id lands as its own row in `inquiry_categories`. Server
+   * matching joins these against expanded seller categories via a
+   * recursive CTE so a seller subscribed to parent 'electronics'
+   * still matches a 'mobile-phones-buy' inquiry.
+   */
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  categoryIds: string[];
 
   @IsString()
   @IsNotEmpty()

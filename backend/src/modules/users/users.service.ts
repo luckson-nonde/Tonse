@@ -5,15 +5,18 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { UserEmail } from './entities/user-email.entity';
 import { IdentityAudit } from './entities/identity-audit.entity';
 import { BuyerProfile } from './entities/buyer-profile.entity';
 import { SellerProfile } from './entities/seller-profile.entity';
 import { ServiceProviderProfile } from './entities/service-provider-profile.entity';
+import { SellerProfileCategory } from './entities/seller-profile-category.entity';
+import { ServiceProviderProfileCategory } from './entities/service-provider-profile-category.entity';
 import { UserDisplayIdUtil } from '../../utils/user-display-id.util';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ArchetypeResolverService } from './services/archetype-resolver.service';
 import * as crypto from 'crypto';
 
 // Phase 3 contract: users table holds ONLY these fields. Anything else is
@@ -76,7 +79,16 @@ export class UsersService {
     private readonly sellerProfileRepository: Repository<SellerProfile>,
 
     @InjectRepository(ServiceProviderProfile)
-    private readonly serviceProviderProfileRepository: Repository<ServiceProviderProfile>
+    private readonly serviceProviderProfileRepository: Repository<ServiceProviderProfile>,
+
+    @InjectRepository(SellerProfileCategory)
+    private readonly sellerProfileCategoryRepository: Repository<SellerProfileCategory>,
+
+    @InjectRepository(ServiceProviderProfileCategory)
+    private readonly serviceProviderProfileCategoryRepository: Repository<ServiceProviderProfileCategory>,
+
+    private readonly archetypeResolver: ArchetypeResolverService,
+    private readonly dataSource: DataSource,
   ) {}
 
   // ===== PROFILE HELPERS (Phase 3) ============================================
@@ -158,6 +170,12 @@ export class UsersService {
       hasPin = !!pinRow?.pin;
     }
 
+    // Phase: matching — load the profile's category IDs so the
+    // frontend can re-hydrate selections without a second round-trip.
+    // For BUYER profiles this stays empty (buyers don't subscribe to
+    // categories the same way; see comment in categoryJunctionFor).
+    const categoryIds = await this.loadActiveProfileCategoryIds(user);
+
     const {
       id: _profId,
       userId: _profUserId,
@@ -166,7 +184,7 @@ export class UsersService {
       pin: _pin, // belt-and-braces — should never be present, but strip if it is
       ...profileFields
     } = profile as any;
-    return { ...user, ...profileFields, hasPin };
+    return { ...user, ...profileFields, hasPin, categoryIds };
   }
 
   /**
@@ -210,9 +228,44 @@ export class UsersService {
   }
 
   /**
-   * Create a profile row matching `role` for the given user, then point the
-   * user's activeProfileId / activeProfileType at the new row. Returns the
-   * created profile.
+   * Resolve the profile-categories junction repo (and the FK column
+   * name on it) for a given profile type. Centralised here so the
+   * Phase: matching writes go through one place that knows about both
+   * SELLER and SERVICE_PROVIDER variants.
+   */
+  private categoryJunctionFor(type: string): {
+    repo: Repository<SellerProfileCategory | ServiceProviderProfileCategory>;
+    profileColumn: 'sellerProfileId' | 'serviceProviderProfileId';
+  } | null {
+    if (type === 'SELLER') {
+      return {
+        repo: this.sellerProfileCategoryRepository as Repository<
+          SellerProfileCategory | ServiceProviderProfileCategory
+        >,
+        profileColumn: 'sellerProfileId',
+      };
+    }
+    if (type === 'SERVICE_PROVIDER') {
+      return {
+        repo: this.serviceProviderProfileCategoryRepository as Repository<
+          SellerProfileCategory | ServiceProviderProfileCategory
+        >,
+        profileColumn: 'serviceProviderProfileId',
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Create a profile row matching `role` for the given user, then point
+   * the user's activeProfileId / activeProfileType at the new row.
+   *
+   * Phase: matching — when `categoryIds` is in the profileFields, the
+   * profile row, the junction rows, and the archetype recomputation all
+   * happen inside one transaction. The profile pointer on `users` is
+   * updated last. This is what closes the registration race that used
+   * to ship `categories=[]` profiles when the post-register
+   * `updateUser` call fired before the profile existed.
    */
   async createProfileForRole(
     userId: string,
@@ -224,15 +277,85 @@ export class UsersService {
     const repo = this.profileRepoFor(type);
     if (!repo) return null;
 
-    const profile = (repo as any).create({ userId, ...profileFields });
-    const saved = await (repo as any).save(profile);
+    const { categoryIds, ...rest } = profileFields as { categoryIds?: string[] } & Record<string, any>;
+    const wantsCategories = Array.isArray(categoryIds) && categoryIds.length > 0;
 
-    await this.userRepository.update(
-      { id: userId },
-      { activeProfileId: saved.id, activeProfileType: type }
-    );
+    return this.dataSource.transaction(async (manager) => {
+      const txProfileRepo = manager.getRepository(repo.target as any) as Repository<ActiveProfile>;
+      const profile = (txProfileRepo as any).create({ userId, ...rest });
+      const saved = await (txProfileRepo as any).save(profile);
 
-    return saved;
+      if (wantsCategories) {
+        const junction = this.categoryJunctionFor(type);
+        if (junction) {
+          const txJunction = manager.getRepository(junction.repo.target as any) as Repository<any>;
+          const unique = Array.from(new Set(categoryIds));
+          await txJunction.save(
+            unique.map((cid) => ({
+              [junction.profileColumn]: saved.id,
+              categoryId: cid,
+            })),
+          );
+          // Recompute and persist the archetype cache.
+          const archetype = await this.archetypeResolver.resolve(unique);
+          if (archetype) {
+            await txProfileRepo.update({ id: saved.id } as any, { archetype } as any);
+            (saved as any).archetype = archetype;
+          }
+        }
+      }
+
+      await manager
+        .getRepository(User)
+        .update({ id: userId }, { activeProfileId: saved.id, activeProfileType: type });
+
+      return saved;
+    });
+  }
+
+  /**
+   * Replace a profile's category set with a new one. Old junction rows
+   * are deleted, new ones inserted, archetype recomputed — all inside
+   * one transaction so a partial failure can't leave the profile with
+   * a stale archetype or orphaned junction rows.
+   */
+  async setProfileCategories(
+    profileType: string,
+    profileId: string,
+    categoryIds: string[],
+  ): Promise<void> {
+    const junction = this.categoryJunctionFor(profileType);
+    if (!junction) return;
+    const repo = this.profileRepoFor(profileType);
+    if (!repo) return;
+    const unique = Array.from(new Set(categoryIds));
+    await this.dataSource.transaction(async (manager) => {
+      const txJunction = manager.getRepository(junction.repo.target as any) as Repository<any>;
+      await txJunction.delete({ [junction.profileColumn]: profileId });
+      if (unique.length > 0) {
+        await txJunction.save(
+          unique.map((cid) => ({
+            [junction.profileColumn]: profileId,
+            categoryId: cid,
+          })),
+        );
+      }
+      const archetype = await this.archetypeResolver.resolve(unique);
+      const txProfileRepo = manager.getRepository(repo.target as any) as Repository<any>;
+      await txProfileRepo.update({ id: profileId }, { archetype: archetype || null });
+    });
+  }
+
+  /** Read the category IDs the active profile is subscribed to. */
+  async loadActiveProfileCategoryIds(user: User): Promise<string[]> {
+    if (!user?.activeProfileId || !user?.activeProfileType) return [];
+    const junction = this.categoryJunctionFor(user.activeProfileType);
+    if (!junction) return [];
+    const rows = await junction.repo.find({
+      where: { [junction.profileColumn]: user.activeProfileId } as any,
+      select: ['categoryId'] as any,
+    });
+    return rows.map((r: any) => r.categoryId);
   }
 
   // ===== BACKWARD COMPATIBILITY METHODS (kept for existing code) =====
@@ -277,19 +400,33 @@ export class UsersService {
     if (Object.keys(profilePatch).length > 0) {
       const user = await this.userRepository.findOne({ where: { id } });
       if (user) {
+        // categoryIds writes are isolated from the column patch — they
+        // route to the junction table via setProfileCategories, which
+        // also recomputes archetype. Strip them out of the column patch
+        // so TypeORM doesn't try to write a non-existent column.
+        const { categoryIds, ...columnPatch } = profilePatch as {
+          categoryIds?: string[];
+        } & Record<string, any>;
+
         let activeId = user.activeProfileId;
         let activeType = user.activeProfileType;
         if (!activeId || !activeType) {
-          // Lazily create the matching profile row.
+          // Lazily create the matching profile row + categories in
+          // one transaction.
           const created = await this.createProfileForRole(id, user.role, profilePatch);
           if (!created) {
             // Role with no profile concept (e.g. ADMIN) — nothing to write.
             return this.findById(id);
           }
         } else {
-          const repo = this.profileRepoFor(activeType);
-          if (repo) {
-            await (repo as any).update({ id: activeId }, profilePatch);
+          if (Object.keys(columnPatch).length > 0) {
+            const repo = this.profileRepoFor(activeType);
+            if (repo) {
+              await (repo as any).update({ id: activeId }, columnPatch);
+            }
+          }
+          if (Array.isArray(categoryIds)) {
+            await this.setProfileCategories(activeType, activeId, categoryIds);
           }
         }
       }

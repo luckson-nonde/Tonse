@@ -14,7 +14,6 @@ import { InquiryImage } from './inquiry-image.entity';
 
 @Entity('inquiries')
 @Index('idx_inquiries_buyer_id', ['buyerId'])
-@Index('idx_inquiries_category', ['category'])
 @Index('idx_inquiries_status', ['status'])
 @Index('idx_inquiries_location', ['location'])
 @Index('idx_inquiries_created_at', ['createdAt'])
@@ -39,9 +38,6 @@ export class Inquiry {
   @ManyToOne(() => User)
   @JoinColumn({ name: 'buyerId' })
   buyer: User;
-
-  @Column({ type: 'varchar', length: 50 })
-  category: string;
 
   /** Human-readable "City, Province" snapshot for display. */
   @Column({ type: 'varchar', length: 255 })

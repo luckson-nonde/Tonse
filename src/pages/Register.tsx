@@ -101,8 +101,12 @@ export default function Register() {
     const [searchParams] = useSearchParams();
     const role = searchParams.get('role') || 'BUYER';
     const subRole = (searchParams.get('subRole') as SubRole) || undefined;
-    const categoriesParam = searchParams.get('categories');
-    const initialCategories = categoriesParam ? categoriesParam.split(',') : [];
+    // Phase: matching — RoleSelection now hands us category IDs (not
+    // display names). Accept either query key during the transition,
+    // newer `categoryIds` first, falling back to the legacy `categories`.
+    const categoryIdsParam =
+      searchParams.get('categoryIds') || searchParams.get('categories');
+    const initialCategories = categoryIdsParam ? categoryIdsParam.split(',') : [];
 
     // Multi-step registration state
     const [currentStep, setCurrentStep] = useState(1);
@@ -291,7 +295,7 @@ export default function Register() {
             latitude,
             longitude,
             radius,
-            categories: initialCategories,
+            categoryIds: initialCategories,
             nrc,
             profilePicture: logo,
             ...(nrcDocumentPayload ? { nrcDocumentPath: nrcDocumentPayload } : {}),
@@ -313,7 +317,7 @@ export default function Register() {
             latitude,
             longitude,
             radius,
-            categories: initialCategories,
+            categoryIds: initialCategories,
             ...(subRole ? { subRole } : {}),
           };
           await register(

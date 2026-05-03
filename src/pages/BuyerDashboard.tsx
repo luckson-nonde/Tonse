@@ -292,13 +292,17 @@ export default function BuyerDashboard() {
       // and either could be missing if the user took an unusual path
       // (deep-link, quick-action, etc.). Empty strings inside the array
       // are filtered before joining.
-      const resolvedCategory =
-        (isLabour ? pendingInquiry.category : '') ||
-        pendingInquiry.categories?.filter(Boolean).join(', ') ||
-        pendingInquiry.category ||
-        '';
+      // Phase: matching — send stable category IDs to the backend.
+      // CategorySelection now emits IDs into pendingInquiry.categories;
+      // the labour branch still carries singular categoryId for the
+      // chosen labour subType.
+      const categoryIds: string[] = isLabour
+        ? pendingInquiry.categoryId
+          ? [pendingInquiry.categoryId]
+          : []
+        : pendingInquiry.categories?.filter(Boolean) || [];
 
-      if (!resolvedCategory) {
+      if (categoryIds.length === 0) {
         alert(
           "We couldn't read a category for this inquiry. Go back to the categories step, pick what you're inquiring about, then try again."
         );
@@ -306,14 +310,17 @@ export default function BuyerDashboard() {
         return;
       }
 
-      const categoryName = isLabour
-        ? pendingInquiry.category
-        : pendingInquiry.categories?.[pendingInquiry.categories.length - 1] ||
-          resolvedCategory ||
-          'Inquiry';
+      // Title uses the human-readable name of the most-specific picked
+      // category. Resolved from CATEGORIES_DB by id; falls back to the
+      // labour display label or a generic 'Inquiry' if the lookup fails.
+      const lastCategoryId = categoryIds[categoryIds.length - 1];
+      const lastCategoryName =
+        CATEGORIES_DB.find((c) => c.id === lastCategoryId)?.name ||
+        (isLabour ? pendingInquiry.category : null) ||
+        'Inquiry';
       const title = pendingInquiry.attributes?.brand
         ? `${pendingInquiry.attributes.brand} ${pendingInquiry.attributes.model || ''} Request`
-        : `${categoryName} Request`;
+        : `${lastCategoryName} Request`;
 
       // Merge the payment receipt back into preferences so the backend can
       // bill, audit, and enforce the auto-close cap.
@@ -333,7 +340,7 @@ export default function BuyerDashboard() {
         title,
         description: pendingInquiry.attributes?.description || 'No description provided.',
         items: JSON.stringify([]),
-        category: resolvedCategory,
+        categoryIds,
         location: `${locationData.city}, ${locationData.province}`,
         province: locationData.province,
         city: locationData.city,

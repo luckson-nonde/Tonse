@@ -22,6 +22,8 @@ import { InquiriesService } from '../inquiries.service';
 import { CreateInquiryDto } from '../dto/create-inquiry.dto';
 import { UpdateInquiryDto } from '../dto/update-inquiry.dto';
 import { InquiryImagesService } from '../services/inquiry-images.service';
+import { MatchingService } from '../services/matching.service';
+import { UsersService } from '../../users/users.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 
 interface AuthenticatedRequest extends ExpressRequest {
@@ -32,8 +34,50 @@ interface AuthenticatedRequest extends ExpressRequest {
 export class InquiriesController {
   constructor(
     private readonly inquiriesService: InquiriesService,
-    private readonly inquiryImagesService: InquiryImagesService
+    private readonly inquiryImagesService: InquiryImagesService,
+    private readonly matchingService: MatchingService,
+    private readonly usersService: UsersService,
   ) {}
+
+  /**
+   * Server-side, ID-based, hierarchy-aware leads matching for the
+   * authenticated provider. Reads the active profile pointer off the
+   * user, walks down the category tree from the seller's chosen
+   * categories, and returns inquiries tagged with any descendant id.
+   *
+   * Replaces the previous client-side filter where the frontend pulled
+   * every OPEN inquiry and ran name-substring matching in the browser.
+   */
+  @Get('leads/me')
+  @UseGuards(JwtAuthGuard)
+  async leadsForMe(@Query() query: any, @Request() req: AuthenticatedRequest) {
+    if (!req.user?.id) throw new ForbiddenException('User not authenticated');
+    const user = await this.usersService.findById(req.user.id);
+    if (!user) throw new ForbiddenException('User not found');
+    if (!user.activeProfileId || !user.activeProfileType) {
+      // No business profile yet — buyers / freshly-bootstrapped users.
+      return { data: [], total: 0, matchedCategoryIds: [] };
+    }
+    if (
+      user.activeProfileType !== 'SELLER' &&
+      user.activeProfileType !== 'SERVICE_PROVIDER'
+    ) {
+      return { data: [], total: 0, matchedCategoryIds: [] };
+    }
+    return this.matchingService.findLeadsForProfile(
+      {
+        type: user.activeProfileType as 'SELLER' | 'SERVICE_PROVIDER',
+        profileId: user.activeProfileId,
+      },
+      {
+        status: query?.status,
+        city: query?.city,
+        province: query?.province,
+        page: query?.page,
+        limit: query?.limit,
+      },
+    );
+  }
 
   @Post()
   @UseGuards(JwtAuthGuard)

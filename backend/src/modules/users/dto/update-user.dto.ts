@@ -153,4 +153,19 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   nrcDocumentPath?: string;
+
+  /**
+   * Stable category IDs the seller / service-provider profile is
+   * subscribed to. Stored as junction rows
+   * (seller_profile_categories / service_provider_profile_categories);
+   * server recomputes archetype on every write.
+   */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  categoryIds?: string[];
+
+  @IsOptional()
+  @IsEnum(['RETAIL', 'RENTAL', 'BOOKING', 'LABOUR', 'REPAIR', 'SERVICE', 'EVENTS', 'ENTERTAINMENT'])
+  archetype?: string;
 }

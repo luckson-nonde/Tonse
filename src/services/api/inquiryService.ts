@@ -11,7 +11,14 @@ export interface CreateInquiryPayload {
   title: string;
   description: string;
   items: string; // JSON string
-  category: string;
+  /**
+   * Stable category IDs from the catalog (e.g. 'mobile-phones-buy').
+   * Replaces the old comma-joined display-name string. Each id lands
+   * as its own row in `inquiry_categories`; matching expands ancestry
+   * server-side, so a seller subscribed to parent 'electronics'
+   * matches a 'mobile-phones-buy' inquiry without any string parsing.
+   */
+  categoryIds: string[];
   /** Human-readable "City, Province" for display. */
   location: string;
   /** Province + city are the matching scope. The city is the destination
@@ -34,8 +41,16 @@ export interface InquiryResponse {
   id: string;
   title: string;
   description: string;
-  category: string;
+  /** Legacy display string. Phase: matching split this into a real
+   *  many-to-many `categoryIds` set; kept here for older surfaces that
+   *  still display the comma-joined string. New code should read
+   *  `categoryIds` and look up names via CATEGORIES_DB. */
+  category?: string;
+  /** Stable category IDs the inquiry is tagged with. */
+  categoryIds?: string[];
   location: string;
+  province?: string;
+  city?: string;
   latitude: number;
   longitude: number;
   radius: number;
@@ -47,11 +62,16 @@ export interface InquiryResponse {
   attributes?: any;
   items?: any[];
   processType?: string;
-  // Optional fields for display purposes
+  // Optional fields for display purposes / archival behaviour
   buyerName?: string;
   viewCount?: number;
   entertainmentData?: any;
   repairData?: any;
+  archivedBy?: string[];
+  deletedBy?: string[];
+  /** When set, only this provider may see / quote this inquiry
+   *  (broadcast vs targeted distinction). */
+  targetedProviderId?: string;
 }
 
 /**
@@ -124,6 +144,48 @@ export async function fetchOpenInquiries(): Promise<InquiryResponse[]> {
     return leads.map(normalizeInquiry);
   } catch (error) {
     console.error('Error fetching open inquiries:', error);
+    return [];
+  }
+}
+
+/**
+ * Server-side, ID-based, hierarchy-aware leads matching for the
+ * authenticated provider. Replaces the previous "fetch every OPEN
+ * inquiry then filter in the browser" pattern. The backend joins the
+ * caller's seller/service-provider profile categories against
+ * `inquiry_categories` with recursive ancestry expansion so a seller
+ * subscribed to parent `'electronics'` matches an inquiry tagged
+ * `'mobile-phones-buy'` with no client-side string parsing.
+ */
+export async function fetchLeadsForMe(filters?: {
+  status?: string;
+  city?: string;
+  province?: string;
+  page?: number;
+  limit?: number;
+}): Promise<InquiryResponse[]> {
+  try {
+    const qs = new URLSearchParams();
+    if (filters?.status) qs.set('status', filters.status);
+    if (filters?.city) qs.set('city', filters.city);
+    if (filters?.province) qs.set('province', filters.province);
+    if (filters?.page) qs.set('page', String(filters.page));
+    if (filters?.limit) qs.set('limit', String(filters.limit));
+    const url = qs.toString() ? `/inquiries/leads/me?${qs}` : '/inquiries/leads/me';
+
+    const response = await apiClient.get<{
+      data: any[];
+      total: number;
+      matchedCategoryIds: string[];
+    }>(url);
+
+    if (!response.data?.data) {
+      return [];
+    }
+    const leads = Array.isArray(response.data.data) ? response.data.data : [];
+    return leads.map(normalizeInquiry);
+  } catch (error) {
+    console.error('Error fetching matched leads:', error);
     return [];
   }
 }

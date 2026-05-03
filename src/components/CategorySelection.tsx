@@ -525,9 +525,11 @@ export default function CategorySelection({
   // Push the current selection up to the parent (RoleSelection) so its outer
   // Continue button can enable/disable. Was destructured but not wired before —
   // that's why the parent's selectedCategories stayed empty.
+  // Phase: matching — emit category IDs (not display names). Stable ids
+  // round-trip cleanly to the backend junction tables.
   useEffect(() => {
     if (!onChange) return;
-    onChange(selectedCategories.map((c) => c.name));
+    onChange(selectedCategories.map((c) => c.id));
   }, [selectedCategories, onChange]);
 
   const nextStepRef = useRef<HTMLDivElement>(null);
@@ -737,19 +739,26 @@ export default function CategorySelection({
       const allSubsByParent = await Promise.all(
         parentIds.map(async (pId) => ({ pId, subs: await fetchCategories(pId) }))
       );
-      const consolidated = [];
+      // Phase: matching — emit category IDs (not display names). The
+      // backend stores junction rows keyed by id; frontend rendering
+      // looks names up via CATEGORIES_DB. If every sub of a parent is
+      // selected, collapse to the parent id; otherwise emit the sub
+      // ids individually.
+      const consolidated: string[] = [];
       for (const { pId, subs } of allSubsByParent) {
-        const parent = generalCategories.find((c) => c.id === pId);
         const selectedSubs = parentGroups[pId];
-        // If all subcategories are selected, just return the parent name
-        if (parent && selectedSubs.length === subs.length && subs.length > 0)
-          consolidated.push(parent.name);
-        else consolidated.push(...selectedSubs.map((c) => c.name));
+        if (selectedSubs.length === subs.length && subs.length > 0) {
+          consolidated.push(pId);
+        } else {
+          consolidated.push(...selectedSubs.map((c) => c.id));
+        }
       }
-      consolidated.push(...selectedCategories.filter((c) => !c.parentId).map((c) => c.name));
+      consolidated.push(
+        ...selectedCategories.filter((c) => !c.parentId).map((c) => c.id),
+      );
       onComplete(Array.from(new Set(consolidated)));
     } catch (e) {
-      onComplete(selectedCategories.map((c) => c.name));
+      onComplete(selectedCategories.map((c) => c.id));
     } finally {
       setLoading(false);
     }

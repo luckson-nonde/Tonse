@@ -70,17 +70,17 @@ export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     },
     { 
       id: 'products', 
-      label: (role) => role === 'EVENTS' ? 'Inventory' : 'My Products', 
-      icon: 'Store', 
+      label: 'My Products',
+      icon: 'Store',
       permissions: [PERMISSIONS.VIEW_ANALYTICS],
       excludeRoles: ['ENTERTAINMENT'],
-      categoryFilter: (role, categories) => {
-        if (role === 'EVENTS') {
-          const catsLower = categories.map(c => c.toLowerCase());
-          return catsLower.some(c => c.includes('equipment rental') || c.includes('catering') || c.includes('decor'));
-        }
-        return true;
-      }
+      // Phase 2 of the users-table restructure removed EVENTS from the
+      // role enum; the dashboard variant is now driven by the
+      // `archetype` field on the seller / service-provider profile,
+      // recomputed by ArchetypeResolverService on every category
+      // write. Per-archetype label / visibility overlays live in
+      // DashboardLayout.getLabel(); this schema entry is now archetype-
+      // agnostic.
     },
     { id: 'team', label: 'Team Management', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },

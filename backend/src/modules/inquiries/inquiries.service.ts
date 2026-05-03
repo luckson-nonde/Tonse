@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Inquiry } from './entities/inquiry.entity';
+import { InquiryCategory } from './entities/inquiry-category.entity';
 import { CreateInquiryDto, UpdateInquiryDto } from './dto';
 import { DisplayIdUtil } from '../../utils/display-id.util';
 
@@ -9,17 +10,39 @@ import { DisplayIdUtil } from '../../utils/display-id.util';
 export class InquiriesService {
   constructor(
     @InjectRepository(Inquiry)
-    private readonly inquiriesRepository: Repository<Inquiry>
+    private readonly inquiriesRepository: Repository<Inquiry>,
+    @InjectRepository(InquiryCategory)
+    private readonly inquiryCategoriesRepository: Repository<InquiryCategory>,
+    private readonly dataSource: DataSource,
   ) {}
 
+  /**
+   * Insert the inquiry plus its `inquiry_categories` rows in a single
+   * transaction. categoryIds is the *new* shape (Phase: matching); the
+   * legacy `category: string` is gone — write paths must now provide
+   * an array of stable category ids (e.g. 'mobile-phones-buy').
+   */
   async create(createInquiryDto: CreateInquiryDto): Promise<Inquiry> {
-    const inquiry = this.inquiriesRepository.create(createInquiryDto);
-    const savedInquiry = await this.inquiriesRepository.save(inquiry);
+    const { categoryIds, ...rest } = createInquiryDto;
+    return this.dataSource.transaction(async (manager) => {
+      const inquiryRepo = manager.getRepository(Inquiry);
+      const junctionRepo = manager.getRepository(InquiryCategory);
 
-    // Generate display ID from the actual UUID after creation
-    savedInquiry.displayId = DisplayIdUtil.generateDisplayId(savedInquiry.id);
+      const inquiry = inquiryRepo.create(rest);
+      let saved = await inquiryRepo.save(inquiry);
+      saved.displayId = DisplayIdUtil.generateDisplayId(saved.id);
+      saved = await inquiryRepo.save(saved);
 
-    return await this.inquiriesRepository.save(savedInquiry);
+      const uniqueIds = Array.from(new Set(categoryIds));
+      if (uniqueIds.length > 0) {
+        await junctionRepo.save(
+          uniqueIds.map((categoryId) =>
+            junctionRepo.create({ inquiryId: saved.id, categoryId }),
+          ),
+        );
+      }
+      return saved;
+    });
   }
 
   async findAll(filters: any = {}): Promise<{ data: Inquiry[]; total: number }> {
@@ -34,9 +57,10 @@ export class InquiriesService {
       queryBuilder.andWhere('inquiry.status = :status', { status: filters.status });
     }
 
-    if (filters.category) {
-      queryBuilder.andWhere('inquiry.category = :category', { category: filters.category });
-    }
+    // Phase: matching dropped the legacy `category` exact-equality filter
+    // — server-side category-aware leads now flow through MatchingService
+    // (`GET /inquiries/leads/me`). findAll still serves "list my inquiries"
+    // for buyers via the buyerId filter.
 
     if (filters.search) {
       queryBuilder.andWhere('(inquiry.title ILIKE :search OR inquiry.description ILIKE :search)', {
@@ -67,9 +91,48 @@ export class InquiriesService {
     });
   }
 
+  /**
+   * Update an inquiry. When `categoryIds` is provided, the existing
+   * junction rows are replaced atomically — old set deleted, new set
+   * inserted, all in one transaction. Plain field updates (status,
+   * title, etc.) write through directly.
+   */
   async update(id: string, updateInquiryDto: UpdateInquiryDto): Promise<Inquiry> {
-    await this.inquiriesRepository.update(id, updateInquiryDto);
-    return await this.findOne(id);
+    const { categoryIds, ...rest } = updateInquiryDto as UpdateInquiryDto & {
+      categoryIds?: string[];
+    };
+    if (categoryIds === undefined) {
+      if (Object.keys(rest).length > 0) {
+        await this.inquiriesRepository.update(id, rest);
+      }
+      return this.findOne(id);
+    }
+    return this.dataSource.transaction(async (manager) => {
+      if (Object.keys(rest).length > 0) {
+        await manager.getRepository(Inquiry).update(id, rest);
+      }
+      const junction = manager.getRepository(InquiryCategory);
+      await junction.delete({ inquiryId: id });
+      const uniqueIds = Array.from(new Set(categoryIds));
+      if (uniqueIds.length > 0) {
+        await junction.save(
+          uniqueIds.map((categoryId) =>
+            junction.create({ inquiryId: id, categoryId }),
+          ),
+        );
+      }
+      return manager.getRepository(Inquiry).findOne({ where: { id } });
+    });
+  }
+
+  /** Read the category IDs attached to an inquiry. Used by the buyer
+   *  list view so the UI can re-hydrate selections. */
+  async findCategoryIds(inquiryId: string): Promise<string[]> {
+    const rows = await this.inquiryCategoriesRepository.find({
+      where: { inquiryId },
+      select: ['categoryId'],
+    });
+    return rows.map((r) => r.categoryId);
   }
 
   async remove(id: string): Promise<void> {

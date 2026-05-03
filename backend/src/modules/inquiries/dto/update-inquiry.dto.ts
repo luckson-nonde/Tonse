@@ -22,10 +22,11 @@ export class UpdateInquiryDto {
   @MinLength(10)
   description?: string;
 
+  /** Update the inquiry's category set. Replaces the existing
+   *  inquiry_categories rows in a single transaction. */
   @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  category?: string;
+  @IsString({ each: true })
+  categoryIds?: string[];
 
   @IsOptional()
   @IsString()

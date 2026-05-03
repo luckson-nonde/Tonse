@@ -43,9 +43,9 @@ import {
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLiveQuery } from '../hooks/useLiveQuery';
+import { useMatchedLeads } from '../hooks/useInquiries';
 import { db } from '../services/api/database';
 import {
-  isRelatedCategory,
   getCategorySchema,
   getCategoryNature,
   CATEGORIES_DB,
@@ -249,37 +249,24 @@ export default function ProviderDashboard() {
       return last7Days;
     }, [user, myQuotes]) || [];
 
-  const allLeads =
-    useLiveQuery(async () => {
-      const inquiries = await db.inquiries.where('status').equals('OPEN').toArray();
-      const userCategories = user?.categories || [];
-
-      // STRICT: a provider with no categories has nothing matched to them, so
-      // they see zero leads — not all of them. The previous "show everything"
-      // fallback caused unrelated leads (e.g. Event Venues) to leak into an
-      // Electronics seller's inbox whenever categories failed to persist on
-      // registration. Provider must complete their profile to receive matched
-      // leads.
-      if (!userCategories || userCategories.length === 0) {
-        if (user?.id) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            '[ProviderDashboard] No categories on user — leads hidden. ' +
-              'User must complete profile (categories) to receive matched inquiries.'
-          );
-        }
-        return [];
-      }
-
-      const filtered = inquiries.filter((lead) => {
-        const leadCats = (lead.category || '').split(', ').map((c: string) => c.trim());
-        return leadCats.some((leadCat) =>
-          userCategories.some((userCat) => isRelatedCategory(userCat, leadCat))
-        );
-      });
-
-      return filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    }, [user?.categories, user?.id]) || [];
+  // Phase: matching — leads come from the server-side category-aware
+  // endpoint. The backend resolves the active profile, expands the
+  // category ancestry, and returns only matching inquiries. The old
+  // path (read every OPEN inquiry from IndexedDB + run
+  // isRelatedCategory client-side) is gone — it was the source of the
+  // "Electronics seller sees zero / wrong leads" bug because it
+  // depended on stable display-name parsing and a populated
+  // user.categories array, both of which were fragile.
+  const { inquiries: matchedLeads } = useMatchedLeads(user?.id);
+  const allLeads = React.useMemo(
+    () =>
+      [...matchedLeads].sort(
+        (a: any, b: any) =>
+          new Date(b.createdAt || 0).getTime() -
+          new Date(a.createdAt || 0).getTime(),
+      ),
+    [matchedLeads],
+  );
 
   const availableBalance = displayQuotes
     .filter((q) => q.status === 'COMPLETED' || q.status === 'PAID')
@@ -374,21 +361,15 @@ export default function ProviderDashboard() {
       });
     }
 
-    if (user?.categories && user.categories.length > 0) {
-      filtered = filtered.filter((lead) => {
-        // If it's targeted directly to this provider, always show it
-        if (lead.targetedProviderId === effectiveProviderId) return true;
-
-        if (!lead.category) return false; // Hide uncategorized leads from providers to prevent leakage
-
-        const leadCats = lead.category.split(',').map((c) => c.trim());
-
-        const isMatch = user.categories?.some((providerCat) =>
-          leadCats.some((leadCat) => isRelatedCategory(providerCat, leadCat))
-        );
-        return isMatch;
-      });
-    }
+    // Phase: matching — the previous "filter every lead by
+    // user.categories overlap via isRelatedCategory" block was a
+    // client-side category gate that duplicated what /inquiries/leads/
+    // me already does server-side via the recursive ancestry CTE.
+    // Keeping it would silently re-introduce the "Electronics seller
+    // sees zero leads" bug whenever user.categories was missing
+    // (which it now is — categories live on the profile junction
+    // table, not on user). Leaving this gate stripped: the server is
+    // the authoritative matcher.
 
     // Variant-level filter — REPAIR_SERVICE shop only sees repair-tagged
     // inquiries; RETAIL_PRODUCTS shop only sees buy-new inquiries; mixed

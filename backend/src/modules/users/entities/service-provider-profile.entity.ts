@@ -66,9 +66,16 @@ export class ServiceProviderProfile {
   @Column({ type: 'varchar', length: 50, nullable: true })
   subRole: string;
 
-  /** Categories of services offered (with variant suffixes for repair). */
-  @Column({ type: 'simple-array', default: '' })
-  categories: string[];
+  /**
+   * Cached archetype — see seller-profile.entity for the contract.
+   * Recomputed on every junction write by ArchetypeResolver.
+   */
+  @Column({
+    type: 'enum',
+    enum: ['RETAIL', 'RENTAL', 'BOOKING', 'LABOUR', 'REPAIR', 'SERVICE', 'EVENTS', 'ENTERTAINMENT'],
+    nullable: true,
+  })
+  archetype: string;
 
   // ===== Labour-specific (only populated when subRole = SKILLED_LABOUR) =====
 

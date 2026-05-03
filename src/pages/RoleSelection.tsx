@@ -267,16 +267,14 @@ export default function RoleSelection() {
         navigate(`/register?role=${masterRole}&subRole=${selectedSubRole}`);
       }
     } else if (tier === 3 && selectedCategories.length > 0) {
-      const categoriesParam = selectedCategories.join(',');
-
-      // Don't rewrite role based on category. The four-signal architecture
-      // (role + subRole + categories + specification) carries the event-ness
-      // via the categories array; getBusinessType() reads them and resolves
-      // EVENTS / ENTERTAINMENT / RETAIL / REPAIR / etc. Rewriting role here
-      // collapses an Event Equipment Rental seller and an Event Venues seller
-      // into the identical EVENTS dashboard, destroying the subRole context.
+      // selectedCategories is now an array of stable category IDs
+      // (CategorySelection.onChange emits ids per Phase: matching).
+      // We pass them as `categoryIds=` so the receiver in Register.tsx
+      // routes them to the backend junction tables via updateUser
+      // ({ categoryIds: [...] }).
+      const categoryIdsParam = selectedCategories.join(',');
       navigate(
-        `/register?role=${masterRole}&subRole=${selectedSubRole}&categories=${categoriesParam}`
+        `/register?role=${masterRole}&subRole=${selectedSubRole}&categoryIds=${categoryIdsParam}`
       );
     }
   };
