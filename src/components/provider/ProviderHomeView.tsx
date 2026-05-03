@@ -258,6 +258,26 @@ export default function ProviderHomeView({
           },
         ];
       case 'RETAIL_PRODUCTS':
+        return [
+          { ...t1Common, label: 'Buyer Inquiries', caption: 'New buyer requests' },
+          { ...t2Common, label: 'Quotes Sent' },
+          {
+            label: 'Potential Revenue',
+            value: fmtZMW(totalQuotedValue),
+            caption: 'Across open quotes',
+            tab: 'my-quotes',
+            icon: TrendingUp,
+            palette: 'gold-soft',
+          },
+          {
+            label: 'Pending Fulfilment',
+            value: pendingPickupCount.toString(),
+            caption: 'Orders awaiting collection',
+            tab: 'paid-orders',
+            icon: Clock,
+            palette: 'gold',
+          },
+        ];
       default:
         return [
           { ...t1Common, label: 'Booking Requests', caption: 'New requests available' },
@@ -308,8 +328,10 @@ export default function ProviderHomeView({
         return 'Event Bookings';
       case 'ENTERTAINMENT':
         return 'Performance Bookings';
+      case 'RETAIL_PRODUCTS':
+        return 'Buyer Inquiries';
       default:
-        return 'Booking Requests';
+        return 'Buyer Inquiries';
     }
   }, [businessType]);
 

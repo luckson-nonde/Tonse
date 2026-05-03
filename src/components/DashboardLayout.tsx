@@ -265,6 +265,8 @@ export default function DashboardLayout({
           return 'Event Bookings';
         case 'ENTERTAINMENT':
           return 'Performance Bookings';
+        case 'RETAIL_PRODUCTS':
+          return 'Buyer Inquiries';
         default:
           return baseLabel;
       }

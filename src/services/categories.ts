@@ -1370,7 +1370,46 @@ export function getCategoryVariant(categoryName: string): string | null {
 interface MinimalUserForBusinessType {
   role?: string;
   subRole?: string;
+  /** Legacy: display names. Older surfaces still pass these. */
   categories?: string[];
+  /** Phase: matching — stable category IDs. Newer flows pass these. */
+  categoryIds?: string[];
+  /** Phase: matching — cached archetype the backend persists on the
+   *  active profile and ships in /auth/me. When present, this is the
+   *  canonical answer; the regex fallbacks below only run when it
+   *  isn't. */
+  archetype?: string;
+}
+
+/**
+ * Map the persisted profile.archetype enum (RETAIL / RENTAL / BOOKING /
+ * LABOUR / REPAIR / SERVICE / EVENTS / ENTERTAINMENT) to the
+ * BusinessType enum the existing dashboard code already keys off.
+ */
+function archetypeToBusinessType(archetype: string | undefined): BusinessType | null {
+  if (!archetype) return null;
+  switch (archetype.toUpperCase()) {
+    case 'RETAIL':
+      return 'RETAIL_PRODUCTS';
+    case 'REPAIR':
+      return 'REPAIR_SERVICE';
+    case 'SERVICE':
+      return 'PRO_SERVICES';
+    case 'LABOUR':
+      return 'LABOUR';
+    case 'EVENTS':
+      return 'EVENTS';
+    case 'ENTERTAINMENT':
+      return 'ENTERTAINMENT';
+    case 'RENTAL':
+      // Rentals don't have a dedicated business type today; surface as
+      // EVENTS (the only existing type with a booking-shaped UI).
+      return 'EVENTS';
+    case 'BOOKING':
+      return 'EVENTS';
+    default:
+      return null;
+  }
 }
 
 /**
@@ -1409,6 +1448,16 @@ export function getBusinessType(user: MinimalUserForBusinessType | null | undefi
   const role = user.role.toUpperCase();
   if (role === 'BUYER') return 'BUYER';
   if (role === 'ADMIN') return 'ADMIN';
+
+  // Prefer the cached archetype the backend persists on the active
+  // profile (recomputed by ArchetypeResolverService on every category
+  // junction write). When it's present it's the authoritative answer
+  // — built from stable category IDs, not display-name regex. The
+  // category-name fallbacks below only run when it isn't, e.g. for
+  // mid-onboarding users whose profile hasn't received its first
+  // category write yet.
+  const fromArchetype = archetypeToBusinessType(user.archetype);
+  if (fromArchetype) return fromArchetype;
 
   // Phase 2 tightened the role enum to BUYER / SELLER / SERVICE_PROVIDER /
   // ADMIN. Legacy values (EVENTS, ENTERTAINMENT, SUPPLIER, LABOUR) were
