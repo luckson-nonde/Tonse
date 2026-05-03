@@ -1,6 +1,7 @@
 import { MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import { MASTER_LABOUR_ACCOUNT_SCHEMA } from '../services/labourAccountSchema';
 import { MASTER_PROVIDER_ACCOUNT_SCHEMA } from '../services/providerAccountSchema';
+import { MASTER_RETAIL_ACCOUNT_SCHEMA } from '../services/retailAccountSchema';
 import { MASTER_SUPPLIER_ACCOUNT_SCHEMA } from '../services/supplierAccountSchema';
 import { NavigationItem } from '../services/accountSchemaTypes';
 import {
@@ -212,18 +213,19 @@ export default function DashboardLayout({
   const navItems = useMemo(() => {
     if (!user) return [];
     let schema;
+    // Schema selection. Order matters — labour wins before supplier wins
+    // before retail wins before the generic provider fallback. Each new
+    // archetype that gets its own schema slots in here.
+    //
+    // The labour check used to read `user.categories` (legacy display-name
+    // array) directly. Since the matching refactor moved categories to
+    // junction tables that field can be empty on a flatten path, so we
+    // route via getBusinessType() which already prefers the cached
+    // archetype over name regex.
     if (user.role === 'BUYER') schema = MASTER_BUYER_ACCOUNT_SCHEMA;
-    // Phase 2: SERVICE_PROVIDER (incl. former LABOUR) routes through the
-    // labour schema if their categories carry labour markers; otherwise
-    // through the generic provider schema. SUPPLIER_SELLER subRole keeps
-    // the supplier schema. Any future business-type-specific schemas can
-    // dispatch from here without touching the enum.
-    else if (
-      user.role === 'SERVICE_PROVIDER' &&
-      (user.categories || []).some((c) => /\bskilled\s?labour\b|\blabour\b/i.test(c))
-    )
-      schema = MASTER_LABOUR_ACCOUNT_SCHEMA;
+    else if (businessType === 'LABOUR') schema = MASTER_LABOUR_ACCOUNT_SCHEMA;
     else if (user.subRole === 'SUPPLIER_SELLER') schema = MASTER_SUPPLIER_ACCOUNT_SCHEMA;
+    else if (businessType === 'RETAIL_PRODUCTS') schema = MASTER_RETAIL_ACCOUNT_SCHEMA;
     else schema = MASTER_PROVIDER_ACCOUNT_SCHEMA;
 
     return schema.navigation.filter((item) => {
@@ -267,7 +269,12 @@ export default function DashboardLayout({
     const baseLabel = typeof label === 'function' ? label(user?.role || '') : label;
     if (!itemId) return baseLabel;
 
-    // Per-tab translations based on businessType
+    // Per-tab translations based on businessType. Each case rewrites the
+    // generic "Booking Requests" label declared by the (still-shared)
+    // MASTER_PROVIDER_ACCOUNT_SCHEMA. Once an archetype gets its own
+    // schema (RETAIL already did) it declares its own label and no
+    // longer needs a case here — those entries become dead code for
+    // that archetype and can be deleted alongside the schema split.
     if (itemId === 'leads') {
       switch (businessType) {
         case 'REPAIR_SERVICE':
@@ -282,8 +289,8 @@ export default function DashboardLayout({
           return 'Event Bookings';
         case 'ENTERTAINMENT':
           return 'Performance Bookings';
-        case 'RETAIL_PRODUCTS':
-          return 'Buyer Inquiries';
+        // RETAIL_PRODUCTS now uses MASTER_RETAIL_ACCOUNT_SCHEMA which
+        // declares "Buyer Inquiries" directly — no rewrite needed here.
         default:
           return baseLabel;
       }
