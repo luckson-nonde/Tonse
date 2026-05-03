@@ -62,15 +62,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import ProviderHomeView from '../components/provider/ProviderHomeView';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
 import { robustParse } from '../utils/jsonUtils';
-import { MASTER_PROVIDER_ACCOUNT_SCHEMA } from '../services/providerAccountSchema';
-import { MASTER_SUPPLIER_ACCOUNT_SCHEMA } from '../services/supplierAccountSchema';
-import { MASTER_RETAIL_ACCOUNT_SCHEMA } from '../services/retailAccountSchema';
-import { MASTER_REPAIR_ACCOUNT_SCHEMA } from '../services/repairAccountSchema';
-import { MASTER_RENTAL_ACCOUNT_SCHEMA } from '../services/rentalAccountSchema';
-import { MASTER_BOOKING_ACCOUNT_SCHEMA } from '../services/bookingAccountSchema';
-import { MASTER_SERVICE_ACCOUNT_SCHEMA } from '../services/serviceAccountSchema';
-import { MASTER_EVENTS_ACCOUNT_SCHEMA } from '../services/eventsAccountSchema';
-import { MASTER_ENTERTAINMENT_ACCOUNT_SCHEMA } from '../services/entertainmentAccountSchema';
+import { resolveSchemaForUser } from '../services/mergeAccountSchemas';
 
 const renderSpecifications = (
   data: any,
@@ -122,21 +114,11 @@ export default function ProviderDashboard() {
   }, [tab, activeTab, setActiveTab]);
 
   const currentSchema = useMemo(() => {
-    // Mirrors the schema selection in DashboardLayout. Order matters —
-    // WHOLESALE wins regardless of other archetypes in the seller's
-    // set; then primary archetype drives 1:1 mapping. PROVIDER is the
-    // last-resort fallback (UNKNOWN archetype, mid-onboarding rows).
-    const types = getBusinessTypes(user as any);
-    const primary = getPrimaryBusinessType(user as any);
-    if (types.includes('WHOLESALE')) return MASTER_SUPPLIER_ACCOUNT_SCHEMA;
-    if (primary === 'REPAIR') return MASTER_REPAIR_ACCOUNT_SCHEMA;
-    if (primary === 'RETAIL') return MASTER_RETAIL_ACCOUNT_SCHEMA;
-    if (primary === 'EVENTS') return MASTER_EVENTS_ACCOUNT_SCHEMA;
-    if (primary === 'ENTERTAINMENT') return MASTER_ENTERTAINMENT_ACCOUNT_SCHEMA;
-    if (primary === 'BOOKING') return MASTER_BOOKING_ACCOUNT_SCHEMA;
-    if (primary === 'RENTAL') return MASTER_RENTAL_ACCOUNT_SCHEMA;
-    if (primary === 'SERVICE') return MASTER_SERVICE_ACCOUNT_SCHEMA;
-    return MASTER_PROVIDER_ACCOUNT_SCHEMA;
+    return resolveSchemaForUser(
+      user,
+      getBusinessTypes(user as any),
+      getPrimaryBusinessType(user as any),
+    );
   }, [user]);
 
   const effectiveProviderId = user?.parentProviderId || user?.id;

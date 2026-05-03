@@ -70,10 +70,11 @@ export interface NavigationItem {
   roleFilter?: string[];
   excludeRoles?: string[];
   categoryFilter?: string[] | ((role: string, categories: string[]) => boolean);
-  // Limit this nav item to specific BusinessType values (e.g.
-  // ['REPAIR_SERVICE', 'PRODUCTS_AND_REPAIR']). When omitted, the item is
-  // shown regardless of business type. Resolved via getBusinessType(user)
-  // in services/categories.ts.
+  // Limit this nav item to specific BusinessType values (e.g. ['REPAIR',
+  // 'WHOLESALE']). When omitted, the item is shown regardless of
+  // business type. Resolved via getBusinessTypes(user) in services/
+  // categories.ts. (Phase 1.5 retired the legacy collapsed types like
+  // REPAIR_SERVICE / PRODUCTS_AND_REPAIR.)
   businessTypes?: string[];
 }
 
