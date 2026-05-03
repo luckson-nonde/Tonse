@@ -1,7 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../AuthContext';
-import { db } from '../services/api/database';
-import { useLiveQuery } from '../hooks/useLiveQuery';
 import {
   Users,
   UserPlus,
@@ -13,7 +11,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { PERMISSIONS, hasPermission } from '../utils/rbac';
-import { motion, AnimatePresence } from 'motion/react';
+import { teamService, TeamMember } from '../services/api/teamService';
 
 const ROLES = [
   {
@@ -32,11 +30,56 @@ const ROLES = [
   },
 ];
 
+const permissionsForRole = (role: string): string[] => {
+  if (role === 'COLLECTION_MANAGER') {
+    return [
+      PERMISSIONS.MANAGE_QUOTES,
+      PERMISSIONS.MANAGE_COLLECTIONS,
+      PERMISSIONS.VIEW_ANALYTICS,
+    ];
+  }
+  // Default = QUOTATION_ONLY
+  return [PERMISSIONS.MANAGE_QUOTES, PERMISSIONS.VIEW_ANALYTICS];
+};
+
 export default function TeamManagement() {
   const { user } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [staffName, setStaffName] = useState('');
+  const [staffEmail, setStaffEmail] = useState('');
+  const [role, setRole] = useState('QUOTATION_ONLY');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [generatedPassword, setGeneratedPassword] = useState('');
+  const [lastRegisteredInfo, setLastRegisteredInfo] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+  } | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [isLoadingTeam, setIsLoadingTeam] = useState(true);
 
-  if (!hasPermission(user, PERMISSIONS.MANAGE_TEAM)) {
+  const canManage = hasPermission(user, PERMISSIONS.MANAGE_TEAM);
+
+  const loadTeam = useCallback(async () => {
+    if (!user?.id) return;
+    setIsLoadingTeam(true);
+    try {
+      const list = await teamService.list();
+      setTeamMembers(list);
+    } catch (err) {
+      // Silent: most likely 403 (the page already gates on canManage).
+    } finally {
+      setIsLoadingTeam(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (canManage) loadTeam();
+  }, [canManage, loadTeam]);
+
+  if (!canManage) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center bg-white rounded-4xl border border-slate-100 shadow-sm">
         <div className="w-20 h-20 bg-rose-50 rounded-full flex items-center justify-center mb-6">
@@ -51,34 +94,6 @@ export default function TeamManagement() {
     );
   }
 
-  const [staffName, setStaffName] = useState('');
-  const [staffEmail, setStaffEmail] = useState('');
-  const [role, setRole] = useState('QUOTATION_ONLY');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [generatedPassword, setGeneratedPassword] = useState('');
-  const [lastRegisteredInfo, setLastRegisteredInfo] = useState<{
-    name: string;
-    email: string;
-    phone: string;
-  } | null>(null);
-
-  const generatePassword = () => {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let password = '';
-    for (let i = 0; i < 8; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return password;
-  };
-
-  const teamMembers =
-    useLiveQuery(async () => {
-      if (!user?.id) return [];
-      return await db.users.where('parentProviderId').equals(user.id).toArray();
-    }, [user]) || [];
-
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -87,53 +102,25 @@ export default function TeamManagement() {
     setGeneratedPassword('');
 
     try {
-      // Check if user already exists by phone or email
-      const existingByPhone = await db.users.where('phone').equals(phoneNumber).first();
-      const existingByEmail = await db.users.where('email').equals(staffEmail).first();
-
-      if (existingByPhone || existingByEmail) {
-        setErrorMessage('A user with this phone number or email already exists.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Generate a unique password
-      const newPassword = generatePassword();
-
-      // Assign permissions based on role
-      let permissions: string[] = [];
-      if (role === 'QUOTATION_ONLY') {
-        permissions = [PERMISSIONS.MANAGE_QUOTES, PERMISSIONS.VIEW_ANALYTICS];
-      } else if (role === 'COLLECTION_MANAGER') {
-        permissions = [
-          PERMISSIONS.MANAGE_QUOTES,
-          PERMISSIONS.MANAGE_COLLECTIONS,
-          PERMISSIONS.VIEW_ANALYTICS,
-        ];
-      }
-
-      // Create the new staff user
-      await db.users.add({
-        id: crypto.randomUUID() as string,
+      const created = await teamService.create({
         name: staffName,
         email: staffEmail,
         phone: phoneNumber,
-        password: newPassword, // In a real app, this would be hashed
-        role: 'PROVIDER_STAFF',
-        parentProviderId: user!.id,
-        permissions: permissions,
-        mustChangePassword: true,
-        createdAt: new Date().toISOString(),
+        permissions: permissionsForRole(role),
       });
 
-      setGeneratedPassword(newPassword);
+      setGeneratedPassword(created.generatedPassword || '');
       setLastRegisteredInfo({ name: staffName, email: staffEmail, phone: phoneNumber });
       setSuccessMessage('Staff member registered successfully!');
       setPhoneNumber('');
       setStaffName('');
       setStaffEmail('');
-    } catch (err) {
-      setErrorMessage('Failed to register staff member.');
+      await loadTeam();
+    } catch (err: any) {
+      // Backend's ConflictException for duplicate email surfaces here as the
+      // thrown Error's message. Generic catch-all keeps unexpected failures
+      // from killing the form.
+      setErrorMessage(err?.message || 'Failed to register staff member.');
     } finally {
       setIsSubmitting(false);
     }
@@ -142,7 +129,7 @@ export default function TeamManagement() {
   const handleShare = async () => {
     if (!lastRegisteredInfo || !generatedPassword) return;
 
-    const shareText = `Welcome to TONSE! 🌟\n\nYou've been added as a staff member for ${user?.name}.\n\nLogin at: ${window.location.origin}\nUser: ${lastRegisteredInfo.phone} or ${lastRegisteredInfo.email}\nTemp Password: ${generatedPassword}\n\nPlease change your password after logging in.`;
+    const shareText = `Welcome to TONSE!\n\nYou've been added as a staff member for ${user?.name}.\n\nLogin at: ${window.location.origin}\nUser: ${lastRegisteredInfo.email}\nTemp Password: ${generatedPassword}\n\nPlease change your password after logging in.`;
 
     if (navigator.share) {
       try {
@@ -151,7 +138,6 @@ export default function TeamManagement() {
           text: shareText,
         });
       } catch (err) {
-        // Fallback to clipboard
         copyToClipboard(shareText);
       }
     } else {
@@ -166,15 +152,11 @@ export default function TeamManagement() {
 
   const handleRemoveStaff = async (staffId: string) => {
     if (!window.confirm('Are you sure you want to remove this staff member?')) return;
-
     try {
-      await db.users.update(staffId, {
-        role: 'BUYER', // Revert to default role or keep as is but remove linkage
-        parentProviderId: undefined,
-        permissions: [],
-      });
-    } catch (err) {
-      alert('Failed to remove staff member.');
+      await teamService.remove(staffId);
+      await loadTeam();
+    } catch (err: any) {
+      alert(err?.message || 'Failed to remove staff member.');
     }
   };
 
@@ -346,7 +328,9 @@ export default function TeamManagement() {
           </div>
         </div>
 
-        {teamMembers.length === 0 ? (
+        {isLoadingTeam ? (
+          <div className="text-center py-8 text-slate-400">Loading team…</div>
+        ) : teamMembers.length === 0 ? (
           <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-xl border border-slate-100 border-dashed">
             No staff members added yet.
           </div>
@@ -359,7 +343,7 @@ export default function TeamManagement() {
               >
                 <div>
                   <div className="font-bold text-slate-900">{member.name}</div>
-                  <div className="text-sm text-slate-500">{member.phone}</div>
+                  <div className="text-sm text-slate-500">{member.email} · {member.phone}</div>
                   <div className="mt-1 flex items-center gap-1 text-xs font-medium text-[#C9973A] bg-[#fdf8f0] px-2 py-0.5 rounded-full w-fit">
                     <Shield className="w-3 h-3" />
                     {member.permissions?.includes(PERMISSIONS.MANAGE_COLLECTIONS)
@@ -368,7 +352,7 @@ export default function TeamManagement() {
                   </div>
                 </div>
                 <button
-                  onClick={() => handleRemoveStaff(member.id!)}
+                  onClick={() => handleRemoveStaff(member.id)}
                   className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
                   title="Remove Staff"
                 >
