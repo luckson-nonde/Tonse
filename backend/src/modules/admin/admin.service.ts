@@ -200,15 +200,12 @@ export class AdminService {
         `Role '${user.role}' is not eligible for verification`
       );
     }
-    const metadata = { ...((user as any).metadata || {}) };
-    delete metadata.verificationRejectionReason;
-    metadata.verifiedAt = new Date().toISOString();
-
     await this.usersService.update(id, {
       verificationStatus: 'VERIFIED',
       isActive: true,
       isNrcVerified: true,
-      metadata,
+      verifiedAt: new Date(),
+      verificationRejectionReason: null,
     } as any);
     this.logger.log(`User ${id} verified.`);
     return this.usersService.findById(id);
@@ -224,14 +221,11 @@ export class AdminService {
         `Role '${user.role}' is not eligible for verification`
       );
     }
-    const metadata = { ...((user as any).metadata || {}) };
-    metadata.verificationRejectionReason = reason || 'No reason provided';
-    metadata.rejectedAt = new Date().toISOString();
-    delete metadata.verifiedAt;
-
     await this.usersService.update(id, {
       verificationStatus: 'REJECTED',
-      metadata,
+      verificationRejectionReason: reason || 'No reason provided',
+      rejectedAt: new Date(),
+      verifiedAt: null,
     } as any);
     this.logger.log(`User ${id} verification rejected: ${reason ?? '(no reason)'}`);
     return this.usersService.findById(id);

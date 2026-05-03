@@ -191,12 +191,108 @@ export class User {
   @Column({ type: 'uuid', nullable: true })
   businessLicenseId: string;
 
+  // ===== PROFILE FIELDS (formerly inside metadata jsonb) =====
+  // Phase 1 of the users-table restructure: these were keys inside a
+  // metadata jsonb column with a frontend whitelist (TOP_LEVEL_USER_KEYS in
+  // AuthContext.tsx) doing the partitioning. That was opaque to admin tooling
+  // and to SQL inspection — promoted to typed columns so every field is
+  // visible, queryable and constrained.
+
   /**
-   * Additional Metadata
-   * JSON object for extensibility
+   * Sub-role within the master role (e.g. PRODUCT_SELLER, SUPPLIER_SELLER,
+   * COMPANY_PROCUREMENT_OFFICER, INDIVIDUAL_BUYER). Defines the legal/business
+   * shape inside a role.
    */
-  @Column({ type: 'jsonb', nullable: true })
-  metadata: Record<string, any>;
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  subRole: string;
+
+  /**
+   * Zambian province name. Captured during registration step 2.
+   */
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  province: string;
+
+  /**
+   * City within the province.
+   */
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  city: string;
+
+  /**
+   * Optional street / building / landmark.
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  area: string;
+
+  /**
+   * GPS latitude. Range: roughly -8.2 to -18.1 for Zambia.
+   */
+  @Column({ type: 'numeric', precision: 10, scale: 7, nullable: true })
+  latitude: number;
+
+  /**
+   * GPS longitude. Range: roughly 21.9 to 33.7 for Zambia.
+   */
+  @Column({ type: 'numeric', precision: 10, scale: 7, nullable: true })
+  longitude: number;
+
+  /**
+   * Service / delivery radius in kilometres.
+   */
+  @Column({ type: 'numeric', precision: 6, scale: 2, nullable: true })
+  radius: number;
+
+  /**
+   * Company legal name as registered with PACRA. Filled in step 4 of seller
+   * onboarding (CompanyDocuments).
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  companyName: string;
+
+  /**
+   * Zambian Tax Payer Identification Number (10 digits).
+   */
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  tpin: string;
+
+  /**
+   * PACRA Certificate of Incorporation — base64 data URL or storage path.
+   */
+  @Column({ type: 'text', nullable: true })
+  incorporationCertUrl: string;
+
+  /**
+   * Labour-only: top-level labour category id picked at registration tier 1.
+   */
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  labourCategory: string;
+
+  /**
+   * Labour-only: array of selected labour sub-type ids.
+   */
+  @Column({ type: 'simple-array', default: '' })
+  labourSubTypes: string[];
+
+  /**
+   * Reason supplied by the admin reviewer when verificationStatus is REJECTED.
+   * Was previously stored in metadata.verificationRejectionReason.
+   */
+  @Column({ type: 'text', nullable: true })
+  verificationRejectionReason: string;
+
+  /**
+   * Timestamp when the admin marked verificationStatus = VERIFIED.
+   * Was previously stored in metadata.verifiedAt.
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  verifiedAt: Date;
+
+  /**
+   * Timestamp when the admin marked verificationStatus = REJECTED.
+   * Was previously stored in metadata.rejectedAt.
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  rejectedAt: Date;
 
   /**
    * Social Links

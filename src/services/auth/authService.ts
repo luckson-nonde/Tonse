@@ -155,17 +155,12 @@ export const authService = {
    * Update user profile
    */
   updateProfile: async (userId: string, data: UpdateProfileRequest): Promise<any> => {
-    // Sanitize data: remove empty dob to avoid validation errors
+    // Sanitize data: remove empty dob to avoid validation errors. Phase 1
+    // dropped the metadata jsonb so dob (when present) is at the top level
+    // — no nested metadata.dob check anymore.
     const sanitizedData = { ...data };
     if (!sanitizedData.dob || sanitizedData.dob === '') {
       delete sanitizedData.dob;
-    }
-
-    // Also check inside metadata if it exists
-    if (sanitizedData.metadata && (!sanitizedData.metadata.dob || sanitizedData.metadata.dob === '')) {
-      const sanitizedMetadata = { ...sanitizedData.metadata };
-      delete sanitizedMetadata.dob;
-      sanitizedData.metadata = sanitizedMetadata;
     }
 
     const response = await apiClient.patch<any>(`/users/${userId}`, sanitizedData);

@@ -4,41 +4,12 @@ import { tokenManager } from './services/api/client';
 import { SubRole, EntityType } from './types';
 import { generateVirtualAccount } from './utils/financeUtils';
 
-// Single source of truth for which profile fields the backend's User entity
-// stores as top-level columns vs which roll into the metadata jsonb. Used by
-// both updateUser (post-login profile edits) and register (the new
-// extraProfile path that bypasses the closure race during onboarding).
-const TOP_LEVEL_USER_KEYS = [
-  'name',
-  'email',
-  'phone',
-  'nrc',
-  'profilePicture',
-  'location',
-  'role',
-  'categories',
-  'verificationStatus',
-  'businessLicenseId',
-  'socialLinks',
-  'isActive',
-  'pin',
-];
-
-function splitProfileFields(
-  data: Record<string, any>,
-  existingMetadata: Record<string, any> = {}
-): { topLevelData: Record<string, any>; metadata: Record<string, any> } {
-  const topLevelData: Record<string, any> = {};
-  const metadata: Record<string, any> = { ...existingMetadata };
-  Object.keys(data).forEach((key) => {
-    if (TOP_LEVEL_USER_KEYS.includes(key)) {
-      topLevelData[key] = data[key];
-    } else {
-      metadata[key] = data[key];
-    }
-  });
-  return { topLevelData, metadata };
-}
+// NOTE: pre-Phase-1, this file held a TOP_LEVEL_USER_KEYS whitelist and a
+// splitProfileFields() helper that partitioned profile updates into top-level
+// columns vs a metadata jsonb. Phase 1 promoted every field to a typed
+// column on the users table, so the backend's UpdateUserDto is now the
+// single source of truth for what's accepted. updateUser/register simply
+// pass the data through.
 
 export type Role =
   | 'BUYER'
@@ -143,14 +114,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               if (stored) pendingProfile = JSON.parse(stored);
             } catch (e) {}
 
-            // Flatten metadata if it exists
-            const { metadata, ...userData } = currentUser as any;
-
+            // Phase 1: every field is now a typed column on the user row,
+            // so the response is already flat — no metadata jsonb to spread.
             const finalUser: User = {
               ...pendingProfile,
-              ...userData,
-              ...(metadata || {}),
-              metadata,
+              ...(currentUser as any),
               id: currentUser.id || '',
               email: currentUser.email || '',
               name: currentUser.name || (pendingProfile as any).name || '',
@@ -207,14 +175,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (stored) pendingProfile = JSON.parse(stored);
       } catch (e) {}
 
-      // Flatten metadata if it exists
-      const { metadata, ...userData } = response.user as any;
-
+      // Phase 1: every field is now a typed column on the user row, so the
+      // response is already flat — no metadata jsonb to spread.
       const finalUser: User = {
         ...pendingProfile,
-        ...userData,
-        ...(metadata || {}),
-        metadata,
+        ...(response.user as any),
         id: response.user.id,
         email: response.user.email,
         name: response.user.name || (pendingProfile as any).name || '',
@@ -256,20 +221,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           dob,
         });
 
-        // Apply extra profile fields (categories, subRole, location, area,
-        // province, city, latitude, longitude, radius, etc.) to the brand-new
-        // user record BEFORE the auto-login. Done synchronously here so we
-        // bypass the closure race where Register.tsx's updateUser ref still
-        // pointed at user=null when called immediately after register().
-        // RegisterResponse is flat — { id, email, name, role } — so we read
-        // .id directly, not .user.id.
+        // Apply extra profile fields to the brand-new user record BEFORE the
+        // auto-login. Done synchronously here so we bypass the closure race
+        // where Register.tsx's updateUser ref still pointed at user=null
+        // when called immediately after register(). RegisterResponse is flat
+        // — { id, email, name, role } — so we read .id directly, not .user.id.
+        // Phase 1: every field is now a typed column on users; the backend
+        // UpdateUserDto validates the payload, so we flat-pass it through
+        // (no more topLevel/metadata partitioning).
         const newUserId = registerResponse?.id;
         if (newUserId && extraProfile && Object.keys(extraProfile).length > 0) {
-          const { topLevelData, metadata } = splitProfileFields(extraProfile);
-          const payload: Record<string, any> = { ...topLevelData };
-          if (Object.keys(metadata).length > 0) payload.metadata = metadata;
           try {
-            await authService.updateProfile(newUserId, payload);
+            await authService.updateProfile(newUserId, extraProfile);
           } catch (e) {
             // Non-fatal — registration itself succeeded; user can complete
             // profile from settings if this update fails.
@@ -297,25 +260,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         setError(null);
 
-        // Separate top-level fields from metadata using the shared helper.
-        // The list of top-level keys lives at the top of this file so the
-        // register() flow uses the same partitioning.
-        const { topLevelData, metadata } = splitProfileFields(data, (user as any).metadata);
+        // Phase 1: every field is now a typed column on users. The backend
+        // UpdateUserDto is the single source of truth for what's accepted
+        // — flat-pass the data through, no client-side partitioning.
+        const response = await authService.updateProfile(user.id, data);
 
-        // Send to backend
-        const payload: Record<string, any> = { ...topLevelData };
-        if (Object.keys(metadata).length > 0) {
-          payload.metadata = metadata;
-        }
-
-        const response = await authService.updateProfile(user.id, payload);
-
-        // Update local user state with flattened metadata
-        const { metadata: updatedMetadata, ...rest } = response;
+        // Merge the response into local user state. The backend returns the
+        // full flattened user row (no metadata jsonb anymore — every field
+        // is a typed column after Phase 1).
         setUser((prevUser) => {
           if (!prevUser) return null;
-          const finalUser = { ...prevUser, ...rest, ...updatedMetadata, metadata: updatedMetadata };
-          return finalUser;
+          return { ...prevUser, ...response };
         });
 
         // Save to pendingProfile as well for redundancy
