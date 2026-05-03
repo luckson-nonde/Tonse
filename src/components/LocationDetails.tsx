@@ -16,36 +16,45 @@ import {
 
 /**
  * Best-effort detection of whether the device probably has a real GPS
- * chip. There's no reliable browser API for this — the navigator.geolocation
- * surface is the same on every platform, but actual accuracy depends on
- * hardware (GPS chip vs Wi-Fi/IP triangulation).
+ * chip. There's no reliable browser API for this — the
+ * navigator.geolocation surface is the same on every platform, but
+ * actual accuracy depends on hardware (GPS chip vs Wi-Fi/IP
+ * triangulation).
  *
- * We use the strongest synchronous signals: mobile-shaped user agent OR
- * coarse pointer + touch. A laptop with a touchscreen looks similar
- * enough to a phone here that we'll let the user try GPS — a desktop
- * tower with a fine-pointer mouse is the case we want to redirect to
- * Manual without showing a GPS option that won't work.
+ * We trust the user-agent string as the primary signal: phones and
+ * tablets reliably have GPS, desktops reliably don't. We deliberately
+ * do NOT fall back to touch / coarse-pointer detection — Chromium
+ * exposes 'ontouchstart' on plain Windows desktops without touch
+ * hardware, and even Surface laptops with touchscreens almost never
+ * have a GPS chip. The minority of desktops that do (cellular
+ * laptops, GPS dongles) can opt in via the "Try GPS →" link.
+ *
+ * iPadOS is the one platform where the UA lies — Safari sends a
+ * Mac-style UA by default. We sniff multi-touch (maxTouchPoints > 1)
+ * combined with a Mac UA as the giveaway, since macOS proper has
+ * maxTouchPoints === 0.
  *
  * Returns:
- *   'likely'  — phone or tablet, GPS hardware almost always present
- *   'unlikely' — desktop / laptop with no touch, default to Manual
+ *   'likely'   — phone or tablet, GPS hardware almost always present
+ *   'unlikely' — desktop / laptop, default to Manual
  *
- * Server-side render: returns 'unlikely' (safe default — Manual works
- * for everyone).
+ * Server-side render: returns 'unlikely' (safe default — Manual
+ * works for every device).
  */
 function detectGpsCapability(): 'likely' | 'unlikely' {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') {
     return 'unlikely';
   }
   const ua = navigator.userAgent || '';
-  const isMobileUA = /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua);
-  const isTouch =
-    'ontouchstart' in window ||
-    (typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 0);
-  const isCoarsePointer = !!window.matchMedia?.('(pointer: coarse)').matches;
-  // Phone-like: mobile UA OR coarse-pointer touchscreen.
-  if (isMobileUA) return 'likely';
-  if (isTouch && isCoarsePointer) return 'likely';
+  if (/Android|iPhone|iPad|iPod|Windows Phone|Mobile/i.test(ua)) {
+    return 'likely';
+  }
+  // iPadOS spoofs Mac UA — distinguish via touchpoints.
+  const maxTouchPoints =
+    typeof navigator.maxTouchPoints === 'number' ? navigator.maxTouchPoints : 0;
+  if (/Macintosh/i.test(ua) && maxTouchPoints > 1) {
+    return 'likely';
+  }
   return 'unlikely';
 }
 
