@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   MapPin,
   ChevronDown,
@@ -13,6 +13,41 @@ import {
   AlertCircle,
   Check,
 } from 'lucide-react';
+
+/**
+ * Best-effort detection of whether the device probably has a real GPS
+ * chip. There's no reliable browser API for this — the navigator.geolocation
+ * surface is the same on every platform, but actual accuracy depends on
+ * hardware (GPS chip vs Wi-Fi/IP triangulation).
+ *
+ * We use the strongest synchronous signals: mobile-shaped user agent OR
+ * coarse pointer + touch. A laptop with a touchscreen looks similar
+ * enough to a phone here that we'll let the user try GPS — a desktop
+ * tower with a fine-pointer mouse is the case we want to redirect to
+ * Manual without showing a GPS option that won't work.
+ *
+ * Returns:
+ *   'likely'  — phone or tablet, GPS hardware almost always present
+ *   'unlikely' — desktop / laptop with no touch, default to Manual
+ *
+ * Server-side render: returns 'unlikely' (safe default — Manual works
+ * for everyone).
+ */
+function detectGpsCapability(): 'likely' | 'unlikely' {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return 'unlikely';
+  }
+  const ua = navigator.userAgent || '';
+  const isMobileUA = /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua);
+  const isTouch =
+    'ontouchstart' in window ||
+    (typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 0);
+  const isCoarsePointer = !!window.matchMedia?.('(pointer: coarse)').matches;
+  // Phone-like: mobile UA OR coarse-pointer touchscreen.
+  if (isMobileUA) return 'likely';
+  if (isTouch && isCoarsePointer) return 'likely';
+  return 'unlikely';
+}
 
 interface LocationDetailsProps {
   onBack?: () => void;
@@ -264,6 +299,24 @@ export default function LocationDetails({
   const [geoError, setGeoError] = useState<string | null>(null);
   const [resolvedNote, setResolvedNote] = useState<string | null>(null);
 
+  // Device-class flag: 'likely' on phones / tablets / touch-first laptops,
+  // 'unlikely' on desktops with a fine pointer. Drives whether we expose
+  // the GPS toggle in the segmented control. Resolved once on mount —
+  // it's purely capability-based, not user state, so no need to watch.
+  const [gpsCapability, setGpsCapability] = useState<'likely' | 'unlikely'>(
+    'unlikely'
+  );
+  // Desktop opt-in escape hatch: when the user explicitly asks to try GPS
+  // on a chip-less device (rare, but some Windows laptops with cellular
+  // modems do have GPS), we reveal the toggle anyway.
+  const [gpsForcedAvailable, setGpsForcedAvailable] = useState(false);
+
+  useEffect(() => {
+    setGpsCapability(detectGpsCapability());
+  }, []);
+
+  const showGpsToggle = gpsCapability === 'likely' || gpsForcedAvailable;
+
   const provinces = Object.keys(ZAMBIA_DATA).sort();
   const cities = province ? ZAMBIA_DATA[province].sort() : [];
 
@@ -444,8 +497,12 @@ export default function LocationDetails({
   };
 
   const handleComplete = () => {
-    // If user is in manual mode, clicking complete should first take them to GPS to verify
-    if (!useGps) {
+    // If GPS is available on this device and the user is still in Manual
+    // mode, take them through GPS once first — a real fix is preferable
+    // to a typed address. On devices without GPS we accept the manual
+    // entry directly; forcing a scan that can't return useful coordinates
+    // is just friction.
+    if (!useGps && showGpsToggle) {
       handleUseMyLocation();
       return;
     }
@@ -481,7 +538,12 @@ export default function LocationDetails({
         </span>
       </div>
 
-      {/* Mode Selector — compact segmented control */}
+      {/* Mode Selector — only when the device has a credible chance of
+          returning useful GPS coordinates. On a desktop with no chip we
+          hide the toggle entirely so the user isn't tempted to use a
+          mode that returns ±10km readings. They can still opt in via
+          the "Try GPS anyway" link below the manual form. */}
+      {showGpsToggle && (
       <div className="flex p-[3px] bg-[#f1ede5] rounded-full">
         <button
           type="button"
@@ -511,6 +573,7 @@ export default function LocationDetails({
           GPS
         </button>
       </div>
+      )}
 
       <div className="relative">
         {useGps ? (
@@ -536,7 +599,7 @@ export default function LocationDetails({
                         : 'GPS Active'}
                 </p>
                 {!isLocating && latitude !== undefined && longitude !== undefined && (
-                  <p className="text-[12px] font-mono text-[#1a1612]/55 tabular-nums">
+                  <p className="text-[16px] md:text-[18px] font-mono font-bold text-[#1a1612]/75 tabular-nums tracking-tight">
                     {latitude.toFixed(6)}, {longitude.toFixed(6)}
                   </p>
                 )}
@@ -775,6 +838,24 @@ export default function LocationDetails({
                 <label className={floatingLabel}>Address (Optional)</label>
               </div>
             </div>
+            {/* Desktop opt-in: most laptops have no GPS chip and the toggle
+                is hidden, but a few (Windows tablets, laptops with cellular
+                modems) do — this lets a knowing user reveal it without us
+                showing a toggle that fails for everyone else. */}
+            {!showGpsToggle && (
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <span className="text-[11px] text-[#1a1612]/45">
+                  Have GPS hardware on this device?
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setGpsForcedAvailable(true)}
+                  className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#C9973A] hover:underline"
+                >
+                  Try GPS →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -811,7 +892,7 @@ export default function LocationDetails({
         disabled={!useGps && (!province || !city)}
         className="group w-full h-[58px] mt-2 shadow-[0_12px_28px_-8px_rgba(201,151,58,0.4)] disabled:shadow-none text-[13px] font-sans font-bold text-white bg-gradient-to-b from-[#D5A547] to-[#C9973A] hover:from-[#C9973A] hover:to-[#B08432] disabled:from-[#e8e4dc] disabled:to-[#e0dccf] disabled:text-[#1a1612]/30 disabled:cursor-not-allowed transition-all active:scale-[0.98] rounded-2xl uppercase tracking-[0.22em] flex justify-center items-center gap-2"
       >
-        {!useGps ? (
+        {!useGps && showGpsToggle ? (
           <>
             Next · Capture GPS Location <span className="text-base leading-none">→</span>
           </>
