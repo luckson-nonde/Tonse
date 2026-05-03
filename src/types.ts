@@ -68,16 +68,23 @@ export interface IdentityAudit {
 }
 
 export type SubRole =
+  // Buyer shapes
   | 'INDIVIDUAL_BUYER'
   | 'COMPANY_BUYER'
   | 'COMPANY_PROCUREMENT_OFFICER'
   | 'COMPANY_SECRETARY'
   | 'COMPANY_RECEPTIONIST'
   | 'COMPANY_MANAGER'
+  // Seller (goods) shapes
   | 'PRODUCT_SELLER'
-  | 'SERVICE_SELLER'
   | 'HYBRID_SELLER'
-  | 'SUPPLIER_SELLER';
+  | 'SUPPLIER_SELLER'
+  // Service-provider shapes (Phase 2 fix — services are not sellers)
+  | 'INDIVIDUAL_PROVIDER'
+  | 'AGENCY_PROVIDER'
+  | 'SKILLED_LABOUR'
+  // Legacy — kept for compat with older user rows that have it stored
+  | 'SERVICE_SELLER';
 export type EntityType = 'INDIVIDUAL' | 'BUSINESS';
 
 export interface InquiryItem {

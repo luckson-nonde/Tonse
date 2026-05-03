@@ -1426,6 +1426,9 @@ export function getBusinessType(user: MinimalUserForBusinessType | null | undefi
 
   // SERVICE_PROVIDER includes labour, repair-only services, and pro services.
   if (role === 'SERVICE_PROVIDER') {
+    // SKILLED_LABOUR subRole pins straight to LABOUR (categories may not yet
+    // be populated for a fresh registration).
+    if (subRole === 'SKILLED_LABOUR') return 'LABOUR';
     if (categories.some(isRepairVariant)) return 'REPAIR_SERVICE';
     // labour categories carry "Skilled Labour" prefix from Phase 2 backfill
     if (categoriesMatch(categories, /\bskilled\s?labour\b|\blabour\b|\bworker\b|\bgig\b/i))

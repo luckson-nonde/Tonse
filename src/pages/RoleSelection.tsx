@@ -121,6 +121,10 @@ const companySubRoles: RoleOption[] = [
   },
 ];
 
+// SELLER tier-2: only goods-shaped business models. The "Services Only" card
+// moved to the SERVICE_PROVIDER role (where it belongs); a service business
+// doesn't transfer ownership of goods. HYBRID stays here because it's
+// primarily a goods seller that also offers repair on the same items.
 const sellerSubRoles: RoleOption[] = [
   {
     id: 'PRODUCT_SELLER',
@@ -131,18 +135,10 @@ const sellerSubRoles: RoleOption[] = [
     subRole: 'PRODUCT_SELLER',
   },
   {
-    id: 'SERVICE_SELLER',
-    eyebrow: 'Services · Skills',
-    title: 'Services',
-    description: 'Offer professional skills and services.',
-    icon: Settings,
-    subRole: 'SERVICE_SELLER',
-  },
-  {
     id: 'HYBRID_SELLER',
-    eyebrow: 'Goods + Services',
+    eyebrow: 'Goods + Repair',
     title: 'Hybrid',
-    description: 'Sell both goods and professional services.',
+    description: 'Sell goods and repair the same items (e.g. phone shop with tech bench).',
     icon: Layers,
     subRole: 'HYBRID_SELLER',
   },
@@ -156,16 +152,48 @@ const sellerSubRoles: RoleOption[] = [
   },
 ];
 
+// SERVICE_PROVIDER tier-2: businesses that book/rent/perform/fix.
+// Three shapes by company structure, not by what they offer (categories
+// in tier 3 narrow that down).
+const serviceProviderSubRoles: RoleOption[] = [
+  {
+    id: 'INDIVIDUAL_PROVIDER',
+    eyebrow: 'Solo · Practitioner',
+    title: 'Solo',
+    description: 'Independent professional — DJ, photographer, planner, consultant.',
+    icon: User,
+    subRole: 'INDIVIDUAL_PROVIDER',
+  },
+  {
+    id: 'AGENCY_PROVIDER',
+    eyebrow: 'Agency · Multi-team',
+    title: 'Agency',
+    description: 'Multi-person service business — event company, repair shop, catering co.',
+    icon: Building2,
+    subRole: 'AGENCY_PROVIDER',
+  },
+  {
+    id: 'SKILLED_LABOUR',
+    eyebrow: 'Trade · Skilled Labour',
+    title: 'Skilled Labour',
+    description: 'Tradesperson — carpenter, welder, plumber, electrician.',
+    icon: Wrench,
+    subRole: 'SKILLED_LABOUR',
+  },
+];
+
+type MasterRole = 'BUYER' | 'SELLER' | 'SERVICE_PROVIDER';
+
 export default function RoleSelection() {
   const [tier, setTier] = useState(1);
-  const [masterRole, setMasterRole] = useState<'BUYER' | 'SELLER' | null>(null);
+  const [masterRole, setMasterRole] = useState<MasterRole | null>(null);
   const [selectedSubRole, setSelectedSubRole] = useState<SubRole | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isCompanyExpanded, setIsCompanyExpanded] = useState(false);
   const [isViewingSubcategories, setIsViewingSubcategories] = useState(false);
   const navigate = useNavigate();
 
-  const handleMasterSelect = (role: 'BUYER' | 'SELLER') => {
+  const handleMasterSelect = (role: MasterRole) => {
     setMasterRole(role);
     setTier(2);
   };
@@ -191,13 +219,34 @@ export default function RoleSelection() {
         return nature === 'PRODUCT' || nature === 'BOTH';
       });
     }
-    if (selectedSubRole === 'SERVICE_SELLER') {
+    if (selectedSubRole === 'SUPPLIER_SELLER') {
+      return rootCategories.filter((c) => {
+        const nature = getCategoryNature(c.id);
+        return nature === 'PRODUCT' || nature === 'BOTH';
+      });
+    }
+    if (selectedSubRole === 'HYBRID_SELLER') {
+      // Hybrid sells goods + repairs the same items — show product categories
+      // that have a Repair variant (Mobile Phones, Laptops, Home Appliances).
+      return rootCategories.filter((c) => {
+        const nature = getCategoryNature(c.id);
+        return nature === 'PRODUCT' || nature === 'BOTH';
+      });
+    }
+    // SERVICE_PROVIDER subRoles all see service categories. Tier-3 click
+    // drills into the specialty step where the variant (Repair / Hire /
+    // Performance / etc.) is picked.
+    if (
+      selectedSubRole === 'INDIVIDUAL_PROVIDER' ||
+      selectedSubRole === 'AGENCY_PROVIDER' ||
+      selectedSubRole === 'SKILLED_LABOUR'
+    ) {
       return rootCategories.filter((c) => {
         const nature = getCategoryNature(c.id);
         return nature === 'SERVICE' || nature === 'BOTH';
       });
     }
-    return rootCategories; // HYBRID_SELLER
+    return rootCategories;
   }, [selectedSubRole]);
 
   const toggleCategory = (catId: string) => {
@@ -210,7 +259,9 @@ export default function RoleSelection() {
     if (tier === 1 && masterRole) {
       setTier(2);
     } else if (tier === 2 && selectedSubRole) {
-      if (masterRole === 'SELLER') {
+      // Both SELLER and SERVICE_PROVIDER need to pick categories at tier 3.
+      // BUYER skips it — they pick categories at inquiry time, not at registration.
+      if (masterRole === 'SELLER' || masterRole === 'SERVICE_PROVIDER') {
         setTier(3);
       } else {
         navigate(`/register?role=${masterRole}&subRole=${selectedSubRole}`);
@@ -248,7 +299,8 @@ export default function RoleSelection() {
     if (tier === 1) return HERO_CONTENT.tier1;
     if (tier === 3) return HERO_CONTENT.categories;
     if (masterRole === 'BUYER') return HERO_CONTENT.buyer;
-    if (masterRole === 'SELLER') return HERO_CONTENT.seller;
+    if (masterRole === 'SELLER' || masterRole === 'SERVICE_PROVIDER')
+      return HERO_CONTENT.seller;
     return HERO_CONTENT.tier1;
   }, [tier, masterRole]);
 
@@ -256,7 +308,7 @@ export default function RoleSelection() {
     <AuthSplitLayout
       title={
         isViewingSubcategories
-          ? tier === 3 && masterRole === 'SELLER'
+          ? tier === 3 && (masterRole === 'SELLER' || masterRole === 'SERVICE_PROVIDER')
             ? 'Choose Specialty'
             : null
           : tier === 1
@@ -266,12 +318,14 @@ export default function RoleSelection() {
                 ? 'Your Position'
                 : masterRole === 'BUYER'
                   ? 'Buyer Setup'
-                  : 'Seller Setup'
+                  : masterRole === 'SERVICE_PROVIDER'
+                    ? 'Provider Setup'
+                    : 'Seller Setup'
               : 'Business Categories'
       }
       subtitle={
         isViewingSubcategories
-          ? tier === 3 && masterRole === 'SELLER'
+          ? tier === 3 && (masterRole === 'SELLER' || masterRole === 'SERVICE_PROVIDER')
             ? <span className="text-[#1a1612]/60">Pick exactly what you sell or repair</span>
             : null
           : <span className="text-[#1a1612]/60">
@@ -280,7 +334,11 @@ export default function RoleSelection() {
                 : tier === 2
                   ? isCompanyExpanded
                     ? 'Select your role within the company'
-                    : `Tell us how you'll ${masterRole === 'BUYER' ? 'buy' : 'sell'} on Tonse`
+                    : masterRole === 'BUYER'
+                      ? "Tell us how you'll buy on Tonse"
+                      : masterRole === 'SERVICE_PROVIDER'
+                        ? 'Tell us what kind of provider you are'
+                        : "Tell us how you'll sell on Tonse"
                   : 'Select the categories that best describe your business.'}
             </span>
       }
@@ -310,23 +368,23 @@ export default function RoleSelection() {
                 },
                 {
                   id: 'SELLER' as const,
-                  eyebrow: 'Seller · Commerce',
-                  title: "I'm Selling",
+                  eyebrow: 'Seller · Goods',
+                  title: "I Sell Goods",
                   description:
-                    'Offer products or business services on the Tonse marketplace.',
+                    'Sell physical products — retail, wholesale, or hybrid (with repair).',
                   icon: Store,
                   selectable: true,
                   onClick: () => handleMasterSelect('SELLER'),
                 },
                 {
-                  id: 'LABOUR' as const,
-                  eyebrow: 'Labour · Gig',
-                  title: 'I Offer Skills',
+                  id: 'SERVICE_PROVIDER' as const,
+                  eyebrow: 'Service · Booking',
+                  title: 'I Provide Services',
                   description:
-                    'Get hired for trades, expertise, and short-term work.',
+                    'Repairs, events, entertainment, skilled labour — anything customers book.',
                   icon: Wrench,
-                  selectable: false,
-                  onClick: () => navigate('/register/labour'),
+                  selectable: true,
+                  onClick: () => handleMasterSelect('SERVICE_PROVIDER'),
                 },
               ].map(({ id, eyebrow, title, description, icon: Icon, selectable, onClick }) => {
                 const isSelected = selectable && masterRole === id;
@@ -423,7 +481,9 @@ export default function RoleSelection() {
                   ? companySubRoles
                   : masterRole === 'BUYER'
                     ? buyerSubRoles
-                    : sellerSubRoles;
+                    : masterRole === 'SERVICE_PROVIDER'
+                      ? serviceProviderSubRoles
+                      : sellerSubRoles;
                 const isStacked = items.length <= 2;
                 return (
                   <div
@@ -534,16 +594,27 @@ export default function RoleSelection() {
                   hideHeader={true}
                   hideSubmitButton={true}
                   isStandalone={false}
-                  role={masterRole === 'SELLER' ? 'SELLER' : undefined}
+                  // SELLER and SERVICE_PROVIDER both get the auto-drill +
+                  // single-master-select behaviour; CategorySelection treats
+                  // any non-buyer role as a "specialist" picker.
+                  role={
+                    masterRole === 'SELLER' || masterRole === 'SERVICE_PROVIDER'
+                      ? 'SELLER'
+                      : undefined
+                  }
                   categoryFilter={(cat) => {
-                    if (selectedSubRole === 'PRODUCT_SELLER') {
-                      const nature = getCategoryNature(cat.id);
+                    const nature = getCategoryNature(cat.id);
+                    if (selectedSubRole === 'PRODUCT_SELLER' || selectedSubRole === 'SUPPLIER_SELLER') {
                       return nature === 'PRODUCT' || nature === 'BOTH';
                     }
-                    if (selectedSubRole === 'SERVICE_SELLER') {
-                      const nature = getCategoryNature(cat.id);
+                    if (
+                      selectedSubRole === 'INDIVIDUAL_PROVIDER' ||
+                      selectedSubRole === 'AGENCY_PROVIDER' ||
+                      selectedSubRole === 'SKILLED_LABOUR'
+                    ) {
                       return nature === 'SERVICE' || nature === 'BOTH';
                     }
+                    // HYBRID_SELLER sees everything (sells goods + repairs them)
                     return true;
                   }}
                   onSubcategoryViewChange={setIsViewingSubcategories}
@@ -557,28 +628,30 @@ export default function RoleSelection() {
       {(() => {
         // Hide the outer Continue button on the buyer subcategory view (the
         // CategorySelection component has its own "Complete Selection" CTA
-        // there). For sellers we keep it visible across master AND specialty
-        // views so they have a single, predictable continue affordance.
-        const showButton = !isViewingSubcategories || (tier === 3 && masterRole === 'SELLER');
+        // there). For sellers + service providers we keep it visible across
+        // master AND specialty views so they have a single, predictable
+        // continue affordance.
+        const isSpecialist = masterRole === 'SELLER' || masterRole === 'SERVICE_PROVIDER';
+        const showButton = !isViewingSubcategories || (tier === 3 && isSpecialist);
         if (!showButton) return null;
 
-        // For sellers in tier-3, require at least one sub-category to be
-        // picked — not just the master. CategorySelection's seller flow
+        // For specialists in tier-3, require at least one sub-category to be
+        // picked — not just the master. CategorySelection's specialist flow
         // stores the master pseudo-entry first, then appends real subs as
         // the user toggles them, so length >= 2 means "master + at least
         // one specialty". This rule is suffix-agnostic, so it works for
         // categories whose subs carry a variant ("Mobile Phones (Repair)")
         // and ones whose subs don't ("MCs & Hosts", "Event Catering").
-        const sellerHasSubPicked =
-          tier === 3 && masterRole === 'SELLER' && selectedCategories.length >= 2;
+        const specialistHasSubPicked =
+          tier === 3 && isSpecialist && selectedCategories.length >= 2;
 
         const disabled =
           tier === 1
             ? !masterRole
             : tier === 2
               ? !selectedSubRole
-              : tier === 3 && masterRole === 'SELLER'
-                ? !sellerHasSubPicked
+              : tier === 3 && isSpecialist
+                ? !specialistHasSubPicked
                 : selectedCategories.length === 0;
 
         return (
@@ -592,7 +665,7 @@ export default function RoleSelection() {
                 ? 'Next Step'
                 : tier === 2
                   ? 'Continue'
-                  : isViewingSubcategories && masterRole === 'SELLER'
+                  : isViewingSubcategories && isSpecialist
                     ? 'Initialize Membership'
                     : 'Continue'}
               <span className="text-base leading-none">→</span>
