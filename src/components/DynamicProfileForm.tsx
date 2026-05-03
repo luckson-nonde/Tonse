@@ -331,9 +331,16 @@ export default function DynamicProfileForm({
                             GPS Coordinates
                           </p>
                           <p className="text-[11px] font-sans text-[#9ca3af]">
-                            {(value as any)?.latitude
-                              ? `${(value as any).latitude.toFixed(6)}, ${(value as any).longitude.toFixed(6)}`
-                              : 'No coordinates set'}
+                            {(() => {
+                              // Postgres decimal(10,6) returns strings via the pg driver,
+                              // so coerce before .toFixed(). Number() on a non-numeric
+                              // string yields NaN; guard with Number.isFinite.
+                              const lat = Number((value as any)?.latitude);
+                              const lng = Number((value as any)?.longitude);
+                              return Number.isFinite(lat) && Number.isFinite(lng)
+                                ? `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+                                : 'No coordinates set';
+                            })()}
                           </p>
                         </div>
                       </div>
