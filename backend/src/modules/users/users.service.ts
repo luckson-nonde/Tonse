@@ -186,12 +186,22 @@ export class UsersService {
     // frontend can re-hydrate selections without a second round-trip.
     // For BUYER profiles this stays empty (buyers don't subscribe to
     // categories the same way; see comment in categoryJunctionFor).
-    const categoryIds = await this.loadActiveProfileCategoryIds(user);
+    //
+    // Stage 1 (team auth): for staff (parentProviderId set), the
+    // categories + archetypes that drive the dashboard composer come
+    // from the PARENT'S seller profile, not the staff's own minimal
+    // profile (which carries only personal contact info). Resolve to
+    // parent first, fall back to self.
+    const archetypeOwner =
+      user.parentProviderId
+        ? (await this.findById(user.parentProviderId).catch(() => null)) ?? user
+        : user;
+    const categoryIds = await this.loadActiveProfileCategoryIds(archetypeOwner);
     // Multi-archetype: load the SET of archetypes the active profile
     // serves. The dashboard composer reads this to merge per-archetype
     // schemas (e.g. RETAIL + REPAIR for a seller offering both
     // mobile-phones-buy and mobile-phones-repair).
-    const archetypes = await this.loadActiveProfileArchetypes(user);
+    const archetypes = await this.loadActiveProfileArchetypes(archetypeOwner);
 
     const {
       id: _profId,

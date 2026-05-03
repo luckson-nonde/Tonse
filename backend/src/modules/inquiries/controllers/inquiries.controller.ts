@@ -52,22 +52,33 @@ export class InquiriesController {
   @UseGuards(JwtAuthGuard)
   async leadsForMe(@Query() query: any, @Request() req: AuthenticatedRequest) {
     if (!req.user?.id) throw new ForbiddenException('User not authenticated');
-    const user = await this.usersService.findById(req.user.id);
-    if (!user) throw new ForbiddenException('User not found');
-    if (!user.activeProfileId || !user.activeProfileType) {
+    const caller = await this.usersService.findById(req.user.id);
+    if (!caller) throw new ForbiddenException('User not found');
+
+    // Stage 1 (team auth): staff (parentProviderId set) match against
+    // the PARENT provider's profile, not their own minimal contact
+    // profile. Their own profile carries no categories or archetypes.
+    const profileOwner =
+      caller.parentProviderId
+        ? (await this.usersService
+            .findById(caller.parentProviderId)
+            .catch(() => null)) ?? caller
+        : caller;
+
+    if (!profileOwner.activeProfileId || !profileOwner.activeProfileType) {
       // No business profile yet — buyers / freshly-bootstrapped users.
       return { data: [], total: 0, matchedCategoryIds: [] };
     }
     if (
-      user.activeProfileType !== 'SELLER' &&
-      user.activeProfileType !== 'SERVICE_PROVIDER'
+      profileOwner.activeProfileType !== 'SELLER' &&
+      profileOwner.activeProfileType !== 'SERVICE_PROVIDER'
     ) {
       return { data: [], total: 0, matchedCategoryIds: [] };
     }
     return this.matchingService.findLeadsForProfile(
       {
-        type: user.activeProfileType as 'SELLER' | 'SERVICE_PROVIDER',
-        profileId: user.activeProfileId,
+        type: profileOwner.activeProfileType as 'SELLER' | 'SERVICE_PROVIDER',
+        profileId: profileOwner.activeProfileId,
       },
       {
         status: query?.status,

@@ -148,6 +148,49 @@ export class User {
   })
   activeProfileType: string;
 
+  // ===== Team-member identity (Stage 1) =====
+
+  /**
+   * Parent provider's user.id — set when this user is a team member /
+   * staff under another provider's account. NULL for top-level account
+   * owners. The parent-provider's seller_profile / service_provider_-
+   * profile is the one that owns categories, archetypes, leads etc.;
+   * staff don't carry their own profile rows. Resolution happens in
+   * the leads / orders / products surfaces by falling back to the
+   * parent when this column is set.
+   */
+  @Column({ type: 'uuid', nullable: true })
+  @Index('idx_users_parent_provider', ['parentProviderId'])
+  parentProviderId: string | null;
+
+  /**
+   * Permission codes granted to this user. NULL on top-level owners
+   * (they have full access via role/RBAC); a string[] on staff. Strings
+   * match the values in src/utils/rbac.ts PERMISSIONS constants
+   * (MANAGE_QUOTES, MANAGE_COLLECTIONS, VIEW_ANALYTICS, ...).
+   */
+  @Column({ type: 'simple-array', nullable: true })
+  permissions: string[] | null;
+
+  /**
+   * For multi-archetype sellers, restrict this team member to one
+   * specific archetype's leads view. Values match the Archetype enum
+   * (RETAIL, REPAIR, ...). NULL = no restriction (the parent owner
+   * sees everything; staff with NULL also see everything within their
+   * permissions). Used by /inquiries/leads/me and the variant toggle
+   * UI in ProviderLeadsView.
+   */
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  assignedArchetype: string | null;
+
+  /**
+   * Force a password change on next login. Set when an owner creates
+   * a staff user with a generated password, so the staff member must
+   * pick their own password before continuing.
+   */
+  @Column({ type: 'boolean', default: false })
+  mustChangePassword: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

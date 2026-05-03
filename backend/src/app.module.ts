@@ -20,6 +20,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { FilesModule } from './modules/files/files.module';
 import { CategoriesModule } from './modules/categories/categories.module';
+import { TeamModule } from './modules/team/team.module';
 
 // Common
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -67,6 +68,7 @@ import encryptionConfig from './config/encryption.config';
     AdminModule,
     FilesModule,
     CategoriesModule,
+    TeamModule,
   ],
   providers: [
     {
