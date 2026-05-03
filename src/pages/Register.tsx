@@ -21,6 +21,7 @@ import { getRegistrationSchema } from '../services/userSchemas';
 import DynamicProfileForm from '../components/DynamicProfileForm';
 import { HeroContent } from '../types';
 import CompactIdentityCapture from '../components/CompactIdentityCapture';
+import NrcDocumentCapture from '../components/NrcDocumentCapture';
 import LocationDetails from '../components/LocationDetails';
 
 // Zambian NRC format: XXXXXX/XX/X (6 digits / 2 digits / 1 digit)
@@ -108,6 +109,7 @@ export default function Register() {
 
     // Step 1: Personal Information & Identity
     const [logo, setLogo] = useState('');
+    const [nrcDocument, setNrcDocument] = useState('');
     const [nrc, setNrc] = useState('');
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
@@ -278,6 +280,7 @@ export default function Register() {
             categories: initialCategories,
             nrc,
             profilePicture: logo,
+            ...(nrcDocument ? { nrcDocumentPath: nrcDocument } : {}),
           };
 
           await updateUser(updateData);
@@ -299,7 +302,18 @@ export default function Register() {
             categories: initialCategories,
             ...(subRole ? { subRole } : {}),
           };
-          await register(email, password, name, phone, role, nrc, logo, dob, extraProfile);
+          await register(
+            email,
+            password,
+            name,
+            phone,
+            role,
+            nrc,
+            logo,
+            dob,
+            extraProfile,
+            nrcDocument
+          );
         }
 
         if (isCompany) {
@@ -475,9 +489,11 @@ export default function Register() {
 
                 <CompactIdentityCapture value={logo} onCapture={setLogo} />
 
+                <NrcDocumentCapture value={nrcDocument} onCapture={setNrcDocument} />
+
                 <p className="text-[11px] text-[#1a1612]/45 flex items-center gap-2 ml-1">
                   <ShieldCheck className="w-3.5 h-3.5 text-[#C9973A]/60" strokeWidth={2} />
-                  Optional · speeds up verification by 24h.
+                  Selfie + NRC photo are optional but speed up admin verification.
                 </p>
               </section>
 

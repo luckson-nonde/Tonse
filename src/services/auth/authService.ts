@@ -24,6 +24,9 @@ export interface RegisterRequest {
   role: string;
   nrc?: string;
   profilePicture?: string;
+  /** Base64 data URL of the NRC document photo. Lands on
+   * users.nrcDocumentPath; admins use it to verify the NRC number. */
+  nrcDocument?: string;
   dob?: string;
 }
 

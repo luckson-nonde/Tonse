@@ -331,6 +331,7 @@ export class UsersService {
     role: string = 'BUYER',
     profilePicture?: string,
     dateOfBirth?: string,
+    nrcDocumentPath?: string,
     ipAddress?: string,
     userAgent?: string
   ): Promise<User> {
@@ -357,12 +358,15 @@ export class UsersService {
 
     // Phase 3c: users row holds auth identity ONLY. Profile fields (name,
     // email, phone, profilePicture, dateOfBirth, verificationStatus) live
-    // on the matching profile row created below.
+    // on the matching profile row created below. nrcDocumentPath is an
+    // exception — the NRC document is part of identity verification and
+    // belongs with the immutable NRC anchor on the auth row.
     const user = this.userRepository.create({
       nrcNumber: normalizedNrc,
       password: passwordHash,
       role,
       isActive: true,
+      ...(nrcDocumentPath ? { nrcDocumentPath } : {}),
     });
 
     const savedUser = await this.userRepository.save(user);

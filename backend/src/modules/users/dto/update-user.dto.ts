@@ -149,4 +149,8 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean()
   isNrcVerified?: boolean;
+
+  @IsOptional()
+  @IsString()
+  nrcDocumentPath?: string;
 }

@@ -39,6 +39,12 @@ export class RegisterDto {
   profilePicture?: string; // Optional - Base64 encoded image or URL from front camera
 
   @IsString()
+  @IsOptional()
+  nrcDocument?: string; // Optional - Base64 encoded photo / scan of the NRC
+  // document itself. Stored as users.nrcDocumentPath. Used by admin
+  // verification to confirm the NRC number against the document.
+
+  @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {
     message: 'Date of Birth must be in ISO 8601 format (YYYY-MM-DD)',
   })

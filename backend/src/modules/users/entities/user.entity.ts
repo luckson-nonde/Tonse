@@ -101,9 +101,13 @@ export class User {
   isNrcVerified: boolean;
 
   /**
-   * NRC Document Upload Path (encrypted).
+   * NRC Document content / path. Held as `text` so we can either store
+   * a base64-encoded image (the registration flow) or a server-side
+   * upload path once we move large blobs out of the DB. Excluded from
+   * default selects and from JSON serialisation — only the admin
+   * verification path should ever see this value.
    */
-  @Column({ type: 'varchar', length: 500, nullable: true, select: false })
+  @Column({ type: 'text', nullable: true, select: false })
   @Exclude({ toPlainOnly: true })
   nrcDocumentPath: string;
 

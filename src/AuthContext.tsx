@@ -74,7 +74,10 @@ interface AuthContextType {
      * the auto-login. Eliminates the race where Register.tsx's closure
      * captured a stale `user=null` updateUser, silently swallowing every
      * new registration's categories / subRole / location / area / lat/lng. */
-    extraProfile?: Record<string, any>
+    extraProfile?: Record<string, any>,
+    /** Base64 data URL of the NRC document photo. Stored on the auth
+     * row as users.nrcDocumentPath for admin verification. */
+    nrcDocument?: string
   ) => Promise<void>;
   updateUser: (data: Record<string, any>) => Promise<void>;
   logout: () => Promise<void>;
@@ -201,11 +204,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       nrc: string = '',
       profilePicture: string = '',
       dob: string = '',
-      extraProfile?: Record<string, any>
+      extraProfile?: Record<string, any>,
+      nrcDocument: string = ''
     ) => {
       try {
         setError(null);
-        // Register with identity verification fields (NRC, profile picture, and DOB)
+        // Register with identity verification fields (NRC, profile picture,
+        // NRC document photo, and DOB).
         const registerResponse = await authService.register({
           email,
           password,
@@ -215,6 +220,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           nrc,
           profilePicture,
           dob,
+          ...(nrcDocument ? { nrcDocument } : {}),
         });
 
         // Apply extra profile fields to the brand-new user record BEFORE the
