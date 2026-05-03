@@ -110,17 +110,13 @@ export class AuthService {
         userAgent
       );
 
+      // Phase 3: profile fields (name, email, verificationStatus) live on
+      // the active profile row created by usersService.register. Flatten to
+      // include them in the response.
+      const flat = await this.usersService.flattenWithProfile(user);
       return {
         success: true,
-        user: {
-          id: user.id,
-          displayId: user.displayId,
-          nrcNumber: user.nrcNumber,
-          email: user.primaryEmail,
-          name: user.name,
-          role: user.role,
-          verificationStatus: user.verificationStatus,
-        },
+        user: flat,
         message: 'Registration successful. Your account is pending NRC verification by an admin.',
       };
     } catch (error) {
@@ -177,11 +173,12 @@ export class AuthService {
     // Update last login timestamp
     await this.usersService.updateLastLoginAt(user.id);
 
-    // Generate tokens with enhanced claims
+    // Generate tokens with enhanced claims. Email comes from the login
+    // input — it's the verified address the user just authenticated with.
     const accessToken = this.generateAccessToken(
       user.id,
       user.displayId,
-      user.primaryEmail,
+      email,
       user.role,
       user.nrcNumber
     );
@@ -231,10 +228,14 @@ export class AuthService {
       throw new UnauthorizedException('Account is inactive');
     }
 
+    // Phase 3: email lives on the active profile, so load it for the JWT
+    // claim. Falls back to empty string if the user has no profile yet
+    // (admins, freshly-bootstrapped accounts).
+    const flat = await this.usersService.flattenWithProfile(user);
     const accessToken = this.generateAccessToken(
       user.id,
       user.displayId,
-      user.primaryEmail,
+      flat?.email || '',
       user.role,
       user.nrcNumber
     );
@@ -286,12 +287,16 @@ export class AuthService {
       throw new BadRequestException('If account exists, recovery email will be sent');
     }
 
-    // In real implementation, would send recovery email here
+    // In real implementation, would send recovery email here. Email lives
+    // on the active profile (Phase 3), so flatten before masking.
+    const flat = await this.usersService.flattenWithProfile(user);
+    const email: string = flat?.email || '';
     return {
       found: true,
       displayId: user.displayId,
-      recoveryEmail:
-        user.primaryEmail?.substring(0, user.primaryEmail.indexOf('@') + 2) + '***.***',
+      recoveryEmail: email
+        ? email.substring(0, email.indexOf('@') + 2) + '***.***'
+        : null,
       message: 'Recovery email sent to your registered email address',
     };
   }

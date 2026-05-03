@@ -207,22 +207,6 @@ export class UsersService {
     return this.findByAnyEmail(email);
   }
 
-  async findByEmailWithPassword(email: string): Promise<User> {
-    const userEmail = await this.userEmailRepository.findOne({
-      where: { email: email.toLowerCase() },
-      relations: ['user'],
-    });
-
-    if (!userEmail?.user) {
-      return null;
-    }
-
-    return this.userRepository.findOne({
-      where: { id: userEmail.user.id },
-      select: ['id', 'password', 'name', 'role', 'primaryEmail'],
-    });
-  }
-
   async updateRefreshToken(userId: string, refreshToken: string): Promise<void> {
     await this.userRepository.update({ id: userId }, { refreshToken });
   }
@@ -278,10 +262,25 @@ export class UsersService {
       queryBuilder.andWhere('user.role = :role', { role: filters.role });
     }
 
-    if (filters.verificationStatus) {
-      queryBuilder.andWhere('user.verificationStatus = :verificationStatus', {
-        verificationStatus: filters.verificationStatus,
-      });
+    // Phase 3: verificationStatus lives on the role-specific profile row.
+    // Join the profile table that matches the current role filter and
+    // filter on profile.verificationStatus. The admin verification queue
+    // always passes role together with verificationStatus, so this covers
+    // every real caller. If verificationStatus is requested without a
+    // role we silently skip (was always nonsensical even before Phase 3).
+    if (filters.verificationStatus && filters.role) {
+      const profileTable =
+        filters.role === 'BUYER' ? 'buyer_profiles'
+        : filters.role === 'SELLER' ? 'seller_profiles'
+        : filters.role === 'SERVICE_PROVIDER' ? 'service_provider_profiles'
+        : null;
+      if (profileTable) {
+        queryBuilder
+          .innerJoin(profileTable, 'profile', 'profile."userId" = user.id')
+          .andWhere('profile."verificationStatus" = :verificationStatus', {
+            verificationStatus: filters.verificationStatus,
+          });
+      }
     }
 
     if (filters.isActive !== undefined) {
@@ -356,47 +355,37 @@ export class UsersService {
       );
     }
 
-    // Create new user. Phase 3 dual-write: profile fields (name, email, phone,
-    // profilePicture, dateOfBirth, verificationStatus) still get written to
-    // users while the old columns exist. Phase 3c drops them; register at
-    // that point will only populate auth fields here. The matching profile
-    // row is also created below so the new code paths see consistent data.
+    // Phase 3c: users row holds auth identity ONLY. Profile fields (name,
+    // email, phone, profilePicture, dateOfBirth, verificationStatus) live
+    // on the matching profile row created below.
     const user = this.userRepository.create({
       nrcNumber: normalizedNrc,
-      name,
-      primaryEmail: email.toLowerCase(),
-      phone,
       password: passwordHash,
       role,
-      profilePicture: profilePicture || null,
-      dateOfBirth: dateOfBirth || null,
-      verificationStatus: 'PENDING',
       isActive: true,
     });
 
     const savedUser = await this.userRepository.save(user);
 
     // Generate and assign display ID
-    const displayId = UserDisplayIdUtil.generateDisplayId(savedUser.id);
-    savedUser.displayId = displayId;
+    savedUser.displayId = UserDisplayIdUtil.generateDisplayId(savedUser.id);
     await this.userRepository.save(savedUser);
 
-    // Create primary email entry
-    const userEmail = this.userEmailRepository.create({
-      userId: savedUser.id,
-      email: email.toLowerCase(),
-      isPrimary: true,
-      verificationStatus: 'NOT_VERIFIED',
-    });
-    const savedUserEmail = await this.userEmailRepository.save(userEmail);
+    // user_emails is the canonical lookup table for sign-in by email. The
+    // primary email lives here flagged with isPrimary=true; other addresses
+    // can be added later via the email-management endpoints.
+    await this.userEmailRepository.save(
+      this.userEmailRepository.create({
+        userId: savedUser.id,
+        email: email.toLowerCase(),
+        isPrimary: true,
+        verificationStatus: 'NOT_VERIFIED',
+      })
+    );
 
-    // Update user with primary email reference
-    savedUser.primaryEmailId = savedUserEmail.id;
-    await this.userRepository.save(savedUser);
-
-    // Phase 3: also create the matching profile row and point activeProfileId
-    // at it. Profile fields are populated from the same data so the auth
-    // response (which reads from the profile) is consistent immediately.
+    // Create the matching profile row and point activeProfileId at it. The
+    // profile carries the user-facing fields (name, email, phone, etc.) so
+    // /auth/me, /auth/login, and dashboards see consistent data.
     await this.createProfileForRole(savedUser.id, role, {
       name,
       email: email.toLowerCase(),
@@ -412,17 +401,14 @@ export class UsersService {
       'USER_REGISTERED',
       `New user registered with NRC: ${normalizedNrc}`,
       null,
-      {
-        nrc: normalizedNrc,
-        email: email,
-        role: role,
-      },
+      { nrc: normalizedNrc, email, role },
       'nrc',
       ipAddress,
       userAgent
     );
 
-    return savedUser;
+    // Re-load so the returned object includes activeProfileId/Type.
+    return this.findById(savedUser.id);
   }
 
   // ===== FIND OPERATIONS =====
@@ -489,17 +475,25 @@ export class UsersService {
   }
 
   /**
-   * Find user by phone number (identity verification)
-   * Used to check if phone is already registered during signup
-   *
-   * @param phone - Phone number
-   * @returns User or null
+   * Find user by phone number (identity verification).
+   * Phase 3: phone lives on profile rows. We check all three profile
+   * tables — first hit wins. Used by registration to surface "phone
+   * already in use" errors.
    */
-  async findByPhone(phone: string): Promise<User> {
-    return this.userRepository.findOne({
-      where: { phone },
-      relations: ['emails', 'identityAudits'],
-    });
+  async findByPhone(phone: string): Promise<User | null> {
+    if (!phone) return null;
+    const repos: Repository<ActiveProfile>[] = [
+      this.buyerProfileRepository as Repository<ActiveProfile>,
+      this.sellerProfileRepository as Repository<ActiveProfile>,
+      this.serviceProviderProfileRepository as Repository<ActiveProfile>,
+    ];
+    for (const repo of repos) {
+      const hit = await (repo as any).findOne({ where: { phone } });
+      if (hit?.userId) {
+        return this.findById(hit.userId);
+      }
+    }
+    return null;
   }
 
   /**
@@ -568,13 +562,17 @@ export class UsersService {
     savedEmail.verificationStatus = 'VERIFICATION_SENT';
     await this.userEmailRepository.save(savedEmail);
 
-    // Log email addition
+    // Log email addition. Phase 3: previous primary lives on user_emails
+    // (isPrimary=true), not on the user row.
+    const previousPrimary = await this.userEmailRepository.findOne({
+      where: { userId, isPrimary: true },
+    });
     await this.createAuditLog(
       userId,
       'EMAIL_ADDED',
       `New email added: ${email}`,
-      { email: user.primaryEmail },
-      { email: email },
+      { email: previousPrimary?.email ?? null },
+      { email },
       'email',
       ipAddress,
       userAgent
@@ -632,69 +630,49 @@ export class UsersService {
   }
 
   /**
-   * Change primary email for user
-   * Selected email must be verified
-   *
-   * @param userId - User ID
-   * @param emailId - Email ID to set as primary
-   * @param ipAddress - IP address for audit
-   * @param userAgent - User agent for audit
+   * Change primary email for user. Phase 3: the "primary" flag lives on
+   * user_emails — flip the boolean on the new row, clear it on the old.
+   * Selected email must be verified.
    */
   async changePrimaryEmail(
     userId: string,
     emailId: string,
     ipAddress?: string,
     userAgent?: string
-  ): Promise<User> {
-    const user = await this.findById(userId);
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    const newPrimaryEmail = await this.userEmailRepository.findOne({
+  ): Promise<UserEmail> {
+    const newPrimary = await this.userEmailRepository.findOne({
       where: { id: emailId, userId },
     });
-
-    if (!newPrimaryEmail) {
+    if (!newPrimary) {
       throw new NotFoundException('Email not found');
     }
-
-    if (newPrimaryEmail.verificationStatus !== 'VERIFIED') {
+    if (newPrimary.verificationStatus !== 'VERIFIED') {
       throw new BadRequestException('Email must be verified before setting as primary');
     }
 
-    // Update old primary
-    if (user.primaryEmailId) {
-      const oldPrimary = await this.userEmailRepository.findOne({
-        where: { id: user.primaryEmailId },
-      });
-      if (oldPrimary) {
-        oldPrimary.isPrimary = false;
-        await this.userEmailRepository.save(oldPrimary);
-      }
+    const oldPrimary = await this.userEmailRepository.findOne({
+      where: { userId, isPrimary: true },
+    });
+    if (oldPrimary && oldPrimary.id !== newPrimary.id) {
+      oldPrimary.isPrimary = false;
+      await this.userEmailRepository.save(oldPrimary);
     }
 
-    // Set new primary
-    newPrimaryEmail.isPrimary = true;
-    await this.userEmailRepository.save(newPrimaryEmail);
+    newPrimary.isPrimary = true;
+    const saved = await this.userEmailRepository.save(newPrimary);
 
-    user.primaryEmail = newPrimaryEmail.email;
-    user.primaryEmailId = newPrimaryEmail.id;
-    const updatedUser = await this.userRepository.save(user);
-
-    // Log primary email change
     await this.createAuditLog(
       userId,
       'EMAIL_PRIMARY_CHANGED',
-      `Primary email changed to: ${newPrimaryEmail.email}`,
-      { email: user.primaryEmail },
-      { email: newPrimaryEmail.email },
+      `Primary email changed to: ${newPrimary.email}`,
+      { email: oldPrimary?.email ?? null },
+      { email: newPrimary.email },
       'primaryEmail',
       ipAddress,
       userAgent
     );
 
-    return updatedUser;
+    return saved;
   }
 
   /**
@@ -780,15 +758,15 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    user.isNrcVerified = true;
-    user.verificationStatus = 'VERIFIED';
-    user.lastNrcVerificationAt = new Date();
-
-    if (nrcDocumentPath) {
-      user.nrcDocumentPath = nrcDocumentPath;
-    }
-
-    const updatedUser = await this.userRepository.save(user);
+    // Phase 3: isNrcVerified / nrcDocumentPath / lastNrcVerificationAt are
+    // auth fields and stay on users. verificationStatus is a profile field
+    // and routes to the active profile via the update() splitter.
+    await this.update(userId, {
+      isNrcVerified: true,
+      lastNrcVerificationAt: new Date(),
+      verificationStatus: 'VERIFIED',
+      ...(nrcDocumentPath ? { nrcDocumentPath } : {}),
+    } as any);
 
     // Log NRC verification
     await this.createAuditLog(
@@ -803,7 +781,7 @@ export class UsersService {
       adminId
     );
 
-    return updatedUser;
+    return this.findById(userId);
   }
 
   /**
@@ -827,10 +805,12 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    user.isNrcVerified = false;
-    user.verificationStatus = 'REJECTED';
-
-    const updatedUser = await this.userRepository.save(user);
+    // Phase 3: isNrcVerified stays on users; verificationStatus routes to
+    // the active profile via the update() splitter.
+    await this.update(userId, {
+      isNrcVerified: false,
+      verificationStatus: 'REJECTED',
+    } as any);
 
     // Log NRC verification failure
     await this.createAuditLog(
@@ -846,7 +826,7 @@ export class UsersService {
       { reason }
     );
 
-    return updatedUser;
+    return this.findById(userId);
   }
 
   // ===== ACCOUNT SECURITY =====
@@ -909,9 +889,13 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    user.isActive = false;
-    user.verificationStatus = 'SUSPENDED';
-    const updatedUser = await this.userRepository.save(user);
+    // Phase 3: isActive stays on users; verificationStatus routes to the
+    // active profile via the update() splitter.
+    await this.update(userId, {
+      isActive: false,
+      verificationStatus: 'SUSPENDED',
+    } as any);
+    const updatedUser = await this.findById(userId);
 
     // Log suspension
     await this.createAuditLog(
@@ -949,11 +933,16 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    user.isActive = true;
-    if (user.verificationStatus === 'SUSPENDED') {
-      user.verificationStatus = 'VERIFIED';
+    // Phase 3: isActive stays on users; verificationStatus lives on the
+    // active profile. Read it via flattenWithProfile to know whether to
+    // flip SUSPENDED back to VERIFIED.
+    const flat = await this.flattenWithProfile(user);
+    const patch: Record<string, any> = { isActive: true };
+    if (flat?.verificationStatus === 'SUSPENDED') {
+      patch.verificationStatus = 'VERIFIED';
     }
-    const updatedUser = await this.userRepository.save(user);
+    await this.update(userId, patch as any);
+    const updatedUser = await this.findById(userId);
 
     // Log reactivation
     await this.createAuditLog(
@@ -1093,18 +1082,21 @@ export class UsersService {
       return null;
     }
 
+    // Phase 3: name / email / location / profilePicture / verificationStatus
+    // live on the active profile. flattenWithProfile merges them onto a
+    // copy of the user.
+    const flat: any = await this.flattenWithProfile(user);
     return {
       id: user.id,
       displayId: user.displayId,
-      name: user.name,
       role: user.role,
-      primaryEmail: user.primaryEmail,
-      location: user.location,
-      profilePicture: user.profilePicture,
       isNrcVerified: user.isNrcVerified,
-      verificationStatus: user.verificationStatus,
       isActive: user.isActive,
       createdAt: user.createdAt,
+      name: flat?.name ?? null,
+      primaryEmail: flat?.email ?? null,
+      profilePicture: flat?.profilePicture ?? null,
+      verificationStatus: flat?.verificationStatus ?? null,
     };
   }
 

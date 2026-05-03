@@ -22,6 +22,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user) {
       throw new Error('User not found');
     }
-    return { id: user.id, email: user.primaryEmail, role: user.role, displayId: user.displayId };
+    // Phase 3: email lives on the active profile, not the user row. The JWT
+    // payload already carries the email claim from sign-in / refresh, so use
+    // it directly — avoids an extra DB hit per authenticated request.
+    return { id: user.id, email: payload.email, role: user.role, displayId: user.displayId };
   }
 }
