@@ -267,12 +267,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // — flat-pass the data through, no client-side partitioning.
         const response = await authService.updateProfile(user.id, data);
 
-        // Merge the response into local user state. The backend returns the
-        // full flattened user row (no metadata jsonb anymore — every field
-        // is a typed column after Phase 1).
+        // Merge: prevUser provides the baseline, then the locally-sent
+        // `data` so any fields the backend hides via select:false (notably
+        // `pin`, which is excluded from API responses for security) still
+        // land in client state for in-session checks. The flattened
+        // backend `response` wins last, since it carries server-side
+        // computed fields (e.g. updatedAt, displayId).
         setUser((prevUser) => {
           if (!prevUser) return null;
-          return { ...prevUser, ...response };
+          return { ...prevUser, ...data, ...response };
         });
 
         // Save to pendingProfile as well for redundancy

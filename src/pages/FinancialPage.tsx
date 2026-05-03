@@ -73,6 +73,12 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
     if (isCreatingPin) {
       if (creationStep === 'enter') {
         if (pinInput.length !== 4) return;
+        // Stash the first entry so the confirm step has something to
+        // compare against. Previous code cleared pinInput without
+        // saving it, so confirmPinInput stayed empty forever and the
+        // equality check on the next step always failed — meaning the
+        // PIN was never actually persisted via updateUser.
+        setConfirmPinInput(pinInput);
         setCreationStep('confirm');
         setPinInput('');
       } else {
@@ -81,6 +87,10 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
           await updateUser({ pin: pinInput });
           setIsPinVerified(true);
           setShowPinModal(false);
+          // Reset confirmation state so a re-open of the modal starts
+          // clean (covers the rare "user signs out and a new user
+          // signs in on the same browser tab" path).
+          setConfirmPinInput('');
           alert('PIN created successfully!');
         } else {
           alert('PINs do not match. Please try again.');
