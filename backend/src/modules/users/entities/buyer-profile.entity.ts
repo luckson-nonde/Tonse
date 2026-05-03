@@ -8,6 +8,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
+import { Exclude } from 'class-transformer';
 import { User } from './user.entity';
 
 /**
@@ -106,6 +107,19 @@ export class BuyerProfile {
 
   @Column({ type: 'timestamp', nullable: true })
   rejectedAt: Date;
+
+  /**
+   * 4-digit security PIN that gates access to this profile's financial
+   * surface (virtual account, withdrawals, sensitive ops). Lives on
+   * the profile so a person who role-switches between BUYER and SELLER
+   * profiles can have separate PINs per profile if they choose, and so
+   * the auth row stays purely identity. select:false + @Exclude keep
+   * it out of API responses — verification needs a server-side check
+   * endpoint, never a client-side compare.
+   */
+  @Column({ type: 'varchar', length: 4, nullable: true, select: false })
+  @Exclude({ toPlainOnly: true })
+  pin: string;
 
   @CreateDateColumn()
   createdAt: Date;

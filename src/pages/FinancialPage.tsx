@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import { authService } from '../services/auth/authService';
 import { useLiveQuery } from '../hooks/useLiveQuery';
 import { db } from '../services/api/database';
 import Button from '../components/Button';
@@ -48,7 +49,10 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
   const [momoPhone, setMomoPhone] = useState(user?.phone || '');
 
   useEffect(() => {
-    if (user && !user.pin) {
+    // hasPin is the server-side truth; PIN itself never reaches the
+    // client. First-time users see the create flow; returning users
+    // see the verify flow.
+    if (user && !user.hasPin) {
       setIsCreatingPin(true);
     } else {
       setIsCreatingPin(false);
@@ -101,7 +105,13 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
       }
     } else {
       if (pinInput.length !== 4) return;
-      if (pinInput === user?.pin) {
+      if (!user?.id) {
+        alert('Please sign in again.');
+        return;
+      }
+      // Server-side verify — actual PIN value never travels to the client.
+      const valid = await authService.verifyPin(user.id, pinInput);
+      if (valid) {
         setIsPinVerified(true);
         setShowPinModal(false);
       } else {

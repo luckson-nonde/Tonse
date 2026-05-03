@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Lock, Loader2 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
+import { authService } from '../services/auth/authService';
 import Button from './Button';
 
 interface PinModalProps {
@@ -29,7 +30,10 @@ export default function PinModal({ isOpen, onClose, onSuccess }: PinModalProps) 
       setFirstEntry('');
       setCreationStep('enter');
       setError('');
-      setIsCreating(!user?.pin);
+      // hasPin is the source of truth — published by the backend on
+      // /auth/me and /auth/login. The actual PIN value never reaches
+      // the client.
+      setIsCreating(!user?.hasPin);
     }
   }, [isOpen, user]);
 
@@ -74,7 +78,13 @@ export default function PinModal({ isOpen, onClose, onSuccess }: PinModalProps) 
           }
         }
       } else {
-        if (pin === user?.pin) {
+        // Server-side verify — actual PIN never travels to the client.
+        if (!user?.id) {
+          setError('Please sign in again.');
+          return;
+        }
+        const valid = await authService.verifyPin(user.id, pin);
+        if (valid) {
           onSuccess();
         } else {
           setError('Incorrect PIN. Please try again.');

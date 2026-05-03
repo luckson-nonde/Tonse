@@ -118,13 +118,6 @@ export class User {
   isActive: boolean;
 
   /**
-   * Security PIN (optional, for sensitive ops).
-   */
-  @Column({ type: 'varchar', length: 4, nullable: true, select: false })
-  @Exclude({ toPlainOnly: true })
-  pin: string;
-
-  /**
    * Last Login Timestamp.
    */
   @Column({ type: 'timestamp', nullable: true })

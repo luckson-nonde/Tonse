@@ -165,6 +165,19 @@ export const authService = {
   /**
    * Update user profile
    */
+  /**
+   * Verify a candidate PIN against the active profile's stored PIN.
+   * Server-side compare — the actual PIN never travels back to the
+   * client. Returns true on match, false on mismatch (or no PIN set).
+   */
+  verifyPin: async (userId: string, pin: string): Promise<boolean> => {
+    const response = await apiClient.post<{ valid: boolean }>(
+      `/users/${userId}/pin/verify`,
+      { pin }
+    );
+    return !!response.data?.valid;
+  },
+
   updateProfile: async (userId: string, data: UpdateProfileRequest): Promise<any> => {
     // Sanitize data: remove empty dob to avoid validation errors. Phase 1
     // dropped the metadata jsonb so dob (when present) is at the top level

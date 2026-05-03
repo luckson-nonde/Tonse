@@ -48,7 +48,10 @@ export interface User {
   latitude?: number;
   longitude?: number;
   verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'INCOMPLETE';
-  pin?: string;
+  /** Whether a PIN has been set on the active profile. Backend
+   * publishes this boolean in /auth/me + /auth/login + /users/:id
+   * responses; the actual PIN value never leaves the server. */
+  hasPin?: boolean;
   parentProviderId?: number;
   permissions?: string[];
   mustChangePassword?: boolean;
@@ -267,15 +270,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // — flat-pass the data through, no client-side partitioning.
         const response = await authService.updateProfile(user.id, data);
 
-        // Merge: prevUser provides the baseline, then the locally-sent
-        // `data` so any fields the backend hides via select:false (notably
-        // `pin`, which is excluded from API responses for security) still
-        // land in client state for in-session checks. The flattened
-        // backend `response` wins last, since it carries server-side
-        // computed fields (e.g. updatedAt, displayId).
+        // Merge: prevUser baseline, then locally-sent `data` so any
+        // fields the backend hides via select:false still land in
+        // client state, then the flattened backend `response` wins
+        // last (it carries server-computed booleans like `hasPin` and
+        // timestamps like updatedAt).
+        //
+        // Sensitive secrets are stripped from `data` before the merge —
+        // we never want the literal PIN value in React state. The
+        // server publishes `hasPin: boolean` for create-vs-verify
+        // decisions and a /pin/verify endpoint for the compare itself.
+        const { pin: _stripPin, ...nonSecretData } = data as any;
         setUser((prevUser) => {
           if (!prevUser) return null;
-          return { ...prevUser, ...data, ...response };
+          return { ...prevUser, ...nonSecretData, ...response };
         });
 
         // Save to pendingProfile as well for redundancy

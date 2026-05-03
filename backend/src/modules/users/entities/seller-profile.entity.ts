@@ -8,6 +8,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
+import { Exclude } from 'class-transformer';
 import { User } from './user.entity';
 
 /**
@@ -115,6 +116,16 @@ export class SellerProfile {
 
   @Column({ type: 'numeric', precision: 6, scale: 2, nullable: true })
   radius: number;
+
+  /**
+   * 4-digit security PIN — gates this profile's financial surface.
+   * Lives on the profile (not the auth row) so a user can carry a
+   * different PIN per profile when role-switching. select:false +
+   * @Exclude keep it out of API responses.
+   */
+  @Column({ type: 'varchar', length: 4, nullable: true, select: false })
+  @Exclude({ toPlainOnly: true })
+  pin: string;
 
   @CreateDateColumn()
   createdAt: Date;

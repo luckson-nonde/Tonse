@@ -30,7 +30,8 @@ const USER_AUTH_FIELDS = [
   'isActive',
   'isNrcVerified',
   'nrcDocumentPath',
-  'pin',
+  // `pin` lives on the active profile now (per the auth-row-is-identity-only
+  // contract). Splitter routes pin to profile via the default branch.
   'lastLoginAt',
   'lastNrcVerificationAt',
   'createdAt',
@@ -132,19 +133,61 @@ export class UsersService {
    *
    * The profile's id is exposed as `activeProfileId` (already present on
    * the user row) so write paths can target the right row directly.
+   *
+   * `pin` lives on the profile but is marked select:false / @Exclude
+   * so it never travels over the wire. To let the frontend decide
+   * between "set a new PIN" vs "enter your existing PIN", we expose a
+   * boolean `hasPin` flag derived from a minimal pin-only query.
    */
   async flattenWithProfile(user: User | null | undefined): Promise<any> {
     if (!user) return null;
     const profile = await this.loadActiveProfile(user);
     if (!profile) return user;
+
+    // Side query: select only the pin column so we can publish
+    // hasPin without ever shipping the value itself.
+    let hasPin = false;
+    const repo = this.profileRepoFor(user.activeProfileType);
+    if (repo && user.activeProfileId) {
+      const pinRow = await (repo as any)
+        .createQueryBuilder('p')
+        .select('p.id')
+        .addSelect('p.pin')
+        .where('p.id = :id', { id: user.activeProfileId })
+        .getOne();
+      hasPin = !!pinRow?.pin;
+    }
+
     const {
       id: _profId,
       userId: _profUserId,
       createdAt: _pCreated,
       updatedAt: _pUpdated,
+      pin: _pin, // belt-and-braces — should never be present, but strip if it is
       ...profileFields
     } = profile as any;
-    return { ...user, ...profileFields };
+    return { ...user, ...profileFields, hasPin };
+  }
+
+  /**
+   * Verify a candidate PIN against the active profile's stored PIN.
+   * Server-side compare keeps the actual PIN value off the wire.
+   * Returns true on match, false otherwise (including when no PIN
+   * has been set yet).
+   */
+  async verifyProfilePin(userId: string, candidate: string): Promise<boolean> {
+    if (!candidate || candidate.length !== 4) return false;
+    const user = await this.findById(userId);
+    if (!user?.activeProfileId || !user?.activeProfileType) return false;
+    const repo = this.profileRepoFor(user.activeProfileType);
+    if (!repo) return false;
+    const row = await (repo as any)
+      .createQueryBuilder('p')
+      .select('p.id')
+      .addSelect('p.pin')
+      .where('p.id = :id', { id: user.activeProfileId })
+      .getOne();
+    return !!row?.pin && row.pin === candidate;
   }
 
   /** Split a flat update payload into auth fields (for users) and profile

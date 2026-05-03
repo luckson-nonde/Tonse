@@ -2,12 +2,14 @@ import {
   Controller,
   Get,
   Patch,
+  Post,
   Delete,
   Body,
   Param,
   Query,
   UseGuards,
   Request,
+  ForbiddenException,
   HttpStatus,
   HttpCode,
 } from '@nestjs/common';
@@ -78,5 +80,26 @@ export class UsersController {
       throw new Error('Unauthorized');
     }
     await this.usersService.remove(id);
+  }
+
+  /**
+   * Verify a candidate PIN against the active profile's stored PIN.
+   * Compare happens server-side so the actual PIN value never reaches
+   * the wire — the response is a plain boolean. Used by the financial
+   * surface (PinModal / FinancialPage) when the user is unlocking
+   * access, paired with the hasPin flag from /auth/me.
+   */
+  @Post(':id/pin/verify')
+  @UseGuards(JwtAuthGuard)
+  async verifyPin(
+    @Param('id') id: string,
+    @Body() body: { pin?: string },
+    @Request() req,
+  ) {
+    if (req.user.id !== id) {
+      throw new ForbiddenException();
+    }
+    const valid = await this.usersService.verifyProfilePin(id, body?.pin ?? '');
+    return { valid };
   }
 }
