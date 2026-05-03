@@ -284,9 +284,33 @@ export default function BuyerDashboard() {
 
     try {
       const isLabour = pendingInquiry.isLabour === true;
+
+      // Resolve the category string the backend will store. Fall through
+      // multiple sources because the inquiry flow has two shapes:
+      //   - non-labour passes an array into categories
+      //   - labour passes a singular category
+      // and either could be missing if the user took an unusual path
+      // (deep-link, quick-action, etc.). Empty strings inside the array
+      // are filtered before joining.
+      const resolvedCategory =
+        (isLabour ? pendingInquiry.category : '') ||
+        pendingInquiry.categories?.filter(Boolean).join(', ') ||
+        pendingInquiry.category ||
+        '';
+
+      if (!resolvedCategory) {
+        alert(
+          "We couldn't read a category for this inquiry. Go back to the categories step, pick what you're inquiring about, then try again."
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
       const categoryName = isLabour
         ? pendingInquiry.category
-        : pendingInquiry.categories?.[pendingInquiry.categories.length - 1] || 'Inquiry';
+        : pendingInquiry.categories?.[pendingInquiry.categories.length - 1] ||
+          resolvedCategory ||
+          'Inquiry';
       const title = pendingInquiry.attributes?.brand
         ? `${pendingInquiry.attributes.brand} ${pendingInquiry.attributes.model || ''} Request`
         : `${categoryName} Request`;
@@ -309,9 +333,7 @@ export default function BuyerDashboard() {
         title,
         description: pendingInquiry.attributes?.description || 'No description provided.',
         items: JSON.stringify([]),
-        category: isLabour
-          ? pendingInquiry.category || ''
-          : pendingInquiry.categories?.join(', ') || '',
+        category: resolvedCategory,
         location: `${locationData.city}, ${locationData.province}`,
         province: locationData.province,
         city: locationData.city,
