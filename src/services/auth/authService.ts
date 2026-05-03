@@ -33,9 +33,13 @@ export interface RegisterRequest {
 export interface RegisterResponse {
   success: boolean;
   message?: string;
+  /** Access / refresh tokens issued at register time so the client can
+   *  immediately authenticate follow-up onboarding writes (updateProfile,
+   *  category junction writes) without a separate /auth/login round-trip. */
+  accessToken?: string;
+  refreshToken?: string;
   // Backend returns the freshly-flattened user (auth row merged with the
-  // active profile). Callers care most about user.id so they can apply
-  // post-register profile updates before the auto-login fires.
+  // active profile).
   user: {
     id: string;
     email?: string;
@@ -91,6 +95,16 @@ export const authService = {
     const response = await apiClient.post<RegisterResponse>('/auth/register', sanitizedData);
 
     if (response.data) {
+      // Persist the tokens issued by /auth/register so the very next
+      // authenticated call (post-register updateProfile, junction
+      // writes) attaches a Bearer header. Without this the client
+      // would get 401, the apiClient interceptor would clear tokens
+      // and force-redirect to /login, and the seller's onboarding
+      // would die mid-flow.
+      const { accessToken, refreshToken } = response.data;
+      if (accessToken && refreshToken) {
+        tokenManager.setTokens(accessToken, refreshToken);
+      }
       return response.data;
     }
 

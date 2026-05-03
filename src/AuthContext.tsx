@@ -212,8 +212,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ) => {
       try {
         setError(null);
-        // Register with identity verification fields (NRC, profile picture,
-        // NRC document photo, and DOB).
+        // /auth/register issues access/refresh tokens AND the flattened user
+        // in one shot. authService.register persists the tokens via
+        // tokenManager so the immediately-following updateProfile call
+        // attaches an authenticated Bearer header. Previously register
+        // returned only the user, the post-register updateProfile call hit
+        // the backend without a token, the apiClient 401 interceptor
+        // force-redirected to /login, and the seller's onboarding died
+        // before they could even reach the next step.
         const registerResponse = await authService.register({
           email,
           password,
@@ -226,16 +232,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ...(nrcDocument ? { nrcDocument } : {}),
         });
 
-        // Apply extra profile fields to the brand-new user record BEFORE the
-        // auto-login. Done synchronously here so we bypass the closure race
-        // where Register.tsx's updateUser ref still pointed at user=null
-        // when called immediately after register(). The backend wraps the
-        // user inside { success, user, message } (see RegisterResponse) and
-        // the global TransformInterceptor adds another { statusCode, data }
-        // envelope on top — apiClient strips that first envelope, so we
-        // read user.id, NOT id directly.
         const newUserId = registerResponse?.user?.id;
-        if (newUserId && extraProfile && Object.keys(extraProfile).length > 0) {
+        if (!newUserId) throw new Error('Registration response missing user id');
+
+        // Apply the extra profile (categoryIds, location, subRole, etc.)
+        // synchronously while we hold the registration tokens. After this
+        // returns, the seller_profile_categories rows exist and the
+        // archetype cache is computed.
+        if (extraProfile && Object.keys(extraProfile).length > 0) {
           try {
             await authService.updateProfile(newUserId, extraProfile);
           } catch (e) {
@@ -245,16 +249,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        // Auto-login after registration. By this point the backend record
-        // already has every field, so AuthContext.user lands fully populated.
-        await login(email, password);
+        // Pull the now-merged user (auth row flattened with the active
+        // profile, including categoryIds and hasPin) so client state
+        // mirrors the backend without firing /auth/login again. setUser
+        // here keeps the user logged in across the rest of the
+        // onboarding chain (Register → CompanyDocuments → …).
+        let pendingProfile: Record<string, any> = {};
+        try {
+          const stored = localStorage.getItem('pendingProfile');
+          if (stored) pendingProfile = JSON.parse(stored);
+        } catch (e) {}
+
+        try {
+          const fresh = await authService.getCurrentUser();
+          if (fresh) {
+            setUser({
+              ...pendingProfile,
+              ...(fresh as any),
+              id: fresh.id,
+              email: fresh.email || email,
+              name: fresh.name || name,
+              role: (fresh.role as Role) || (role as Role),
+            });
+          } else {
+            // Defensive fallback — if /auth/me returned nothing, hydrate
+            // from the register response so the app at least knows who
+            // is signed in.
+            setUser({
+              ...pendingProfile,
+              ...(registerResponse.user as any),
+              id: newUserId,
+              email,
+              name,
+              role: role as Role,
+            });
+          }
+        } catch (e) {
+          setUser({
+            ...pendingProfile,
+            ...(registerResponse.user as any),
+            id: newUserId,
+            email,
+            name,
+            role: role as Role,
+          });
+        }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Registration failed';
         setError(errorMessage);
         throw err;
       }
     },
-    [login]
+    []
   );
 
   const updateUser = React.useCallback(

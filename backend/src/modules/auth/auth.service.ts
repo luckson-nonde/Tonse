@@ -125,8 +125,28 @@ export class AuthService {
       // the active profile row created by usersService.register. Flatten to
       // include them in the response.
       const flat = await this.usersService.flattenWithProfile(user);
+
+      // Issue auth tokens immediately so the client can authenticate the
+      // follow-up onboarding writes (updateProfile, junction-table category
+      // writes) without a separate /auth/login round-trip. Previously
+      // register returned only the user, the frontend then tried to
+      // updateProfile *before* logging in, that call returned 401, and the
+      // apiClient interceptor force-redirected to /login — cutting the
+      // seller out of their own onboarding right after account creation.
+      const accessToken = this.generateAccessToken(
+        user.id,
+        user.displayId,
+        email,
+        user.role,
+        user.nrcNumber,
+      );
+      const refreshToken = this.generateRefreshToken(user.id);
+      await this.usersService.updateRefreshToken(user.id, refreshToken);
+
       return {
         success: true,
+        accessToken,
+        refreshToken,
         user: flat,
         message: 'Registration successful. Your account is pending NRC verification by an admin.',
       };

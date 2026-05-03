@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth, type Role } from '../AuthContext';
+import { authService } from '../services/auth/authService';
 import {
   Key,
   Eye,
@@ -335,9 +336,22 @@ export default function Register() {
         }
 
         if (isCompany) {
+          // Company sellers / service-providers still have one more
+          // onboarding step (CompanyDocuments). Stay logged in so the
+          // junction-table writes there are authenticated; the final
+          // submit on that page logs them out.
           navigate('/register/company-documents');
         } else {
-          navigate(role === 'BUYER' ? '/buyer' : '/provider');
+          // Buyers (and non-company providers) finish onboarding here.
+          // Per the product rule, end-of-onboarding logs the user out
+          // so the very next session is a fully-hydrated re-login.
+          try {
+            await authService.logout();
+          } catch (e) {
+            // Local tokens are cleared by authService.logout's
+            // catch-all anyway; carry on with the redirect.
+          }
+          navigate('/login', { replace: true });
         }
       } catch (err: any) {
         setError(err.message || 'Failed to register');

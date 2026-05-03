@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import { authService } from '../services/auth/authService';
 import {
   CheckCircle2,
   Loader2,
@@ -232,10 +233,22 @@ export default function CompanyDocuments() {
     return true;
   };
 
-  const navigateAfter = () => {
-    // Phase 2: LABOUR was demoted into SERVICE_PROVIDER which lives at /provider.
-    if (user?.role === 'BUYER') navigate('/buyer');
-    else navigate('/provider');
+  const navigateAfter = async () => {
+    // End-of-onboarding gate: the seller has now provided every piece
+    // we ask for at signup (identity, location, credentials, business
+    // documents). Per the product rule, this is where the session
+    // ends — clear tokens server-side + locally and bounce them to
+    // /login so the next entry into the app is a clean, fully-
+    // hydrated authenticated session against the freshly-created
+    // profile + categories junction rows.
+    try {
+      await authService.logout();
+    } catch (e) {
+      // Even if the server call fails (network blip, expired token),
+      // the local fallthrough in authService.logout already cleared
+      // tokens. Don't block the redirect.
+    }
+    navigate('/login', { replace: true });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -249,7 +262,7 @@ export default function CompanyDocuments() {
         incorporationCertUrl: certUrl,
         verificationStatus: 'PENDING',
       } as any);
-      navigateAfter();
+      await navigateAfter();
     } catch (err: any) {
       setError(err.message || 'Failed to submit documents.');
     } finally {
@@ -261,7 +274,7 @@ export default function CompanyDocuments() {
     setIsLoading(true);
     try {
       await updateUser({ verificationStatus: 'INCOMPLETE' } as any);
-      navigateAfter();
+      await navigateAfter();
     } catch (err: any) {
       setError(err.message || 'Failed to skip.');
     } finally {
