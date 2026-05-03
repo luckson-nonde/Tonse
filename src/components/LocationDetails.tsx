@@ -252,6 +252,11 @@ export default function LocationDetails({
   const [address, setAddress] = useState('');
   const [latitude, setLatitude] = useState<number | undefined>();
   const [longitude, setLongitude] = useState<number | undefined>();
+  // Accuracy radius reported by the browser, in metres. Smaller is better;
+  // GPS-chip readings on a phone are typically <30m, Wi-Fi triangulation
+  // on a desktop is often hundreds-to-thousands of metres. We surface this
+  // so the user can decide whether to trust the pin or refine manually.
+  const [accuracyMeters, setAccuracyMeters] = useState<number | undefined>();
   const [radius, setRadius] = useState<number>(5); // Default 5km
   const [isLocating, setIsLocating] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
@@ -267,10 +272,24 @@ export default function LocationDetails({
     setCity(''); // Reset city when province changes
   };
 
+  /**
+   * Capture the user's location at the highest accuracy the device will
+   * give us. Onboarding pins the user's home/work coordinates, so the
+   * pin needs to land on the actual user — getCurrentPosition often
+   * returns a coarse first-fix (Wi-Fi triangulation), which can be
+   * kilometres off. We use watchPosition to keep collecting readings as
+   * the GPS chip refines its lock and pick the smallest-accuracy one.
+   *
+   * Stop conditions (whichever fires first):
+   *  - a reading lands with accuracy <= 25m (GPS-grade, accept and stop)
+   *  - 12 seconds elapse (commit to the best reading we've seen)
+   *  - the API errors before any reading lands (treat as failure)
+   */
   const handleUseMyLocation = () => {
     setIsLocating(true);
     setGeoError(null);
     setResolvedNote(null);
+    setAccuracyMeters(undefined);
 
     if (!navigator.geolocation) {
       setGeoError('Geolocation is not supported by your browser.');
@@ -278,56 +297,93 @@ export default function LocationDetails({
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
+    let bestPosition: GeolocationPosition | null = null;
+    let watchId: number | null = null;
+    let settled = false;
 
-        if (!isInZambia(lat, lng)) {
-          setGeoError(
-            'Tonse is currently available only in Zambia. Switch to Manual to enter a Zambian address.'
-          );
-          setIsLocating(false);
-          return;
-        }
+    const cleanup = () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+    };
 
-        setLatitude(lat);
-        setLongitude(lng);
-        setUseGps(true);
+    const commit = async (position: GeolocationPosition) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      const accuracy = position.coords.accuracy;
+
+      if (!isInZambia(lat, lng)) {
+        setGeoError(
+          'Tonse is currently available only in Zambia. Switch to Manual to enter a Zambian address.'
+        );
         setIsLocating(false);
+        return;
+      }
 
-        // Reverse-geocode and auto-fill the manual fields. The actual select
-        // values stay populated even if the user switches back to Manual mode,
-        // so they can refine without losing GPS-detected context.
-        setIsResolving(true);
-        const resolved = await reverseGeocode(lat, lng);
-        setIsResolving(false);
+      setLatitude(lat);
+      setLongitude(lng);
+      setAccuracyMeters(accuracy);
+      setUseGps(true);
+      setIsLocating(false);
 
-        if (!resolved) {
-          setResolvedNote(
-            'Coordinates captured — please confirm province and city manually.'
-          );
-          return;
+      // Reverse-geocode and auto-fill the manual fields. The actual select
+      // values stay populated even if the user switches back to Manual mode,
+      // so they can refine without losing GPS-detected context.
+      setIsResolving(true);
+      const resolved = await reverseGeocode(lat, lng);
+      setIsResolving(false);
+
+      if (!resolved) {
+        setResolvedNote(
+          'Coordinates captured — please confirm province and city manually.'
+        );
+        return;
+      }
+      if (resolved.province) setProvince(resolved.province);
+      if (resolved.city) setCity(resolved.city);
+      if (resolved.address) setAddress(resolved.address);
+
+      if (resolved.province && resolved.city) {
+        setResolvedNote(`${resolved.city}, ${resolved.province} Province`);
+      } else if (resolved.province) {
+        setResolvedNote(
+          `${resolved.province} Province · refine city manually${
+            resolved.rawLocality ? ` (detected: ${resolved.rawLocality})` : ''
+          }`
+        );
+      } else {
+        setResolvedNote(
+          `Detected: ${resolved.rawState || 'Zambia'} — please confirm in Manual.`
+        );
+      }
+    };
+
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const acc = position.coords.accuracy;
+        if (!bestPosition || acc < bestPosition.coords.accuracy) {
+          bestPosition = position;
+          // Surface the live best accuracy so the user sees the pin sharpen.
+          setAccuracyMeters(acc);
         }
-        if (resolved.province) setProvince(resolved.province);
-        if (resolved.city) setCity(resolved.city);
-        if (resolved.address) setAddress(resolved.address);
-
-        if (resolved.province && resolved.city) {
-          setResolvedNote(`${resolved.city}, ${resolved.province} Province`);
-        } else if (resolved.province) {
-          setResolvedNote(
-            `${resolved.province} Province · refine city manually${
-              resolved.rawLocality ? ` (detected: ${resolved.rawLocality})` : ''
-            }`
-          );
-        } else {
-          setResolvedNote(
-            `Detected: ${resolved.rawState || 'Zambia'} — please confirm in Manual.`
-          );
+        // Good enough — accept immediately so we don't make the user wait.
+        if (acc <= 25) {
+          commit(position);
         }
       },
       (error) => {
+        // If we already have a reading, ignore late errors — we'll commit
+        // the best one when the timer fires. Only escalate when we truly
+        // have nothing.
+        if (bestPosition) return;
+        if (settled) return;
+        settled = true;
+        cleanup();
         console.error('Geolocation error:', error);
         const msg =
           error.code === error.PERMISSION_DENIED
@@ -338,8 +394,22 @@ export default function LocationDetails({
         setGeoError(msg);
         setIsLocating(false);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     );
+
+    // Hard ceiling on the watch window. Whatever's best after this elapses
+    // is what we commit. If still empty, we surfaced an error path above.
+    window.setTimeout(() => {
+      if (settled) return;
+      if (bestPosition) {
+        commit(bestPosition);
+      } else {
+        settled = true;
+        cleanup();
+        setGeoError('GPS timed out — try again, or switch to Manual.');
+        setIsLocating(false);
+      }
+    }, 12000);
   };
 
   const handleComplete = () => {
@@ -426,11 +496,38 @@ export default function LocationDetails({
               </div>
               <div className="mt-3 text-center">
                 <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A] mb-0.5">
-                  {isResolving ? 'Resolving location…' : geoError ? 'GPS Issue' : 'GPS Active'}
+                  {isLocating
+                    ? 'Locking GPS…'
+                    : isResolving
+                      ? 'Resolving location…'
+                      : geoError
+                        ? 'GPS Issue'
+                        : 'GPS Active'}
                 </p>
                 {latitude !== undefined && longitude !== undefined && (
                   <p className="text-[12px] font-mono text-[#1a1612]/55 tabular-nums">
-                    {latitude.toFixed(4)}, {longitude.toFixed(4)}
+                    {latitude.toFixed(6)}, {longitude.toFixed(6)}
+                  </p>
+                )}
+                {accuracyMeters !== undefined && (
+                  <p
+                    className={`text-[10px] font-bold uppercase tracking-[0.18em] mt-1 tabular-nums ${
+                      accuracyMeters <= 30
+                        ? 'text-emerald-600'
+                        : accuracyMeters <= 150
+                          ? 'text-[#C9973A]'
+                          : 'text-rose-500'
+                    }`}
+                  >
+                    ± {accuracyMeters < 1000
+                      ? `${Math.round(accuracyMeters)}m`
+                      : `${(accuracyMeters / 1000).toFixed(1)}km`}{' '}
+                    accuracy
+                  </p>
+                )}
+                {accuracyMeters !== undefined && accuracyMeters > 150 && !isLocating && (
+                  <p className="text-[11px] text-rose-500/80 mt-1.5 max-w-[260px] mx-auto leading-snug">
+                    GPS lock is loose. Move outside, re-scan, or switch to Manual to enter the address.
                   </p>
                 )}
               </div>
