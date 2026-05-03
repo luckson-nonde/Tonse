@@ -202,20 +202,17 @@ export class AuthService {
       userAgent
     );
 
+    // Phase 3: merge the active profile into the user response so the
+    // frontend's existing reads (user.name, user.email, user.companyName,
+    // user.verificationStatus, etc.) all see the right data — sourced from
+    // the profile row, with auth fields kept on user.
+    const flat = await this.usersService.flattenWithProfile(user);
+
     return {
       success: true,
       accessToken,
       refreshToken,
-      user: {
-        id: user.id,
-        displayId: user.displayId,
-        nrcNumber: user.nrcNumber,
-        email: user.primaryEmail,
-        name: user.name,
-        role: user.role,
-        isNrcVerified: user.isNrcVerified,
-        verificationStatus: user.verificationStatus,
-      },
+      user: flat,
     };
   }
 

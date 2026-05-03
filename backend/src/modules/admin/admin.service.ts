@@ -200,6 +200,10 @@ export class AdminService {
         `Role '${user.role}' is not eligible for verification`
       );
     }
+    // Phase 3: usersService.update() splits the payload — verificationStatus,
+    // verifiedAt, verificationRejectionReason are profile fields and route to
+    // the user's active profile row. isActive and isNrcVerified are auth
+    // fields and stay on the users row.
     await this.usersService.update(id, {
       verificationStatus: 'VERIFIED',
       isActive: true,
@@ -208,7 +212,8 @@ export class AdminService {
       verificationRejectionReason: null,
     } as any);
     this.logger.log(`User ${id} verified.`);
-    return this.usersService.findById(id);
+    const fresh = await this.usersService.findById(id);
+    return this.usersService.flattenWithProfile(fresh);
   }
 
   async rejectUser(id: string, reason?: string) {
@@ -228,7 +233,8 @@ export class AdminService {
       verifiedAt: null,
     } as any);
     this.logger.log(`User ${id} verification rejected: ${reason ?? '(no reason)'}`);
-    return this.usersService.findById(id);
+    const fresh = await this.usersService.findById(id);
+    return this.usersService.flattenWithProfile(fresh);
   }
 
   // ───── Cross-cutting list endpoints ─────────────────────────────────────

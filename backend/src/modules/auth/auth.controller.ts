@@ -38,10 +38,14 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async getCurrentUser(@Request() req) {
     const user = await this.usersService.findById(req.user.id);
-    if (user) {
-      delete user.password;
-      delete user.refreshToken;
+    if (!user) return null;
+    // Phase 3: merge the active profile into the response so frontend reads
+    // like user.companyName, user.name, user.verificationStatus all work.
+    const flat = await this.usersService.flattenWithProfile(user);
+    if (flat) {
+      delete flat.password;
+      delete flat.refreshToken;
     }
-    return user;
+    return flat;
   }
 }

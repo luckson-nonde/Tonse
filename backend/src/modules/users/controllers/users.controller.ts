@@ -22,12 +22,14 @@ export class UsersController {
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   async getProfile(@Request() req) {
-    return this.usersService.findById(req.user.id);
+    const user = await this.usersService.findById(req.user.id);
+    return this.usersService.flattenWithProfile(user);
   }
 
   @Get(':id')
   async findOne(@Param('id') id: string) {
-    return this.usersService.findById(id);
+    const user = await this.usersService.findById(id);
+    return this.usersService.flattenWithProfile(user);
   }
 
   @Get()
@@ -40,7 +42,13 @@ export class UsersController {
       page: query.page,
       limit: query.limit,
     };
-    return this.usersService.findAll(filters);
+    const result = await this.usersService.findAll(filters);
+    // Phase 3: each row in the listing also gets its active profile merged
+    // so admin search / list views show the right name, email, companyName.
+    const flatData = await Promise.all(
+      result.data.map((u) => this.usersService.flattenWithProfile(u))
+    );
+    return { ...result, data: flatData };
   }
 
   @Patch(':id')
@@ -54,7 +62,11 @@ export class UsersController {
     if (req.user.id !== id) {
       throw new Error('Unauthorized');
     }
-    return this.usersService.update(id, updateUserDto);
+    // service.update() splits the payload (auth fields → users, everything
+    // else → active profile) per the Phase 3 contract and returns the user.
+    // Flatten before responding so the frontend sees the merged shape.
+    const user = await this.usersService.update(id, updateUserDto);
+    return this.usersService.flattenWithProfile(user);
   }
 
   @Delete(':id')

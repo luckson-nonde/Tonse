@@ -5,13 +5,41 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, QueryBuilder } from 'typeorm';
+import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { UserEmail } from './entities/user-email.entity';
 import { IdentityAudit } from './entities/identity-audit.entity';
+import { BuyerProfile } from './entities/buyer-profile.entity';
+import { SellerProfile } from './entities/seller-profile.entity';
+import { ServiceProviderProfile } from './entities/service-provider-profile.entity';
 import { UserDisplayIdUtil } from '../../utils/user-display-id.util';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as crypto from 'crypto';
+
+// Phase 3 contract: users table holds ONLY these fields. Anything else is
+// profile data and lives in buyer_profiles / seller_profiles /
+// service_provider_profiles. The frontend doesn't see this split — auth
+// responses merge active profile into user before returning.
+const USER_AUTH_FIELDS = [
+  'id',
+  'nrcNumber',
+  'displayId',
+  'password',
+  'refreshToken',
+  'role',
+  'isActive',
+  'isNrcVerified',
+  'nrcDocumentPath',
+  'pin',
+  'lastLoginAt',
+  'lastNrcVerificationAt',
+  'createdAt',
+  'updatedAt',
+  'activeProfileId',
+  'activeProfileType',
+];
+
+type ActiveProfile = BuyerProfile | SellerProfile | ServiceProviderProfile;
 
 /**
  * Users Service
@@ -38,8 +66,131 @@ export class UsersService {
     private readonly userEmailRepository: Repository<UserEmail>,
 
     @InjectRepository(IdentityAudit)
-    private readonly identityAuditRepository: Repository<IdentityAudit>
+    private readonly identityAuditRepository: Repository<IdentityAudit>,
+
+    @InjectRepository(BuyerProfile)
+    private readonly buyerProfileRepository: Repository<BuyerProfile>,
+
+    @InjectRepository(SellerProfile)
+    private readonly sellerProfileRepository: Repository<SellerProfile>,
+
+    @InjectRepository(ServiceProviderProfile)
+    private readonly serviceProviderProfileRepository: Repository<ServiceProviderProfile>
   ) {}
+
+  // ===== PROFILE HELPERS (Phase 3) ============================================
+
+  /**
+   * Resolve the repository for a given profile type. Centralised so we don't
+   * scatter `if/else if/else` over every read/write site.
+   */
+  private profileRepoFor(type: string): Repository<ActiveProfile> | null {
+    switch (type) {
+      case 'BUYER':
+        return this.buyerProfileRepository as Repository<ActiveProfile>;
+      case 'SELLER':
+        return this.sellerProfileRepository as Repository<ActiveProfile>;
+      case 'SERVICE_PROVIDER':
+        return this.serviceProviderProfileRepository as Repository<ActiveProfile>;
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Default profile type for a role. Used when bootstrapping the active
+   * profile pointer at registration time.
+   */
+  private defaultProfileTypeForRole(role: string): string | null {
+    switch (role) {
+      case 'BUYER':
+        return 'BUYER';
+      case 'SELLER':
+        return 'SELLER';
+      case 'SERVICE_PROVIDER':
+        return 'SERVICE_PROVIDER';
+      default:
+        return null;
+    }
+  }
+
+  /** Load the active profile row for a user (or null if none). */
+  async loadActiveProfile(user: User): Promise<ActiveProfile | null> {
+    if (!user?.activeProfileId || !user?.activeProfileType) return null;
+    const repo = this.profileRepoFor(user.activeProfileType);
+    if (!repo) return null;
+    return (repo as any).findOne({ where: { id: user.activeProfileId } });
+  }
+
+  /**
+   * Merge the active profile fields into the user object so the wire shape
+   * the frontend receives stays flat. Profile is authoritative for any
+   * overlapping field — that's the whole point of Phase 3 — so it spreads
+   * AFTER user. Auth-only fields are safe because the profile doesn't
+   * carry them. Profile bookkeeping (its own id / userId / created /
+   * updated) is stripped before merging so it doesn't clobber the user's.
+   *
+   * The profile's id is exposed as `activeProfileId` (already present on
+   * the user row) so write paths can target the right row directly.
+   */
+  async flattenWithProfile(user: User | null | undefined): Promise<any> {
+    if (!user) return null;
+    const profile = await this.loadActiveProfile(user);
+    if (!profile) return user;
+    const {
+      id: _profId,
+      userId: _profUserId,
+      createdAt: _pCreated,
+      updatedAt: _pUpdated,
+      ...profileFields
+    } = profile as any;
+    return { ...user, ...profileFields };
+  }
+
+  /** Split a flat update payload into auth fields (for users) and profile
+   *  fields (for the active profile). Auth keys are the ones in
+   *  USER_AUTH_FIELDS — everything else is profile. */
+  private splitUpdatePayload(data: Record<string, any>): {
+    userPatch: Record<string, any>;
+    profilePatch: Record<string, any>;
+  } {
+    const userPatch: Record<string, any> = {};
+    const profilePatch: Record<string, any> = {};
+    for (const key of Object.keys(data)) {
+      if (USER_AUTH_FIELDS.includes(key)) {
+        userPatch[key] = data[key];
+      } else {
+        profilePatch[key] = data[key];
+      }
+    }
+    return { userPatch, profilePatch };
+  }
+
+  /**
+   * Create a profile row matching `role` for the given user, then point the
+   * user's activeProfileId / activeProfileType at the new row. Returns the
+   * created profile.
+   */
+  async createProfileForRole(
+    userId: string,
+    role: string,
+    profileFields: Record<string, any> = {}
+  ): Promise<ActiveProfile | null> {
+    const type = this.defaultProfileTypeForRole(role);
+    if (!type) return null;
+    const repo = this.profileRepoFor(type);
+    if (!repo) return null;
+
+    const profile = (repo as any).create({ userId, ...profileFields });
+    const saved = await (repo as any).save(profile);
+
+    await this.userRepository.update(
+      { id: userId },
+      { activeProfileId: saved.id, activeProfileType: type }
+    );
+
+    return saved;
+  }
 
   // ===== BACKWARD COMPATIBILITY METHODS (kept for existing code) =====
 
@@ -80,8 +231,43 @@ export class UsersService {
     await this.userRepository.update({ id: userId }, { refreshToken: null });
   }
 
+  /**
+   * Apply a profile update. Phase 3 contract: auth fields go to users,
+   * everything else routes to the active profile. Caller passes a flat
+   * payload — splitting happens here.
+   *
+   * If the user has no active profile yet (legacy row, or just-created),
+   * we lazily create one matching their role and write the profile fields
+   * to it.
+   */
   async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
-    await this.userRepository.update({ id }, updateUserDto);
+    const { userPatch, profilePatch } = this.splitUpdatePayload(updateUserDto as any);
+
+    if (Object.keys(userPatch).length > 0) {
+      await this.userRepository.update({ id }, userPatch);
+    }
+
+    if (Object.keys(profilePatch).length > 0) {
+      const user = await this.userRepository.findOne({ where: { id } });
+      if (user) {
+        let activeId = user.activeProfileId;
+        let activeType = user.activeProfileType;
+        if (!activeId || !activeType) {
+          // Lazily create the matching profile row.
+          const created = await this.createProfileForRole(id, user.role, profilePatch);
+          if (!created) {
+            // Role with no profile concept (e.g. ADMIN) — nothing to write.
+            return this.findById(id);
+          }
+        } else {
+          const repo = this.profileRepoFor(activeType);
+          if (repo) {
+            await (repo as any).update({ id: activeId }, profilePatch);
+          }
+        }
+      }
+    }
+
     return this.findById(id);
   }
 
@@ -170,7 +356,11 @@ export class UsersService {
       );
     }
 
-    // Create new user
+    // Create new user. Phase 3 dual-write: profile fields (name, email, phone,
+    // profilePicture, dateOfBirth, verificationStatus) still get written to
+    // users while the old columns exist. Phase 3c drops them; register at
+    // that point will only populate auth fields here. The matching profile
+    // row is also created below so the new code paths see consistent data.
     const user = this.userRepository.create({
       nrcNumber: normalizedNrc,
       name,
@@ -203,6 +393,18 @@ export class UsersService {
     // Update user with primary email reference
     savedUser.primaryEmailId = savedUserEmail.id;
     await this.userRepository.save(savedUser);
+
+    // Phase 3: also create the matching profile row and point activeProfileId
+    // at it. Profile fields are populated from the same data so the auth
+    // response (which reads from the profile) is consistent immediately.
+    await this.createProfileForRole(savedUser.id, role, {
+      name,
+      email: email.toLowerCase(),
+      phone,
+      profilePicture: profilePicture || null,
+      dateOfBirth: dateOfBirth || null,
+      verificationStatus: 'PENDING',
+    });
 
     // Log the registration event
     await this.createAuditLog(
