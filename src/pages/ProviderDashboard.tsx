@@ -308,91 +308,24 @@ export default function ProviderDashboard() {
     // Filter by Delete Status
     filtered = filtered.filter((lead) => !lead.deletedBy?.includes(providerId));
 
-    // Filter by Role/SubRole Nature (strictly block Product vs Service leakage).
-    // Phase 2: only two provider-side roles remain in the enum.
-    const isProviderRole = ['SELLER', 'SERVICE_PROVIDER'].includes(user?.role || '');
-    if (isProviderRole) {
-      filtered = filtered.filter((lead) => {
-        // If the lead has no category, we can't reliably filter by nature here
-        if (!lead.category) return true;
-
-        // Determine Provider Nature — businessType wins because it already
-        // accounts for category-driven events/entertainment detection (a
-        // SELLER who picked DJs is functionally a SERVICE provider even
-        // though their stored role is SELLER).
-        let providerNature: 'PRODUCT' | 'SERVICE' | 'BOTH' = 'BOTH';
-        const natureBiz = getBusinessType(user as any);
-        if (
-          natureBiz === 'EVENTS' ||
-          natureBiz === 'ENTERTAINMENT' ||
-          natureBiz === 'PRO_SERVICES' ||
-          natureBiz === 'REPAIR_SERVICE' ||
-          natureBiz === 'LABOUR' ||
-          user?.subRole === 'SERVICE_SELLER' ||
-          user?.role === 'SERVICE_PROVIDER'
-        )
-          providerNature = 'SERVICE';
-        else if (user?.subRole === 'PRODUCT_SELLER' || user?.subRole === 'SUPPLIER_SELLER')
-          providerNature = 'PRODUCT';
-        else if (user?.subRole === 'HYBRID_SELLER') providerNature = 'BOTH';
-        const leadCats = lead.category.split(',').map((c) => c.trim());
-        const leadCatIds = leadCats
-          .map((name) => CATEGORIES_DB.find((c) => c.name.toLowerCase() === name.toLowerCase())?.id)
-          .filter(Boolean) as string[];
-
-        // If we can't find the category in DB, we use a string-based guess for nature
-        const natures =
-          leadCatIds.length > 0
-            ? leadCatIds.map((id) => getCategoryNature(id))
-            : [
-                lead.category.toLowerCase().includes('phone') ||
-                lead.category.toLowerCase().includes('laptop')
-                  ? 'PRODUCT'
-                  : 'SERVICE',
-              ];
-
-        if (providerNature === 'PRODUCT') {
-          return natures.some((n) => n === 'PRODUCT' || n === 'BOTH');
-        }
-        if (providerNature === 'SERVICE') {
-          return natures.some((n) => n === 'SERVICE' || n === 'BOTH');
-        }
-        return true; // BOTH / HYBRID
-      });
-    }
-
-    // Phase: matching — the previous "filter every lead by
-    // user.categories overlap via isRelatedCategory" block was a
-    // client-side category gate that duplicated what /inquiries/leads/
-    // me already does server-side via the recursive ancestry CTE.
-    // Keeping it would silently re-introduce the "Electronics seller
-    // sees zero leads" bug whenever user.categories was missing
-    // (which it now is — categories live on the profile junction
-    // table, not on user). Leaving this gate stripped: the server is
-    // the authoritative matcher.
-
-    // Variant-level filter — REPAIR_SERVICE shop only sees repair-tagged
-    // inquiries; RETAIL_PRODUCTS shop only sees buy-new inquiries; mixed
-    // and other types fall through unchanged. Resolves the user's
-    // architectural rule: specification (sells new vs repairs) drives
-    // which leads they actually receive.
-    const businessType = getBusinessType(user as any);
-    if (businessType === 'REPAIR_SERVICE' || businessType === 'RETAIL_PRODUCTS') {
-      const wantRepair = businessType === 'REPAIR_SERVICE';
-      filtered = filtered.filter((lead) => {
-        // Direct-targeted leads bypass variant filtering
-        if (lead.targetedProviderId === effectiveProviderId) return true;
-        if (!lead.category) return false;
-        const leadCats = lead.category.split(',').map((c) => c.trim());
-        // A lead is "repair" if any category name carries a repair variant.
-        // Otherwise we treat it as a buy-new inquiry.
-        const leadIsRepair = leadCats.some((c) => isRepairVariant(c));
-        return wantRepair ? leadIsRepair : !leadIsRepair;
-      });
-    }
+    // The previous Provider-Nature and Variant-Level client-side filters
+    // both keyed off lead.category (the legacy comma-joined display-name
+    // string). After the matching refactor inquiries no longer carry
+    // that field — they have categoryIds (junction-table backed) — so
+    // both filters short-circuited to "drop the lead." That's why the
+    // matched inquiry showed up on the right-rail calendar (which uses
+    // useMatchedLeads directly) but the BUYER INQUIRIES tile and the
+    // section card were empty.
+    //
+    // Both filters are intentionally removed. The server's MatchingService
+    // is now the single authority on which inquiries reach a seller. The
+    // PRODUCT-vs-SERVICE nature gate and the buy-new vs repair variant
+    // gate are legitimate business rules but they belong server-side as
+    // proper filters on the inquiry_categories join, not as fragile
+    // client-side string parsing on a field that no longer exists.
 
     return filtered;
-  }, [user, allLeads, myQuotes, effectiveProviderId]);
+  }, [allLeads, myQuotes, effectiveProviderId]);
 
   // Collection Handshake State
   const [scanningQuoteId, setScanningQuoteId] = useState<number | null>(null);
