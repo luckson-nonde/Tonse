@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
@@ -20,7 +20,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: any) {
     const user = await this.usersService.findById(payload.sub);
     if (!user) {
-      throw new Error('User not found');
+      // Throwing a plain Error here surfaces as a 500. UnauthorizedException
+      // surfaces as a 401, which the frontend apiClient already handles by
+      // clearing tokens + redirecting to /login — exactly what we want when
+      // the JWT references a deleted user (e.g. stale localStorage tokens
+      // left over from a wiped dev DB).
+      throw new UnauthorizedException('User not found');
     }
     // Phase 3: email lives on the active profile, not the user row. The JWT
     // payload already carries the email claim from sign-in / refresh, so use

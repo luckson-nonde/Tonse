@@ -212,6 +212,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ) => {
       try {
         setError(null);
+        // Registration is always a fresh-session entry. Any token already
+        // sitting in localStorage is from a previous identity (e.g. a
+        // dev session whose user got wiped on a DB reset). Carrying it
+        // into /auth/register doesn't hurt the register call itself
+        // (no auth required), but the immediately-following
+        // updateProfile would attach the stale Bearer, the JWT guard's
+        // findById would return null, and the request would fail with
+        // "User not found." Clearing here makes registration robust
+        // to any prior browser state.
+        tokenManager.clearTokens();
+        setUser(null);
+
         // /auth/register issues access/refresh tokens AND the flattened user
         // in one shot. authService.register persists the tokens via
         // tokenManager so the immediately-following updateProfile call
