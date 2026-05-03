@@ -109,11 +109,25 @@ export default function Register() {
 
     // Step 1: Personal Information & Identity
     const [logo, setLogo] = useState('');
-    const [nrcDocument, setNrcDocument] = useState('');
+    // NRC document is captured side-by-side: front and back as separate
+    // base64 data URLs, serialised to a JSON string when sent to the
+    // backend so a single nrcDocumentPath text column holds both.
+    const [nrcDocument, setNrcDocument] = useState<{ front?: string; back?: string }>({});
     const [nrc, setNrc] = useState('');
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
     const [dob, setDob] = useState('');
+
+    // Serialised form for the network — empty string when neither side
+    // has been captured (lets the backend skip the column write
+    // entirely instead of storing an empty JSON envelope).
+    const nrcDocumentPayload =
+      nrcDocument.front || nrcDocument.back
+        ? JSON.stringify({
+            ...(nrcDocument.front ? { front: nrcDocument.front } : {}),
+            ...(nrcDocument.back ? { back: nrcDocument.back } : {}),
+          })
+        : '';
 
     // Step 2: Location State
     const [province, setProvince] = useState('');
@@ -280,7 +294,7 @@ export default function Register() {
             categories: initialCategories,
             nrc,
             profilePicture: logo,
-            ...(nrcDocument ? { nrcDocumentPath: nrcDocument } : {}),
+            ...(nrcDocumentPayload ? { nrcDocumentPath: nrcDocumentPayload } : {}),
           };
 
           await updateUser(updateData);
@@ -312,7 +326,7 @@ export default function Register() {
             logo,
             dob,
             extraProfile,
-            nrcDocument
+            nrcDocumentPayload
           );
         }
 

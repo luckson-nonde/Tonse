@@ -1,22 +1,32 @@
 import React, { useRef, useState } from 'react';
 import { Check, FileText, Upload, X, AlertCircle } from 'lucide-react';
 
+export interface NrcDocumentSides {
+  front?: string;
+  back?: string;
+}
+
 interface NrcDocumentCaptureProps {
-  /** Base64 data URL of the captured NRC document (or empty string). */
-  value: string;
-  onCapture: (imageData: string) => void;
+  /** Captured base64 data URLs for each side. Empty / missing entries
+   * mean that side hasn't been captured yet. */
+  value: NrcDocumentSides;
+  onCapture: (value: NrcDocumentSides) => void;
 }
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB ceiling on the original file
 const ACCEPTED_TYPES = 'image/jpeg,image/png,image/webp,image/heic,image/heif';
 
+type Side = 'front' | 'back';
+
 /**
- * Compact NRC document upload control. The user picks (or photographs,
- * via the file input's `capture` attribute on mobile) a clear photo of
- * their NRC document. The file is read into a base64 data URL and
- * handed back through onCapture; the caller is responsible for piping
- * it to the registration endpoint, where it lands on
- * users.nrcDocumentPath.
+ * Two-side NRC document capture. Both sides are captured through the
+ * same tile — clicking "Upload" picks whichever side hasn't been done
+ * yet, the tile updates to show progress, and individual "Replace"
+ * actions appear once a side has been captured.
+ *
+ * The upstream value is a structured { front, back } object; the
+ * registration submit step serialises it before sending to the
+ * backend.
  *
  * Visually mirrors CompactIdentityCapture so the two identity-step
  * controls feel like a pair.
@@ -24,9 +34,24 @@ const ACCEPTED_TYPES = 'image/jpeg,image/png,image/webp,image/heic,image/heif';
 export default function NrcDocumentCapture({ value, onCapture }: NrcDocumentCaptureProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  // Which side the next file selection lands on. Defaults to whichever
+  // side is still missing; explicitly settable via the per-side
+  // "Replace" action so the user can re-shoot one side without
+  // touching the other.
+  const [pendingSide, setPendingSide] = useState<Side | null>(null);
 
-  const openPicker = () => {
+  const hasFront = !!value.front;
+  const hasBack = !!value.back;
+  const completed = (hasFront ? 1 : 0) + (hasBack ? 1 : 0);
+
+  const nextSide = (): Side => (hasFront ? 'back' : 'front');
+
+  const openPicker = (side?: Side) => {
     setError(null);
+    setPendingSide(side ?? nextSide());
+    // Reset value first so picking the same file twice still triggers
+    // onChange (browsers de-dupe identical paths otherwise).
+    if (inputRef.current) inputRef.current.value = '';
     inputRef.current?.click();
   };
 
@@ -40,13 +65,15 @@ export default function NrcDocumentCapture({ value, onCapture }: NrcDocumentCapt
       setError('File is too large (max 5 MB). Try a smaller image.');
       return;
     }
+    const targetSide: Side = pendingSide ?? nextSide();
     const reader = new FileReader();
     reader.onerror = () => setError("Couldn't read that file. Try another image.");
     reader.onload = () => {
       const result = reader.result;
       if (typeof result === 'string') {
-        onCapture(result);
+        onCapture({ ...value, [targetSide]: result });
         setError(null);
+        setPendingSide(null);
       } else {
         setError("Couldn't read that file. Try another image.");
       }
@@ -54,49 +81,119 @@ export default function NrcDocumentCapture({ value, onCapture }: NrcDocumentCapt
     reader.readAsDataURL(file);
   };
 
-  return (
-    <>
-      {value ? (
-        <div className="flex items-center gap-3 p-3.5 rounded-2xl border border-[#C9973A]/35 bg-white shadow-[0_4px_18px_-14px_rgba(201,151,58,0.5)]">
-          <div className="w-12 h-12 rounded-xl overflow-hidden ring-1 ring-[#C9973A]/20 bg-[#faf6ee] shrink-0">
-            <img src={value} alt="" className="w-full h-full object-cover" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600 mb-0.5 flex items-center gap-1.5">
-              <Check className="w-3 h-3" strokeWidth={3} /> NRC Document Attached
-            </p>
-            <p className="text-[12px] font-medium text-[#1a1612]/60 leading-tight">
-              Admin will verify against your NRC number.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={openPicker}
-            className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#C9973A] hover:text-[#B08432] transition-colors shrink-0"
-          >
-            Replace
-          </button>
+  const sideLabel = (side: Side) => (side === 'front' ? 'Front' : 'Back');
+
+  const idleCopy =
+    completed === 0
+      ? {
+          title: 'NRC document — Front side',
+          subtitle: 'Step 1 of 2 · clear photo of the front',
+          cta: 'Upload front',
+        }
+      : completed === 1 && hasFront
+        ? {
+            title: 'NRC document — Back side',
+            subtitle: 'Step 2 of 2 · now capture the back',
+            cta: 'Upload back',
+          }
+        : {
+            title: 'NRC document — Front side',
+            subtitle: 'Step 1 of 2 · clear photo of the front',
+            cta: 'Upload front',
+          };
+
+  // Rendered when at least one side is captured — shows thumbnails for
+  // each side and per-side action (Replace if captured, Upload if missing).
+  const SideThumb = ({ side, src }: { side: Side; src?: string }) => {
+    const captured = !!src;
+    return (
+      <div
+        className={`flex items-center gap-3 p-3 rounded-2xl border bg-white ${
+          captured
+            ? 'border-[#C9973A]/35 shadow-[0_4px_14px_-12px_rgba(201,151,58,0.5)]'
+            : 'border-[#e8e4dc]'
+        }`}
+      >
+        <div
+          className={`w-12 h-12 rounded-xl overflow-hidden ring-1 ${
+            captured ? 'ring-[#C9973A]/20 bg-[#faf6ee]' : 'ring-[#e8e4dc] bg-[#f5f2ee]'
+          } flex items-center justify-center shrink-0`}
+        >
+          {captured ? (
+            <img src={src} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <FileText className="w-5 h-5 text-[#C9973A]/50" strokeWidth={2} />
+          )}
         </div>
-      ) : (
+        <div className="flex-1 min-w-0">
+          <p
+            className={`text-[10px] font-black uppercase tracking-[0.18em] mb-0.5 flex items-center gap-1.5 ${
+              captured ? 'text-emerald-600' : 'text-[#1a1612]/45'
+            }`}
+          >
+            {captured ? (
+              <Check className="w-3 h-3" strokeWidth={3} />
+            ) : (
+              <span className="w-3 h-3 rounded-full border border-[#1a1612]/25" />
+            )}
+            {sideLabel(side)} {captured ? 'captured' : 'pending'}
+          </p>
+          <p className="text-[11px] text-[#1a1612]/55 leading-tight truncate">
+            {captured ? 'Looks good — submitted.' : 'Tap to upload'}
+          </p>
+        </div>
         <button
           type="button"
-          onClick={openPicker}
+          onClick={() => openPicker(side)}
+          className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#C9973A] hover:text-[#B08432] transition-colors shrink-0"
+        >
+          {captured ? 'Replace' : 'Upload'}
+        </button>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      {completed === 0 ? (
+        <button
+          type="button"
+          onClick={() => openPicker('front')}
           className="w-full flex items-center gap-3 p-3.5 rounded-2xl border border-[#e8e4dc] bg-brand-white hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)] transition-all duration-200 text-left"
         >
           <div className="w-11 h-11 rounded-xl bg-[#C9973A]/10 text-[#C9973A] flex items-center justify-center shrink-0">
             <FileText className="w-5 h-5" strokeWidth={2} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-bold text-[#1a1612] leading-tight">NRC document photo</p>
-            <p className="text-[11px] text-[#1a1612]/55 mt-0.5">
-              Upload a clear shot · matches your NRC number
-            </p>
+            <p className="text-[13px] font-bold text-[#1a1612] leading-tight">{idleCopy.title}</p>
+            <p className="text-[11px] text-[#1a1612]/55 mt-0.5">{idleCopy.subtitle}</p>
           </div>
           <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#C9973A] shrink-0 flex items-center gap-1">
             <Upload className="w-3 h-3" strokeWidth={2.5} />
-            Upload
+            {idleCopy.cta}
           </span>
         </button>
+      ) : (
+        <div className="space-y-2">
+          {/* Progress meter — gives the user a sense of "how far through" */}
+          <div className="flex items-center justify-between px-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#1a1612]/55">
+              NRC Document
+            </p>
+            <p className="text-[10px] font-bold text-[#1a1612]/55 tabular-nums">
+              {completed} of 2 captured
+            </p>
+          </div>
+          <div className="h-1 rounded-full bg-[#f1ede5] overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-[#D5A547] to-[#C9973A] transition-all duration-300"
+              style={{ width: `${(completed / 2) * 100}%` }}
+            />
+          </div>
+
+          <SideThumb side="front" src={value.front} />
+          <SideThumb side="back" src={value.back} />
+        </div>
       )}
 
       {error && (
