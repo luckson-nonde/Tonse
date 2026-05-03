@@ -31,10 +31,12 @@ export class UpdateUserDto {
   @MaxLength(50)
   nrc?: string;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  location?: string;
+  // `location` was a composite "City, Province" display string. No
+  // profile entity actually carries that column — `province` + `city`
+  // are the real storage. Any caller that sent `location` 500'd
+  // updateProfile with "Property location was not found in
+  // SellerProfile." Dropped from the DTO so forbidNonWhitelisted
+  // catches it cleanly with a 400 if anyone re-introduces the field.
 
   @IsOptional()
   @IsArray()

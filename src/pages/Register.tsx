@@ -288,8 +288,12 @@ export default function Register() {
             name,
             phone,
             dob,
-            country: 'Zambia',
-            location: city && province ? `${city}, ${province}` : '',
+            // Province + city are the matching scope. The composite
+            // "City, Province" display string was redundant — no
+            // profile entity carries a `location` column, so writing
+            // it here triggered "Property location was not found in
+            // SellerProfile" from TypeORM. Display surfaces compose
+            // it on the fly from the two columns.
             province,
             city,
             area: address,
@@ -314,7 +318,10 @@ export default function Register() {
             province,
             city,
             area: address,
-            location: city && province ? `${city}, ${province}` : '',
+            // Composite "City, Province" string is derived for display
+            // — not a column on any profile entity. Sending it here
+            // 500'd updateProfile with "Property location was not
+            // found in SellerProfile."
             latitude,
             longitude,
             radius,
