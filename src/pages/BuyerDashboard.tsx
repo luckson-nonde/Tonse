@@ -3,7 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../AuthContext';
 import { useDashboard } from '../DashboardContext';
-import { createInquiry, fetchUserInquiries, deleteInquiry } from '../services/api/inquiryService';
+import {
+  createInquiry,
+  fetchUserInquiries,
+  deleteInquiry,
+  type CreateInquiryPayload,
+} from '../services/api/inquiryService';
 import { useUserInquiries } from '../hooks/useInquiries';
 import { useUserQuotes } from '../hooks/useQuotes';
 import { markQuoteAsRead, archiveQuote, deleteQuote } from '../services/api/quoteService';
@@ -268,10 +273,13 @@ export default function BuyerDashboard() {
       alert('Missing location data. Please go back and re-enter your location.');
       return;
     }
-    if (locationData.latitude == null || locationData.longitude == null) {
-      alert('Location coordinates missing. Please re-capture GPS on the location step.');
+    if (!locationData.province || !locationData.city) {
+      alert('Province and city are required. Please go back and complete the location step.');
       return;
     }
+    // Coordinates are optional. When they're absent, the inquiry
+    // broadcasts to every provider in the chosen city; when present,
+    // matching narrows to providers within `radius` km of the point.
     setIsSubmitting(true);
 
     try {
@@ -295,7 +303,9 @@ export default function BuyerDashboard() {
         },
       };
 
-      const inquiryData = {
+      const hasCoords =
+        locationData.latitude != null && locationData.longitude != null;
+      const inquiryData: CreateInquiryPayload = {
         title,
         description: pendingInquiry.attributes?.description || 'No description provided.',
         items: JSON.stringify([]),
@@ -303,13 +313,17 @@ export default function BuyerDashboard() {
           ? pendingInquiry.category || ''
           : pendingInquiry.categories?.join(', ') || '',
         location: `${locationData.city}, ${locationData.province}`,
-        latitude: locationData.latitude,
-        longitude: locationData.longitude,
-        radius: locationData.radius ?? 5,
+        province: locationData.province,
+        city: locationData.city,
         status: 'OPEN',
         preferences: JSON.stringify(preferencesWithPayment),
         attributes: JSON.stringify(pendingInquiry.attributes || {}),
         processType: pendingInquiry.processType || 'STANDARD',
+        ...(hasCoords && {
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          radius: locationData.radius ?? 5,
+        }),
       };
 
       await createInquiry(inquiryData);

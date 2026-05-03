@@ -12,10 +12,18 @@ export interface CreateInquiryPayload {
   description: string;
   items: string; // JSON string
   category: string;
+  /** Human-readable "City, Province" for display. */
   location: string;
-  latitude: number;
-  longitude: number;
-  radius: number;
+  /** Province + city are the matching scope. The city is the destination
+   *  the inquiry resolves against; without coords below, the backend
+   *  broadcasts to every provider in this city. */
+  province?: string;
+  city?: string;
+  /** Optional coordinate refinement. When set, the backend narrows
+   *  matching to providers within `radius` km of the point. */
+  latitude?: number;
+  longitude?: number;
+  radius?: number;
   status: string;
   preferences: string; // JSON string
   attributes: string; // JSON string
@@ -199,20 +207,4 @@ export async function recordInquiryView(
     console.warn('recordInquiryView failed (non-fatal):', error);
     return null;
   }
-}
-
-
-export interface CreateInquiryPayload {
-  title: string;
-  description: string;
-  items: string; // JSON string
-  category: string;
-  location: string;
-  latitude: number;
-  longitude: number;
-  radius: number;
-  status: string;
-  preferences: string; // JSON string
-  attributes: string; // JSON string
-  processType: string;
 }

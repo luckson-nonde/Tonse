@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   MapPin,
   ChevronDown,
@@ -13,50 +13,6 @@ import {
   AlertCircle,
   Check,
 } from 'lucide-react';
-
-/**
- * Best-effort detection of whether the device probably has a real GPS
- * chip. There's no reliable browser API for this — the
- * navigator.geolocation surface is the same on every platform, but
- * actual accuracy depends on hardware (GPS chip vs Wi-Fi/IP
- * triangulation).
- *
- * We trust the user-agent string as the primary signal: phones and
- * tablets reliably have GPS, desktops reliably don't. We deliberately
- * do NOT fall back to touch / coarse-pointer detection — Chromium
- * exposes 'ontouchstart' on plain Windows desktops without touch
- * hardware, and even Surface laptops with touchscreens almost never
- * have a GPS chip. The minority of desktops that do (cellular
- * laptops, GPS dongles) can opt in via the "Try GPS →" link.
- *
- * iPadOS is the one platform where the UA lies — Safari sends a
- * Mac-style UA by default. We sniff multi-touch (maxTouchPoints > 1)
- * combined with a Mac UA as the giveaway, since macOS proper has
- * maxTouchPoints === 0.
- *
- * Returns:
- *   'likely'   — phone or tablet, GPS hardware almost always present
- *   'unlikely' — desktop / laptop, default to Manual
- *
- * Server-side render: returns 'unlikely' (safe default — Manual
- * works for every device).
- */
-function detectGpsCapability(): 'likely' | 'unlikely' {
-  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
-    return 'unlikely';
-  }
-  const ua = navigator.userAgent || '';
-  if (/Android|iPhone|iPad|iPod|Windows Phone|Mobile/i.test(ua)) {
-    return 'likely';
-  }
-  // iPadOS spoofs Mac UA — distinguish via touchpoints.
-  const maxTouchPoints =
-    typeof navigator.maxTouchPoints === 'number' ? navigator.maxTouchPoints : 0;
-  if (/Macintosh/i.test(ua) && maxTouchPoints > 1) {
-    return 'likely';
-  }
-  return 'unlikely';
-}
 
 interface LocationDetailsProps {
   onBack?: () => void;
@@ -308,23 +264,13 @@ export default function LocationDetails({
   const [geoError, setGeoError] = useState<string | null>(null);
   const [resolvedNote, setResolvedNote] = useState<string | null>(null);
 
-  // Device-class flag: 'likely' on phones / tablets / touch-first laptops,
-  // 'unlikely' on desktops with a fine pointer. Drives whether we expose
-  // the GPS toggle in the segmented control. Resolved once on mount —
-  // it's purely capability-based, not user state, so no need to watch.
-  const [gpsCapability, setGpsCapability] = useState<'likely' | 'unlikely'>(
-    'unlikely'
-  );
-  // Desktop opt-in escape hatch: when the user explicitly asks to try GPS
-  // on a chip-less device (rare, but some Windows laptops with cellular
-  // modems do have GPS), we reveal the toggle anyway.
-  const [gpsForcedAvailable, setGpsForcedAvailable] = useState(false);
-
-  useEffect(() => {
-    setGpsCapability(detectGpsCapability());
-  }, []);
-
-  const showGpsToggle = gpsCapability === 'likely' || gpsForcedAvailable;
+  // GPS coordinates are an OPTIONAL refinement on top of province + city.
+  // The form always exposes the GPS toggle so the user can choose to pin
+  // a precise point — useful even on desktops where the underlying API
+  // gives coarser readings, since the user might know their exact lat/lng
+  // (e.g. from Google Maps) and just wants to try once. The accuracy
+  // tier badges below ("This device has no GPS chip…") tell them when
+  // the reading isn't precise enough to trust.
 
   const provinces = Object.keys(ZAMBIA_DATA).sort();
   const cities = province ? ZAMBIA_DATA[province].sort() : [];
@@ -506,23 +452,19 @@ export default function LocationDetails({
   };
 
   const handleComplete = () => {
-    // If GPS is available on this device and the user is still in Manual
-    // mode, take them through GPS once first — a real fix is preferable
-    // to a typed address. On devices without GPS we accept the manual
-    // entry directly; forcing a scan that can't return useful coordinates
-    // is just friction.
-    if (!useGps && showGpsToggle) {
-      handleUseMyLocation();
-      return;
-    }
-
+    // Province + city are the only requirements — the city is the inquiry's
+    // destination scope. Coordinates are an optional refinement: when set,
+    // the backend can match providers within `radius` km of the point;
+    // when blank, matching falls back to "all providers in this city".
+    if (!province || !city) return;
+    const hasCoords = latitude !== undefined && longitude !== undefined;
     onComplete({
       province,
       city,
       address,
       latitude,
       longitude,
-      radius: useGps && showRadius ? radius : undefined,
+      radius: hasCoords && showRadius ? radius : undefined,
     });
   };
 
@@ -547,12 +489,10 @@ export default function LocationDetails({
         </span>
       </div>
 
-      {/* Mode Selector — only when the device has a credible chance of
-          returning useful GPS coordinates. On a desktop with no chip we
-          hide the toggle entirely so the user isn't tempted to use a
-          mode that returns ±10km readings. They can still opt in via
-          the "Try GPS anyway" link below the manual form. */}
-      {showGpsToggle && (
+      {/* Mode Selector — Manual is the default, GPS is an optional
+          refinement. Always rendered so the user can pin coordinates
+          even from a desktop (the GPS panel surfaces the accuracy
+          tier so they can decide whether to trust the reading). */}
       <div className="flex p-[3px] bg-[#f1ede5] rounded-full">
         <button
           type="button"
@@ -582,7 +522,6 @@ export default function LocationDetails({
           GPS
         </button>
       </div>
-      )}
 
       <div className="relative">
         {useGps ? (
@@ -847,24 +786,25 @@ export default function LocationDetails({
                 <label className={floatingLabel}>Address (Optional)</label>
               </div>
             </div>
-            {/* Desktop opt-in: most laptops have no GPS chip and the toggle
-                is hidden, but a few (Windows tablets, laptops with cellular
-                modems) do — this lets a knowing user reveal it without us
-                showing a toggle that fails for everyone else. */}
-            {!showGpsToggle && (
-              <div className="flex items-center justify-center gap-2 pt-1">
-                <span className="text-[11px] text-[#1a1612]/45">
-                  Have GPS hardware on this device?
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setGpsForcedAvailable(true)}
-                  className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#C9973A] hover:underline"
-                >
-                  Try GPS →
-                </button>
-              </div>
-            )}
+            {/* Optional refinement nudge — coordinates aren't required, but
+                they let providers price delivery and match more precisely.
+                Without coords, matching falls back to "all providers in
+                this city". */}
+            <div className="flex items-center justify-center gap-2 pt-1">
+              <span className="text-[11px] text-[#1a1612]/45">
+                Want a tighter match?
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setUseGps(true);
+                  if (latitude === undefined) handleUseMyLocation();
+                }}
+                className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#C9973A] hover:underline"
+              >
+                Pin GPS →
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -894,20 +834,17 @@ export default function LocationDetails({
         </div>
       </div>
 
-      {/* Submit */}
+      {/* Submit — province + city are the only requirements. Coordinates
+          are optional refinement: when present they sharpen matching,
+          when absent the inquiry broadcasts to every provider in the
+          chosen city. */}
       <button
         type="button"
         onClick={handleComplete}
-        disabled={!useGps && (!province || !city)}
+        disabled={!province || !city}
         className="group w-full h-[58px] mt-2 shadow-[0_12px_28px_-8px_rgba(201,151,58,0.4)] disabled:shadow-none text-[13px] font-sans font-bold text-white bg-gradient-to-b from-[#D5A547] to-[#C9973A] hover:from-[#C9973A] hover:to-[#B08432] disabled:from-[#e8e4dc] disabled:to-[#e0dccf] disabled:text-[#1a1612]/30 disabled:cursor-not-allowed transition-all active:scale-[0.98] rounded-2xl uppercase tracking-[0.22em] flex justify-center items-center gap-2"
       >
-        {!useGps && showGpsToggle ? (
-          <>
-            Next · Capture GPS Location <span className="text-base leading-none">→</span>
-          </>
-        ) : (
-          submitLabel
-        )}
+        {submitLabel}
       </button>
     </div>
   );

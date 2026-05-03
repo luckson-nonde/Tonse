@@ -43,8 +43,22 @@ export class Inquiry {
   @Column({ type: 'varchar', length: 50 })
   category: string;
 
+  /** Human-readable "City, Province" snapshot for display. */
   @Column({ type: 'varchar', length: 255 })
   location: string;
+
+  /**
+   * Province + city are the inquiry's matching scope. The city is the
+   * destination the inquiry resolves against; without coordinates
+   * below, the backend broadcasts to every provider in this city.
+   * Coordinates are an optional refinement that narrows matching to a
+   * radius around the point.
+   */
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  province: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  city: string;
 
   @Column({ type: 'decimal', precision: 10, scale: 6, nullable: true })
   latitude: number;

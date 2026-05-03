@@ -37,6 +37,22 @@ export class CreateInquiryDto {
   @MaxLength(255)
   location: string;
 
+  /**
+   * Province + city are the inquiry's destination scope. City is what
+   * the matching system broadcasts against when no coordinates are
+   * provided (default behaviour: every provider in that city sees the
+   * inquiry). When coordinates are present, matching narrows further.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  province?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  city?: string;
+
   @IsOptional()
   @IsNumber()
   latitude?: number;
