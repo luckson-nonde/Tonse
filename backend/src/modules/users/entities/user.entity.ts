@@ -330,6 +330,32 @@ export class User {
   @Column({ type: 'timestamp', nullable: true })
   lastNrcVerificationAt: Date;
 
+  // ===== Active-profile pointer (Phase 3) =====
+  // A user can carry multiple profile rows simultaneously (a buyer_profiles
+  // AND a seller_profiles, etc.) — these two columns mark which one is
+  // currently "active" for routing, dashboard rendering, and lead matching.
+  // The type column tells us which table to look at; we don't FK against a
+  // specific table because the target varies. Phase 3 makes role-switching
+  // schema-ready; the actual switch endpoint ships later.
+
+  /**
+   * UUID of the row in the matching profile table (buyer_profiles /
+   * seller_profiles / service_provider_profiles) that's currently active.
+   */
+  @Column({ type: 'uuid', nullable: true })
+  activeProfileId: string;
+
+  /**
+   * Which profile table activeProfileId references. Mirrors the role enum
+   * minus ADMIN (admins have no business profile).
+   */
+  @Column({
+    type: 'enum',
+    enum: ['BUYER', 'SELLER', 'SERVICE_PROVIDER'],
+    nullable: true,
+  })
+  activeProfileType: string;
+
   /**
    * Account Creation Timestamp
    */
