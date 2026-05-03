@@ -53,8 +53,15 @@ export interface User {
    * publishes this boolean in /auth/me + /auth/login + /users/:id
    * responses; the actual PIN value never leaves the server. */
   hasPin?: boolean;
-  parentProviderId?: number;
+  /** Owner's user.id when this user is staff. NULL on top-level
+   *  accounts. Surfaced by /auth/me + /auth/login. */
+  parentProviderId?: string;
   permissions?: string[];
+  /** Restrict this staff member to one archetype's leads view
+   *  (e.g. 'REPAIR'). NULL on owners and on staff with no
+   *  restriction. Read by ProviderLeadsView's variant toggle and
+   *  by the post-login route to auto-jump to the right view. */
+  assignedArchetype?: string | null;
   mustChangePassword?: boolean;
   createdAt?: string;
   virtualAccountNumber?: string;
@@ -64,7 +71,7 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   register: (
     email: string,
     password: string,
@@ -191,6 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 
       setUser(finalUser);
+      return finalUser;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Login failed';
       setError(errorMessage);

@@ -9,6 +9,13 @@ interface LeadsFilters {
   province?: string;
   page?: number;
   limit?: number;
+  /**
+   * Restrict results to inquiries whose categories carry this archetype
+   * (e.g. 'REPAIR' returns only repair-tagged leads). Used by the
+   * variant toggle in ProviderLeadsView and by staff users whose
+   * `assignedArchetype` is set. NULL / undefined = no restriction.
+   */
+  variant?: string;
 }
 
 interface ProfileSelector {
@@ -105,6 +112,25 @@ export class MatchingService {
       params.push(filters.province);
     }
 
+    // Variant filter — narrow to inquiries whose category carries the
+    // requested archetype. The inner sub-select joins inquiry_categories
+    // → categories to read archetype, so we keep this in the existing
+    // sub-select rather than splatting a JOIN into the outer query.
+    let variantSubquery = `
+      SELECT DISTINCT ic."inquiryId" FROM inquiry_categories ic
+      WHERE ic."categoryId" = ANY($1::varchar[])
+    `;
+    if (filters.variant) {
+      const variantPlaceholder = `$${++p}`;
+      params.push(filters.variant);
+      variantSubquery = `
+        SELECT DISTINCT ic."inquiryId" FROM inquiry_categories ic
+        JOIN categories c ON c.id = ic."categoryId"
+        WHERE ic."categoryId" = ANY($1::varchar[])
+          AND c.archetype = ${variantPlaceholder}::categories_archetype_enum
+      `;
+    }
+
     const limitPlaceholder = `$${++p}`;
     const offsetPlaceholder = `$${++p}`;
 
@@ -114,20 +140,14 @@ export class MatchingService {
     // dedup happens in a sub-select on i.id alone instead.
     const inquirySql = `
       SELECT i.* FROM inquiries i
-      WHERE i.id IN (
-        SELECT DISTINCT ic."inquiryId" FROM inquiry_categories ic
-        WHERE ic."categoryId" = ANY($1::varchar[])
-      )
+      WHERE i.id IN (${variantSubquery})
       ${where}
       ORDER BY i."createdAt" DESC
       LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}
     `;
     const countSql = `
       SELECT COUNT(*)::int AS count FROM inquiries i
-      WHERE i.id IN (
-        SELECT DISTINCT ic."inquiryId" FROM inquiry_categories ic
-        WHERE ic."categoryId" = ANY($1::varchar[])
-      )
+      WHERE i.id IN (${variantSubquery})
       ${where}
     `;
 
@@ -140,7 +160,7 @@ export class MatchingService {
     const total = countRows[0]?.count || 0;
 
     this.logger.log(
-      `Leads query: profile=${selector.type}/${selector.profileId} matchedCategories=[${matchedCategoryIds.length}] → ${rows.length} inquiries (total ${total})`,
+      `Leads query: profile=${selector.type}/${selector.profileId} matchedCategories=[${matchedCategoryIds.length}] variant=${filters.variant ?? '(none)'} → ${rows.length} inquiries (total ${total})`,
     );
 
     return { data: rows, total, matchedCategoryIds };

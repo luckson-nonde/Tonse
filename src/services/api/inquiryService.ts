@@ -169,6 +169,13 @@ export async function fetchLeadsForMe(filters?: {
   province?: string;
   page?: number;
   limit?: number;
+  /**
+   * Restrict to leads whose category carries this archetype (e.g.
+   * 'REPAIR' returns only repair-tagged leads). Driven by the variant
+   * toggle in ProviderLeadsView. Staff with assignedArchetype have
+   * their value enforced server-side regardless of what's passed here.
+   */
+  variant?: string;
 }): Promise<InquiryResponse[]> {
   try {
     const qs = new URLSearchParams();
@@ -177,6 +184,7 @@ export async function fetchLeadsForMe(filters?: {
     if (filters?.province) qs.set('province', filters.province);
     if (filters?.page) qs.set('page', String(filters.page));
     if (filters?.limit) qs.set('limit', String(filters.limit));
+    if (filters?.variant) qs.set('variant', filters.variant);
     const url = qs.toString() ? `/inquiries/leads/me?${qs}` : '/inquiries/leads/me';
 
     const response = await apiClient.get<{

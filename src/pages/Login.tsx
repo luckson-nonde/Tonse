@@ -28,8 +28,17 @@ export default function Login() {
     setError('');
     setIsLoading(true);
     try {
-      await login(email, password);
-      navigate('/');
+      const loggedIn = await login(email, password);
+      // Auto-route team members to their leads view. Staff with
+      // assignedArchetype have the variant locked server-side, so the
+      // landing tab is unambiguous; full staff (parentProviderId set
+      // but no archetype assigned) also benefit from landing on
+      // /provider where the schema-merged dashboard renders.
+      if (loggedIn?.parentProviderId) {
+        navigate('/provider?tab=leads');
+      } else {
+        navigate('/');
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to login');
     } finally {

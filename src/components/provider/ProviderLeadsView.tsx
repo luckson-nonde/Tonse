@@ -183,6 +183,15 @@ interface ProviderLeadsViewProps {
   quotingInquiryId: number | null;
   itemPrices: Record<string, number>;
   venueSpaces: any[];
+  /** Variant toggle (Phase 2.2): owner's archetype set, the currently
+   *  selected variant, the setter, and a lock flag for staff. When
+   *  variantOptions has length <=1 OR variantLocked is true, the
+   *  toggle hides — single-archetype owners and assigned staff have
+   *  nothing to switch. */
+  variantOptions?: string[];
+  selectedVariant?: string;
+  onSetSelectedVariant?: (variant: string | undefined) => void;
+  variantLocked?: boolean;
   onArchiveSelected: () => void;
   onDeleteSelected: () => void;
   onSetSelectionMode: (value: boolean) => void;
@@ -204,6 +213,10 @@ export default function ProviderLeadsView({
   quotingInquiryId,
   itemPrices,
   venueSpaces,
+  variantOptions,
+  selectedVariant,
+  onSetSelectedVariant,
+  variantLocked,
   onArchiveSelected,
   onDeleteSelected,
   onSetSelectionMode,
@@ -261,8 +274,64 @@ export default function ProviderLeadsView({
   const dateTextSize = isRelaxed ? 'text-sm' : 'text-[10px]';
   const chevronSize = isRelaxed ? 'w-6 h-6' : 'w-4 h-4';
 
+  // Variant toggle visibility: hide for single-archetype owners (nothing
+  // to switch between) and for staff with assignedArchetype (locked
+  // server-side). Multi-archetype owners get the pill row.
+  const showVariantToggle =
+    !variantLocked && Array.isArray(variantOptions) && variantOptions.length > 1;
+
   return (
     <div className={containerSpacing}>
+      {/* Variant pill row — multi-archetype owners only */}
+      {showVariantToggle && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">
+            Showing:
+          </span>
+          {variantOptions!.map((opt) => {
+            const isActive = selectedVariant === opt;
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => onSetSelectedVariant?.(opt)}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
+                  isActive
+                    ? 'bg-[#C9973A] text-white border-[#C9973A] shadow-sm'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                {opt}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => onSetSelectedVariant?.(undefined)}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
+              !selectedVariant
+                ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            All
+          </button>
+        </div>
+      )}
+
+      {/* Locked indicator — staff with assignedArchetype */}
+      {variantLocked && user?.assignedArchetype && (
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            Filtered to:
+          </span>
+          <span className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full font-bold text-xs">
+            {user.assignedArchetype}
+          </span>
+          <span className="italic">(your shop owner restricted this view)</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

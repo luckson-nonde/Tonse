@@ -260,7 +260,36 @@ export default function ProviderDashboard() {
   // "Electronics seller sees zero / wrong leads" bug because it
   // depended on stable display-name parsing and a populated
   // user.categories array, both of which were fragile.
-  const { inquiries: matchedLeads } = useMatchedLeads(user?.id);
+  // Variant-aware leads: staff with assignedArchetype are locked to
+  // that variant (the backend enforces it regardless of what we send).
+  // Multi-archetype owners default to their primary archetype but can
+  // switch via the toggle in ProviderLeadsView. Single-archetype
+  // owners pass undefined → no filter.
+  const sellerArchetypes = React.useMemo<string[]>(
+    () =>
+      getBusinessTypes(user as any).filter(
+        (a) => a !== 'BUYER' && a !== 'ADMIN' && a !== 'UNKNOWN' && a !== 'LABOUR',
+      ),
+    [user],
+  );
+  const initialVariant = React.useMemo<string | undefined>(() => {
+    if (user?.assignedArchetype) return user.assignedArchetype;
+    if (sellerArchetypes.length > 1) return getPrimaryBusinessType(user as any);
+    return undefined;
+  }, [user, sellerArchetypes]);
+  const [selectedVariant, setSelectedVariant] = useState<string | undefined>(
+    initialVariant,
+  );
+  // Re-sync if the user / assignedArchetype changes (e.g. on first
+  // /auth/me load after a refresh).
+  React.useEffect(() => {
+    setSelectedVariant(initialVariant);
+  }, [initialVariant]);
+  const { inquiries: matchedLeads } = useMatchedLeads(
+    user?.id,
+    undefined,
+    selectedVariant,
+  );
   const allLeads = React.useMemo(
     () =>
       [...matchedLeads].sort(
@@ -842,6 +871,14 @@ export default function ProviderDashboard() {
               quotingInquiryId,
               itemPrices,
               venueSpaces,
+              // Variant toggle: only owners with multiple archetypes
+              // can switch. Staff with assignedArchetype see no toggle
+              // (locked server-side anyway). Single-archetype owners
+              // also see no toggle.
+              variantOptions: sellerArchetypes,
+              selectedVariant,
+              onSetSelectedVariant: setSelectedVariant,
+              variantLocked: !!user?.assignedArchetype,
               onArchiveSelected: handleArchiveSelected,
               onDeleteSelected: handleDeleteSelected,
               onSetSelectionMode: setIsSelectionMode,

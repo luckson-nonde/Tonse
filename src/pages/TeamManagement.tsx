@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { PERMISSIONS, hasPermission } from '../utils/rbac';
 import { teamService, TeamMember } from '../services/api/teamService';
+import { getBusinessTypes, BusinessType } from '../services/categories';
 
 const ROLES = [
   {
@@ -48,6 +49,7 @@ export default function TeamManagement() {
   const [staffName, setStaffName] = useState('');
   const [staffEmail, setStaffEmail] = useState('');
   const [role, setRole] = useState('QUOTATION_ONLY');
+  const [assignedArchetype, setAssignedArchetype] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -61,6 +63,15 @@ export default function TeamManagement() {
   const [isLoadingTeam, setIsLoadingTeam] = useState(true);
 
   const canManage = hasPermission(user, PERMISSIONS.MANAGE_TEAM);
+
+  // Owner's archetype set drives the variant-assignment select. Single-
+  // archetype owners (e.g. just RETAIL) don't see the select at all —
+  // there's nothing to restrict to. Multi-archetype owners get a select
+  // with one option per archetype plus "All variants".
+  const ownerArchetypes: BusinessType[] = getBusinessTypes(user as any).filter(
+    (a) => a !== 'BUYER' && a !== 'ADMIN' && a !== 'UNKNOWN' && a !== 'LABOUR',
+  );
+  const showVariantSelect = ownerArchetypes.length > 1;
 
   const loadTeam = useCallback(async () => {
     if (!user?.id) return;
@@ -107,6 +118,7 @@ export default function TeamManagement() {
         email: staffEmail,
         phone: phoneNumber,
         permissions: permissionsForRole(role),
+        assignedArchetype: assignedArchetype || null,
       });
 
       setGeneratedPassword(created.generatedPassword || '');
@@ -115,6 +127,7 @@ export default function TeamManagement() {
       setPhoneNumber('');
       setStaffName('');
       setStaffEmail('');
+      setAssignedArchetype('');
       await loadTeam();
     } catch (err: any) {
       // Backend's ConflictException for duplicate email surfaces here as the
@@ -307,6 +320,35 @@ export default function TeamManagement() {
             </div>
           </div>
 
+          {/* Variant assignment — only shown to multi-archetype owners.
+              Single-archetype owners have nothing to restrict to, so we
+              hide the select entirely (the staff member will see all
+              leads in the only archetype that exists). */}
+          {showVariantSelect && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Variant Assignment
+              </label>
+              <p className="text-xs text-slate-500 mb-2">
+                Restrict this staff member to one variant of leads.
+                Leave on "All variants" to give them access to every
+                inquiry your shop handles.
+              </p>
+              <select
+                value={assignedArchetype}
+                onChange={(e) => setAssignedArchetype(e.target.value)}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#C9973A] focus:border-transparent"
+              >
+                <option value="">All variants ({ownerArchetypes.join(', ')})</option>
+                {ownerArchetypes.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={isSubmitting || !phoneNumber || !staffName || !staffEmail}
@@ -344,11 +386,18 @@ export default function TeamManagement() {
                 <div>
                   <div className="font-bold text-slate-900">{member.name}</div>
                   <div className="text-sm text-slate-500">{member.email} · {member.phone}</div>
-                  <div className="mt-1 flex items-center gap-1 text-xs font-medium text-[#C9973A] bg-[#fdf8f0] px-2 py-0.5 rounded-full w-fit">
-                    <Shield className="w-3 h-3" />
-                    {member.permissions?.includes(PERMISSIONS.MANAGE_COLLECTIONS)
-                      ? 'Collection Manager'
-                      : 'Quotation Manager'}
+                  <div className="mt-1 flex items-center gap-2 flex-wrap">
+                    <span className="flex items-center gap-1 text-xs font-medium text-[#C9973A] bg-[#fdf8f0] px-2 py-0.5 rounded-full w-fit">
+                      <Shield className="w-3 h-3" />
+                      {member.permissions?.includes(PERMISSIONS.MANAGE_COLLECTIONS)
+                        ? 'Collection Manager'
+                        : 'Quotation Manager'}
+                    </span>
+                    {member.assignedArchetype && (
+                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                        {member.assignedArchetype} only
+                      </span>
+                    )}
                   </div>
                 </div>
                 <button

@@ -75,6 +75,12 @@ export class InquiriesController {
     ) {
       return { data: [], total: 0, matchedCategoryIds: [] };
     }
+    // Variant resolution: staff with assignedArchetype set are LOCKED
+    // to that variant — their query string can't override it. Owners
+    // (no assignedArchetype) honour ?variant= from the toggle, or
+    // omit it for "all variants".
+    const variant = caller.assignedArchetype || query?.variant || undefined;
+
     return this.matchingService.findLeadsForProfile(
       {
         type: profileOwner.activeProfileType as 'SELLER' | 'SERVICE_PROVIDER',
@@ -86,6 +92,7 @@ export class InquiriesController {
         province: query?.province,
         page: query?.page,
         limit: query?.limit,
+        variant,
       },
     );
   }

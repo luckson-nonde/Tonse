@@ -89,7 +89,11 @@ export function useOpenInquiries(refetch?: boolean) {
  * walks the recursive ancestry of their subscribed categories, and
  * returns only the matching inquiries.
  */
-export function useMatchedLeads(userId?: string, refetch?: boolean) {
+export function useMatchedLeads(
+  userId?: string,
+  refetch?: boolean,
+  variant?: string,
+) {
   const [inquiries, setInquiries] = useState<InquiryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -106,7 +110,7 @@ export function useMatchedLeads(userId?: string, refetch?: boolean) {
       try {
         setLoading(true);
         setError(null);
-        const data = await fetchLeadsForMe();
+        const data = await fetchLeadsForMe(variant ? { variant } : undefined);
         setInquiries(data);
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to fetch matched leads'));
@@ -120,7 +124,7 @@ export function useMatchedLeads(userId?: string, refetch?: boolean) {
     // without manually refreshing.
     const interval = setInterval(loadLeads, 30000);
     return () => clearInterval(interval);
-  }, [userId, refetch, refetchTrigger]);
+  }, [userId, refetch, refetchTrigger, variant]);
 
   return { inquiries, loading, error, refresh };
 }
