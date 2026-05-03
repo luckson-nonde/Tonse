@@ -66,16 +66,9 @@ export class ServiceProviderProfile {
   @Column({ type: 'varchar', length: 50, nullable: true })
   subRole: string;
 
-  /**
-   * Cached archetype — see seller-profile.entity for the contract.
-   * Recomputed on every junction write by ArchetypeResolver.
-   */
-  @Column({
-    type: 'enum',
-    enum: ['RETAIL', 'RENTAL', 'BOOKING', 'LABOUR', 'REPAIR', 'SERVICE', 'EVENTS', 'ENTERTAINMENT'],
-    nullable: true,
-  })
-  archetype: string;
+  // Multi-archetype set lives in `service_provider_profile_archetypes`
+  // — see seller-profile.entity for the contract. The single
+  // `archetype` enum column was dropped in the same Phase-1 change.
 
   // ===== Labour-specific (only populated when subRole = SKILLED_LABOUR) =====
 

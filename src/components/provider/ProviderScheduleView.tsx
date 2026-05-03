@@ -3,7 +3,7 @@ import { Clock, MapPin, ChevronRight, X } from 'lucide-react';
 import { uniqueKey } from '../../utils/keyUtils';
 import emptyScheduleImage from '../../assets/images/empty-states/owl_reading.png';
 import DashboardCalendar from '../DashboardCalendar';
-import { getBusinessType } from '../../services/categories';
+import { getBusinessTypes } from '../../services/categories';
 
 interface ProviderScheduleViewProps {
   user: any;
@@ -32,11 +32,9 @@ export default function ProviderScheduleView({
   onSetRescheduleTime,
   onReschedule,
 }: ProviderScheduleViewProps) {
-  // Use the derived business type so a SELLER who picked Event Equipment
-  // Rental gets the rental-specific copy (was previously gated on the
-  // legacy raw role only).
-  const businessType = getBusinessType(user as any);
-  const isEventsBusiness = businessType === 'EVENTS';
+  // Set-check: a seller who serves EVENTS plus other archetypes still
+  // gets the rental-specific copy on the schedule view.
+  const isEventsBusiness = getBusinessTypes(user as any).includes('EVENTS');
 
   return (
     <div className="space-y-6">

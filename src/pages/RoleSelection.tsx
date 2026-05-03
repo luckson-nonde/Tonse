@@ -123,8 +123,11 @@ const companySubRoles: RoleOption[] = [
 
 // SELLER tier-2: only goods-shaped business models. The "Services Only" card
 // moved to the SERVICE_PROVIDER role (where it belongs); a service business
-// doesn't transfer ownership of goods. HYBRID stays here because it's
-// primarily a goods seller that also offers repair on the same items.
+// doesn't transfer ownership of goods. Hybrid (goods + repair) and Wholesale
+// were retired as separate subRoles in Phase 1.5 — both are now expressed
+// natively via the archetype set on the active profile (a phone shop that
+// repairs ends up with archetypes=['RETAIL','REPAIR']; a wholesaler picks
+// wholesale-tagged categories and resolves to archetype=WHOLESALE).
 const sellerSubRoles: RoleOption[] = [
   {
     id: 'PRODUCT_SELLER',
@@ -133,22 +136,6 @@ const sellerSubRoles: RoleOption[] = [
     description: 'Sell physical goods and stocked inventory.',
     icon: Package,
     subRole: 'PRODUCT_SELLER',
-  },
-  {
-    id: 'HYBRID_SELLER',
-    eyebrow: 'Goods + Repair',
-    title: 'Hybrid',
-    description: 'Sell goods and repair the same items (e.g. phone shop with tech bench).',
-    icon: Layers,
-    subRole: 'HYBRID_SELLER',
-  },
-  {
-    id: 'SUPPLIER_SELLER',
-    eyebrow: 'Bulk · Wholesale',
-    title: 'Wholesale',
-    description: 'Supply goods in bulk to other businesses.',
-    icon: Truck,
-    subRole: 'SUPPLIER_SELLER',
   },
 ];
 
@@ -214,20 +201,6 @@ export default function RoleSelection() {
     const rootCategories = CATEGORIES_DB.filter((c) => !c.parentId);
 
     if (selectedSubRole === 'PRODUCT_SELLER') {
-      return rootCategories.filter((c) => {
-        const nature = getCategoryNature(c.id);
-        return nature === 'PRODUCT' || nature === 'BOTH';
-      });
-    }
-    if (selectedSubRole === 'SUPPLIER_SELLER') {
-      return rootCategories.filter((c) => {
-        const nature = getCategoryNature(c.id);
-        return nature === 'PRODUCT' || nature === 'BOTH';
-      });
-    }
-    if (selectedSubRole === 'HYBRID_SELLER') {
-      // Hybrid sells goods + repairs the same items — show product categories
-      // that have a Repair variant (Mobile Phones, Laptops, Home Appliances).
       return rootCategories.filter((c) => {
         const nature = getCategoryNature(c.id);
         return nature === 'PRODUCT' || nature === 'BOTH';
@@ -602,7 +575,7 @@ export default function RoleSelection() {
                   }
                   categoryFilter={(cat) => {
                     const nature = getCategoryNature(cat.id);
-                    if (selectedSubRole === 'PRODUCT_SELLER' || selectedSubRole === 'SUPPLIER_SELLER') {
+                    if (selectedSubRole === 'PRODUCT_SELLER') {
                       return nature === 'PRODUCT' || nature === 'BOTH';
                     }
                     if (
@@ -612,7 +585,6 @@ export default function RoleSelection() {
                     ) {
                       return nature === 'SERVICE' || nature === 'BOTH';
                     }
-                    // HYBRID_SELLER sees everything (sells goods + repairs them)
                     return true;
                   }}
                   onSubcategoryViewChange={setIsViewingSubcategories}

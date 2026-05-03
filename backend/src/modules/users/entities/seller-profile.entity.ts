@@ -57,23 +57,19 @@ export class SellerProfile {
 
   // ===== Sub-shape =====
 
-  /** PRODUCT_SELLER / HYBRID_SELLER / SUPPLIER_SELLER */
+  /** PRODUCT_SELLER. (HYBRID_SELLER and SUPPLIER_SELLER retired —
+   * "wholesale" and "products + services" are now expressed via the
+   * archetype set on `seller_profile_archetypes`, not the auth-level
+   * sub-role.) */
   @Column({ type: 'varchar', length: 50, nullable: true })
   subRole: string;
 
-  /**
-   * Cached archetype derived from the union of this seller's
-   * `seller_profile_categories` rows (recomputed on every category
-   * write by ArchetypeResolver). Drives dashboard variant — labels,
-   * sidebar items, stat tiles. The seller's actual categories live
-   * in the join table; this column is a pre-computed projection.
-   */
-  @Column({
-    type: 'enum',
-    enum: ['RETAIL', 'RENTAL', 'BOOKING', 'LABOUR', 'REPAIR', 'SERVICE', 'EVENTS', 'ENTERTAINMENT'],
-    nullable: true,
-  })
-  archetype: string;
+  // Phase 1 of multi-archetype: the previous `archetype` enum column
+  // collapsed mixed-variant sellers to a single dashboard surface. The
+  // archetype set now lives in `seller_profile_archetypes` (composite-
+  // PK junction), which lets a seller declare both RETAIL and REPAIR
+  // simultaneously. ArchetypeResolverService recomputes that set on
+  // every category junction write, in the same transaction.
 
   // ===== Business identity (PACRA / ZRA registration) =====
 

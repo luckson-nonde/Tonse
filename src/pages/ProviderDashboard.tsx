@@ -49,7 +49,7 @@ import {
   getCategorySchema,
   getCategoryNature,
   CATEGORIES_DB,
-  getBusinessType,
+  getBusinessTypes,
   isRepairVariant,
 } from '../services/categories';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';
@@ -114,7 +114,7 @@ export default function ProviderDashboard() {
   }, [tab, activeTab, setActiveTab]);
 
   const currentSchema = useMemo(() => {
-    if (user?.subRole === 'SUPPLIER_SELLER') return MASTER_SUPPLIER_ACCOUNT_SCHEMA;
+    if (getBusinessTypes(user as any).includes('WHOLESALE')) return MASTER_SUPPLIER_ACCOUNT_SCHEMA;
     return MASTER_PROVIDER_ACCOUNT_SCHEMA;
   }, [user]);
 
@@ -129,12 +129,12 @@ export default function ProviderDashboard() {
     }
   }, [user?.id, user?.permissions, activeTab, setActiveTab]);
 
-  // Booking-based flow keys off the derived businessType. Phase 2 dropped
-  // role==='EVENTS'/'ENTERTAINMENT' — those are now category strings on a
-  // SELLER row.
-  const _bizTypeForFlow = getBusinessType(user as any);
+  // Booking-based flow fires if EVENTS or ENTERTAINMENT is anywhere in the
+  // seller's archetype set — a seller who runs both retail and events still
+  // needs the booking flow visible.
+  const _bizTypesForFlow = getBusinessTypes(user as any);
   const isBookingBased =
-    _bizTypeForFlow === 'EVENTS' || _bizTypeForFlow === 'ENTERTAINMENT';
+    _bizTypesForFlow.includes('EVENTS') || _bizTypesForFlow.includes('ENTERTAINMENT');
 
   const isServiceOrEvent = (inquiry: Inquiry) => {
     return (
@@ -353,7 +353,7 @@ export default function ProviderDashboard() {
       // Temporarily disabled to stop 404 logs until backend route
       // /venue-spaces is implemented. Phase 2: gate by businessType (EVENTS
       // is now a derived value on a SELLER row, not a top-level role).
-      if (!effectiveProviderId || _bizTypeForFlow !== 'EVENTS') return [];
+      if (!effectiveProviderId || !_bizTypesForFlow.includes('EVENTS')) return [];
       return [] as any[];
       /* 
       try {

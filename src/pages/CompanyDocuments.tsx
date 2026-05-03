@@ -18,7 +18,7 @@ import {
 import AuthSplitLayout from '../components/AuthSplitLayout';
 import FloatingInput from '../components/FloatingInput';
 import { HeroContent } from '../types';
-import { getBusinessType, BusinessType } from '../services/categories';
+import { getPrimaryBusinessType, BusinessType } from '../services/categories';
 
 // Zambian TPIN is 10 digits, e.g. 1234567890
 function formatTPIN(raw: string): string {
@@ -82,32 +82,28 @@ const SERVICES_HERO: HeroContent = {
 };
 
 function getDocsConfig(type: BusinessType): DocsConfig {
+  // PRODUCTS_AND_REPAIR retired in Phase 1.5 — a phone shop that both
+  // sells and repairs has archetypes=['RETAIL','REPAIR'] and the docs
+  // page picks the PRIMARY archetype (REPAIR by priority). The "both
+  // sides activate together" copy is irrelevant now since the company
+  // is one entity with one PACRA cert anyway.
   switch (type) {
-    case 'REPAIR_SERVICE':
-    case 'PRODUCTS_AND_REPAIR':
+    case 'REPAIR':
       return {
-        hero: type === 'PRODUCTS_AND_REPAIR' ? FORMAL_HERO : REPAIR_HERO,
-        brandLabel: type === 'PRODUCTS_AND_REPAIR' ? 'Company Legal Name' : 'Repair Shop Name',
-        brandHint:
-          type === 'PRODUCTS_AND_REPAIR'
-            ? 'Exactly as registered with PACRA.'
-            : 'The name customers will see on the marketplace.',
-        brandIcon: type === 'PRODUCTS_AND_REPAIR' ? Building2 : Wrench,
-        requiresPACRA: type === 'PRODUCTS_AND_REPAIR',
-        requiresTPIN: type === 'PRODUCTS_AND_REPAIR',
-        docTitle: type === 'PRODUCTS_AND_REPAIR' ? 'PACRA Certificate' : 'Trade License (Optional)',
-        docTileHeadline:
-          type === 'PRODUCTS_AND_REPAIR'
-            ? 'Certificate of Incorporation'
-            : 'Trade license or technician certificate',
+        hero: REPAIR_HERO,
+        brandLabel: 'Repair Shop Name',
+        brandHint: 'The name customers will see on the marketplace.',
+        brandIcon: Wrench,
+        requiresPACRA: false,
+        requiresTPIN: false,
+        docTitle: 'Trade License (Optional)',
+        docTileHeadline: 'Trade license or technician certificate',
         docTileSubcopy: 'PDF, JPG, PNG · max 5MB',
         activationCopy:
-          type === 'PRODUCTS_AND_REPAIR'
-            ? 'Verification typically takes 24–48 working hours. Both sides of your business activate together.'
-            : 'Skill review takes ~24h. You can list your services right away while we verify.',
+          'Skill review takes ~24h. You can list your services right away while we verify.',
       };
 
-    case 'PRO_SERVICES':
+    case 'SERVICE':
       return {
         hero: SERVICES_HERO,
         brandLabel: 'Service Brand Name',
@@ -153,8 +149,7 @@ function getDocsConfig(type: BusinessType): DocsConfig {
           'Performers can list bookings immediately. Verified portfolios surface higher in search.',
       };
 
-    case 'HYBRID':
-    case 'RETAIL_PRODUCTS':
+    case 'RETAIL':
     default:
       return {
         hero: FORMAL_HERO,
@@ -177,7 +172,9 @@ export default function CompanyDocuments() {
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const businessType = useMemo(() => getBusinessType(user as any), [user]);
+  // A multi-archetype seller still has ONE company, so the docs page picks
+  // the seller's primary archetype and lets that drive the doc set.
+  const businessType = useMemo(() => getPrimaryBusinessType(user as any), [user]);
   const cfg = useMemo(() => getDocsConfig(businessType), [businessType]);
 
   const [companyName, setCompanyName] = useState(user?.companyName || '');

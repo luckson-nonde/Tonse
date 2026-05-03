@@ -34,6 +34,7 @@ export interface User {
   incorporationCertUrl?: string;
   location?: string;
   categories?: string[];
+  archetypes?: string[];
   businessDocs?: string[];
   socialMediaLink?: string;
   facebookLink?: string;

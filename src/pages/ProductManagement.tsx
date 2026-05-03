@@ -5,13 +5,14 @@ import { db } from '../services/api/database';
 import { Product } from '../types';
 import { Plus, Trash2, Edit2, Package, Image as ImageIcon, Loader2, X } from 'lucide-react';
 import { uniqueKey } from '../utils/keyUtils';
-import { getBusinessType } from '../services/categories';
+import { getBusinessTypes } from '../services/categories';
 
 export default function ProductManagement() {
   const { user } = useAuth();
-  // Phase 2: EVENTS is no longer a role. Drive the labels off the derived
-  // businessType — same single source of truth used by every other surface.
-  const isEventsBusiness = getBusinessType(user as any) === 'EVENTS';
+  // EVENTS is no longer a role; we drive copy off the seller's archetype
+  // set. A seller serving EVENTS plus other archetypes still gets the
+  // rental-flavoured copy here.
+  const isEventsBusiness = getBusinessTypes(user as any).includes('EVENTS');
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);

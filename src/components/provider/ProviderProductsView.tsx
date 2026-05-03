@@ -1,6 +1,6 @@
 import React from 'react';
 import ProductManagement from '../../pages/ProductManagement';
-import { getBusinessType } from '../../services/categories';
+import { getPrimaryBusinessType } from '../../services/categories';
 
 interface ProviderProductsViewProps {
   user: any;
@@ -11,7 +11,8 @@ export default function ProviderProductsView({ user }: ProviderProductsViewProps
   // Rental sees "Inventory Management" (rental-stock framing), a repair
   // shop sees "Service Catalog", a wholesaler sees "Stock & Pricing", and
   // a generic retail seller keeps "Product Management".
-  const businessType = getBusinessType(user as any);
+  // Single-value: the title switch picks one of N strings.
+  const businessType = getPrimaryBusinessType(user as any);
   let title = 'Product Management';
   let subtitle = "Manage your shop's listed products";
   switch (businessType) {
@@ -19,11 +20,11 @@ export default function ProviderProductsView({ user }: ProviderProductsViewProps
       title = 'Inventory Management';
       subtitle = 'Manage your event equipment and services';
       break;
-    case 'REPAIR_SERVICE':
+    case 'REPAIR':
       title = 'Service Catalog';
       subtitle = 'Repair services you offer to customers';
       break;
-    case 'PRO_SERVICES':
+    case 'SERVICE':
       title = 'Service Catalog';
       subtitle = 'Services you offer to clients';
       break;
@@ -31,10 +32,9 @@ export default function ProviderProductsView({ user }: ProviderProductsViewProps
       title = 'Stock & Pricing';
       subtitle = 'Bulk inventory and tier pricing';
       break;
-    case 'PRODUCTS_AND_REPAIR':
-      title = 'Catalog';
-      subtitle = 'Products you sell and services you repair';
-      break;
+    // PRODUCTS_AND_REPAIR retired — a multi-archetype seller's primary
+    // archetype (REPAIR by priority) drives the title for this single-
+    // value switch.
     default:
       break;
   }

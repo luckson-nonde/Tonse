@@ -60,12 +60,12 @@ export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       // device handoff), so we keep them in.
       excludeRoles: undefined,
       businessTypes: [
-        'RETAIL_PRODUCTS',
+        'RETAIL',
         'WHOLESALE',
-        'HYBRID',
-        'PRODUCTS_AND_REPAIR',
-        'REPAIR_SERVICE',
+        'REPAIR',
         'EVENTS',
+        'RENTAL',
+        'BOOKING',
       ],
     },
     { 

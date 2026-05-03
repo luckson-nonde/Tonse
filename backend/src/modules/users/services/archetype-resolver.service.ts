@@ -4,27 +4,20 @@ import { In, Repository } from 'typeorm';
 import { Category, Archetype } from '../../categories/entities/category.entity';
 
 /**
- * Pick the dominant archetype across a set of categories. Higher
- * priority wins. Tie-breaker: stable enum order.
- *
- * Priority: EVENTS > ENTERTAINMENT > REPAIR > RENTAL > BOOKING >
- * RETAIL > LABOUR > SERVICE.
- *
- * The reasoning: "an Electronics seller who also picked Event Venues"
- * is fundamentally an events business — the events surface (booking
- * calendar, venue inventory) is non-trivial, the retail surface
- * collapses to a single nav item. Better to surface the heavier
- * surface and trim the lighter one than the reverse.
+ * Tie-breaker order, used ONLY by `pickPrimary` for the rare caller
+ * that genuinely needs a single archetype (e.g. calendar tone, page
+ * title). The dashboard composer reads the full set instead.
  */
 const PRIORITY: Archetype[] = [
   'EVENTS',
   'ENTERTAINMENT',
   'REPAIR',
-  'RENTAL',
+  'WHOLESALE',
   'BOOKING',
+  'RENTAL',
+  'SERVICE',
   'RETAIL',
   'LABOUR',
-  'SERVICE',
 ];
 
 @Injectable()
@@ -35,18 +28,36 @@ export class ArchetypeResolverService {
   ) {}
 
   /**
-   * Look up the categories by id and return the dominant archetype.
-   * Returns null when there are no categories or none match (caller
-   * decides whether that maps to a default UI variant).
+   * Resolve a categoryIds array to the SET of distinct non-null
+   * archetypes those categories belong to. Returns the full set —
+   * callers that genuinely need a single archetype can run it through
+   * `pickPrimary`, but the dashboard composer reads the full set so a
+   * mixed-variant seller (e.g. mobile-phones-buy + mobile-phones-
+   * repair) gets both RETAIL and REPAIR surfaces.
    */
-  async resolve(categoryIds: string[]): Promise<Archetype | null> {
-    if (!categoryIds || categoryIds.length === 0) return null;
+  async resolve(categoryIds: string[]): Promise<Archetype[]> {
+    if (!categoryIds || categoryIds.length === 0) return [];
     const rows = await this.categoryRepository.find({
       where: { id: In(categoryIds) },
       select: ['id', 'archetype'],
     });
-    if (rows.length === 0) return null;
-    const present = new Set(rows.map((r) => r.archetype));
+    const set = new Set<Archetype>();
+    for (const row of rows) {
+      if (row.archetype) set.add(row.archetype);
+    }
+    return Array.from(set);
+  }
+
+  /**
+   * Collapse an archetype set to a single dominant value via the
+   * tie-breaker priority. Use sparingly — UI surfaces that take a set
+   * (sidebar composition, leads/orders surfaces) should consume
+   * `resolve` directly. This helper is only for cases where exactly
+   * one archetype is needed (calendar visual tone, fallback labels).
+   */
+  pickPrimary(archetypes: Archetype[]): Archetype | null {
+    if (!archetypes || archetypes.length === 0) return null;
+    const present = new Set(archetypes);
     for (const candidate of PRIORITY) {
       if (present.has(candidate)) return candidate;
     }

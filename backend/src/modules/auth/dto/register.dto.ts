@@ -67,7 +67,7 @@ export class RegisterDto {
   categoryIds?: string[];
 
   /**
-   * Optional sub-role hint (e.g. PRODUCT_SELLER, SUPPLIER_SELLER). Lands
+   * Optional sub-role hint (e.g. PRODUCT_SELLER). Lands
    * on the active profile so categoryIds + subRole are coherent at
    * registration time.
    */

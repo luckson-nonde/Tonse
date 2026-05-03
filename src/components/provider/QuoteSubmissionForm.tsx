@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { motion, AnimatePresence } from 'motion/react';
 import { Camera, X, ImagePlus, Loader2, UploadCloud } from 'lucide-react';
 import { generateQuoteSchema } from '../../services/quoteSchemaGenerator';
-import { getBusinessType } from '../../services/categories';
+import { getBusinessTypes } from '../../services/categories';
 import { uniqueKey } from '../../utils/keyUtils';
 
 interface QuoteSubmissionFormProps {
@@ -302,9 +302,9 @@ export default function QuoteSubmissionForm({
       <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-3">
         {quoteSchema.map(renderField)}
 
-        {/* Venue space selector — shown to any seller in the events bucket
-            (legacy role='EVENTS' OR a SELLER who picked Event Venues etc.) */}
-        {getBusinessType(user as any) === 'EVENTS' && venueSpaces.length > 0 && (
+        {/* Venue space selector — shown to any seller whose archetype set
+            includes EVENTS, even if it isn't their primary archetype. */}
+        {getBusinessTypes(user as any).includes('EVENTS') && venueSpaces.length > 0 && (
           <div className="pt-2 border-t border-slate-100 space-y-3">
             <div>
               <label className={labelClass}>Venue Space (Optional)</label>

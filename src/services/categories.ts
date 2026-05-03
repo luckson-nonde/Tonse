@@ -1331,17 +1331,28 @@ export const getCategorySchema = (categoryName: string): FieldSchema[] => {
 // genuinely different UIs even though they share role+subRole+category name.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * BusinessType is now 1:1 with the backend `Archetype` enum, plus three
+ * UI-only states (BUYER / ADMIN / UNKNOWN). The previous lossy mappings
+ * (RENTAL → EVENTS, BOOKING → EVENTS) were the root cause behind sellers
+ * landing on the wrong dashboard, and the legacy values WHOLESALE was a
+ * subRole flag, HYBRID and PRODUCTS_AND_REPAIR were workarounds for the
+ * single-archetype constraint. Multi-archetype now expresses the latter
+ * two natively (e.g. archetypes=['RETAIL','REPAIR']).
+ */
 export type BusinessType =
-  | 'BUYER'
+  // 1:1 with backend Archetype (9 values)
+  | 'RETAIL'
+  | 'RENTAL'
+  | 'BOOKING'
   | 'LABOUR'
+  | 'REPAIR'
+  | 'SERVICE'
   | 'EVENTS'
   | 'ENTERTAINMENT'
   | 'WHOLESALE'
-  | 'HYBRID'                // sells both products & services as a brand model
-  | 'PRO_SERVICES'          // service-only seller (consulting, design, etc.)
-  | 'REPAIR_SERVICE'        // sells the act of repairing things
-  | 'PRODUCTS_AND_REPAIR'   // sells new + repairs (e.g. phone shop + tech bench)
-  | 'RETAIL_PRODUCTS'       // sells new products only
+  // UI-only states (no archetype equivalent)
+  | 'BUYER'
   | 'ADMIN'
   | 'UNKNOWN';
 
@@ -1374,58 +1385,75 @@ interface MinimalUserForBusinessType {
   categories?: string[];
   /** Phase: matching — stable category IDs. Newer flows pass these. */
   categoryIds?: string[];
-  /** Phase: matching — cached archetype the backend persists on the
-   *  active profile and ships in /auth/me. When present, this is the
-   *  canonical answer; the regex fallbacks below only run when it
-   *  isn't. */
-  archetype?: string;
+  /** Multi-archetype: the SET of archetypes the active profile serves.
+   *  Backend recomputes on every category-junction write and ships in
+   *  /auth/me. Empty array → fall through to the regex / role-based
+   *  derivation below. */
+  archetypes?: string[];
 }
 
 /**
- * Map the persisted profile.archetype enum (RETAIL / RENTAL / BOOKING /
- * LABOUR / REPAIR / SERVICE / EVENTS / ENTERTAINMENT) to the
- * BusinessType enum the existing dashboard code already keys off.
+ * Map a single persisted profile.archetype enum to its BusinessType.
+ * Used by `archetypesToBusinessTypes` (the set form) and by direct
+ * single-archetype callers; not exported because every caller should
+ * be operating on the set the backend now ships.
  */
 function archetypeToBusinessType(archetype: string | undefined): BusinessType | null {
   if (!archetype) return null;
-  switch (archetype.toUpperCase()) {
+  const upper = archetype.toUpperCase();
+  switch (upper) {
     case 'RETAIL':
-      return 'RETAIL_PRODUCTS';
-    case 'REPAIR':
-      return 'REPAIR_SERVICE';
-    case 'SERVICE':
-      return 'PRO_SERVICES';
-    case 'LABOUR':
-      return 'LABOUR';
-    case 'EVENTS':
-      return 'EVENTS';
-    case 'ENTERTAINMENT':
-      return 'ENTERTAINMENT';
     case 'RENTAL':
-      // Rentals don't have a dedicated business type today; surface as
-      // EVENTS (the only existing type with a booking-shaped UI).
-      return 'EVENTS';
     case 'BOOKING':
-      return 'EVENTS';
+    case 'LABOUR':
+    case 'REPAIR':
+    case 'SERVICE':
+    case 'EVENTS':
+    case 'ENTERTAINMENT':
+    case 'WHOLESALE':
+      return upper as BusinessType;
     default:
       return null;
   }
 }
 
 /**
- * Resolve the four onboarding signals into a single BusinessType.
- *
- * Priority order:
- *   1. Top-level roles that bypass the seller hierarchy (BUYER, LABOUR, ADMIN,
- *      EVENTS, ENTERTAINMENT) win first — they don't depend on subRole.
- *   2. Within the seller hierarchy, subRole resolves WHOLESALE / HYBRID /
- *      PRO_SERVICES directly.
- *   3. PRODUCT_SELLER (or bare SELLER) inspects the categories' action
- *      variants to pick between RETAIL_PRODUCTS, REPAIR_SERVICE, and the mixed
- *      PRODUCTS_AND_REPAIR.
- *
- * Returns 'UNKNOWN' for users with no role set yet (e.g. mid-onboarding).
+ * Multi-archetype: map the SET of archetypes a profile serves to the
+ * SET of BusinessTypes downstream UI keys off. Now 1:1 (the lossy
+ * RENTAL/BOOKING → EVENTS collapse was retired).
  */
+function archetypesToBusinessTypes(archetypes: string[] | undefined): BusinessType[] {
+  if (!archetypes || archetypes.length === 0) return [];
+  const set = new Set<BusinessType>();
+  for (const a of archetypes) {
+    const bt = archetypeToBusinessType(a);
+    if (bt) set.add(bt);
+  }
+  return Array.from(set);
+}
+
+/**
+ * Tie-breaker priority for picking a single dominant BusinessType from
+ * a set. Used only by `getPrimaryBusinessType` (visual callers — calendar
+ * tone, page-title switches, single-config selectors). Composition-aware
+ * callers should consume `getBusinessTypes` directly so a multi-archetype
+ * seller (e.g. RETAIL + REPAIR) gets both surfaces.
+ */
+const BUSINESS_TYPE_PRIORITY: BusinessType[] = [
+  'EVENTS',
+  'ENTERTAINMENT',
+  'REPAIR',
+  'WHOLESALE',
+  'BOOKING',
+  'RENTAL',
+  'SERVICE',
+  'RETAIL',
+  'LABOUR',
+  'BUYER',
+  'ADMIN',
+  'UNKNOWN',
+];
+
 // Category-name predicates for events / entertainment trees. These match
 // against the *names* (the only data we have on user.categories — see
 // CategorySelection's onChange wiring). The patterns intentionally cover both
@@ -1442,65 +1470,101 @@ function categoriesMatch(categories: string[], pattern: RegExp): boolean {
   return categories.some((c) => pattern.test(c));
 }
 
-export function getBusinessType(user: MinimalUserForBusinessType | null | undefined): BusinessType {
-  if (!user || !user.role) return 'UNKNOWN';
+/**
+ * Multi-archetype resolution. Returns the SET of BusinessType values
+ * the user serves. Composition-aware UI surfaces (sidebar merge,
+ * archetype-specific sections) read this directly — a seller offering
+ * both `mobile-phones-buy` and `mobile-phones-repair` gets
+ * `['RETAIL_PRODUCTS', 'REPAIR_SERVICE']` here, both surfaces visible.
+ *
+ * Priority of signals:
+ *   1. BUYER / ADMIN role short-circuits to a single-element set.
+ *   2. Multi-archetype set on the user (backend-cached) is the
+ *      authoritative answer when present. Mapped 1:N via
+ *      `archetypesToBusinessTypes`.
+ *   3. Legacy fallback for mid-onboarding rows whose archetype set
+ *      hasn't been written yet — derives from role + subRole +
+ *      legacy categories display-name regex. Always returns a single
+ *      element here; the multi-archetype resolution requires the
+ *      backend's archetype set.
+ *
+ * Empty role → `[]` (UNKNOWN-equivalent; callers can default).
+ */
+export function getBusinessTypes(
+  user: MinimalUserForBusinessType | null | undefined,
+): BusinessType[] {
+  if (!user || !user.role) return [];
 
   const role = user.role.toUpperCase();
-  if (role === 'BUYER') return 'BUYER';
-  if (role === 'ADMIN') return 'ADMIN';
+  if (role === 'BUYER') return ['BUYER'];
+  if (role === 'ADMIN') return ['ADMIN'];
 
-  // Prefer the cached archetype the backend persists on the active
-  // profile (recomputed by ArchetypeResolverService on every category
-  // junction write). When it's present it's the authoritative answer
-  // — built from stable category IDs, not display-name regex. The
-  // category-name fallbacks below only run when it isn't, e.g. for
-  // mid-onboarding users whose profile hasn't received its first
-  // category write yet.
-  const fromArchetype = archetypeToBusinessType(user.archetype);
-  if (fromArchetype) return fromArchetype;
+  // Backend-cached set wins when present — built from stable category
+  // IDs by ArchetypeResolverService, recomputed on every category-
+  // junction write. Multi-archetype sellers land here.
+  const fromArchetypes = archetypesToBusinessTypes(user.archetypes);
+  if (fromArchetypes.length > 0) return fromArchetypes;
 
+  // ===== Legacy fallback (single-element result) =====
   // Phase 2 tightened the role enum to BUYER / SELLER / SERVICE_PROVIDER /
   // ADMIN. Legacy values (EVENTS, ENTERTAINMENT, SUPPLIER, LABOUR) were
   // backfilled into the categories array, so detection happens entirely
-  // through category-name predicates below.
+  // through category-name predicates below. Runs only when the backend
+  // hasn't published an archetype set yet (mid-onboarding rows).
   const categories = user.categories || [];
   const subRole = (user.subRole || '').toUpperCase();
 
-  // Category-driven specialty detection — checked BEFORE the seller subRole
-  // branches so a SELLER who picked "Event Equipment Rental" or "DJs" lands
-  // on the right dashboard rather than the generic RETAIL_PRODUCTS bucket.
-  // Events takes priority over entertainment when both match (rare).
-  if (categoriesMatch(categories, EVENT_CATEGORY_PATTERN)) return 'EVENTS';
-  if (categoriesMatch(categories, ENTERTAINMENT_CATEGORY_PATTERN)) return 'ENTERTAINMENT';
+  if (categoriesMatch(categories, EVENT_CATEGORY_PATTERN)) return ['EVENTS'];
+  if (categoriesMatch(categories, ENTERTAINMENT_CATEGORY_PATTERN)) return ['ENTERTAINMENT'];
 
-  // SERVICE_PROVIDER includes labour, repair-only services, and pro services.
   if (role === 'SERVICE_PROVIDER') {
-    // SKILLED_LABOUR subRole pins straight to LABOUR (categories may not yet
-    // be populated for a fresh registration).
-    if (subRole === 'SKILLED_LABOUR') return 'LABOUR';
-    if (categories.some(isRepairVariant)) return 'REPAIR_SERVICE';
-    // labour categories carry "Skilled Labour" prefix from Phase 2 backfill
+    if (subRole === 'SKILLED_LABOUR') return ['LABOUR'];
+    if (categories.some(isRepairVariant)) return ['REPAIR'];
     if (categoriesMatch(categories, /\bskilled\s?labour\b|\blabour\b|\bworker\b|\bgig\b/i))
-      return 'LABOUR';
-    return 'PRO_SERVICES';
+      return ['LABOUR'];
+    return ['SERVICE'];
   }
 
-  // SELLER branch — products, hybrid, wholesale, sales-with-repair.
-  if (subRole === 'SUPPLIER_SELLER') return 'WHOLESALE';
-  if (subRole === 'HYBRID_SELLER') return 'HYBRID';
-  if (subRole === 'SERVICE_SELLER') return 'PRO_SERVICES';
+  // SUPPLIER_SELLER / HYBRID_SELLER / SERVICE_SELLER subRoles retired in
+  // Phase 1.5 — wholesale / multi-archetype / service-only are now
+  // expressed via the `archetypes` set, not subRole.
 
   if (subRole === 'PRODUCT_SELLER' || role === 'SELLER') {
     const hasRepair = categories.some(isRepairVariant);
-    // "buy new" is the implicit default — any non-repair entry counts as sales
     const hasSales = categories.some((c) => !isRepairVariant(c));
-
-    if (hasRepair && hasSales) return 'PRODUCTS_AND_REPAIR';
-    if (hasRepair) return 'REPAIR_SERVICE';
-    return 'RETAIL_PRODUCTS';
+    // Phase 1.5: hasRepair + hasSales returns the SET so the multi-
+    // archetype UI composes both surfaces (replaces the old
+    // PRODUCTS_AND_REPAIR collapse).
+    if (hasRepair && hasSales) return ['RETAIL', 'REPAIR'];
+    if (hasRepair) return ['REPAIR'];
+    return ['RETAIL'];
   }
 
-  return 'UNKNOWN';
+  return ['UNKNOWN'];
+}
+
+/**
+ * Single-value form of `getBusinessTypes`. Use ONLY for visual callers
+ * that genuinely need one answer (calendar tone, page-title switches,
+ * single-config selectors like CompanyDocuments' docs-config picker).
+ * For composition-aware surfaces (sidebar merging, archetype sections)
+ * use `getBusinessTypes` and `.includes(...)` instead.
+ *
+ * Tie-breaker priority is `BUSINESS_TYPE_PRIORITY` (events-first, then
+ * services, then retail). A multi-archetype seller will surface their
+ * "heaviest" surface here — e.g. RETAIL+REPAIR collapses to REPAIR_SERVICE
+ * for the calendar tone. That's intentional: visual callers want one
+ * coherent style, not a merged one.
+ */
+export function getPrimaryBusinessType(
+  user: MinimalUserForBusinessType | null | undefined,
+): BusinessType {
+  const all = getBusinessTypes(user);
+  if (all.length === 0) return 'UNKNOWN';
+  for (const candidate of BUSINESS_TYPE_PRIORITY) {
+    if (all.includes(candidate)) return candidate;
+  }
+  return all[0];
 }
 
 /**
@@ -1518,16 +1582,16 @@ export function getBusinessTypeLabel(type: BusinessType): string {
       return 'Entertainment Provider';
     case 'WHOLESALE':
       return 'Wholesale Supplier';
-    case 'HYBRID':
-      return 'Hybrid Seller';
-    case 'PRO_SERVICES':
+    case 'SERVICE':
       return 'Service Provider';
-    case 'REPAIR_SERVICE':
+    case 'REPAIR':
       return 'Repair Service';
-    case 'PRODUCTS_AND_REPAIR':
-      return 'Sales & Repair';
-    case 'RETAIL_PRODUCTS':
+    case 'RETAIL':
       return 'Retail Shop';
+    case 'RENTAL':
+      return 'Rental Provider';
+    case 'BOOKING':
+      return 'Booking Provider';
     case 'ADMIN':
       return 'Admin';
     default:

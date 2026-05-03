@@ -15,6 +15,9 @@ import { SellerProfile } from './entities/seller-profile.entity';
 import { ServiceProviderProfile } from './entities/service-provider-profile.entity';
 import { SellerProfileCategory } from './entities/seller-profile-category.entity';
 import { ServiceProviderProfileCategory } from './entities/service-provider-profile-category.entity';
+import { SellerProfileArchetype } from './entities/seller-profile-archetype.entity';
+import { ServiceProviderProfileArchetype } from './entities/service-provider-profile-archetype.entity';
+import { Archetype } from '../categories/entities/category.entity';
 import { UserDisplayIdUtil } from '../../utils/user-display-id.util';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ArchetypeResolverService } from './services/archetype-resolver.service';
@@ -89,6 +92,12 @@ export class UsersService {
 
     @InjectRepository(ServiceProviderProfileCategory)
     private readonly serviceProviderProfileCategoryRepository: Repository<ServiceProviderProfileCategory>,
+
+    @InjectRepository(SellerProfileArchetype)
+    private readonly sellerProfileArchetypeRepository: Repository<SellerProfileArchetype>,
+
+    @InjectRepository(ServiceProviderProfileArchetype)
+    private readonly serviceProviderProfileArchetypeRepository: Repository<ServiceProviderProfileArchetype>,
 
     private readonly archetypeResolver: ArchetypeResolverService,
     private readonly dataSource: DataSource,
@@ -178,6 +187,11 @@ export class UsersService {
     // For BUYER profiles this stays empty (buyers don't subscribe to
     // categories the same way; see comment in categoryJunctionFor).
     const categoryIds = await this.loadActiveProfileCategoryIds(user);
+    // Multi-archetype: load the SET of archetypes the active profile
+    // serves. The dashboard composer reads this to merge per-archetype
+    // schemas (e.g. RETAIL + REPAIR for a seller offering both
+    // mobile-phones-buy and mobile-phones-repair).
+    const archetypes = await this.loadActiveProfileArchetypes(user);
 
     const {
       id: _profId,
@@ -185,9 +199,10 @@ export class UsersService {
       createdAt: _pCreated,
       updatedAt: _pUpdated,
       pin: _pin, // belt-and-braces — should never be present, but strip if it is
+      archetype: _legacyArchetype, // dropped column; strip just in case a stale row leaks through
       ...profileFields
     } = profile as any;
-    return { ...user, ...profileFields, hasPin, categoryIds };
+    return { ...user, ...profileFields, hasPin, categoryIds, archetypes };
   }
 
   /**
@@ -260,6 +275,35 @@ export class UsersService {
   }
 
   /**
+   * Sibling of categoryJunctionFor — picks the archetype-junction repo
+   * for a given profile type. Both junctions move together in the same
+   * transaction whenever categoryIds change, so they share one helper
+   * shape.
+   */
+  private archetypeJunctionFor(type: string): {
+    repo: Repository<SellerProfileArchetype | ServiceProviderProfileArchetype>;
+    profileColumn: 'sellerProfileId' | 'serviceProviderProfileId';
+  } | null {
+    if (type === 'SELLER') {
+      return {
+        repo: this.sellerProfileArchetypeRepository as Repository<
+          SellerProfileArchetype | ServiceProviderProfileArchetype
+        >,
+        profileColumn: 'sellerProfileId',
+      };
+    }
+    if (type === 'SERVICE_PROVIDER') {
+      return {
+        repo: this.serviceProviderProfileArchetypeRepository as Repository<
+          SellerProfileArchetype | ServiceProviderProfileArchetype
+        >,
+        profileColumn: 'serviceProviderProfileId',
+      };
+    }
+    return null;
+  }
+
+  /**
    * Create a profile row matching `role` for the given user, then point
    * the user's activeProfileId / activeProfileType at the new row.
    *
@@ -290,6 +334,7 @@ export class UsersService {
 
       if (wantsCategories) {
         const junction = this.categoryJunctionFor(type);
+        const archJunction = this.archetypeJunctionFor(type);
         if (junction) {
           const txJunction = manager.getRepository(junction.repo.target as any) as Repository<any>;
           const unique = Array.from(new Set(categoryIds));
@@ -299,11 +344,22 @@ export class UsersService {
               categoryId: cid,
             })),
           );
-          // Recompute and persist the archetype cache.
-          const archetype = await this.archetypeResolver.resolve(unique);
-          if (archetype) {
-            await txProfileRepo.update({ id: saved.id } as any, { archetype } as any);
-            (saved as any).archetype = archetype;
+          // Multi-archetype: resolve returns the SET of archetypes, one
+          // row per archetype goes into the archetype-junction table.
+          // Same transaction as the categories junction so a partial
+          // failure can't leave one half written.
+          if (archJunction) {
+            const txArchetypes = manager.getRepository(archJunction.repo.target as any) as Repository<any>;
+            const archetypes = await this.archetypeResolver.resolve(unique);
+            if (archetypes.length > 0) {
+              await txArchetypes.save(
+                archetypes.map((a) => ({
+                  [archJunction.profileColumn]: saved.id,
+                  archetype: a,
+                })),
+              );
+              (saved as any).archetypes = archetypes;
+            }
           }
         }
       }
@@ -328,9 +384,8 @@ export class UsersService {
     categoryIds: string[],
   ): Promise<void> {
     const junction = this.categoryJunctionFor(profileType);
+    const archJunction = this.archetypeJunctionFor(profileType);
     if (!junction) return;
-    const repo = this.profileRepoFor(profileType);
-    if (!repo) return;
     const unique = Array.from(new Set(categoryIds));
     await this.dataSource.transaction(async (manager) => {
       const txJunction = manager.getRepository(junction.repo.target as any) as Repository<any>;
@@ -343,9 +398,22 @@ export class UsersService {
           })),
         );
       }
-      const archetype = await this.archetypeResolver.resolve(unique);
-      const txProfileRepo = manager.getRepository(repo.target as any) as Repository<any>;
-      await txProfileRepo.update({ id: profileId }, { archetype: archetype || null });
+      // Recompute the archetype set and rewrite the junction. Wipe
+      // first so a category change that drops an archetype actually
+      // removes the row.
+      if (archJunction) {
+        const txArchetypes = manager.getRepository(archJunction.repo.target as any) as Repository<any>;
+        await txArchetypes.delete({ [archJunction.profileColumn]: profileId });
+        const archetypes = await this.archetypeResolver.resolve(unique);
+        if (archetypes.length > 0) {
+          await txArchetypes.save(
+            archetypes.map((a) => ({
+              [archJunction.profileColumn]: profileId,
+              archetype: a,
+            })),
+          );
+        }
+      }
     });
   }
 
@@ -359,6 +427,22 @@ export class UsersService {
       select: ['categoryId'] as any,
     });
     return rows.map((r: any) => r.categoryId);
+  }
+
+  /**
+   * Read the archetype set the active profile serves. Multi-archetype
+   * sellers (e.g. mobile-phones-buy + mobile-phones-repair) get
+   * multiple rows here; single-archetype sellers get one.
+   */
+  async loadActiveProfileArchetypes(user: User): Promise<Archetype[]> {
+    if (!user?.activeProfileId || !user?.activeProfileType) return [];
+    const junction = this.archetypeJunctionFor(user.activeProfileType);
+    if (!junction) return [];
+    const rows = await junction.repo.find({
+      where: { [junction.profileColumn]: user.activeProfileId } as any,
+      select: ['archetype'] as any,
+    });
+    return rows.map((r: any) => r.archetype as Archetype);
   }
 
   // ===== BACKWARD COMPATIBILITY METHODS (kept for existing code) =====

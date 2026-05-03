@@ -17,7 +17,8 @@ export type Archetype =
   | 'REPAIR'
   | 'SERVICE'
   | 'EVENTS'
-  | 'ENTERTAINMENT';
+  | 'ENTERTAINMENT'
+  | 'WHOLESALE';
 
 export type CategoryNature = 'PRODUCT' | 'SERVICE' | 'BOTH';
 export type ActionVariant = 'BUY_NEW' | 'REPAIR' | null;
@@ -66,7 +67,7 @@ export class Category {
    */
   @Column({
     type: 'enum',
-    enum: ['RETAIL', 'RENTAL', 'BOOKING', 'LABOUR', 'REPAIR', 'SERVICE', 'EVENTS', 'ENTERTAINMENT'],
+    enum: ['RETAIL', 'RENTAL', 'BOOKING', 'LABOUR', 'REPAIR', 'SERVICE', 'EVENTS', 'ENTERTAINMENT', 'WHOLESALE'],
     default: 'RETAIL',
   })
   archetype: Archetype;

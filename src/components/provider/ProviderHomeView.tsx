@@ -24,7 +24,7 @@ import {
 import { hasPermission, PERMISSIONS } from '../../utils/rbac';
 import { uniqueKey } from '../../utils/keyUtils';
 import { generateVirtualAccount } from '../../utils/financeUtils';
-import { getBusinessType, BusinessType } from '../../services/categories';
+import { getBusinessTypes, getPrimaryBusinessType, BusinessType } from '../../services/categories';
 
 interface ProviderHomeViewProps {
   user: any;
@@ -64,18 +64,22 @@ export default function ProviderHomeView({
   onDeleteSelected,
 }: ProviderHomeViewProps) {
   const navigate = useNavigate();
-  // isBookingBased reads businessType so a SELLER who picked Event Catering /
-  // Event Venues / DJs flows into the booking-style home. Phase 2 dropped
-  // role='EVENTS'/'ENTERTAINMENT' from the enum — those are category strings.
+  // Multi-archetype: read the SET so a seller who serves both EVENTS
+  // *and* RETAIL (e.g. an event-venue that also sells equipment) flips
+  // the booking-style flag without losing their retail surfaces.
+  const businessTypes = React.useMemo(
+    () => getBusinessTypes(user as any),
+    [user]
+  );
   const isBookingBased =
-    getBusinessType(user as any) === 'EVENTS' ||
-    getBusinessType(user as any) === 'ENTERTAINMENT';
+    businessTypes.includes('EVENTS') || businessTypes.includes('ENTERTAINMENT');
 
-  // The four-signal pipeline lands here: every dashboard surface that wants
-  // to differentiate a repair shop from a retail shop from a wholesaler reads
-  // this single value. See services/categories.ts → getBusinessType().
+  // The statTile + inboxHeading switches further down still want a
+  // single dominant value — they pick one set of labels per render.
+  // Composition-aware surfaces (sidebar merge in DashboardLayout) read
+  // `businessTypes` directly.
   const businessType: BusinessType = React.useMemo(
-    () => getBusinessType(user as any),
+    () => getPrimaryBusinessType(user as any),
     [user]
   );
 
@@ -173,7 +177,7 @@ export default function ProviderHomeView({
     };
 
     switch (businessType) {
-      case 'REPAIR_SERVICE':
+      case 'REPAIR':
         return [
           { ...t1Common, label: 'Repair Requests', caption: 'New repair leads' },
           { ...t2Common, label: 'Quotes Sent' },
@@ -215,7 +219,7 @@ export default function ProviderHomeView({
             palette: 'gold',
           },
         ];
-      case 'PRO_SERVICES':
+      case 'SERVICE':
         return [
           { ...t1Common, label: 'Service Requests', caption: 'New client briefs' },
           { ...t2Common, label: 'Quotes Sent' },
@@ -236,28 +240,11 @@ export default function ProviderHomeView({
             palette: 'gold',
           },
         ];
-      case 'PRODUCTS_AND_REPAIR':
-        return [
-          { ...t1Common, label: 'Mixed Requests', caption: 'Sales + repair leads' },
-          { ...t2Common, label: 'Quotes Sent' },
-          {
-            label: 'Pipeline Value',
-            value: fmtZMW(totalQuotedValue),
-            caption: 'Across all quotes',
-            tab: 'my-quotes',
-            icon: TrendingUp,
-            palette: 'gold-soft',
-          },
-          {
-            label: 'Active Jobs',
-            value: activeJobsCount.toString(),
-            caption: 'Sales + repairs in flight',
-            tab: 'paid-orders',
-            icon: Clock,
-            palette: 'gold',
-          },
-        ];
-      case 'RETAIL_PRODUCTS':
+      // PRODUCTS_AND_REPAIR retired in Phase 1.5 — a phone shop that
+      // both sells and repairs has archetypes=['RETAIL','REPAIR']; the
+      // PRIMARY archetype (REPAIR by priority) drives this single-value
+      // switch. Phase 2 composes both surfaces via the dashboard merge.
+      case 'RETAIL':
         return [
           { ...t1Common, label: 'Buyer Inquiries', caption: 'New buyer requests' },
           { ...t2Common, label: 'Quotes Sent' },
@@ -316,19 +303,17 @@ export default function ProviderHomeView({
   // vocabulary the sidebar is using via getLabel() in DashboardLayout.
   const inboxHeading = React.useMemo(() => {
     switch (businessType) {
-      case 'REPAIR_SERVICE':
+      case 'REPAIR':
         return 'Repair Requests';
-      case 'PRODUCTS_AND_REPAIR':
-        return 'Sales & Repair Requests';
       case 'WHOLESALE':
         return 'Purchase Requests';
-      case 'PRO_SERVICES':
+      case 'SERVICE':
         return 'Service Requests';
       case 'EVENTS':
         return 'Event Bookings';
       case 'ENTERTAINMENT':
         return 'Performance Bookings';
-      case 'RETAIL_PRODUCTS':
+      case 'RETAIL':
         return 'Buyer Inquiries';
       default:
         return 'Buyer Inquiries';
@@ -337,9 +322,9 @@ export default function ProviderHomeView({
 
   const todaysSalesLabel = React.useMemo(() => {
     switch (businessType) {
-      case 'REPAIR_SERVICE':
+      case 'REPAIR':
         return "Today's Repairs Completed";
-      case 'PRO_SERVICES':
+      case 'SERVICE':
         return "Today's Service Hours";
       case 'WHOLESALE':
         return "Today's Bulk Sales";

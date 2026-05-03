@@ -47,9 +47,9 @@ export default function ArchivedLeadsPage() {
         if (user.subRole === 'PRODUCT_SELLER') {
           return natures.some((n) => n === 'PRODUCT' || n === 'BOTH');
         }
-        if (user.subRole === 'SERVICE_SELLER') {
-          return natures.some((n) => n === 'SERVICE' || n === 'BOTH');
-        }
+        // SERVICE_SELLER subRole retired in Phase 1.5 — service-only
+        // sellers now resolve via archetypes=['SERVICE']; no archived
+        // surface gates on subRole anymore.
         return true;
       });
     }

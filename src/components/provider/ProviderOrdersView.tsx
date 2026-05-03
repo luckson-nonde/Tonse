@@ -4,6 +4,7 @@ import { Inquiry } from '../../types';
 import { hasPermission, PERMISSIONS } from '../../utils/rbac';
 import { uniqueKey } from '../../utils/keyUtils';
 import emptyOrdersImage from '../../assets/images/empty-states/owl_reading.png';
+import { getBusinessTypes } from '../../services/categories';
 
 interface ProviderOrdersViewProps {
   user: any;
@@ -20,6 +21,7 @@ export default function ProviderOrdersView({
   onSetActiveChecklistQuote,
   onStartScan,
 }: ProviderOrdersViewProps) {
+  const isWholesale = getBusinessTypes(user as any).includes('WHOLESALE');
   const filteredQuotes = displayQuotes.filter(
     (q) => q.status === 'PAID' || q.status === 'AWAITING_PICKUP'
   );
@@ -27,7 +29,7 @@ export default function ProviderOrdersView({
   return (
     <div className="space-y-4 sm:space-y-6">
       <h2 className="text-2xl font-serif font-bold text-slate-900 px-0 sm:px-0">
-        {user?.subRole === 'SUPPLIER_SELLER' ? 'Purchase Orders (Active)' : isBookingBased ? 'Paid Bookings' : 'Paid Orders (Escrow)'}
+        {isWholesale ? 'Purchase Orders (Active)' : isBookingBased ? 'Paid Bookings' : 'Paid Orders (Escrow)'}
       </h2>
       <div className="space-y-4 sm:space-y-6">
         {filteredQuotes.length === 0 ? (
@@ -118,7 +120,7 @@ export default function ProviderOrdersView({
                       className="w-full py-4 bg-brand-dark text-white font-bold rounded-2xl hover:bg-brand-navy-dark transition-all shadow-lg shadow-slate-200 flex items-center justify-center gap-2"
                     >
                       <FileText className="w-5 h-5" />
-                      {user?.subRole === 'SUPPLIER_SELLER' ? 'Finalize Supply Handover' : 'Complete Pickup Checklist'}
+                      {isWholesale ? 'Finalize Supply Handover' : 'Complete Pickup Checklist'}
                     </button>
                   ) : (
                     <button
@@ -126,7 +128,7 @@ export default function ProviderOrdersView({
                       className="w-full py-4 bg-[#C9973A] text-white font-bold rounded-2xl hover:bg-brand-dark transition-all shadow-lg shadow-[#C9973A]/20 flex items-center justify-center gap-2 duration-300"
                     >
                       <QrCode className="w-5 h-5" />
-                      {user?.subRole === 'SUPPLIER_SELLER' ? 'Verify Fulfillment' : 'Scan to Collect'}
+                      {isWholesale ? 'Verify Fulfillment' : 'Scan to Collect'}
                     </button>
                   )}
                 </div>

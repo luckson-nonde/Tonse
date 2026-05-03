@@ -75,16 +75,15 @@ export type SubRole =
   | 'COMPANY_SECRETARY'
   | 'COMPANY_RECEPTIONIST'
   | 'COMPANY_MANAGER'
-  // Seller (goods) shapes
+  // Seller (goods) shapes — HYBRID_SELLER, SUPPLIER_SELLER and the legacy
+  // SERVICE_SELLER were retired in Phase 1.5: wholesale / multi-archetype
+  // / service-only sellers are now expressed via the `archetypes` set on
+  // the active profile, not via the auth-level subRole.
   | 'PRODUCT_SELLER'
-  | 'HYBRID_SELLER'
-  | 'SUPPLIER_SELLER'
-  // Service-provider shapes (Phase 2 fix — services are not sellers)
+  // Service-provider shapes (services are not sellers)
   | 'INDIVIDUAL_PROVIDER'
   | 'AGENCY_PROVIDER'
-  | 'SKILLED_LABOUR'
-  // Legacy — kept for compat with older user rows that have it stored
-  | 'SERVICE_SELLER';
+  | 'SKILLED_LABOUR';
 export type EntityType = 'INDIVIDUAL' | 'BUSINESS';
 
 export interface InquiryItem {

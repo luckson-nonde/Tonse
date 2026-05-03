@@ -8,6 +8,8 @@ import { SellerProfile } from './entities/seller-profile.entity';
 import { ServiceProviderProfile } from './entities/service-provider-profile.entity';
 import { SellerProfileCategory } from './entities/seller-profile-category.entity';
 import { ServiceProviderProfileCategory } from './entities/service-provider-profile-category.entity';
+import { SellerProfileArchetype } from './entities/seller-profile-archetype.entity';
+import { ServiceProviderProfileArchetype } from './entities/service-provider-profile-archetype.entity';
 import { Category } from '../categories/entities/category.entity';
 import { UsersService } from './users.service';
 import { UsersController } from './controllers/users.controller';
@@ -24,6 +26,8 @@ import { ArchetypeResolverService } from './services/archetype-resolver.service'
       ServiceProviderProfile,
       SellerProfileCategory,
       ServiceProviderProfileCategory,
+      SellerProfileArchetype,
+      ServiceProviderProfileArchetype,
       Category,
     ]),
   ],

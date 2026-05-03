@@ -35,7 +35,7 @@ import DashboardCalendar, { CalendarTone } from './DashboardCalendar';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useDashboard } from '../DashboardContext';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';
-import { getBusinessType, BusinessType } from '../services/categories';
+import { getBusinessTypes, getPrimaryBusinessType, BusinessType } from '../services/categories';
 import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useMemo, useEffect } from 'react';
@@ -49,16 +49,15 @@ import { Inquiry } from '../types';
 // "OPEN REPAIRS / THIS WEEK" with "Repair Request" entries while an events
 // provider keeps "TOTAL EVENTS / THIS MONTH" — same widget, same data shape,
 // different vocabulary.
-function businessTypeToCalendarTone(type: ReturnType<typeof getBusinessType>): CalendarTone {
+function businessTypeToCalendarTone(type: BusinessType): CalendarTone {
   switch (type) {
-    case 'REPAIR_SERVICE':
+    case 'REPAIR':
       return 'repair';
-    case 'RETAIL_PRODUCTS':
-    case 'PRODUCTS_AND_REPAIR':
+    case 'RETAIL':
       return 'retail';
     case 'WHOLESALE':
       return 'wholesale';
-    case 'PRO_SERVICES':
+    case 'SERVICE':
       return 'services';
     case 'EVENTS':
     case 'ENTERTAINMENT':
@@ -66,6 +65,8 @@ function businessTypeToCalendarTone(type: ReturnType<typeof getBusinessType>): C
     case 'BUYER':
       return 'buyer';
     default:
+      // RENTAL / BOOKING / LABOUR / ADMIN / UNKNOWN fall through to the
+      // generic tone for now. TODO: dedicated tones per archetype.
       return 'generic';
   }
 }
@@ -94,7 +95,7 @@ const CalendarPanel = () => {
   const { quotes } = useUserQuotes(user?.id);
 
   const tone = useMemo<CalendarTone>(
-    () => businessTypeToCalendarTone(getBusinessType(user as any)),
+    () => businessTypeToCalendarTone(getPrimaryBusinessType(user as any)),
     [user]
   );
 
@@ -208,7 +209,13 @@ export default function DashboardLayout({
   // Single source of truth for what kind of seller/buyer/etc this user is —
   // derived from role + subRole + categories (incl. specification variants).
   // See services/categories.ts → getBusinessType().
-  const businessType: BusinessType = useMemo(() => getBusinessType(user), [user]);
+  // The label / page-title switches further down are single-value
+  // consumers — they pick one string per tab. Composition-aware
+  // surfaces (the schema-selection block above for retail vs others)
+  // operate on `businessTypes` (the set) so a multi-archetype seller
+  // (e.g. RETAIL + REPAIR) merges schemas instead of collapsing to one.
+  const businessTypes: BusinessType[] = useMemo(() => getBusinessTypes(user), [user]);
+  const businessType: BusinessType = useMemo(() => getPrimaryBusinessType(user), [user]);
 
   const navItems = useMemo(() => {
     if (!user) return [];
@@ -224,8 +231,12 @@ export default function DashboardLayout({
     // archetype over name regex.
     if (user.role === 'BUYER') schema = MASTER_BUYER_ACCOUNT_SCHEMA;
     else if (businessType === 'LABOUR') schema = MASTER_LABOUR_ACCOUNT_SCHEMA;
-    else if (user.subRole === 'SUPPLIER_SELLER') schema = MASTER_SUPPLIER_ACCOUNT_SCHEMA;
-    else if (businessType === 'RETAIL_PRODUCTS') schema = MASTER_RETAIL_ACCOUNT_SCHEMA;
+    else if (businessTypes.includes('WHOLESALE')) schema = MASTER_SUPPLIER_ACCOUNT_SCHEMA;
+    else if (businessType === 'RETAIL') schema = MASTER_RETAIL_ACCOUNT_SCHEMA;
+    // TODO: author MASTER_RENTAL_ACCOUNT_SCHEMA — RENTAL falls through to
+    //       MASTER_PROVIDER_ACCOUNT_SCHEMA (the generic booking-shaped
+    //       fallback). Aliasing to EVENTS would be a lossy collapse.
+    // TODO: author MASTER_BOOKING_ACCOUNT_SCHEMA — same situation as RENTAL.
     else schema = MASTER_PROVIDER_ACCOUNT_SCHEMA;
 
     return schema.navigation.filter((item) => {
@@ -277,29 +288,27 @@ export default function DashboardLayout({
     // that archetype and can be deleted alongside the schema split.
     if (itemId === 'leads') {
       switch (businessType) {
-        case 'REPAIR_SERVICE':
+        case 'REPAIR':
           return 'Repair Requests';
-        case 'PRODUCTS_AND_REPAIR':
-          return 'Sales & Repair Requests';
         case 'WHOLESALE':
           return 'Purchase Requests';
-        case 'PRO_SERVICES':
+        case 'SERVICE':
           return 'Service Requests';
         case 'EVENTS':
           return 'Event Bookings';
         case 'ENTERTAINMENT':
           return 'Performance Bookings';
-        // RETAIL_PRODUCTS now uses MASTER_RETAIL_ACCOUNT_SCHEMA which
-        // declares "Buyer Inquiries" directly — no rewrite needed here.
+        // RETAIL now uses MASTER_RETAIL_ACCOUNT_SCHEMA which declares
+        // "Buyer Inquiries" directly — no rewrite needed here.
         default:
           return baseLabel;
       }
     }
     if (itemId === 'products') {
       switch (businessType) {
-        case 'REPAIR_SERVICE':
+        case 'REPAIR':
           return 'Service Catalog';
-        case 'PRO_SERVICES':
+        case 'SERVICE':
           return 'Service Catalog';
         case 'WHOLESALE':
           return 'Stock & Pricing';
@@ -309,9 +318,9 @@ export default function DashboardLayout({
     }
     if (itemId === 'paid-orders') {
       switch (businessType) {
-        case 'REPAIR_SERVICE':
+        case 'REPAIR':
           return 'Active Repairs';
-        case 'PRO_SERVICES':
+        case 'SERVICE':
           return 'Active Engagements';
         default:
           return baseLabel;
@@ -404,23 +413,23 @@ export default function DashboardLayout({
       case 'collection':
         return 'PARCEL COLLECTION';
       case 'products':
-        if (user?.subRole === 'SUPPLIER_SELLER') return 'SUPPLY INVENTORY';
+        if (businessTypes.includes('WHOLESALE')) return 'SUPPLY INVENTORY';
         return businessType === 'EVENTS' ? 'INVENTORY' : 'MY PRODUCTS';
       case 'venue-spaces':
         return 'VENUE SPACES';
       case 'archived':
-        return user?.subRole === 'SUPPLIER_SELLER' ? 'ARCHIVED REQUESTS' : 'ARCHIVED QUOTES';
+        return businessTypes.includes('WHOLESALE') ? 'ARCHIVED REQUESTS' : 'ARCHIVED QUOTES';
       case 'profile':
-        return user?.subRole === 'SUPPLIER_SELLER' ? 'SUPPLIER PROFILE' : 'SHOP PROFILE';
+        return businessTypes.includes('WHOLESALE') ? 'SUPPLIER PROFILE' : 'SHOP PROFILE';
       case 'leads':
-        if (user?.subRole === 'SUPPLIER_SELLER') return 'PURCHASE REQUESTS';
+        if (businessTypes.includes('WHOLESALE')) return 'PURCHASE REQUESTS';
         return 'BOOKING REQUESTS';
       case 'my-quotes':
-        return user?.subRole === 'SUPPLIER_SELLER' ? 'ACTIVE QUOTATIONS' : 'MY QUOTES';
+        return businessTypes.includes('WHOLESALE') ? 'ACTIVE QUOTATIONS' : 'MY QUOTES';
       case 'schedule':
         return 'MY SCHEDULE';
       case 'audit-trail':
-        return user?.subRole === 'SUPPLIER_SELLER' ? 'SUPPLY AUDIT' : 'AUDIT TRAIL';
+        return businessTypes.includes('WHOLESALE') ? 'SUPPLY AUDIT' : 'AUDIT TRAIL';
       default:
         return 'HOME';
     }

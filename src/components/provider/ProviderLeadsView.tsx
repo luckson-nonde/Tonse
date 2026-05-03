@@ -5,6 +5,7 @@ import { uniqueKey } from '../../utils/keyUtils';
 import { PreferenceTags, ThumbnailGrid } from './LeadsHelpers';
 import QuoteSubmissionForm from './QuoteSubmissionForm';
 import { recordInquiryView } from '../../services/api/inquiryService';
+import { getBusinessTypes } from '../../services/categories';
 
 // ─── Collect all images from a lead ──────────────────────────────────────────
 function collectLeadImages(lead: any, parsedItems: any[]): string[] {
@@ -242,6 +243,8 @@ export default function ProviderLeadsView({
     return viewCounts[key] ?? lead.viewCount ?? 0;
   };
 
+  const isWholesale = getBusinessTypes(user as any).includes('WHOLESALE');
+
   // Dynamic layout calculations based on leads volume
   const leadsCount = leads.length;
   const isRelaxed = leadsCount > 0 && leadsCount <= 4;
@@ -264,7 +267,7 @@ export default function ProviderLeadsView({
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-serif font-bold text-slate-900">
-            {user?.subRole === 'SUPPLIER_SELLER' ? 'Purchase Requests' : 'Booking Requests'}
+            {isWholesale ? 'Purchase Requests' : 'Booking Requests'}
           </h2>
           <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wider mt-1">
             Based on your categories:{' '}
@@ -384,7 +387,7 @@ export default function ProviderLeadsView({
                         <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-1 text-slate-400 text-[10px]"><Eye className="w-3 h-3" />{renderViewCount(lead)} views</div>
                           <button onClick={() => onSetQuotingInquiryId(lead.id!)} className="px-5 py-2 bg-[#d49b35] text-white text-xs font-bold rounded-xl hover:bg-[#a37d35] transition-all shadow-md active:scale-95">
-                            {user?.subRole === 'SUPPLIER_SELLER' ? 'Quote for Supply' : 'Submit Quote'}
+                            {isWholesale ? 'Quote for Supply' : 'Submit Quote'}
                           </button>
                         </div>
                       </div>
@@ -398,7 +401,7 @@ export default function ProviderLeadsView({
                           <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
                             <div className="flex items-center gap-1 text-slate-400 text-[10px]"><Eye className="w-3 h-3" />{renderViewCount(lead)} views</div>
                             <button onClick={() => onSetQuotingInquiryId(lead.id!)} className="px-5 py-2 bg-[#d49b35] text-white text-xs font-bold rounded-xl hover:bg-[#a37d35] transition-all shadow-md active:scale-95">
-                              {user?.subRole === 'SUPPLIER_SELLER' ? 'Quote for Supply' : 'Submit Quote'}
+                              {isWholesale ? 'Quote for Supply' : 'Submit Quote'}
                             </button>
                           </div>
                         </div>
