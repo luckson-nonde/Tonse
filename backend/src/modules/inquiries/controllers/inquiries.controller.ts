@@ -96,11 +96,35 @@ export class InquiriesController {
       ...query,
     };
 
-    // ENFORCE RBAC: Buyers strictly see their own inquiries
+    // ENFORCE RBAC. Buyers strictly see their own inquiries — buyerId is
+    // pinned to the JWT subject regardless of what they passed.
     if (req.user.role === 'BUYER') {
       filters.buyerId = req.user.id;
+      return this.inquiriesService.findAll(filters);
     }
 
+    // ADMIN gets the global feed (audit / verification queue).
+    if (req.user.role === 'ADMIN') {
+      return this.inquiriesService.findAll(filters);
+    }
+
+    // SELLER / SERVICE_PROVIDER must NOT use the unfiltered feed — the
+    // category-aware matched view at GET /inquiries/leads/me is the
+    // canonical visibility surface for them. Returning the whole
+    // inquiries table here was the leak that let two unrelated sellers
+    // see the same three inquiries on their dashboard regardless of
+    // category. Refuse and steer.
+    if (!filters.buyerId) {
+      throw new ForbiddenException(
+        'Sellers and service providers must use GET /inquiries/leads/me for category-matched leads.',
+      );
+    }
+    // Caller passed an explicit buyerId — only allow if it's their own
+    // (buyers fetching their own through this path) or admin (handled
+    // above). Anyone else is fishing.
+    if (filters.buyerId !== req.user.id) {
+      throw new ForbiddenException('You can only filter inquiries by your own buyerId.');
+    }
     return this.inquiriesService.findAll(filters);
   }
 

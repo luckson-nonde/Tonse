@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsNotEmpty,
   IsOptional,
+  IsArray,
   Matches,
 } from 'class-validator';
 
@@ -50,4 +51,27 @@ export class RegisterDto {
   })
   @IsOptional()
   dob?: string; // Date of Birth - Optional, ISO 8601 format (YYYY-MM-DD)
+
+  /**
+   * Stable category IDs the seller / service-provider subscribes to.
+   * Carried directly through registration so the active profile + its
+   * `seller_profile_categories` rows + the archetype cache all land in
+   * the same transaction as user creation. Without this they had to
+   * arrive in a follow-up PATCH /users/:id, which silently failed for
+   * months — every seller ended up with empty subscriptions and zero
+   * matched leads.
+   */
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  categoryIds?: string[];
+
+  /**
+   * Optional sub-role hint (e.g. PRODUCT_SELLER, SUPPLIER_SELLER). Lands
+   * on the active profile so categoryIds + subRole are coherent at
+   * registration time.
+   */
+  @IsString()
+  @IsOptional()
+  subRole?: string;
 }

@@ -55,6 +55,8 @@ export class AuthService {
       profilePicture,
       nrcDocument,
       dob,
+      categoryIds,
+      subRole,
     } = registerDto;
 
     // Validate required NRC field
@@ -106,7 +108,12 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(password, 10);
 
     try {
-      // Register user using the three-tier identity system
+      // Register user using the three-tier identity system. categoryIds
+      // + subRole travel into the profile create at register time, so
+      // seller_profile_categories rows + the archetype cache land in the
+      // same transaction as user creation. The previous flow relied on a
+      // follow-up PATCH /users/:id which silently failed for every
+      // seller registered to date.
       const user = await this.usersService.register(
         normalizedNrc,
         name,
@@ -118,7 +125,8 @@ export class AuthService {
         dob,
         nrcDocument,
         ipAddress,
-        userAgent
+        userAgent,
+        { categoryIds, subRole },
       );
 
       // Phase 3: profile fields (name, email, verificationStatus) live on

@@ -28,6 +28,12 @@ export interface RegisterRequest {
    * users.nrcDocumentPath; admins use it to verify the NRC number. */
   nrcDocument?: string;
   dob?: string;
+  /** Stable category IDs for sellers / service-providers. Seeded into
+   * the profile + seller_profile_categories at registration time so
+   * matching is live the moment the seller logs in. */
+  categoryIds?: string[];
+  /** Optional sub-role hint (PRODUCT_SELLER / SUPPLIER_SELLER / etc.). */
+  subRole?: string;
 }
 
 export interface RegisterResponse {

@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   BadRequestException,
   ConflictException,
   NotFoundException,
@@ -62,6 +63,8 @@ type ActiveProfile = BuyerProfile | SellerProfile | ServiceProviderProfile;
  */
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
@@ -393,11 +396,27 @@ export class UsersService {
   async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
     const { userPatch, profilePatch } = this.splitUpdatePayload(updateUserDto as any);
 
+    // Diagnostic — mirrors MatchingService's "(profileId, matchedCategoryIds,
+    // inquiryCount)" pattern so the next "categories didn't land" report is
+    // findable in one log scan. Logs the routing decision before any write
+    // happens; pairs with a "...wrote N junction rows" line below.
+    const profileKeys = Object.keys(profilePatch);
+    const incomingCategoryIds = (profilePatch as any).categoryIds;
+    this.logger.log(
+      `update(${id}): userKeys=[${Object.keys(userPatch).join(',')}] ` +
+        `profileKeys=[${profileKeys.join(',')}] ` +
+        `categoryIds=${
+          Array.isArray(incomingCategoryIds)
+            ? `[${incomingCategoryIds.length}]`
+            : 'null'
+        }`,
+    );
+
     if (Object.keys(userPatch).length > 0) {
       await this.userRepository.update({ id }, userPatch);
     }
 
-    if (Object.keys(profilePatch).length > 0) {
+    if (profileKeys.length > 0) {
       const user = await this.userRepository.findOne({ where: { id } });
       if (user) {
         // categoryIds writes are isolated from the column patch — they
@@ -413,6 +432,9 @@ export class UsersService {
         if (!activeId || !activeType) {
           // Lazily create the matching profile row + categories in
           // one transaction.
+          this.logger.warn(
+            `update(${id}): no activeProfile yet, lazily creating role=${user.role}`,
+          );
           const created = await this.createProfileForRole(id, user.role, profilePatch);
           if (!created) {
             // Role with no profile concept (e.g. ADMIN) — nothing to write.
@@ -427,8 +449,13 @@ export class UsersService {
           }
           if (Array.isArray(categoryIds)) {
             await this.setProfileCategories(activeType, activeId, categoryIds);
+            this.logger.log(
+              `update(${id}): set ${categoryIds.length} categories on ${activeType}/${activeId}`,
+            );
           }
         }
+      } else {
+        this.logger.error(`update(${id}): user not found when applying profile patch`);
       }
     }
 
@@ -513,7 +540,17 @@ export class UsersService {
     dateOfBirth?: string,
     nrcDocumentPath?: string,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
+    /**
+     * Optional profile-side seed: categories the user subscribes to (for
+     * sellers / service-providers, drives matching) and an optional
+     * subRole. Carried at register time so the active profile + its
+     * `seller_profile_categories` rows + the archetype cache all land
+     * in the same transaction. Without this they had to arrive in a
+     * follow-up PATCH /users/:id, which silently failed for every
+     * seller registered to date.
+     */
+    profileSeed?: { categoryIds?: string[]; subRole?: string },
   ): Promise<User> {
     // Normalize NRC
     const normalizedNrc = UserDisplayIdUtil.normalizeIdentifier(nrcNumber);
@@ -570,6 +607,12 @@ export class UsersService {
     // Create the matching profile row and point activeProfileId at it. The
     // profile carries the user-facing fields (name, email, phone, etc.) so
     // /auth/me, /auth/login, and dashboards see consistent data.
+    //
+    // categoryIds + subRole are seeded here so the seller_profile_categories
+    // rows + the archetype cache land in the same transaction as user
+    // creation. createProfileForRole already understands categoryIds —
+    // strips them out, writes the junction rows, recomputes archetype,
+    // commits, all inside DataSource.transaction.
     await this.createProfileForRole(savedUser.id, role, {
       name,
       email: email.toLowerCase(),
@@ -577,7 +620,17 @@ export class UsersService {
       profilePicture: profilePicture || null,
       dateOfBirth: dateOfBirth || null,
       verificationStatus: 'PENDING',
+      ...(profileSeed?.subRole ? { subRole: profileSeed.subRole } : {}),
+      ...(Array.isArray(profileSeed?.categoryIds) && profileSeed.categoryIds.length > 0
+        ? { categoryIds: profileSeed.categoryIds }
+        : {}),
     });
+
+    if (profileSeed?.categoryIds?.length) {
+      this.logger.log(
+        `register(${savedUser.id}): seeded ${profileSeed.categoryIds.length} categories on ${role} profile at registration time`,
+      );
+    }
 
     // Log the registration event
     await this.createAuditLog(

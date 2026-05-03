@@ -220,6 +220,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // the backend without a token, the apiClient 401 interceptor
         // force-redirected to /login, and the seller's onboarding died
         // before they could even reach the next step.
+        // Pull `categoryIds` + `subRole` out of extraProfile and put them
+        // directly on /auth/register so they land in the same backend
+        // transaction as user creation (junction rows + archetype cache).
+        // The rest of extraProfile (location, lat/lng, area, …) still
+        // flows via the post-register updateProfile call.
+        const seedCategoryIds: string[] | undefined =
+          Array.isArray(extraProfile?.categoryIds) && extraProfile!.categoryIds.length > 0
+            ? extraProfile!.categoryIds
+            : undefined;
+        const seedSubRole: string | undefined =
+          typeof extraProfile?.subRole === 'string' && extraProfile!.subRole
+            ? extraProfile!.subRole
+            : undefined;
+        const remainingProfile = extraProfile ? { ...extraProfile } : undefined;
+        if (remainingProfile) {
+          delete (remainingProfile as any).categoryIds;
+          delete (remainingProfile as any).subRole;
+        }
+
         const registerResponse = await authService.register({
           email,
           password,
@@ -230,23 +249,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           profilePicture,
           dob,
           ...(nrcDocument ? { nrcDocument } : {}),
+          ...(seedCategoryIds ? { categoryIds: seedCategoryIds } : {}),
+          ...(seedSubRole ? { subRole: seedSubRole } : {}),
         });
 
         const newUserId = registerResponse?.user?.id;
         if (!newUserId) throw new Error('Registration response missing user id');
 
-        // Apply the extra profile (categoryIds, location, subRole, etc.)
-        // synchronously while we hold the registration tokens. After this
-        // returns, the seller_profile_categories rows exist and the
-        // archetype cache is computed.
-        if (extraProfile && Object.keys(extraProfile).length > 0) {
-          try {
-            await authService.updateProfile(newUserId, extraProfile);
-          } catch (e) {
-            // Non-fatal — registration itself succeeded; user can complete
-            // profile from settings if this update fails.
-            console.warn('Failed to apply extra profile data after register:', e);
-          }
+        // Apply the rest of the extra profile (location, lat/lng, area,
+        // radius, etc.) synchronously while we hold the registration
+        // tokens. categoryIds + subRole already landed in the register
+        // call above, so this round-trip is no longer load-bearing for
+        // matching — but the location fields still need to land for the
+        // dashboard / inquiry creation flows to work.
+        //
+        // Errors here used to be swallowed via console.warn. They no
+        // longer are — the registration form surfaces the failure so
+        // the user can retry instead of finding out hours later.
+        if (remainingProfile && Object.keys(remainingProfile).length > 0) {
+          await authService.updateProfile(newUserId, remainingProfile);
         }
 
         // Pull the now-merged user (auth row flattened with the active

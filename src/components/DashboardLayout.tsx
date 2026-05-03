@@ -38,7 +38,7 @@ import { getBusinessType, BusinessType } from '../services/categories';
 import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useMemo, useEffect } from 'react';
-import { useUserInquiries } from '../hooks/useInquiries';
+import { useUserInquiries, useMatchedLeads } from '../hooks/useInquiries';
 import { useUserQuotes } from '../hooks/useQuotes';
 import { Inquiry } from '../types';
 
@@ -72,7 +72,24 @@ function businessTypeToCalendarTone(type: ReturnType<typeof getBusinessType>): C
 // Calendar panel shown in right sidebar on dashboard/home tabs
 const CalendarPanel = () => {
   const { user } = useAuth();
-  const { inquiries } = useUserInquiries(user?.id);
+  // Inquiry-source split is role-shaped, not ownership-shaped:
+  //   - BUYERS authored their inquiries — own them, see them on the
+  //     calendar.
+  //   - SELLERS / SERVICE_PROVIDERS don't own inquiries; they MATCH them
+  //     by category subscription. The calendar shows whichever open
+  //     inquiries fall under their seller_profile_categories tree, via
+  //     the same recursive-ancestry endpoint the leads tab uses.
+  // Calling useUserInquiries on a seller before this fix issued a bare
+  // GET /inquiries which the backend returned the entire inquiries
+  // table for — every seller saw every buyer's inquiry on the
+  // calendar regardless of category. That's the leak this branch
+  // closes.
+  const isBuyer = user?.role === 'BUYER';
+  const { inquiries: ownInquiries } = useUserInquiries(isBuyer ? user?.id : undefined);
+  const { inquiries: matchedInquiries } = useMatchedLeads(
+    isBuyer ? undefined : user?.id,
+  );
+  const inquiries = isBuyer ? ownInquiries : matchedInquiries;
   const { quotes } = useUserQuotes(user?.id);
 
   const tone = useMemo<CalendarTone>(

@@ -109,18 +109,24 @@ export async function createInquiry(payload: CreateInquiryPayload): Promise<Inqu
 }
 
 /**
- * Fetch all inquiries for current user from PostgreSQL backend
+ * Fetch a buyer's authored inquiries.
+ *
+ * Despite the broad name, this only makes sense for BUYERS — sellers
+ * don't author inquiries; they MATCH them via category subscription
+ * (`fetchLeadsForMe` is the right call for that). The previous
+ * implementation called bare `GET /inquiries`, which the backend
+ * returned the entire inquiries table for any non-BUYER caller —
+ * silently making this function a "fetch every open inquiry in the
+ * system" leak. We now hit the explicit per-buyer endpoint, which
+ * the backend gates on `buyerId === req.user.id`.
  */
 export async function fetchUserInquiries(userId: string): Promise<InquiryResponse[]> {
+  if (!userId) return [];
   try {
-    const response = await apiClient.get<{ data: any[]; total: number }>('/inquiries');
-
-    if (!response.data?.data) {
-      return [];
-    }
-
-    const leads = Array.isArray(response.data.data) ? response.data.data : [];
-    return leads.map(normalizeInquiry);
+    const response = await apiClient.get<any[]>(`/inquiries/buyer/${userId}`);
+    const data = response.data;
+    if (!Array.isArray(data)) return [];
+    return data.map(normalizeInquiry);
   } catch (error) {
     console.error('Error fetching user inquiries:', error);
     return [];
