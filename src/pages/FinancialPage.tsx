@@ -24,6 +24,7 @@ import { db } from '../services/api/database';
 import Button from '../components/Button';
 import { generateVirtualAccount, formatCurrency } from '../utils/financeUtils';
 import ReadingOwl from '../assets/images/empty-states/owl_reading.png';
+import TriumphantOwl from '../assets/images/empty-states/owl_triumphant.png';
 import { lencoService } from '../services/api/lencoService';
 
 interface FinancialPageProps {
@@ -40,6 +41,14 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
   const [confirmPinInput, setConfirmPinInput] = useState('');
   const [isCreatingPin, setIsCreatingPin] = useState(false);
   const [creationStep, setCreationStep] = useState<'enter' | 'confirm'>('enter');
+  // Inline error message in the PIN keypad (replaces native alert()s for
+  // mismatches / wrong PIN, which feel cheap in a financial flow).
+  const [pinError, setPinError] = useState<string | null>(null);
+  // Drives the celebrating-owl success modal that replaces the native
+  // "PIN created successfully!" alert. Independent from isPinVerified
+  // so the financial page is already mounted behind the celebration —
+  // dismissing the modal feels like a reveal, not a redirect.
+  const [showPinSuccess, setShowPinSuccess] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [amountInput, setAmountInput] = useState('');
@@ -74,14 +83,10 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
     .reduce((sum, t) => sum + t.amount, 0);
 
   const handlePinSubmit = async () => {
+    setPinError(null);
     if (isCreatingPin) {
       if (creationStep === 'enter') {
         if (pinInput.length !== 4) return;
-        // Stash the first entry so the confirm step has something to
-        // compare against. Previous code cleared pinInput without
-        // saving it, so confirmPinInput stayed empty forever and the
-        // equality check on the next step always failed — meaning the
-        // PIN was never actually persisted via updateUser.
         setConfirmPinInput(pinInput);
         setCreationStep('confirm');
         setPinInput('');
@@ -90,14 +95,13 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
         if (pinInput === confirmPinInput) {
           await updateUser({ pin: pinInput });
           setIsPinVerified(true);
-          setShowPinModal(false);
-          // Reset confirmation state so a re-open of the modal starts
-          // clean (covers the rare "user signs out and a new user
-          // signs in on the same browser tab" path).
+          // Reveal the financial page behind a celebrating-owl modal
+          // rather than a native alert — feels right for a "first PIN
+          // set" moment. Modal close is what dismisses showPinModal.
+          setShowPinSuccess(true);
           setConfirmPinInput('');
-          alert('PIN created successfully!');
         } else {
-          alert('PINs do not match. Please try again.');
+          setPinError("PINs don't match — let's try again.");
           setPinInput('');
           setConfirmPinInput('');
           setCreationStep('enter');
@@ -106,7 +110,7 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
     } else {
       if (pinInput.length !== 4) return;
       if (!user?.id) {
-        alert('Please sign in again.');
+        setPinError('Please sign in again.');
         return;
       }
       // Server-side verify — actual PIN value never travels to the client.
@@ -115,7 +119,7 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
         setIsPinVerified(true);
         setShowPinModal(false);
       } else {
-        alert('Incorrect PIN. Please try again.');
+        setPinError('Incorrect PIN. Try again.');
         setPinInput('');
       }
     }
@@ -185,66 +189,109 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
   };
 
   if (!isPinVerified && showPinModal) {
+    const headerLabel = isCreatingPin
+      ? creationStep === 'enter'
+        ? 'Step 1 of 2 · Set PIN'
+        : 'Step 2 of 2 · Confirm'
+      : 'Secure Access';
+    const titleText = isCreatingPin
+      ? creationStep === 'enter'
+        ? 'Create Your Security PIN'
+        : 'Confirm Your Security PIN'
+      : 'Enter Security PIN';
+    const subtitleText = isCreatingPin
+      ? creationStep === 'enter'
+        ? 'Choose a 4-digit PIN — this guards every move on your virtual account.'
+        : 'Re-enter the same 4 digits so a typo doesn’t lock you out.'
+      : 'Enter your 4-digit PIN to unlock your virtual account.';
+
     return (
-      <div className={isInsideDashboard ? 'w-full py-12 flex flex-col items-center justify-center' : 'min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4'}>
-        <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-xl border border-slate-100 text-center">
-          <div className="w-12 h-12 bg-[#fdf6e9] rounded-2xl flex items-center justify-center text-[#d49b35] mx-auto mb-4">
-            <Lock className="w-6 h-6" />
+      <div
+        className={
+          isInsideDashboard
+            ? 'w-full py-12 flex flex-col items-center justify-center'
+            : 'min-h-screen bg-gradient-to-b from-[#f5f2ed] to-[#ece4d4] flex flex-col items-center justify-center p-4'
+        }
+      >
+        <div className="w-full max-w-md bg-brand-white rounded-[28px] p-6 md:p-8 shadow-[0_24px_60px_-30px_rgba(26,22,18,0.25)] border border-[#e8e0d0] text-center relative overflow-hidden">
+          {/* Soft gold glow behind the lock icon */}
+          <div
+            aria-hidden
+            className="absolute -top-16 left-1/2 -translate-x-1/2 w-48 h-48 rounded-full bg-[#C9973A]/10 blur-3xl"
+          />
+
+          {/* Step pill */}
+          <div className="relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#C9973A]/10 text-[#C9973A] font-bold uppercase tracking-[0.18em] text-[10px] mb-4">
+            <Lock className="w-3 h-3" strokeWidth={2.5} />
+            {headerLabel}
           </div>
-          <div className="text-center space-y-1 mb-6">
-            <h2 className="text-xl md:text-2xl font-serif font-bold text-brand-dark leading-tight">
-              {isCreatingPin
-                ? creationStep === 'enter'
-                  ? 'Create Your Security PIN'
-                  : 'Confirm Your Security PIN'
-                : 'Enter Security PIN'}
+
+          <div className="relative text-center space-y-1.5 mb-7">
+            <h2 className="text-[22px] md:text-[26px] font-serif font-bold text-[#1a1612] leading-tight">
+              {titleText}
             </h2>
-            <p className="text-slate-500 md:text-[#64748b] font-sans text-[13px] md:text-[14px]">
-              {isCreatingPin
-                ? creationStep === 'enter'
-                  ? 'Set a 4-digit PIN to secure your financial account.'
-                  : 'Please re-enter your 4-digit PIN to confirm.'
-                : 'Please enter your 4-digit PIN to access your account.'}
+            <p className="text-[13px] md:text-[14px] text-[#1a1612]/55 font-medium leading-relaxed max-w-[320px] mx-auto">
+              {subtitleText}
             </p>
           </div>
 
-          <div className="flex justify-center gap-3 mb-6">
-            {[0, 1, 2, 3].map((i) => (
-              <div
-                key={`pin-dot-${i}`}
-                className={`w-12 h-14 rounded-lg border-2 flex items-center justify-center text-xl font-bold transition-all ${
-                  pinInput.length > i
-                    ? 'border-[#d49b35] bg-[#fdf6e9] text-[#d49b35]'
-                    : 'border-[#f1f5f9] bg-transparent text-slate-300'
-                }`}
-              >
-                {pinInput[i] ? '•' : ''}
-              </div>
-            ))}
+          {/* PIN dots — round, gold-glow when filled */}
+          <div className="relative flex justify-center gap-3 mb-3">
+            {[0, 1, 2, 3].map((i) => {
+              const filled = pinInput.length > i;
+              return (
+                <div
+                  key={`pin-dot-${i}`}
+                  className={`w-4 h-4 rounded-full transition-all duration-300 ${
+                    filled
+                      ? 'bg-gradient-to-b from-[#D5A547] to-[#C9973A] shadow-[0_0_0_4px_rgba(201,151,58,0.18)] scale-110'
+                      : 'bg-[#e8e0d0]'
+                  }`}
+                />
+              );
+            })}
           </div>
 
-          <div className="grid grid-cols-3 gap-3 mb-6">
+          {/* Inline error — replaces the native alert() that used to fire
+              on PIN mismatches and wrong-PIN entries. */}
+          <div className="h-5 mb-4 flex items-center justify-center">
+            {pinError && (
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-rose-500 animate-in fade-in duration-200">
+                {pinError}
+              </p>
+            )}
+          </div>
+
+          {/* Premium keypad */}
+          <div className="relative grid grid-cols-3 gap-2.5 mb-7">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, '', 0, 'delete'].map((num, i) => (
               <button
                 key={num === '' ? `empty-${i}` : num}
+                type="button"
                 onClick={() => {
                   if (num === 'delete') {
                     setPinInput((prev) => prev.slice(0, -1));
+                    setPinError(null);
                   } else if (typeof num === 'number' && pinInput.length < 4) {
                     const newVal = pinInput + num;
                     setPinInput(newVal);
+                    setPinError(null);
                     if (isCreatingPin && creationStep === 'enter') {
                       setConfirmPinInput(newVal);
                     }
                   }
                 }}
-                className={`h-14 rounded-[14px] flex items-center justify-center text-[18px] font-bold transition-colors ${
+                className={`group h-16 rounded-2xl flex items-center justify-center text-[22px] font-serif font-bold transition-all duration-150 ${
                   num === ''
                     ? 'invisible'
-                    : 'bg-slate-50 text-brand-dark hover:bg-slate-100 active:bg-slate-200'
+                    : 'bg-[#faf6ee] border border-[#e8e0d0] text-[#1a1612] shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_2px_8px_-4px_rgba(26,22,18,0.06)] hover:border-[#C9973A]/55 hover:bg-[#f3e9d2] active:scale-[0.96]'
                 }`}
               >
-                {num === 'delete' ? '⌫' : num}
+                {num === 'delete' ? (
+                  <span className="text-[#C9973A]/70 text-[20px]">&#x232B;</span>
+                ) : (
+                  num
+                )}
               </button>
             ))}
           </div>
@@ -252,11 +299,11 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
           <Button
             onClick={handlePinSubmit}
             disabled={pinInput.length !== 4}
-            className="w-full py-3.5 text-[15px] shadow-md"
+            className="w-full h-[58px] text-[13px] font-sans font-bold uppercase tracking-[0.22em] bg-gradient-to-b from-[#D5A547] to-[#C9973A] hover:from-[#C9973A] hover:to-[#B08432] disabled:from-[#e8e4dc] disabled:to-[#e0dccf] disabled:text-[#1a1612]/30 disabled:cursor-not-allowed shadow-[0_12px_28px_-8px_rgba(201,151,58,0.4)] disabled:shadow-none rounded-2xl text-white transition-all active:scale-[0.98]"
           >
             {isCreatingPin
               ? creationStep === 'enter'
-                ? 'Continue'
+                ? 'Continue →'
                 : 'Confirm & Create PIN'
               : 'Unlock Account'}
           </Button>
@@ -264,9 +311,9 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
           {!isInsideDashboard && (
             <button
               onClick={() => navigate(-1)}
-              className="mt-4 text-[13px] font-bold text-slate-400 hover:text-slate-600"
+              className="mt-4 text-[11px] font-bold uppercase tracking-[0.18em] text-[#1a1612]/45 hover:text-[#1a1612]/70 transition-colors"
             >
-              Go Back
+              ← Go Back
             </button>
           )}
         </div>
@@ -700,6 +747,64 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
                   )}
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Celebrating-owl PIN-set success — fires once after the user
+          confirms their PIN. Replaces the native alert() that broke
+          the premium feel of the rest of the flow. The financial page
+          is already rendered behind it, so dismissing reveals the
+          wallet rather than triggering a redirect. */}
+      {showPinSuccess && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-[#1a1612]/55 backdrop-blur-md animate-in fade-in duration-200"
+          onClick={() => setShowPinSuccess(false)}
+        >
+          <div
+            className="relative w-full max-w-[420px] bg-brand-white rounded-[32px] overflow-hidden shadow-[0_40px_80px_-30px_rgba(26,22,18,0.45)] border border-[#e8e0d0] animate-in zoom-in-95 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Cream + gold gradient banner behind the owl */}
+            <div className="relative h-44 bg-gradient-to-b from-[#fdf6e9] to-[#f3e3bd] overflow-hidden">
+              <div
+                aria-hidden
+                className="absolute -top-10 left-1/2 -translate-x-1/2 w-72 h-72 rounded-full bg-[#C9973A]/15 blur-3xl"
+              />
+              <div
+                aria-hidden
+                className="absolute inset-0 flex items-center justify-center"
+              >
+                <div className="relative w-44 h-44">
+                  <div className="absolute inset-0 rounded-full bg-white/40 animate-ping" />
+                  <div className="absolute inset-3 rounded-full bg-white/60" />
+                  <img
+                    src={TriumphantOwl}
+                    alt=""
+                    className="relative w-full h-full object-contain drop-shadow-[0_12px_24px_rgba(201,151,58,0.35)]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-7 text-center">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-600 mb-2 flex items-center justify-center gap-1.5">
+                <Check className="w-3 h-3" strokeWidth={3} />
+                PIN Locked In
+              </p>
+              <h3 className="text-[24px] font-serif font-bold text-[#1a1612] leading-tight mb-2">
+                You're all set!
+              </h3>
+              <p className="text-[13px] text-[#1a1612]/55 leading-relaxed max-w-[320px] mx-auto mb-6">
+                Your virtual account is secured with your new 4-digit PIN. You'll need it for deposits, withdrawals, and sensitive moves.
+              </p>
+              <Button
+                onClick={() => setShowPinSuccess(false)}
+                className="w-full h-[54px] text-[13px] font-sans font-bold uppercase tracking-[0.22em] bg-gradient-to-b from-[#D5A547] to-[#C9973A] hover:from-[#C9973A] hover:to-[#B08432] shadow-[0_12px_28px_-8px_rgba(201,151,58,0.4)] rounded-2xl text-white transition-all active:scale-[0.98]"
+              >
+                Open my wallet →
+              </Button>
             </div>
           </div>
         </div>
