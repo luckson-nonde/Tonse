@@ -317,7 +317,7 @@ export default function DashboardLayout({
 
       return true;
     });
-  }, [user, businessType]);
+  }, [user, businessType, businessTypes, activeContext]);
 
   // Adapt the label of universal nav items based on businessType. The schema
   // declares "Booking Requests" generically; for a REPAIR_SERVICE shop we
