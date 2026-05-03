@@ -286,10 +286,20 @@ export default function LocationDetails({
    *  - the API errors before any reading lands (treat as failure)
    */
   const handleUseMyLocation = () => {
+    // Snapshot the previous reading before we wipe state. If the scan
+    // fails, we restore it so the user doesn't lose progress to a flaky
+    // re-scan — a stale-but-valid pin is more useful than no pin.
+    const prevReading =
+      latitude !== undefined && longitude !== undefined
+        ? { lat: latitude, lng: longitude, accuracy: accuracyMeters }
+        : null;
+
     setIsLocating(true);
     setGeoError(null);
     setResolvedNote(null);
     setAccuracyMeters(undefined);
+    setLatitude(undefined);
+    setLongitude(undefined);
 
     if (!navigator.geolocation) {
       setGeoError('Geolocation is not supported by your browser.');
@@ -306,6 +316,17 @@ export default function LocationDetails({
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
       }
+    };
+
+    // If the scan failed and we had a prior reading, put it back so the UI
+    // doesn't lose progress. Returns true if we restored.
+    const restorePrev = (): boolean => {
+      if (!prevReading) return false;
+      setLatitude(prevReading.lat);
+      setLongitude(prevReading.lng);
+      setAccuracyMeters(prevReading.accuracy);
+      setUseGps(true);
+      return true;
     };
 
     const commit = async (position: GeolocationPosition) => {
@@ -377,20 +398,24 @@ export default function LocationDetails({
         }
       },
       (error) => {
-        // If we already have a reading, ignore late errors — we'll commit
-        // the best one when the timer fires. Only escalate when we truly
-        // have nothing.
+        // If we already have a reading from this scan, ignore late errors —
+        // the timer will commit the best one. Only escalate when we truly
+        // have nothing from this attempt.
         if (bestPosition) return;
         if (settled) return;
         settled = true;
         cleanup();
-        console.error('Geolocation error:', error);
+        const restored = restorePrev();
         const msg =
           error.code === error.PERMISSION_DENIED
             ? 'Location permission denied. Allow GPS in your browser settings, or switch to Manual.'
             : error.code === error.TIMEOUT
-              ? 'GPS timed out. Try again, or switch to Manual.'
-              : 'Unable to retrieve your location. Switch to Manual to enter it yourself.';
+              ? restored
+                ? "Couldn't refine — keeping the previous reading. Try again or switch to Manual for a precise address."
+                : 'GPS timed out. Try again, or switch to Manual.'
+              : restored
+                ? "Couldn't refine — keeping the previous reading."
+                : 'Unable to retrieve your location. Switch to Manual to enter it yourself.';
         setGeoError(msg);
         setIsLocating(false);
       },
@@ -398,7 +423,8 @@ export default function LocationDetails({
     );
 
     // Hard ceiling on the watch window. Whatever's best after this elapses
-    // is what we commit. If still empty, we surfaced an error path above.
+    // is what we commit. If nothing came in, fall back to the prior reading
+    // (if any) rather than wiping the user's pin on a flaky re-scan.
     window.setTimeout(() => {
       if (settled) return;
       if (bestPosition) {
@@ -406,7 +432,12 @@ export default function LocationDetails({
       } else {
         settled = true;
         cleanup();
-        setGeoError('GPS timed out — try again, or switch to Manual.');
+        const restored = restorePrev();
+        setGeoError(
+          restored
+            ? "Couldn't refine — keeping the previous reading. Try again or switch to Manual for a precise address."
+            : 'GPS timed out — try again, or switch to Manual.'
+        );
         setIsLocating(false);
       }
     }, 12000);
@@ -504,12 +535,12 @@ export default function LocationDetails({
                         ? 'GPS Issue'
                         : 'GPS Active'}
                 </p>
-                {latitude !== undefined && longitude !== undefined && (
+                {!isLocating && latitude !== undefined && longitude !== undefined && (
                   <p className="text-[12px] font-mono text-[#1a1612]/55 tabular-nums">
                     {latitude.toFixed(6)}, {longitude.toFixed(6)}
                   </p>
                 )}
-                {accuracyMeters !== undefined && (
+                {!isLocating && accuracyMeters !== undefined && (
                   <p
                     className={`text-[10px] font-bold uppercase tracking-[0.18em] mt-1 tabular-nums ${
                       accuracyMeters <= 30
@@ -525,11 +556,31 @@ export default function LocationDetails({
                     accuracy
                   </p>
                 )}
-                {accuracyMeters !== undefined && accuracyMeters > 150 && !isLocating && (
-                  <p className="text-[11px] text-rose-500/80 mt-1.5 max-w-[260px] mx-auto leading-snug">
-                    GPS lock is loose. Move outside, re-scan, or switch to Manual to enter the address.
-                  </p>
-                )}
+                {!isLocating &&
+                  accuracyMeters !== undefined &&
+                  accuracyMeters > 500 && (
+                    <div className="mt-3 max-w-[280px] mx-auto">
+                      <p className="text-[11px] text-rose-500/85 leading-snug mb-2">
+                        This device has no GPS chip — the reading is triangulated from Wi-Fi/IP
+                        and isn't precise enough to match nearby providers.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setUseGps(false)}
+                        className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C9973A] hover:underline"
+                      >
+                        Switch to Manual →
+                      </button>
+                    </div>
+                  )}
+                {!isLocating &&
+                  accuracyMeters !== undefined &&
+                  accuracyMeters > 150 &&
+                  accuracyMeters <= 500 && (
+                    <p className="text-[11px] text-[#C9973A]/85 mt-1.5 max-w-[260px] mx-auto leading-snug">
+                      GPS lock is loose. Move outside or re-scan for a tighter pin.
+                    </p>
+                  )}
               </div>
             </div>
 
