@@ -13,13 +13,11 @@ import { User } from './user.entity';
 /**
  * SellerProfile — Phase 3 of the users-table restructure.
  *
- * Holds the goods-seller-specific data that used to live on users:
- * business identity (companyName, tpin, PACRA cert), what they sell
- * (categories), business location, verification audit fields.
+ * Holds everything a goods-seller needs as a "profile": display name,
+ * contact info, business identity (PACRA, ZRA), location, categories,
+ * verification audit. users carries only auth/identity.
  *
- * userId FK is NOT unique — supports future role-switching (a user can
- * carry both seller_profiles and service_provider_profiles rows; the
- * active one is pointed at by users.activeProfileId).
+ * userId FK is NOT unique — supports future role-switching.
  */
 @Entity('seller_profiles')
 @Index('idx_seller_profiles_user', ['userId'])
@@ -34,6 +32,29 @@ export class SellerProfile {
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user: User;
+
+  // ===== Identity-on-this-profile =====
+
+  /** Display name (often the brand / shop name). */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  name: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  email: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  phone: string;
+
+  @Column({ type: 'date', nullable: true })
+  dateOfBirth: string;
+
+  @Column({ type: 'text', nullable: true })
+  profilePicture: string;
+
+  @Column({ type: 'text', nullable: true })
+  socialLinks: string;
+
+  // ===== Sub-shape =====
 
   /** PRODUCT_SELLER / HYBRID_SELLER / SUPPLIER_SELLER */
   @Column({ type: 'varchar', length: 50, nullable: true })
@@ -57,7 +78,7 @@ export class SellerProfile {
   @Column({ type: 'uuid', nullable: true })
   businessLicenseId: string;
 
-  // ===== Verification (audit fields) =====
+  // ===== Verification audit =====
 
   @Column({
     type: 'enum',
@@ -75,8 +96,7 @@ export class SellerProfile {
   @Column({ type: 'timestamp', nullable: true })
   rejectedAt: Date;
 
-  // ===== Business location (the shop's address — distinct from a buyer's
-  // delivery address that lives on buyer_profiles). =====
+  // ===== Business location (the shop's address) =====
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   province: string;

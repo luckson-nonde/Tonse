@@ -16,17 +16,12 @@ import { User } from './user.entity';
  * Covers anything customers BOOK rather than buy: repair shops, event
  * venues, equipment rental, catering, decor, planning, photography, DJs,
  * bands, MCs, dancers, comedians, performers, AND skilled labour
- * (carpenters, welders, plumbers, etc.). Per the Phase 2 taxonomy fix,
- * none of these transfer ownership of goods, so they're not sellers.
+ * (carpenters, welders, plumbers). Per the Phase 2 taxonomy fix, none
+ * of these transfer ownership of goods, so they're not sellers.
  *
- * The shape closely mirrors SellerProfile because both can be
- * verified businesses (PACRA, TPIN) with a service-area location, but
- * service_provider also carries labour-specific fields and uses different
- * subRole values.
- *
- * userId FK is NOT unique — supports role-switching (a single user
- * row can have a seller_profiles AND a service_provider_profiles row,
- * with users.activeProfileId pointing at whichever is current).
+ * Mirrors SellerProfile's shape (both can be verified businesses with
+ * a service-area location) plus labour-specific fields. userId FK is
+ * NOT unique — supports future role-switching.
  */
 @Entity('service_provider_profiles')
 @Index('idx_service_provider_profiles_user', ['userId'])
@@ -41,6 +36,30 @@ export class ServiceProviderProfile {
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user: User;
+
+  // ===== Identity-on-this-profile =====
+
+  /** Display name — for solo practitioners often the person's name; for
+   *  agencies the brand / business name. */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  name: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  email: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  phone: string;
+
+  @Column({ type: 'date', nullable: true })
+  dateOfBirth: string;
+
+  @Column({ type: 'text', nullable: true })
+  profilePicture: string;
+
+  @Column({ type: 'text', nullable: true })
+  socialLinks: string;
+
+  // ===== Sub-shape =====
 
   /** INDIVIDUAL_PROVIDER / AGENCY_PROVIDER / SKILLED_LABOUR */
   @Column({ type: 'varchar', length: 50, nullable: true })
@@ -58,8 +77,8 @@ export class ServiceProviderProfile {
   @Column({ type: 'simple-array', default: '' })
   labourSubTypes: string[];
 
-  // ===== Business identity (optional for solo practitioners; required
-  // when registering as an Agency or formal Skilled Labour business). =====
+  // ===== Business identity (optional for solo; required for Agency / formal
+  // skilled-labour business). =====
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   companyName: string;
@@ -73,7 +92,7 @@ export class ServiceProviderProfile {
   @Column({ type: 'uuid', nullable: true })
   businessLicenseId: string;
 
-  // ===== Verification (audit fields) =====
+  // ===== Verification audit =====
 
   @Column({
     type: 'enum',
@@ -91,7 +110,7 @@ export class ServiceProviderProfile {
   @Column({ type: 'timestamp', nullable: true })
   rejectedAt: Date;
 
-  // ===== Service-area location (where the provider operates). =====
+  // ===== Service-area location (where the provider operates) =====
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   province: string;

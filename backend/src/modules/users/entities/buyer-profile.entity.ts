@@ -13,17 +13,18 @@ import { User } from './user.entity';
 /**
  * BuyerProfile — Phase 3 of the users-table restructure.
  *
- * Holds the buyer-specific data that used to live as columns on the users
- * table (delivery location, interests). Multiple BuyerProfile rows per user
- * are allowed so a user can switch between roles later — the active row is
- * pointed at by users.activeProfileId + users.activeProfileType.
+ * The contract: users holds auth/identity only. Everything else (the
+ * "proffer" of the user — who they are when wearing this role) lives
+ * on profiles. A buyer's profile carries their display name, contact
+ * info, delivery location, and the categories they typically source.
  *
- * The userId FK is intentionally NOT unique — Phase 3 makes role-switching
- * schema-ready (a single user can carry a buyer_profiles row AND a
- * seller_profiles row simultaneously, switching which is "active").
+ * userId FK is NOT unique — supports future role-switching (a single
+ * user can carry both a buyer_profiles row and a seller_profiles row;
+ * users.activeProfileId points at whichever is current).
  */
 @Entity('buyer_profiles')
 @Index('idx_buyer_profiles_user', ['userId'])
+@Index('idx_buyer_profiles_verification', ['verificationStatus'])
 export class BuyerProfile {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -35,7 +36,37 @@ export class BuyerProfile {
   @JoinColumn({ name: 'userId' })
   user: User;
 
-  /** Delivery / preferred-area location. */
+  // ===== Identity-on-this-profile =====
+
+  /** Display name on this profile (a person may keep a personal name as
+   *  buyer and a business brand name on a seller profile). */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  name: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  email: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  phone: string;
+
+  @Column({ type: 'date', nullable: true })
+  dateOfBirth: string;
+
+  @Column({ type: 'text', nullable: true })
+  profilePicture: string;
+
+  @Column({ type: 'text', nullable: true })
+  socialLinks: string;
+
+  // ===== Sub-shape =====
+
+  /** INDIVIDUAL_BUYER / COMPANY_BUYER / COMPANY_PROCUREMENT_OFFICER /
+   *  COMPANY_SECRETARY / COMPANY_RECEPTIONIST / COMPANY_MANAGER */
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  subRole: string;
+
+  // ===== Delivery / preferred-area location =====
+
   @Column({ type: 'varchar', length: 100, nullable: true })
   province: string;
 
@@ -51,13 +82,30 @@ export class BuyerProfile {
   @Column({ type: 'numeric', precision: 10, scale: 7, nullable: true })
   longitude: number;
 
+  @Column({ type: 'numeric', precision: 6, scale: 2, nullable: true })
+  radius: number;
+
   /** Buyer interest categories — what they typically source. */
   @Column({ type: 'simple-array', default: '' })
   categories: string[];
 
-  /** Sub-shape: INDIVIDUAL_BUYER vs COMPANY_BUYER (and the COMPANY_* roles). */
-  @Column({ type: 'varchar', length: 50, nullable: true })
-  subRole: string;
+  // ===== Verification (uniform shape across all profiles) =====
+
+  @Column({
+    type: 'enum',
+    enum: ['PENDING', 'VERIFIED', 'REJECTED', 'SUSPENDED', 'INCOMPLETE'],
+    default: 'PENDING',
+  })
+  verificationStatus: string;
+
+  @Column({ type: 'text', nullable: true })
+  verificationRejectionReason: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  verifiedAt: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  rejectedAt: Date;
 
   @CreateDateColumn()
   createdAt: Date;
