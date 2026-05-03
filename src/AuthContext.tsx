@@ -220,12 +220,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Apply extra profile fields to the brand-new user record BEFORE the
         // auto-login. Done synchronously here so we bypass the closure race
         // where Register.tsx's updateUser ref still pointed at user=null
-        // when called immediately after register(). RegisterResponse is flat
-        // — { id, email, name, role } — so we read .id directly, not .user.id.
-        // Phase 1: every field is now a typed column on users; the backend
-        // UpdateUserDto validates the payload, so we flat-pass it through
-        // (no more topLevel/metadata partitioning).
-        const newUserId = registerResponse?.id;
+        // when called immediately after register(). The backend wraps the
+        // user inside { success, user, message } (see RegisterResponse) and
+        // the global TransformInterceptor adds another { statusCode, data }
+        // envelope on top — apiClient strips that first envelope, so we
+        // read user.id, NOT id directly.
+        const newUserId = registerResponse?.user?.id;
         if (newUserId && extraProfile && Object.keys(extraProfile).length > 0) {
           try {
             await authService.updateProfile(newUserId, extraProfile);

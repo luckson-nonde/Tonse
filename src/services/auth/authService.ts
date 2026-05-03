@@ -28,10 +28,18 @@ export interface RegisterRequest {
 }
 
 export interface RegisterResponse {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
+  success: boolean;
+  message?: string;
+  // Backend returns the freshly-flattened user (auth row merged with the
+  // active profile). Callers care most about user.id so they can apply
+  // post-register profile updates before the auto-login fires.
+  user: {
+    id: string;
+    email?: string;
+    name?: string;
+    role?: string;
+    [key: string]: any;
+  };
 }
 
 export interface CurrentUserResponse {
