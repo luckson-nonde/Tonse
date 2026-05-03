@@ -1,5 +1,6 @@
 import { resolveSchemaForUser } from '../services/mergeAccountSchemas';
 import { NavigationItem } from '../services/accountSchemaTypes';
+import { useActiveProfileContext } from '../hooks/useActiveProfileContext';
 import {
   Menu,
   Bell,
@@ -213,15 +214,77 @@ export default function DashboardLayout({
   const businessTypes: BusinessType[] = useMemo(() => getBusinessTypes(user), [user]);
   const businessType: BusinessType = useMemo(() => getPrimaryBusinessType(user), [user]);
 
+  const { context: activeContext, setContext: setActiveContext } = useActiveProfileContext();
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+
+  // Sidebar Profile popover — Phase 4. Personal mode + per-archetype
+  // Business mode entries. Hidden for buyers (no business identity)
+  // and locked for staff with assignedArchetype (only their entry +
+  // Personal show, no "All").
+  const profilePersonaOptions = useMemo(() => {
+    const archetypes = businessTypes.filter(
+      (a) => a !== 'BUYER' && a !== 'ADMIN' && a !== 'UNKNOWN' && a !== 'LABOUR',
+    );
+    const lockedArchetype = (user as any)?.assignedArchetype;
+    if (lockedArchetype) {
+      // Staff: only their archetype + Personal.
+      return [
+        { kind: 'personal' as const, label: 'Personal Profile' },
+        { kind: 'business' as const, archetype: lockedArchetype, label: `Business · ${lockedArchetype}` },
+      ];
+    }
+    const opts: Array<
+      | { kind: 'personal'; label: string }
+      | { kind: 'all'; label: string }
+      | { kind: 'business'; archetype: string; label: string }
+    > = [
+      { kind: 'personal', label: 'Personal Profile' },
+    ];
+    if (archetypes.length > 1) {
+      opts.push({ kind: 'all', label: 'Business · All' });
+      archetypes.forEach((a) =>
+        opts.push({ kind: 'business', archetype: a, label: `Business · ${a}` }),
+      );
+    } else if (archetypes.length === 1) {
+      opts.push({ kind: 'business', archetype: archetypes[0], label: 'Business Profile' });
+    }
+    return opts;
+  }, [businessTypes, user]);
+
+  // What's currently selected, so the popover can highlight it.
+  const currentPersonaKey = (() => {
+    if (activeContext.type === 'personal') return 'personal';
+    if (activeContext.type === 'business') return `business:${activeContext.archetype}`;
+    return 'all';
+  })();
+
+  const handleSelectPersona = (
+    opt:
+      | { kind: 'personal'; label: string }
+      | { kind: 'all'; label: string }
+      | { kind: 'business'; archetype: string; label: string },
+  ) => {
+    if (opt.kind === 'personal') setActiveContext({ type: 'personal' });
+    else if (opt.kind === 'all') setActiveContext({ type: 'all' });
+    else setActiveContext({ type: 'business', archetype: opt.archetype as any });
+    setIsProfileMenuOpen(false);
+    // Land on the profile tab when switching to Personal; otherwise
+    // home for the new business persona's dashboard. Staff stay on
+    // leads (their natural surface) when they pick their assigned
+    // archetype.
+    if (opt.kind === 'personal') handleTabClick('profile');
+    else if ((user as any)?.assignedArchetype) handleTabClick('leads');
+    else handleTabClick('home');
+  };
+
   const navItems = useMemo(() => {
     if (!user) return [];
-    // Schema resolution. Multi-archetype sellers get the merged
-    // sidebar: items unique to one archetype concatenate, shared
-    // ids (like `products` or `home`) are won by the higher-
-    // priority archetype. BUYER and LABOUR don't compose; they
-    // short-circuit to their own schema inside resolveSchemaForUser.
+    // Schema resolution. Three-way: merged multi-archetype view
+    // (default), single-archetype scope when the seller switched the
+    // Profile popover to "Business · X", or identity-only Personal
+    // mode when they picked "Personal Profile".
     // See services/mergeAccountSchemas.ts for the full rules.
-    const schema = resolveSchemaForUser(user, businessTypes, businessType);
+    const schema = resolveSchemaForUser(user, businessTypes, businessType, activeContext);
 
     return schema.navigation.filter((item) => {
       if (item.permissions && Array.isArray(item.permissions)) {
@@ -515,6 +578,66 @@ export default function DashboardLayout({
         <div className="py-8 flex-1 overflow-y-auto scrollbar-hide">
           <nav className="space-y-2 md:space-y-3">
             {navItems.map((item) => {
+              // Phase 4: Profile is a persona switcher, not a route.
+              // Personal mode + per-archetype Business modes pop in
+              // line; selecting one switches the entire dashboard.
+              // Buyers don't see this (their `profile` is a regular
+              // route via the BUYER schema's NavLink path below).
+              if (item.id === 'profile' && user?.role !== 'BUYER') {
+                const ProfileIcon = iconMap[item.icon] || User;
+                return (
+                  <div key={item.id} className="w-full">
+                    <button
+                      onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                      className={`flex items-center justify-between w-full px-6 py-3.5 md:py-4 text-[14px] font-medium font-sans transition-all duration-200 border-l-[4px] ${
+                        activeTab === 'profile' || isProfileMenuOpen
+                          ? 'border-[#C9973A] bg-[#1B3068] text-white shadow-md'
+                          : 'border-transparent text-slate-500 hover:bg-[#1B3068] hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        <ProfileIcon className="w-4.5 h-4.5 mr-4 stroke-[1.8]" />
+                        {getLabel(item.label, item.id)}
+                      </div>
+                      {isProfileMenuOpen ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )}
+                    </button>
+                    {isProfileMenuOpen && (
+                      <div className="pl-6 pb-2 space-y-0.5 bg-white">
+                        {profilePersonaOptions.map((opt) => {
+                          const key =
+                            opt.kind === 'personal'
+                              ? 'personal'
+                              : opt.kind === 'all'
+                                ? 'all'
+                                : `business:${(opt as any).archetype}`;
+                          const isSelected = currentPersonaKey === key;
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => handleSelectPersona(opt as any)}
+                              className={`w-full text-left px-6 py-2 text-[13px] font-medium transition-colors ${
+                                isSelected
+                                  ? 'text-[#C9973A] font-bold'
+                                  : 'text-slate-500 hover:text-brand-dark'
+                              }`}
+                            >
+                              {opt.label}
+                              {isSelected && (
+                                <span className="ml-2 text-[10px] uppercase tracking-wider">· active</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
               if (
                 item.id === 'inquiries' &&
                 user?.role === 'BUYER' &&
@@ -674,6 +797,38 @@ export default function DashboardLayout({
                   })}
                 </p>
               </div>
+
+              {/* Phase 4: Active persona badge — shows which profile
+                  the dashboard is currently scoped to. Click "Switch"
+                  to drop back to merged "All Business" view. Hidden
+                  for buyers (no business identity) and when nothing
+                  is set (default "all" with multiple archetypes). */}
+              {user?.role !== 'BUYER' &&
+                (activeContext.type === 'personal' ||
+                  activeContext.type === 'business') && (
+                  <div className="hidden md:flex items-center ml-6 gap-2 px-3 py-1.5 rounded-full bg-[#fdf8f0] border border-[#C9973A]/20">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      Mode:
+                    </span>
+                    <span className="text-xs font-bold text-[#C9973A]">
+                      {activeContext.type === 'personal'
+                        ? 'Personal'
+                        : `Business · ${activeContext.archetype}`}
+                    </span>
+                    {!user?.assignedArchetype && (
+                      <button
+                        onClick={() => {
+                          setActiveContext({ type: 'all' });
+                          handleTabClick('home');
+                        }}
+                        className="text-[10px] font-bold text-slate-400 hover:text-brand-dark uppercase tracking-wider underline-offset-4 hover:underline"
+                        title="Switch back to the merged Business · All view"
+                      >
+                        Switch
+                      </button>
+                    )}
+                  </div>
+                )}
 
               {/* Right Section: User Info & Notifications */}
               <div className="flex items-center space-x-4 ml-auto">

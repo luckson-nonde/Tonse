@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import { useActiveProfileContext, resolveActiveArchetype } from '../hooks/useActiveProfileContext';
 import owlTriumphant from '../assets/images/empty-states/owl_triumphant.png';
 import { type Inquiry, type Quote } from '../types';
 import { useDashboard } from '../DashboardContext';
@@ -113,13 +114,16 @@ export default function ProviderDashboard() {
     }
   }, [tab, activeTab, setActiveTab]);
 
+  const { context: activeContext } = useActiveProfileContext();
+
   const currentSchema = useMemo(() => {
     return resolveSchemaForUser(
       user,
       getBusinessTypes(user as any),
       getPrimaryBusinessType(user as any),
+      activeContext,
     );
-  }, [user]);
+  }, [user, activeContext]);
 
   const effectiveProviderId = user?.parentProviderId || user?.id;
 
@@ -273,10 +277,17 @@ export default function ProviderDashboard() {
     [user],
   );
   const initialVariant = React.useMemo<string | undefined>(() => {
+    // Priority: staff lock > Profile-popover persona > primary archetype
+    // for multi-archetype owners > undefined for single-archetype.
     if (user?.assignedArchetype) return user.assignedArchetype;
+    const personaArchetype = resolveActiveArchetype(
+      activeContext,
+      sellerArchetypes as any,
+    );
+    if (personaArchetype) return personaArchetype;
     if (sellerArchetypes.length > 1) return getPrimaryBusinessType(user as any);
     return undefined;
-  }, [user, sellerArchetypes]);
+  }, [user, sellerArchetypes, activeContext]);
   const [selectedVariant, setSelectedVariant] = useState<string | undefined>(
     initialVariant,
   );
@@ -878,7 +889,13 @@ export default function ProviderDashboard() {
               variantOptions: sellerArchetypes,
               selectedVariant,
               onSetSelectedVariant: setSelectedVariant,
-              variantLocked: !!user?.assignedArchetype,
+              // The persona switcher in the Profile popover is the
+              // authoritative way to change archetype scope — lock the
+              // in-view toggle when persona is set so we don't have two
+              // competing controls. Staff with assignedArchetype lock
+              // for the same reason.
+              variantLocked:
+                !!user?.assignedArchetype || activeContext.type === 'business',
               onArchiveSelected: handleArchiveSelected,
               onDeleteSelected: handleDeleteSelected,
               onSetSelectionMode: setIsSelectionMode,
