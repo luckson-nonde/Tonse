@@ -90,14 +90,27 @@ const CalendarPanel = () => {
   // calendar regardless of category. That's the leak this branch
   // closes.
   const isBuyer = user?.role === 'BUYER';
+  const { context: calendarActiveContext } = useActiveProfileContext();
+
+  // Calendar variant must match the persona — without it, a RETAIL+
+  // REPAIR seller in REPAIR persona would still see RETAIL leads
+  // counted as "OPEN REPAIRS" because the count is taken from the
+  // unfiltered matched-leads set while only the tone (label) follows
+  // persona. Pass the active archetype so backend SQL filters to it.
+  const calendarVariant: string | undefined =
+    !isBuyer && calendarActiveContext.type === 'business'
+      ? calendarActiveContext.archetype
+      : undefined;
+
   const { inquiries: ownInquiries } = useUserInquiries(isBuyer ? user?.id : undefined);
   const { inquiries: matchedInquiries } = useMatchedLeads(
     isBuyer ? undefined : user?.id,
+    undefined,
+    calendarVariant,
   );
   const inquiries = isBuyer ? ownInquiries : matchedInquiries;
   const { quotes } = useUserQuotes(user?.id);
 
-  const { context: calendarActiveContext } = useActiveProfileContext();
   const tone = useMemo<CalendarTone>(
     () => businessTypeToCalendarTone(getEffectiveBusinessType(user as any, calendarActiveContext)),
     [user, calendarActiveContext]
