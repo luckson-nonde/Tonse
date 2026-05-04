@@ -3,6 +3,7 @@ import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Lock, ShieldCheck, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
+import { authService } from '../services/auth/authService';
 
 export default function ForcePasswordChange() {
   const { user, updateUser } = useAuth();
@@ -29,10 +30,20 @@ export default function ForcePasswordChange() {
 
     setIsLoading(true);
     try {
-      await updateUser({
-        password: newPassword,
-        mustChangePassword: false,
-      });
+      // Routes through POST /users/:id/password — backend bcrypt-hashes
+      // and clears mustChangePassword. The previous updateUser({password,
+      // mustChangePassword}) path 400'd because UpdateUserDto whitelists
+      // neither field (passwords shouldn't flow through the generic
+      // update — they need hashing).
+      if (!user?.id) {
+        setError('Please sign in again.');
+        return;
+      }
+      await authService.changePassword(user.id, newPassword);
+      // Refresh /auth/me so mustChangePassword flips to false on the
+      // client; otherwise the route guard would bounce the user back
+      // to this page on the next navigation.
+      await updateUser({});
       navigate('/');
     } catch (err) {
       setError('Failed to update password. Please try again.');

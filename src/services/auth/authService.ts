@@ -208,6 +208,17 @@ export const authService = {
     await apiClient.post(`/users/${userId}/pin`, { pin });
   },
 
+  /**
+   * Change the calling user's password. Used by the ForcePasswordChange
+   * flow on first login (when mustChangePassword=true). Backend
+   * bcrypt-hashes the value and clears mustChangePassword in the
+   * same write. Routes through a dedicated endpoint instead of the
+   * generic update path so passwords never land unhashed.
+   */
+  changePassword: async (userId: string, password: string): Promise<void> => {
+    await apiClient.post(`/users/${userId}/password`, { password });
+  },
+
   updateProfile: async (userId: string, data: UpdateProfileRequest): Promise<any> => {
     // Sanitize data: remove empty dob to avoid validation errors. Phase 1
     // dropped the metadata jsonb so dob (when present) is at the top level

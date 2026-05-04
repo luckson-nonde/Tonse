@@ -122,4 +122,28 @@ export class UsersController {
     await this.usersService.setProfilePin(id, body?.pin ?? '');
     return { success: true };
   }
+
+  /**
+   * Change the calling user's password. Used by the
+   * ForcePasswordChange flow when a staff member logs in with the
+   * generated password and has `mustChangePassword=true`. bcrypt-
+   * hashes the new value server-side and clears mustChangePassword
+   * in the same write. Sits outside UpdateUserDto on purpose —
+   * password writes should never flow through the generic update
+   * path because (a) the value would land in the column unhashed,
+   * (b) it deserves a tighter auth gate.
+   */
+  @Post(':id/password')
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @Param('id') id: string,
+    @Body() body: { password?: string },
+    @Request() req,
+  ) {
+    if (req.user.id !== id) {
+      throw new ForbiddenException();
+    }
+    await this.usersService.changePassword(id, body?.password ?? '');
+    return { success: true };
+  }
 }

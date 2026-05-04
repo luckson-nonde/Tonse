@@ -22,6 +22,7 @@ import { UserDisplayIdUtil } from '../../utils/user-display-id.util';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ArchetypeResolverService } from './services/archetype-resolver.service';
 import * as crypto from 'crypto';
+import * as bcrypt from 'bcryptjs';
 
 // Phase 3 contract: users table holds ONLY these fields. Anything else is
 // profile data and lives in buyer_profiles / seller_profiles /
@@ -293,6 +294,28 @@ export class UsersService {
       throw new BadRequestException('Profile type unsupported for PIN');
     }
     await (repo as any).update({ id: user.activeProfileId }, { pin });
+  }
+
+  /**
+   * Change a user's password (and clear `mustChangePassword` in the
+   * same write). Used by the ForcePasswordChange flow when a staff
+   * member logs in with the auto-generated password and is required
+   * to set their own. Always bcrypt-hashes — passwords never land in
+   * the column unhashed. Sits outside the generic update path on
+   * purpose: a password write deserves its own controller endpoint
+   * with a tighter auth gate, not whitelist drift through UpdateUserDto.
+   */
+  async changePassword(userId: string, plainPassword: string): Promise<void> {
+    if (!plainPassword || plainPassword.length < 6) {
+      throw new BadRequestException('Password must be at least 6 characters');
+    }
+    const user = await this.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+    const passwordHash = await bcrypt.hash(plainPassword, 10);
+    await this.userRepository.update(
+      { id: userId },
+      { password: passwordHash, mustChangePassword: false },
+    );
   }
 
   /** Split a flat update payload into auth fields (for users) and profile
