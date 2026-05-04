@@ -30,22 +30,10 @@ const ARCHETYPE_TO_SCHEMA: Partial<Record<BusinessType, MasterAccountSchema>> = 
   RETAIL: MASTER_RETAIL_ACCOUNT_SCHEMA,
 };
 
-/**
- * Tie-breaker for nav items / views with shared `id` across multiple
- * schemas. Higher (earlier) wins. Mirrors BUSINESS_TYPE_PRIORITY in
- * services/categories.ts so the same archetype that gets primary
- * status for visual callers also wins shared-id ties in the merge.
- */
-const MERGE_PRIORITY: BusinessType[] = [
-  'EVENTS',
-  'ENTERTAINMENT',
-  'REPAIR',
-  'WHOLESALE',
-  'BOOKING',
-  'RENTAL',
-  'SERVICE',
-  'RETAIL',
-];
+// MERGE_PRIORITY removed when the simplified persona model dropped
+// the merged 'all' view — schemas are no longer composed at the
+// dashboard level. mergeSchemas() still merges N inputs in case we
+// reintroduce composition later, but no caller currently passes >1.
 
 /**
  * Merge two or more schemas into one. Rules:
@@ -88,26 +76,27 @@ export function mergeSchemas(schemas: MasterAccountSchema[]): MasterAccountSchem
 }
 
 /**
- * Pick the schema(s) that apply to a user, returning them in priority
- * order ready to feed straight into `mergeSchemas`. Single-schema
- * users get a one-element array; multi-archetype users get the
- * priority-ordered set.
+ * Pick the schema(s) that apply to a user. With the simplified persona
+ * model, this almost always returns a single-element array — the
+ * merged "all archetypes" view is gone. Multi-element results are
+ * vestigial; mergeSchemas still works on N inputs in case we ever
+ * reintroduce a composed view.
  *
- * Top-level branches (BUYER, LABOUR) short-circuit to a single schema
- * because they don't compose with the seller-side archetype set.
+ * Top-level branches (BUYER, LABOUR) short-circuit because they
+ * don't have a persona-driven archetype to switch through.
  *
- * `activeContext` (Phase 4) is the dashboard persona switch:
- *   - 'all' (or undefined) → the merged multi-archetype view.
- *   - 'personal'           → identity-only schema; archetype set
- *                            is ignored.
- *   - 'business' + arche.  → just that archetype's schema, never
- *                            merged with siblings even if the seller
- *                            serves multiple.
+ * `activeContext` is the dashboard persona switch:
+ *   - 'personal'        → identity-only schema; archetype set ignored.
+ *   - 'business' + arch → just that archetype's schema.
+ *   - undefined         → default to RETAIL (Buy New). If the seller
+ *                         doesn't actually serve RETAIL, fall back
+ *                         to their first archetype's schema so the
+ *                         dashboard isn't empty.
  */
 export function pickSchemasForUser(
   user: { role?: string } | null | undefined,
   businessTypes: BusinessType[],
-  primaryBusinessType: BusinessType,
+  _primaryBusinessType: BusinessType,
   activeContext?: ActiveProfileContext,
 ): MasterAccountSchema[] {
   if (!user) return [MASTER_PROVIDER_ACCOUNT_SCHEMA];
@@ -117,27 +106,25 @@ export function pickSchemasForUser(
   // personal schema when they're in this mode.
   if (activeContext?.type === 'personal') return [MASTER_PERSONAL_ACCOUNT_SCHEMA];
 
-  if (primaryBusinessType === 'LABOUR') return [MASTER_LABOUR_ACCOUNT_SCHEMA];
-
-  // Business persona: only that one archetype's schema, no merge.
-  if (activeContext?.type === 'business') {
-    const schema = ARCHETYPE_TO_SCHEMA[activeContext.archetype];
-    if (schema) return [schema];
-    // Picked archetype isn't a known schema (e.g. RENTAL/BOOKING with
-    // no own schema) — fall back to PROVIDER rather than crashing.
-    return [MASTER_PROVIDER_ACCOUNT_SCHEMA];
+  // LABOUR sellers don't have a persona switch (single-purpose role).
+  if (businessTypes.includes('LABOUR') && businessTypes.length === 1) {
+    return [MASTER_LABOUR_ACCOUNT_SCHEMA];
   }
 
-  // Default: merged multi-archetype view (Phase 2.1 behaviour).
-  const matched: MasterAccountSchema[] = [];
-  for (const archetype of MERGE_PRIORITY) {
-    if (businessTypes.includes(archetype)) {
-      const schema = ARCHETYPE_TO_SCHEMA[archetype];
-      if (schema && !matched.includes(schema)) matched.push(schema);
-    }
-  }
-  if (matched.length === 0) return [MASTER_PROVIDER_ACCOUNT_SCHEMA];
-  return matched;
+  // Business persona: pick the active archetype's schema (default
+  // resolves below if not set).
+  const archetype: BusinessType =
+    activeContext?.type === 'business'
+      ? activeContext.archetype
+      : businessTypes.includes('RETAIL')
+        ? 'RETAIL'
+        : (businessTypes[0] ?? 'RETAIL');
+
+  const schema = ARCHETYPE_TO_SCHEMA[archetype];
+  if (schema) return [schema];
+  // Picked archetype isn't a known schema (e.g. RENTAL/BOOKING with
+  // no own schema) — fall back to PROVIDER rather than crashing.
+  return [MASTER_PROVIDER_ACCOUNT_SCHEMA];
 }
 
 /**

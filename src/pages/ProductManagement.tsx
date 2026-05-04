@@ -5,14 +5,16 @@ import { db } from '../services/api/database';
 import { Product } from '../types';
 import { Plus, Trash2, Edit2, Package, Image as ImageIcon, Loader2, X } from 'lucide-react';
 import { uniqueKey } from '../utils/keyUtils';
-import { getBusinessTypes } from '../services/categories';
+import { getEffectiveBusinessTypes } from '../services/categories';
+import { useActiveProfileContext } from '../hooks/useActiveProfileContext';
 
 export default function ProductManagement() {
   const { user } = useAuth();
-  // EVENTS is no longer a role; we drive copy off the seller's archetype
-  // set. A seller serving EVENTS plus other archetypes still gets the
-  // rental-flavoured copy here.
-  const isEventsBusiness = getBusinessTypes(user as any).includes('EVENTS');
+  // Persona-aware: rental copy fires only when the active mode is in
+  // the events bucket. A multi-archetype seller in RETAIL persona
+  // sees product copy even if they ALSO serve EVENTS.
+  const { context: activeContext } = useActiveProfileContext();
+  const isEventsBusiness = getEffectiveBusinessTypes(user as any, activeContext).includes('EVENTS');
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);

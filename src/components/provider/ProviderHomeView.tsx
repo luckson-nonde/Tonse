@@ -24,7 +24,13 @@ import {
 import { hasPermission, PERMISSIONS } from '../../utils/rbac';
 import { uniqueKey } from '../../utils/keyUtils';
 import { generateVirtualAccount } from '../../utils/financeUtils';
-import { getBusinessTypes, getPrimaryBusinessType, BusinessType } from '../../services/categories';
+import {
+  getBusinessTypes,
+  getEffectiveBusinessType,
+  getEffectiveBusinessTypes,
+  BusinessType,
+} from '../../services/categories';
+import { useActiveProfileContext } from '../../hooks/useActiveProfileContext';
 
 interface ProviderHomeViewProps {
   user: any;
@@ -64,23 +70,30 @@ export default function ProviderHomeView({
   onDeleteSelected,
 }: ProviderHomeViewProps) {
   const navigate = useNavigate();
-  // Multi-archetype: read the SET so a seller who serves both EVENTS
-  // *and* RETAIL (e.g. an event-venue that also sells equipment) flips
-  // the booking-style flag without losing their retail surfaces.
-  const businessTypes = React.useMemo(
+  const { context: activeContext } = useActiveProfileContext();
+  // STRUCTURAL: archetypes the seller actually serves. Kept around for
+  // any membership check that's persona-independent (none currently in
+  // this file — every reader below uses the effective set).
+  const _structuralBusinessTypes = React.useMemo(
     () => getBusinessTypes(user as any),
     [user]
+  );
+  void _structuralBusinessTypes;
+
+  // DISPLAY: persona-aware. Drives every label switch below — stat-
+  // tile copy, inbox heading, today's-sales label, isBookingBased.
+  // In RETAIL persona, isBookingBased is false even for a seller who
+  // ALSO serves EVENTS — we render the active mode, not the union.
+  const businessTypes = React.useMemo(
+    () => getEffectiveBusinessTypes(user as any, activeContext),
+    [user, activeContext]
   );
   const isBookingBased =
     businessTypes.includes('EVENTS') || businessTypes.includes('ENTERTAINMENT');
 
-  // The statTile + inboxHeading switches further down still want a
-  // single dominant value — they pick one set of labels per render.
-  // Composition-aware surfaces (sidebar merge in DashboardLayout) read
-  // `businessTypes` directly.
   const businessType: BusinessType = React.useMemo(
-    () => getPrimaryBusinessType(user as any),
-    [user]
+    () => getEffectiveBusinessType(user as any, activeContext),
+    [user, activeContext]
   );
 
   const displayQuotes = React.useMemo(() => {

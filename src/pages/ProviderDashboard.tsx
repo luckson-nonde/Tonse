@@ -52,6 +52,7 @@ import {
   CATEGORIES_DB,
   getBusinessTypes,
   getPrimaryBusinessType,
+  getEffectiveBusinessTypes,
   isRepairVariant,
 } from '../services/categories';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';
@@ -136,12 +137,18 @@ export default function ProviderDashboard() {
     }
   }, [user?.id, user?.permissions, activeTab, setActiveTab]);
 
-  // Booking-based flow fires if EVENTS or ENTERTAINMENT is anywhere in the
-  // seller's archetype set — a seller who runs both retail and events still
-  // needs the booking flow visible.
+  // STRUCTURAL set: archetypes the seller actually serves. Used below
+  // for data-fetch gates (e.g. venue spaces) that must reflect what
+  // they CAN do, regardless of which persona they're viewing right now.
   const _bizTypesForFlow = getBusinessTypes(user as any);
+
+  // DISPLAY: persona-aware. Drives label switches downstream — a
+  // seller who serves EVENTS but is in RETAIL persona reads as "not
+  // booking-based" so the orders view shows "Paid Orders" not "Paid
+  // Bookings".
   const isBookingBased =
-    _bizTypesForFlow.includes('EVENTS') || _bizTypesForFlow.includes('ENTERTAINMENT');
+    getEffectiveBusinessTypes(user as any, activeContext).includes('EVENTS') ||
+    getEffectiveBusinessTypes(user as any, activeContext).includes('ENTERTAINMENT');
 
   const isServiceOrEvent = (inquiry: Inquiry) => {
     return (

@@ -4,7 +4,8 @@ import { Inquiry } from '../../types';
 import { hasPermission, PERMISSIONS } from '../../utils/rbac';
 import { uniqueKey } from '../../utils/keyUtils';
 import emptyOrdersImage from '../../assets/images/empty-states/owl_reading.png';
-import { getBusinessTypes } from '../../services/categories';
+import { getEffectiveBusinessTypes } from '../../services/categories';
+import { useActiveProfileContext } from '../../hooks/useActiveProfileContext';
 
 interface ProviderOrdersViewProps {
   user: any;
@@ -21,7 +22,11 @@ export default function ProviderOrdersView({
   onSetActiveChecklistQuote,
   onStartScan,
 }: ProviderOrdersViewProps) {
-  const isWholesale = getBusinessTypes(user as any).includes('WHOLESALE');
+  // Persona-aware: a RETAIL+WHOLESALE seller in RETAIL persona sees
+  // "Paid Orders" not "Purchase Orders". Wholesale labels only fire
+  // when the active mode is WHOLESALE.
+  const { context: activeContext } = useActiveProfileContext();
+  const isWholesale = getEffectiveBusinessTypes(user as any, activeContext).includes('WHOLESALE');
   const filteredQuotes = displayQuotes.filter(
     (q) => q.status === 'PAID' || q.status === 'AWAITING_PICKUP'
   );

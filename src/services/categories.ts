@@ -1568,6 +1568,64 @@ export function getPrimaryBusinessType(
 }
 
 /**
+ * Persona-aware shape of `getPrimaryBusinessType`. Use this for any
+ * DISPLAY decision (sidebar labels, page titles, stat tiles, hero
+ * copy, button text) — basically anything that should reflect "what
+ * mode the seller is currently acting in" rather than "what
+ * archetypes the seller can serve".
+ *
+ *   - Persona = `business:X` → returns X.
+ *   - Persona = `personal`   → returns RETAIL (the personal schema
+ *                              renders its own surfaces, but if any
+ *                              display caller still fires we default
+ *                              to RETAIL labels rather than nothing).
+ *   - Persona = unset        → returns RETAIL (Buy New) by default.
+ *                              Sellers who don't actually serve
+ *                              RETAIL fall back to their first
+ *                              archetype so the dashboard isn't
+ *                              empty.
+ *
+ * STRUCTURAL decisions (data fetch gates, junction-table membership,
+ * "does this seller actually offer X") still use `getBusinessTypes`
+ * + `.includes(...)`. Persona doesn't change what the seller IS,
+ * only what they're VIEWING.
+ */
+export function getEffectiveBusinessType(
+  user: MinimalUserForBusinessType | null | undefined,
+  activeContext?:
+    | { type: 'business'; archetype: BusinessType }
+    | { type: 'personal' }
+    | null,
+): BusinessType {
+  if (activeContext?.type === 'business') return activeContext.archetype;
+  // No persona set → default to RETAIL (Buy New). If the seller
+  // doesn't actually serve RETAIL, fall back to their first
+  // archetype so display labels match something they can act on.
+  const types = getBusinessTypes(user);
+  if (types.includes('RETAIL')) return 'RETAIL';
+  return types[0] || 'RETAIL';
+}
+
+/**
+ * Persona-aware shape of `getBusinessTypes`. Use this for set-
+ * membership DISPLAY decisions (e.g. `isBookingBased = .includes(
+ * 'EVENTS') || .includes('ENTERTAINMENT')` driving label switches).
+ * In `business:X` persona, the effective set collapses to just
+ * `[X]`, so a multi-archetype seller in RETAIL persona reads as
+ * "not booking-based" even if they ALSO serve EVENTS.
+ */
+export function getEffectiveBusinessTypes(
+  user: MinimalUserForBusinessType | null | undefined,
+  activeContext?:
+    | { type: 'business'; archetype: BusinessType }
+    | { type: 'personal' }
+    | null,
+): BusinessType[] {
+  if (activeContext?.type === 'business') return [activeContext.archetype];
+  return getBusinessTypes(user);
+}
+
+/**
  * Human-friendly label for a BusinessType — used in admin tools and headers.
  */
 export function getBusinessTypeLabel(type: BusinessType): string {

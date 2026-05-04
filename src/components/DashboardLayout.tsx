@@ -32,7 +32,13 @@ import DashboardCalendar, { CalendarTone } from './DashboardCalendar';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useDashboard } from '../DashboardContext';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';
-import { getBusinessTypes, getPrimaryBusinessType, BusinessType } from '../services/categories';
+import {
+  getBusinessTypes,
+  getPrimaryBusinessType,
+  getEffectiveBusinessType,
+  getEffectiveBusinessTypes,
+  BusinessType,
+} from '../services/categories';
 import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useMemo, useEffect } from 'react';
@@ -91,9 +97,10 @@ const CalendarPanel = () => {
   const inquiries = isBuyer ? ownInquiries : matchedInquiries;
   const { quotes } = useUserQuotes(user?.id);
 
+  const { context: calendarActiveContext } = useActiveProfileContext();
   const tone = useMemo<CalendarTone>(
-    () => businessTypeToCalendarTone(getPrimaryBusinessType(user as any)),
-    [user]
+    () => businessTypeToCalendarTone(getEffectiveBusinessType(user as any, calendarActiveContext)),
+    [user, calendarActiveContext]
   );
 
   const events = useMemo(() => {
@@ -211,11 +218,27 @@ export default function DashboardLayout({
   // surfaces (the schema-selection block above for retail vs others)
   // operate on `businessTypes` (the set) so a multi-archetype seller
   // (e.g. RETAIL + REPAIR) merges schemas instead of collapsing to one.
+  // STRUCTURAL: what archetypes this user actually serves (junction
+  // membership). Used for nav-item filters, schema resolver tie-
+  // breakers, and dropdowns that need the seller's full archetype list.
   const businessTypes: BusinessType[] = useMemo(() => getBusinessTypes(user), [user]);
   const businessType: BusinessType = useMemo(() => getPrimaryBusinessType(user), [user]);
 
   const { context: activeContext, setContext: setActiveContext } = useActiveProfileContext();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+
+  // DISPLAY: persona-aware. Drives every visual label / title /
+  // hero-tile copy that should reflect "what mode the seller is
+  // currently acting in" rather than "what archetypes they serve".
+  // Defaults to RETAIL (Buy New) when no persona is set.
+  const effectiveBusinessType: BusinessType = useMemo(
+    () => getEffectiveBusinessType(user, activeContext),
+    [user, activeContext],
+  );
+  const effectiveBusinessTypes: BusinessType[] = useMemo(
+    () => getEffectiveBusinessTypes(user, activeContext),
+    [user, activeContext],
+  );
 
   // Sidebar Profile popover — Phase 4. Personal mode + per-archetype
   // Business mode entries. Hidden for buyers (no business identity)
@@ -233,15 +256,16 @@ export default function DashboardLayout({
         { kind: 'business' as const, archetype: lockedArchetype, label: `Business · ${lockedArchetype}` },
       ];
     }
+    // Owners: Personal + one entry per archetype they actually serve.
+    // No "All" option — the simplified persona model is one view at
+    // a time; default lands on RETAIL (Buy New) on first login.
     const opts: Array<
       | { kind: 'personal'; label: string }
-      | { kind: 'all'; label: string }
       | { kind: 'business'; archetype: string; label: string }
     > = [
       { kind: 'personal', label: 'Personal Profile' },
     ];
     if (archetypes.length > 1) {
-      opts.push({ kind: 'all', label: 'Business · All' });
       archetypes.forEach((a) =>
         opts.push({ kind: 'business', archetype: a, label: `Business · ${a}` }),
       );
@@ -254,18 +278,15 @@ export default function DashboardLayout({
   // What's currently selected, so the popover can highlight it.
   const currentPersonaKey = (() => {
     if (activeContext.type === 'personal') return 'personal';
-    if (activeContext.type === 'business') return `business:${activeContext.archetype}`;
-    return 'all';
+    return `business:${activeContext.archetype}`;
   })();
 
   const handleSelectPersona = (
     opt:
       | { kind: 'personal'; label: string }
-      | { kind: 'all'; label: string }
       | { kind: 'business'; archetype: string; label: string },
   ) => {
     if (opt.kind === 'personal') setActiveContext({ type: 'personal' });
-    else if (opt.kind === 'all') setActiveContext({ type: 'all' });
     else setActiveContext({ type: 'business', archetype: opt.archetype as any });
     setIsProfileMenuOpen(false);
     // Land on the profile tab when switching to Personal; otherwise
@@ -334,7 +355,7 @@ export default function DashboardLayout({
     // longer needs a case here — those entries become dead code for
     // that archetype and can be deleted alongside the schema split.
     if (itemId === 'leads') {
-      switch (businessType) {
+      switch (effectiveBusinessType) {
         case 'REPAIR':
           return 'Repair Requests';
         case 'WHOLESALE':
@@ -352,7 +373,7 @@ export default function DashboardLayout({
       }
     }
     if (itemId === 'products') {
-      switch (businessType) {
+      switch (effectiveBusinessType) {
         case 'REPAIR':
           return 'Service Catalog';
         case 'SERVICE':
@@ -364,7 +385,7 @@ export default function DashboardLayout({
       }
     }
     if (itemId === 'paid-orders') {
-      switch (businessType) {
+      switch (effectiveBusinessType) {
         case 'REPAIR':
           return 'Active Repairs';
         case 'SERVICE':
@@ -433,9 +454,10 @@ export default function DashboardLayout({
   const getPageTitle = () => {
     // Phase 2: legacy roles (EVENTS / ENTERTAINMENT) collapsed into the
     // category-driven businessType. The page-title copy keys off
-    // businessType the same way the sidebar / home tiles already do.
+    // the effective (persona-aware) businessType the same way the
+    // sidebar / home tiles already do.
     const isBookingBased =
-      businessType === 'EVENTS' || businessType === 'ENTERTAINMENT';
+      effectiveBusinessType === 'EVENTS' || effectiveBusinessType === 'ENTERTAINMENT';
     switch (activeTab) {
       case 'home':
       case 'dashboard':
@@ -455,28 +477,36 @@ export default function DashboardLayout({
       case 'suppliers':
         return 'VERIFIED SUPPLIERS';
       case 'paid-orders':
-        if (businessType === 'EVENTS') return 'PAID RENTALS';
+        if (effectiveBusinessType === 'EVENTS') return 'PAID RENTALS';
+        if (effectiveBusinessType === 'WHOLESALE') return 'PURCHASE ORDERS';
+        if (effectiveBusinessType === 'REPAIR') return 'ACTIVE REPAIRS';
         return isBookingBased ? 'PAID BOOKINGS' : 'PAID ORDERS (ESCROW)';
       case 'collection':
         return 'PARCEL COLLECTION';
       case 'products':
-        if (businessTypes.includes('WHOLESALE')) return 'SUPPLY INVENTORY';
-        return businessType === 'EVENTS' ? 'INVENTORY' : 'MY PRODUCTS';
+        if (effectiveBusinessType === 'WHOLESALE') return 'SUPPLY INVENTORY';
+        if (effectiveBusinessType === 'REPAIR' || effectiveBusinessType === 'SERVICE') return 'SERVICE CATALOG';
+        return effectiveBusinessType === 'EVENTS' ? 'INVENTORY' : 'MY PRODUCTS';
       case 'venue-spaces':
         return 'VENUE SPACES';
       case 'archived':
-        return businessTypes.includes('WHOLESALE') ? 'ARCHIVED REQUESTS' : 'ARCHIVED QUOTES';
+        return effectiveBusinessType === 'WHOLESALE' ? 'ARCHIVED REQUESTS' : 'ARCHIVED QUOTES';
       case 'profile':
-        return businessTypes.includes('WHOLESALE') ? 'SUPPLIER PROFILE' : 'SHOP PROFILE';
+        return effectiveBusinessType === 'WHOLESALE' ? 'SUPPLIER PROFILE' : 'SHOP PROFILE';
       case 'leads':
-        if (businessTypes.includes('WHOLESALE')) return 'PURCHASE REQUESTS';
+        if (effectiveBusinessType === 'WHOLESALE') return 'PURCHASE REQUESTS';
+        if (effectiveBusinessType === 'REPAIR') return 'REPAIR REQUESTS';
+        if (effectiveBusinessType === 'SERVICE') return 'SERVICE REQUESTS';
+        if (effectiveBusinessType === 'EVENTS') return 'EVENT BOOKINGS';
+        if (effectiveBusinessType === 'ENTERTAINMENT') return 'PERFORMANCE BOOKINGS';
+        if (effectiveBusinessType === 'RETAIL') return 'BUYER INQUIRIES';
         return 'BOOKING REQUESTS';
       case 'my-quotes':
-        return businessTypes.includes('WHOLESALE') ? 'ACTIVE QUOTATIONS' : 'MY QUOTES';
+        return effectiveBusinessType === 'WHOLESALE' ? 'ACTIVE QUOTATIONS' : 'MY QUOTES';
       case 'schedule':
         return 'MY SCHEDULE';
       case 'audit-trail':
-        return businessTypes.includes('WHOLESALE') ? 'SUPPLY AUDIT' : 'AUDIT TRAIL';
+        return effectiveBusinessType === 'WHOLESALE' ? 'SUPPLY AUDIT' : 'AUDIT TRAIL';
       default:
         return 'HOME';
     }
@@ -611,9 +641,7 @@ export default function DashboardLayout({
                           const key =
                             opt.kind === 'personal'
                               ? 'personal'
-                              : opt.kind === 'all'
-                                ? 'all'
-                                : `business:${(opt as any).archetype}`;
+                              : `business:${(opt as any).archetype}`;
                           const isSelected = currentPersonaKey === key;
                           return (
                             <button
@@ -798,14 +826,16 @@ export default function DashboardLayout({
                 </p>
               </div>
 
-              {/* Phase 4: Active persona badge — shows which profile
-                  the dashboard is currently scoped to. Click "Switch"
-                  to drop back to merged "All Business" view. Hidden
-                  for buyers (no business identity) and when nothing
-                  is set (default "all" with multiple archetypes). */}
+              {/* Active persona badge — shows the seller's current
+                  view mode. Hidden for buyers and for staff pinned by
+                  assignedArchetype (the lock indicator already covers
+                  them). The "Switch" button drops Personal mode back
+                  to the default Business · RETAIL (Buy New) view. */}
               {user?.role !== 'BUYER' &&
+                !user?.assignedArchetype &&
                 (activeContext.type === 'personal' ||
-                  activeContext.type === 'business') && (
+                  (activeContext.type === 'business' &&
+                    activeContext.archetype !== 'RETAIL')) && (
                   <div className="hidden md:flex items-center ml-6 gap-2 px-3 py-1.5 rounded-full bg-[#fdf8f0] border border-[#C9973A]/20">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                       Mode:
@@ -815,10 +845,10 @@ export default function DashboardLayout({
                         ? 'Personal'
                         : `Business · ${activeContext.archetype}`}
                     </span>
-                    {!user?.assignedArchetype && (
+                    {true && (
                       <button
                         onClick={() => {
-                          setActiveContext({ type: 'all' });
+                          setActiveContext({ type: 'business', archetype: 'RETAIL' });
                           handleTabClick('home');
                         }}
                         className="text-[10px] font-bold text-slate-400 hover:text-brand-dark uppercase tracking-wider underline-offset-4 hover:underline"

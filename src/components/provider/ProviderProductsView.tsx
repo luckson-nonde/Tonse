@@ -1,6 +1,7 @@
 import React from 'react';
 import ProductManagement from '../../pages/ProductManagement';
-import { getPrimaryBusinessType } from '../../services/categories';
+import { getEffectiveBusinessType } from '../../services/categories';
+import { useActiveProfileContext } from '../../hooks/useActiveProfileContext';
 
 interface ProviderProductsViewProps {
   user: any;
@@ -11,8 +12,10 @@ export default function ProviderProductsView({ user }: ProviderProductsViewProps
   // Rental sees "Inventory Management" (rental-stock framing), a repair
   // shop sees "Service Catalog", a wholesaler sees "Stock & Pricing", and
   // a generic retail seller keeps "Product Management".
-  // Single-value: the title switch picks one of N strings.
-  const businessType = getPrimaryBusinessType(user as any);
+  // Persona-aware: the title flips with the active mode (RETAIL →
+  // "Product Management", REPAIR → "Service Catalog", etc.).
+  const { context: activeContext } = useActiveProfileContext();
+  const businessType = getEffectiveBusinessType(user as any, activeContext);
   let title = 'Product Management';
   let subtitle = "Manage your shop's listed products";
   switch (businessType) {

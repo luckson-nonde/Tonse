@@ -4,7 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { motion, AnimatePresence } from 'motion/react';
 import { Camera, X, ImagePlus, Loader2, UploadCloud } from 'lucide-react';
 import { generateQuoteSchema } from '../../services/quoteSchemaGenerator';
-import { getBusinessTypes } from '../../services/categories';
+import { getEffectiveBusinessTypes } from '../../services/categories';
+import { useActiveProfileContext } from '../../hooks/useActiveProfileContext';
 import { uniqueKey } from '../../utils/keyUtils';
 
 interface QuoteSubmissionFormProps {
@@ -33,6 +34,7 @@ export default function QuoteSubmissionForm({
   initialValues,
   parentQuoteId,
 }: QuoteSubmissionFormProps) {
+  const { context: activeContext } = useActiveProfileContext();
   const [referencePhotos, setReferencePhotos] = useState<string[]>(initialValues?.referencePhotos || []);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -302,9 +304,10 @@ export default function QuoteSubmissionForm({
       <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-3">
         {quoteSchema.map(renderField)}
 
-        {/* Venue space selector — shown to any seller whose archetype set
-            includes EVENTS, even if it isn't their primary archetype. */}
-        {getBusinessTypes(user as any).includes('EVENTS') && venueSpaces.length > 0 && (
+        {/* Venue space selector — shown only when the seller is
+            ACTIVELY in events persona. A multi-archetype seller in
+            RETAIL persona shouldn't see venue picking on a quote. */}
+        {getEffectiveBusinessTypes(user as any, activeContext).includes('EVENTS') && venueSpaces.length > 0 && (
           <div className="pt-2 border-t border-slate-100 space-y-3">
             <div>
               <label className={labelClass}>Venue Space (Optional)</label>

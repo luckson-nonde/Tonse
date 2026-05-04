@@ -2,27 +2,32 @@ import { useCallback, useEffect, useState } from 'react';
 import { BusinessType } from '../services/categories';
 
 /**
- * The dashboard's active "persona". Drives schema selection and
- * leads/products filtering across the whole dashboard.
+ * The dashboard's active "persona". One archetype at a time — no
+ * merged view. Default on first login is RETAIL (Buy New) because
+ * the MVP centers on multi-archetype Electronics sellers who almost
+ * always do retail; the helper `getEffectiveBusinessType` falls
+ * back to the seller's first archetype if they don't serve RETAIL.
  *
- *   { type: 'all' }                — merged multi-archetype view (default)
- *   { type: 'personal' }           — identity / security / financial only
- *   { type: 'business',
- *     archetype: 'RETAIL' }        — single-archetype dashboard
+ *   { type: 'business', archetype } — viewing one archetype's surface
+ *   { type: 'personal' }            — identity / security / financial
  *
- * Switched by the Profile popover in the sidebar; persisted in
- * localStorage so it survives reloads. A staff member with
- * `assignedArchetype` is forced to `{ type: 'business', archetype: X }`
- * — the popover hides the other options.
+ * Switched via the Profile popover in the sidebar; persisted in
+ * localStorage. Staff with `assignedArchetype` are pinned to
+ * `{ type: 'business', archetype: X }` — the popover hides the
+ * other archetype options.
  */
 export type ActiveProfileContext =
-  | { type: 'all' }
   | { type: 'personal' }
   | { type: 'business'; archetype: BusinessType };
 
 const STORAGE_KEY = 'tonse:activeProfileContext';
 
-const DEFAULT_CONTEXT: ActiveProfileContext = { type: 'all' };
+// Default = Buy New / Retail. The earlier "{ type: 'all' }" merged
+// mode is gone; one view at a time.
+const DEFAULT_CONTEXT: ActiveProfileContext = {
+  type: 'business',
+  archetype: 'RETAIL',
+};
 
 function loadFromStorage(): ActiveProfileContext {
   try {
@@ -31,12 +36,16 @@ function loadFromStorage(): ActiveProfileContext {
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === 'object' && typeof parsed.type === 'string') {
       // Cheap shape validation — anything else falls through to default.
-      if (parsed.type === 'all' || parsed.type === 'personal') {
-        return { type: parsed.type };
+      if (parsed.type === 'personal') {
+        return { type: 'personal' };
       }
       if (parsed.type === 'business' && typeof parsed.archetype === 'string') {
         return { type: 'business', archetype: parsed.archetype as BusinessType };
       }
+      // Legacy 'all' rows from before the simplification — coerce to
+      // the new default so existing localStorage values don't pin
+      // users in a mode that no longer exists.
+      if (parsed.type === 'all') return DEFAULT_CONTEXT;
     }
   } catch {
     // Corrupt JSON — fall through to default and overwrite next save.
@@ -91,22 +100,20 @@ export function useActiveProfileContext(): {
 
 /**
  * Convenience: derive the archetype the dashboard should currently
- * render for, given the user's archetype set + the active context.
+ * render for, given the active context.
  *
  *   - In `business:X` mode → X (the user's pick).
- *   - In `all` mode → null (merged view).
- *   - In `personal` mode → null (no business archetype).
+ *   - In `personal` mode   → null (no business archetype to render).
  *
- * Single-archetype owners are normalised: `all` collapses to their
- * sole archetype, since there's nothing to merge.
+ * Note: `ownerArchetypes` is no longer used here (the merged 'all'
+ * mode that needed it has been removed) but kept in the signature
+ * to avoid touching every call site at once. Drop the param when
+ * we next refactor the consumers.
  */
 export function resolveActiveArchetype(
   context: ActiveProfileContext,
-  ownerArchetypes: BusinessType[],
+  _ownerArchetypes: BusinessType[],
 ): BusinessType | null {
   if (context.type === 'business') return context.archetype;
-  if (context.type === 'all' && ownerArchetypes.length === 1) {
-    return ownerArchetypes[0];
-  }
   return null;
 }

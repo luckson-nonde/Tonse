@@ -5,7 +5,8 @@ import { uniqueKey } from '../../utils/keyUtils';
 import { PreferenceTags, ThumbnailGrid } from './LeadsHelpers';
 import QuoteSubmissionForm from './QuoteSubmissionForm';
 import { recordInquiryView } from '../../services/api/inquiryService';
-import { getBusinessTypes } from '../../services/categories';
+import { getEffectiveBusinessTypes } from '../../services/categories';
+import { useActiveProfileContext } from '../../hooks/useActiveProfileContext';
 
 // ─── Collect all images from a lead ──────────────────────────────────────────
 function collectLeadImages(lead: any, parsedItems: any[]): string[] {
@@ -256,7 +257,10 @@ export default function ProviderLeadsView({
     return viewCounts[key] ?? lead.viewCount ?? 0;
   };
 
-  const isWholesale = getBusinessTypes(user as any).includes('WHOLESALE');
+  // Persona-aware: "Purchase Requests" only fires when the active
+  // mode is WHOLESALE.
+  const { context: activeContext } = useActiveProfileContext();
+  const isWholesale = getEffectiveBusinessTypes(user as any, activeContext).includes('WHOLESALE');
 
   // Dynamic layout calculations based on leads volume
   const leadsCount = leads.length;
@@ -274,51 +278,19 @@ export default function ProviderLeadsView({
   const dateTextSize = isRelaxed ? 'text-sm' : 'text-[10px]';
   const chevronSize = isRelaxed ? 'w-6 h-6' : 'w-4 h-4';
 
-  // Variant toggle visibility: hide for single-archetype owners (nothing
-  // to switch between) and for staff with assignedArchetype (locked
-  // server-side). Multi-archetype owners get the pill row.
-  const showVariantToggle =
-    !variantLocked && Array.isArray(variantOptions) && variantOptions.length > 1;
+  // The in-view variant pill row is gone. The Profile popover in the
+  // sidebar is now the single switch — having two competing controls
+  // confused users (popover said RETAIL, pill row said REPAIR, leads
+  // came back filtered to whichever fired last). Staff still see a
+  // locked indicator since they can't switch at all.
+  // variantOptions / selectedVariant / onSetSelectedVariant props are
+  // kept on the interface for now but unused — drop on next refactor.
+  void variantOptions;
+  void selectedVariant;
+  void onSetSelectedVariant;
 
   return (
     <div className={containerSpacing}>
-      {/* Variant pill row — multi-archetype owners only */}
-      {showVariantToggle && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">
-            Showing:
-          </span>
-          {variantOptions!.map((opt) => {
-            const isActive = selectedVariant === opt;
-            return (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => onSetSelectedVariant?.(opt)}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
-                  isActive
-                    ? 'bg-[#C9973A] text-white border-[#C9973A] shadow-sm'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                {opt}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            onClick={() => onSetSelectedVariant?.(undefined)}
-            className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
-              !selectedVariant
-                ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
-            }`}
-          >
-            All
-          </button>
-        </div>
-      )}
-
       {/* Locked indicator — staff with assignedArchetype */}
       {variantLocked && user?.assignedArchetype && (
         <div className="flex items-center gap-2 text-xs text-slate-500">

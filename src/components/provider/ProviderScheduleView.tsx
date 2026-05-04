@@ -3,7 +3,8 @@ import { Clock, MapPin, ChevronRight, X } from 'lucide-react';
 import { uniqueKey } from '../../utils/keyUtils';
 import emptyScheduleImage from '../../assets/images/empty-states/owl_reading.png';
 import DashboardCalendar from '../DashboardCalendar';
-import { getBusinessTypes } from '../../services/categories';
+import { getEffectiveBusinessTypes } from '../../services/categories';
+import { useActiveProfileContext } from '../../hooks/useActiveProfileContext';
 
 interface ProviderScheduleViewProps {
   user: any;
@@ -32,9 +33,11 @@ export default function ProviderScheduleView({
   onSetRescheduleTime,
   onReschedule,
 }: ProviderScheduleViewProps) {
-  // Set-check: a seller who serves EVENTS plus other archetypes still
-  // gets the rental-specific copy on the schedule view.
-  const isEventsBusiness = getBusinessTypes(user as any).includes('EVENTS');
+  // Persona-aware: rental copy fires only when the active mode is in
+  // the events bucket. A multi-archetype seller in RETAIL persona
+  // sees the generic schedule copy even if they ALSO serve EVENTS.
+  const { context: activeContext } = useActiveProfileContext();
+  const isEventsBusiness = getEffectiveBusinessTypes(user as any, activeContext).includes('EVENTS');
 
   return (
     <div className="space-y-6">

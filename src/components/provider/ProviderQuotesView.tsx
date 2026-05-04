@@ -5,7 +5,8 @@ import emptyQuotesImage from '../../assets/images/empty-states/owl_reading.png';
 import { hasPermission, PERMISSIONS } from '../../utils/rbac';
 import { uniqueKey } from '../../utils/keyUtils';
 import { robustParse } from '../../utils/jsonUtils';
-import { getBusinessTypes } from '../../services/categories';
+import { getEffectiveBusinessTypes } from '../../services/categories';
+import { useActiveProfileContext } from '../../hooks/useActiveProfileContext';
 
 interface ProviderQuotesViewProps {
   user: any;
@@ -32,7 +33,10 @@ export default function ProviderQuotesView({
   onReviseQuote,
   renderSpecifications,
 }: ProviderQuotesViewProps) {
-  const isWholesale = getBusinessTypes(user as any).includes('WHOLESALE');
+  // Persona-aware: "Active Quotations" only fires when the active
+  // mode is WHOLESALE.
+  const { context: activeContext } = useActiveProfileContext();
+  const isWholesale = getEffectiveBusinessTypes(user as any, activeContext).includes('WHOLESALE');
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex justify-between items-center px-0 sm:px-0">
