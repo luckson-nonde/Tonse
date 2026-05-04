@@ -626,13 +626,11 @@ export default function ProviderDashboard() {
       const quoteId = await db.quotes.add(newQuote);
       console.log('[Quote] saved with id:', quoteId);
 
-      // Update the inquiry status to QUOTED so buyer sees the state change immediately
-      try {
-        await db.inquiries.update(String(lead.id), { status: 'QUOTED' });
-        console.log('[Quote] inquiry', lead.id, 'marked as QUOTED');
-      } catch (e) {
-        console.warn('[Quote] could not update inquiry status to QUOTED:', e);
-      }
+      // Inquiry status transition to QUOTED happens server-side now —
+      // QuotesService.create() flips it atomically. The previous
+      // client-side PATCH /inquiries/:id 403'd for any caller who
+      // wasn't the buyer (every seller, in other words), so we don't
+      // run it from here anymore.
 
       try {
         await logAuditAction(user, 'QUOTE_SENT', quoteId, newQuote.inquiryTitle, lead.buyerName || 'Unknown Buyer', newQuote.price, `Quote sent for ${newQuote.inquiryTitle}`);
