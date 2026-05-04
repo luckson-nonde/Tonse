@@ -191,6 +191,57 @@ export class User {
   @Column({ type: 'boolean', default: false })
   mustChangePassword: boolean;
 
+  // ===== Department head delegation (Phase 5) =====
+
+  /**
+   * Whether this team member runs the department for their
+   * `assignedArchetype`. Owners can promote one staff per
+   * (parentProviderId, assignedArchetype) pair to head — the team
+   * service enforces the uniqueness. Department heads gain finance-
+   * view access (with their own PIN) and, when granted INDEPENDENT
+   * autonomy, can move money out of the company virtual account.
+   */
+  @Column({ type: 'boolean', default: false })
+  isDepartmentHead: boolean;
+
+  /**
+   * Autonomy mode for the department head. Only meaningful when
+   * `isDepartmentHead = true`; NULL on regular staff and owners.
+   *
+   *   INDEPENDENT — full autonomy: view + move money out of the
+   *                 company virtual account.
+   *   MANAGED     — view-only: balance + transactions visible behind
+   *                 their PIN, but no withdrawal UI / endpoint access.
+   */
+  @Column({
+    type: 'enum',
+    enum: ['INDEPENDENT', 'MANAGED'],
+    nullable: true,
+  })
+  departmentAutonomy: 'INDEPENDENT' | 'MANAGED' | null;
+
+  /**
+   * Derived from `departmentAutonomy` (kept as a column so backend
+   * gates can read it directly without re-deriving): TRUE when
+   * autonomy is INDEPENDENT, FALSE otherwise. Withdrawal endpoints
+   * + the FinancialPage withdrawal button gate on this field.
+   */
+  @Column({ type: 'boolean', default: false })
+  canMoveFinance: boolean;
+
+  /**
+   * Per-user PIN for finance access. Owners use the PIN on their
+   * active profile (seller_profiles.pin / etc.); department heads
+   * (and any future staff who need self-scoped PIN gating) use this
+   * column. select:false + @Exclude so the value never reaches the
+   * wire — only `hasPin` is published via flattenWithProfile.
+   *
+   * 4 chars to match the existing profile-level PIN format.
+   */
+  @Column({ type: 'varchar', length: 4, nullable: true, select: false })
+  @Exclude({ toPlainOnly: true })
+  pin: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

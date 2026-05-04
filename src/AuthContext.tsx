@@ -63,6 +63,13 @@ export interface User {
    *  by the post-login route to auto-jump to the right view. */
   assignedArchetype?: string | null;
   mustChangePassword?: boolean;
+  /** Phase 5 — Department head delegation. Owner promotes one staff
+   *  per archetype to head. Heads can view finance with their own
+   *  PIN; INDEPENDENT autonomy adds money-movement; MANAGED is
+   *  view-only. Owners always have NULL/false here. */
+  isDepartmentHead?: boolean;
+  departmentAutonomy?: 'INDEPENDENT' | 'MANAGED' | null;
+  canMoveFinance?: boolean;
   createdAt?: string;
   virtualAccountNumber?: string;
   virtualAccountBalance?: number;

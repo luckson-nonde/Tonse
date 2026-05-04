@@ -65,8 +65,19 @@ export default function PinModal({ isOpen, onClose, onSuccess }: PinModalProps) 
           setError('');
         } else {
           if (pin === firstEntry) {
-            await updateUser({ pin });
-            // Reset confirm state so re-opening the modal starts clean.
+            // Route through the dedicated /users/:id/pin endpoint —
+            // backend branches staff (users.pin) vs owner (profile.pin).
+            // The previous `updateUser({pin})` path went through the
+            // generic update split which always routed pin to the
+            // profile, wrong for staff with no real profile of their own.
+            if (!user?.id) {
+              setError('Please sign in again.');
+              return;
+            }
+            await authService.setPin(user.id, pin);
+            // Empty patch — refreshes hasPin on the client by re-pulling
+            // the flattened profile from the backend.
+            await updateUser({});
             setFirstEntry('');
             setCreationStep('enter');
             onSuccess();

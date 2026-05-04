@@ -198,6 +198,16 @@ export const authService = {
     return !!response.data?.valid;
   },
 
+  /**
+   * Set (or change) the calling user's PIN. The backend routes the
+   * write to users.pin for staff (parentProviderId set, Phase 5
+   * department-head model) and to the active profile for owners —
+   * caller doesn't have to branch.
+   */
+  setPin: async (userId: string, pin: string): Promise<void> => {
+    await apiClient.post(`/users/${userId}/pin`, { pin });
+  },
+
   updateProfile: async (userId: string, data: UpdateProfileRequest): Promise<any> => {
     // Sanitize data: remove empty dob to avoid validation errors. Phase 1
     // dropped the metadata jsonb so dob (when present) is at the top level

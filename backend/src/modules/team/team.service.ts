@@ -151,6 +151,57 @@ export class TeamService {
       staff.isActive = dto.isActive;
       dirty = true;
     }
+
+    // Phase 5 — Department head promotion. Setting `isDepartmentHead`
+    // true requires an `assignedArchetype` (head must be a head OF
+    // something) and an autonomy mode. INDEPENDENT auto-flips
+    // canMoveFinance=true; MANAGED keeps it false. Demoting clears
+    // autonomy + canMoveFinance.
+    if (dto.isDepartmentHead !== undefined) {
+      if (dto.isDepartmentHead === true) {
+        const archetype = dto.assignedArchetype ?? staff.assignedArchetype;
+        if (!archetype) {
+          throw new ForbiddenException(
+            'Cannot promote: staff has no assignedArchetype to be head of',
+          );
+        }
+        const autonomy = dto.departmentAutonomy ?? staff.departmentAutonomy;
+        if (autonomy !== 'INDEPENDENT' && autonomy !== 'MANAGED') {
+          throw new ForbiddenException(
+            'Cannot promote: departmentAutonomy must be INDEPENDENT or MANAGED',
+          );
+        }
+        // One head per (parentProviderId, assignedArchetype). Allow
+        // re-saving the same head (idempotent autonomy change).
+        const existingHead = await this.userRepository.findOne({
+          where: {
+            parentProviderId: parentProvider.id,
+            assignedArchetype: archetype,
+            isDepartmentHead: true,
+          },
+        });
+        if (existingHead && existingHead.id !== staff.id) {
+          throw new ConflictException(
+            `${archetype} already has a department head — demote them first`,
+          );
+        }
+        staff.isDepartmentHead = true;
+        staff.departmentAutonomy = autonomy;
+        staff.canMoveFinance = autonomy === 'INDEPENDENT';
+        dirty = true;
+      } else {
+        staff.isDepartmentHead = false;
+        staff.departmentAutonomy = null;
+        staff.canMoveFinance = false;
+        dirty = true;
+      }
+    } else if (dto.departmentAutonomy !== undefined && staff.isDepartmentHead) {
+      // Autonomy change without promotion toggle (already a head).
+      staff.departmentAutonomy = dto.departmentAutonomy;
+      staff.canMoveFinance = dto.departmentAutonomy === 'INDEPENDENT';
+      dirty = true;
+    }
+
     if (dirty) await this.userRepository.save(staff);
 
     if (

@@ -83,11 +83,11 @@ export class UsersController {
   }
 
   /**
-   * Verify a candidate PIN against the active profile's stored PIN.
-   * Compare happens server-side so the actual PIN value never reaches
-   * the wire — the response is a plain boolean. Used by the financial
-   * surface (PinModal / FinancialPage) when the user is unlocking
-   * access, paired with the hasPin flag from /auth/me.
+   * Verify a candidate PIN against the user's stored PIN. For staff
+   * (parentProviderId set) the PIN lives on `users.pin` (per-user,
+   * Phase 5 department-head model); for owners it lives on the
+   * active profile. Compare happens server-side so the actual PIN
+   * value never reaches the wire — response is a plain boolean.
    */
   @Post(':id/pin/verify')
   @UseGuards(JwtAuthGuard)
@@ -101,5 +101,25 @@ export class UsersController {
     }
     const valid = await this.usersService.verifyProfilePin(id, body?.pin ?? '');
     return { valid };
+  }
+
+  /**
+   * Set (or change) the calling user's PIN. Mirrors the verify
+   * endpoint's staff/owner branching — staff write to users.pin,
+   * owners to their active profile. The 4-digit shape is enforced
+   * inside usersService.setProfilePin.
+   */
+  @Post(':id/pin')
+  @UseGuards(JwtAuthGuard)
+  async setPin(
+    @Param('id') id: string,
+    @Body() body: { pin?: string },
+    @Request() req,
+  ) {
+    if (req.user.id !== id) {
+      throw new ForbiddenException();
+    }
+    await this.usersService.setProfilePin(id, body?.pin ?? '');
+    return { success: true };
   }
 }

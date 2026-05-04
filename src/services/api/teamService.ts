@@ -28,6 +28,13 @@ export interface UpdateTeamMemberPayload {
   permissions?: string[];
   assignedArchetype?: string | null;
   isActive?: boolean;
+  /** Promote/demote to department head. Backend enforces "one head
+   *  per (parentProviderId, assignedArchetype)" — second promotion
+   *  for the same archetype returns 409. */
+  isDepartmentHead?: boolean;
+  /** Required when isDepartmentHead = true. INDEPENDENT auto-flips
+   *  canMoveFinance true on the backend; MANAGED keeps it false. */
+  departmentAutonomy?: 'INDEPENDENT' | 'MANAGED';
 }
 
 export interface TeamMember {
@@ -41,6 +48,11 @@ export interface TeamMember {
   assignedArchetype: string | null;
   mustChangePassword: boolean;
   isActive: boolean;
+  /** Phase 5 — department head delegation. */
+  isDepartmentHead?: boolean;
+  departmentAutonomy?: 'INDEPENDENT' | 'MANAGED' | null;
+  canMoveFinance?: boolean;
+  hasPin?: boolean;
   archetypes?: string[]; // inherited from parent
   categoryIds?: string[]; // inherited from parent
   createdAt: string;

@@ -169,17 +169,30 @@ export class UsersService {
     if (!profile) return user;
 
     // Side query: select only the pin column so we can publish
-    // hasPin without ever shipping the value itself.
+    // hasPin without ever shipping the value itself. Staff
+    // (parentProviderId set) read from users.pin (per-user PIN
+    // for finance access — Phase 5); owners read from the active
+    // profile row.
     let hasPin = false;
-    const repo = this.profileRepoFor(user.activeProfileType);
-    if (repo && user.activeProfileId) {
-      const pinRow = await (repo as any)
-        .createQueryBuilder('p')
-        .select('p.id')
-        .addSelect('p.pin')
-        .where('p.id = :id', { id: user.activeProfileId })
+    if (user.parentProviderId) {
+      const pinRow = await this.userRepository
+        .createQueryBuilder('u')
+        .select('u.id')
+        .addSelect('u.pin')
+        .where('u.id = :id', { id: user.id })
         .getOne();
       hasPin = !!pinRow?.pin;
+    } else {
+      const repo = this.profileRepoFor(user.activeProfileType);
+      if (repo && user.activeProfileId) {
+        const pinRow = await (repo as any)
+          .createQueryBuilder('p')
+          .select('p.id')
+          .addSelect('p.pin')
+          .where('p.id = :id', { id: user.activeProfileId })
+          .getOne();
+        hasPin = !!pinRow?.pin;
+      }
     }
 
     // Phase: matching — load the profile's category IDs so the
@@ -216,15 +229,31 @@ export class UsersService {
   }
 
   /**
-   * Verify a candidate PIN against the active profile's stored PIN.
-   * Server-side compare keeps the actual PIN value off the wire.
-   * Returns true on match, false otherwise (including when no PIN
-   * has been set yet).
+   * Verify a candidate PIN. Staff (parentProviderId set) verify
+   * against their own `users.pin`; owners verify against their
+   * active profile's PIN. Server-side compare so the value never
+   * leaves the box. Returns false when no PIN has been set yet.
    */
   async verifyProfilePin(userId: string, candidate: string): Promise<boolean> {
     if (!candidate || candidate.length !== 4) return false;
     const user = await this.findById(userId);
-    if (!user?.activeProfileId || !user?.activeProfileType) return false;
+    if (!user) return false;
+
+    // Staff branch: PIN lives on users.pin (per-user). Department
+    // heads (and any future staff who need finance access) set it
+    // themselves via POST /users/:id/pin.
+    if (user.parentProviderId) {
+      const row = await this.userRepository
+        .createQueryBuilder('u')
+        .select('u.id')
+        .addSelect('u.pin')
+        .where('u.id = :id', { id: user.id })
+        .getOne();
+      return !!row?.pin && row.pin === candidate;
+    }
+
+    // Owner branch: PIN lives on the active profile row.
+    if (!user.activeProfileId || !user.activeProfileType) return false;
     const repo = this.profileRepoFor(user.activeProfileType);
     if (!repo) return false;
     const row = await (repo as any)
@@ -234,6 +263,36 @@ export class UsersService {
       .where('p.id = :id', { id: user.activeProfileId })
       .getOne();
     return !!row?.pin && row.pin === candidate;
+  }
+
+  /**
+   * Set a PIN. Same staff-vs-owner branching as `verifyProfilePin`.
+   * Staff write to `users.pin`; owners write to their active profile.
+   * The 4-char shape is enforced here so callers can pass through a
+   * trimmed input without re-validating.
+   */
+  async setProfilePin(userId: string, pin: string): Promise<void> {
+    if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+      throw new BadRequestException('PIN must be exactly 4 digits');
+    }
+    const user = await this.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.parentProviderId) {
+      await this.userRepository.update({ id: userId }, { pin });
+      return;
+    }
+
+    if (!user.activeProfileId || !user.activeProfileType) {
+      throw new BadRequestException(
+        'User has no active profile yet — finish onboarding first',
+      );
+    }
+    const repo = this.profileRepoFor(user.activeProfileType);
+    if (!repo) {
+      throw new BadRequestException('Profile type unsupported for PIN');
+    }
+    await (repo as any).update({ id: user.activeProfileId }, { pin });
   }
 
   /** Split a flat update payload into auth fields (for users) and profile

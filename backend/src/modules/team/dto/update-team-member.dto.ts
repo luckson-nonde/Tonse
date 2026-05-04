@@ -2,6 +2,7 @@ import {
   IsArray,
   IsBoolean,
   IsEmail,
+  IsIn,
   IsOptional,
   IsString,
   MinLength,
@@ -39,4 +40,23 @@ export class UpdateTeamMemberDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  /**
+   * Promote this staff member to department head for their
+   * assignedArchetype. False (or omitted) demotes them. The team
+   * service enforces the (parentProviderId, assignedArchetype)
+   * uniqueness — only one head per department.
+   */
+  @IsOptional()
+  @IsBoolean()
+  isDepartmentHead?: boolean;
+
+  /**
+   * Autonomy mode for the department head. Required when
+   * isDepartmentHead is set to true. INDEPENDENT auto-flips
+   * canMoveFinance true; MANAGED keeps it false.
+   */
+  @IsOptional()
+  @IsIn(['INDEPENDENT', 'MANAGED'])
+  departmentAutonomy?: 'INDEPENDENT' | 'MANAGED';
 }

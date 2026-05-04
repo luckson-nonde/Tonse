@@ -427,12 +427,30 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
         >
           <Plus className="w-5 h-5 text-[#C9973A]" /> Add Money
         </button>
-        <button 
-          onClick={() => setShowWithdrawModal(true)}
-          className="bg-[#1B3068] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-md hover:bg-[#152554] transition-all active:scale-[0.98]"
-        >
-          <Send className="w-5 h-5 -rotate-45" /> Withdraw
-        </button>
+        {/* Withdrawal gate (Phase 5) — owners always can; staff
+            (parentProviderId set) only when they're an INDEPENDENT
+            department head (canMoveFinance=true). MANAGED heads see
+            balance + history but no Withdraw button. */}
+        {(!user?.parentProviderId || user?.canMoveFinance) ? (
+          <button
+            onClick={() => setShowWithdrawModal(true)}
+            className="bg-[#1B3068] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-md hover:bg-[#152554] transition-all active:scale-[0.98]"
+          >
+            <Send className="w-5 h-5 -rotate-45" /> Withdraw
+          </button>
+        ) : (
+          <div
+            className="bg-slate-50 text-slate-400 font-bold py-4 rounded-2xl flex flex-col items-center justify-center gap-0.5 border border-dashed border-slate-200"
+            title="Withdrawals are restricted by your shop owner. Contact them to move money out."
+          >
+            <span className="flex items-center gap-2 text-sm">
+              <Send className="w-4 h-4 -rotate-45" /> View only
+            </span>
+            <span className="text-[10px] uppercase tracking-wider font-bold">
+              Managed mode
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Transaction History */}
