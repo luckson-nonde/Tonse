@@ -23,7 +23,7 @@ import InquiryPayment, { type InquiryPaymentResult } from '../components/Inquiry
 import InquirySuccess from '../components/InquirySuccess';
 import ConfirmationModal from '../components/ConfirmationModal';
 import DashboardLayout from '../components/DashboardLayout';
-import { CATEGORIES_DB, GENERIC_FALLBACK_SCHEMA } from '../services/categories';
+import { CATEGORIES_DB, getCategorySchema } from '../services/categories';
 import { Inquiry, InquiryItem, Quote } from '../types';
 import { getLabourInquirySchema } from '../services/labourSchemaRegistry';
 import FinancialPage from './FinancialPage';
@@ -402,8 +402,14 @@ export default function BuyerDashboard() {
           const labourSchema = getLabourInquirySchema(pendingInquiry.inquirySchemaKey || 'generic');
           schema = labourSchema?.fields || [];
         } else {
-          const selectedCategory = CATEGORIES_DB.find((cat) => cat.name === rawCategoryName);
-          schema = selectedCategory?.formSchema ?? GENERIC_FALLBACK_SCHEMA;
+          // pendingInquiry.categories[0] is the stable category ID
+          // (e.g. 'mobile-phones-repair'), not the display name. The
+          // previous strict `cat.name === rawCategoryName` match
+          // never resolved repair / variant categories and silently
+          // fell through to GENERIC_FALLBACK_SCHEMA — which is the
+          // buy-flavoured form, wrong for repair inquiries.
+          // getCategorySchema accepts both id and name.
+          schema = getCategorySchema(rawCategoryName || '');
         }
 
         // If express, filter to core fields only to make it faster
