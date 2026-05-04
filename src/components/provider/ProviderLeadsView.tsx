@@ -5,7 +5,11 @@ import { uniqueKey } from '../../utils/keyUtils';
 import { PreferenceTags, ThumbnailGrid } from './LeadsHelpers';
 import QuoteSubmissionForm from './QuoteSubmissionForm';
 import { recordInquiryView } from '../../services/api/inquiryService';
-import { getEffectiveBusinessTypes } from '../../services/categories';
+import {
+  getEffectiveBusinessType,
+  getEffectiveBusinessTypes,
+  CATEGORIES_DB,
+} from '../../services/categories';
 import { useActiveProfileContext } from '../../hooks/useActiveProfileContext';
 
 // ─── Collect all images from a lead ──────────────────────────────────────────
@@ -257,10 +261,57 @@ export default function ProviderLeadsView({
     return viewCounts[key] ?? lead.viewCount ?? 0;
   };
 
-  // Persona-aware: "Purchase Requests" only fires when the active
-  // mode is WHOLESALE.
+  // Persona-aware: drives the page H2 and the "Based on your
+  // categories" subtitle. The H2 switches by archetype (Buyer
+  // Inquiries / Repair Requests / etc.) and the subtitle scopes
+  // the visible categories to the active persona's archetype so
+  // a seller in RETAIL mode sees their RETAIL categories, not the
+  // full category list.
   const { context: activeContext } = useActiveProfileContext();
+  const effectiveType = getEffectiveBusinessType(user as any, activeContext);
   const isWholesale = getEffectiveBusinessTypes(user as any, activeContext).includes('WHOLESALE');
+
+  const headerTitle = (() => {
+    switch (effectiveType) {
+      case 'WHOLESALE':     return 'Purchase Requests';
+      case 'REPAIR':        return 'Repair Requests';
+      case 'SERVICE':       return 'Service Requests';
+      case 'EVENTS':        return 'Event Bookings';
+      case 'ENTERTAINMENT': return 'Performance Bookings';
+      case 'RETAIL':        return 'Buyer Inquiries';
+      default:              return 'Booking Requests';
+    }
+  })();
+
+  // Subtitle source: prefer categoryIds (stable IDs from the catalog)
+  // resolved to display names. Filter by the active persona's
+  // archetype using the catalog's `type` field (`buy` / `repair` /
+  // `restore`) — frontend Category rows don't carry the full
+  // archetype enum, so this is the best signal we have. RETAIL keeps
+  // `buy` and parent rows (no type); REPAIR keeps `repair` + `restore`;
+  // other personas don't filter (show everything matching).
+  const visibleCategoryNames = (() => {
+    const ids: string[] | undefined = (user as any)?.categoryIds;
+    if (Array.isArray(ids) && ids.length > 0) {
+      const matched = ids
+        .map((id) => CATEGORIES_DB.find((c) => c.id === id))
+        .filter((c): c is NonNullable<typeof c> => !!c)
+        .filter((c) => {
+          if (effectiveType === 'RETAIL') {
+            // Keep buy variants and parent rows (no type), drop repair.
+            return c.type !== 'repair' && c.type !== 'restore';
+          }
+          if (effectiveType === 'REPAIR') {
+            return c.type === 'repair' || c.type === 'restore';
+          }
+          return true;
+        })
+        .map((c) => c.name);
+      if (matched.length > 0) return matched;
+    }
+    const legacy = (user as any)?.categories;
+    return Array.isArray(legacy) && legacy.length > 0 ? legacy : null;
+  })();
 
   // Dynamic layout calculations based on leads volume
   const leadsCount = leads.length;
@@ -308,11 +359,13 @@ export default function ProviderLeadsView({
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-serif font-bold text-slate-900">
-            {isWholesale ? 'Purchase Requests' : 'Booking Requests'}
+            {headerTitle}
           </h2>
           <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wider mt-1">
             Based on your categories:{' '}
-            <span className="text-[#d49b35]">{user?.categories?.join(', ') || 'All Categories'}</span>
+            <span className="text-[#d49b35]">
+              {visibleCategoryNames ? visibleCategoryNames.join(', ') : 'No categories matched'}
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-2">
