@@ -18,6 +18,8 @@ import {
   GraduationCap,
   Sparkles,
   Layers,
+  Hotel,
+  TreePine,
 } from 'lucide-react';
 
 export type CategoryType = 'PRODUCTS' | 'SERVICES' | 'VENUES' | 'LABOR';
@@ -26,13 +28,15 @@ interface InquiryPreferencesProps {
   categoryType: CategoryType;
   onBack: () => void;
   onNext: (preferences: any) => void;
+  /** When set, the form is in targeted-shop mode: "Target Destination" is replaced
+   *  with a two-option "Delivery Scope" (this shop only vs. all branches). */
+  targetedShop?: { id: string; sellerId: string; name: string; categoryIds?: string[] };
 }
 
 // Tiered pricing for the quote-count cap. Buyer pays the fee; system auto-closes
-// the inquiry once the chosen number of quotes has landed. Prices increment by
-// K5 across the eight tiers; quote counts step 5 → 10 → 20 → 70.
+// the inquiry once the chosen number of quotes has landed.
 const QUOTE_COUNT_TIERS = [
-  { count: 5, price: 10 },
+  { count: 5,  price: 10 },
   { count: 10, price: 15 },
   { count: 20, price: 20 },
   { count: 30, price: 25 },
@@ -42,6 +46,10 @@ const QUOTE_COUNT_TIERS = [
   { count: 70, price: 45 },
 ];
 
+// Reduced tiers for chain-store targeting — more than ~10 quotes from branches of
+// one chain is rarely useful.
+const CHAIN_QUOTE_TIERS = QUOTE_COUNT_TIERS.slice(0, 3); // 5 / 10 / 20
+
 const PREFERENCES_CONFIG = {
   PRODUCTS: {
     section1: {
@@ -49,11 +57,11 @@ const PREFERENCES_CONFIG = {
       description: "Where would you like to receive quotes from?",
       icon: Navigation,
       options: [
-        { id: "wholesale", label: "Wholesale Markets", icon: Building2 },
-        { id: "malls", label: "Shopping Malls", icon: Store },
-        { id: "local", label: "Local Shops", icon: Store },
-        { id: "distributors", label: "Verified Distributors", icon: CheckCircle2 },
-        { id: "any", label: "Any Shop", icon: MapPin }
+        { id: "wholesale",    label: "Wholesale Markets",    icon: Building2     },
+        { id: "malls",        label: "Shopping Malls",       icon: Store         },
+        { id: "local",        label: "Local Shops",          icon: Store         },
+        { id: "distributors", label: "Verified Distributors",icon: CheckCircle2  },
+        { id: "any",          label: "Any Shop",             icon: MapPin        },
       ]
     },
     section2: {
@@ -61,10 +69,10 @@ const PREFERENCES_CONFIG = {
       description: "What's most important for this product?",
       icon: Settings,
       options: [
-        { id: "price", label: "Lowest Price" },
+        { id: "price",        label: "Lowest Price"       },
         { id: "authenticity", label: "Brand Authenticity" },
-        { id: "delivery", label: "Fastest Delivery" },
-        { id: "warranty", label: "Warranty Included" }
+        { id: "delivery",     label: "Fastest Delivery"   },
+        { id: "warranty",     label: "Warranty Included"  },
       ]
     },
     section3: {
@@ -72,10 +80,10 @@ const PREFERENCES_CONFIG = {
       description: "How long should quotes remain valid?",
       icon: Clock,
       options: [
-        { id: "24h", label: "24 Hours" },
-        { id: "3d", label: "3 Days" },
-        { id: "1w", label: "1 Week" },
-        { id: "budget", label: "Until Budget Met" }
+        { id: "24h",    label: "24 Hours"       },
+        { id: "3d",     label: "3 Days"         },
+        { id: "1w",     label: "1 Week"         },
+        { id: "budget", label: "Until Budget Met"},
       ]
     }
   },
@@ -85,10 +93,10 @@ const PREFERENCES_CONFIG = {
       description: "Who do you want to hire?",
       icon: Navigation,
       options: [
-        { id: "freelancers", label: "Independent Freelancers", icon: User },
-        { id: "agencies", label: "Registered Agencies", icon: Building2 },
-        { id: "top_rated", label: "Top Rated Only", icon: Star },
-        { id: "any", label: "Any Provider", icon: Users }
+        { id: "freelancers", label: "Independent Freelancers", icon: User      },
+        { id: "agencies",    label: "Registered Agencies",     icon: Building2 },
+        { id: "top_rated",   label: "Top Rated Only",          icon: Star      },
+        { id: "any",         label: "Any Provider",            icon: Users     },
       ]
     },
     section2: {
@@ -97,9 +105,9 @@ const PREFERENCES_CONFIG = {
       icon: Settings,
       options: [
         { id: "availability", label: "Fastest Availability" },
-        { id: "price", label: "Lowest Price" },
-        { id: "rating", label: "Highest Rating" },
-        { id: "experience", label: "Most Experience" }
+        { id: "price",        label: "Lowest Price"         },
+        { id: "rating",       label: "Highest Rating"       },
+        { id: "experience",   label: "Most Experience"      },
       ]
     },
     section3: {
@@ -107,34 +115,35 @@ const PREFERENCES_CONFIG = {
       description: "How long should quotes remain valid?",
       icon: Clock,
       options: [
-        { id: "24h", label: "24 Hours" },
-        { id: "3d", label: "3 Days" },
-        { id: "1w", label: "1 Week" },
-        { id: "flexible", label: "Flexible" }
+        { id: "24h",      label: "24 Hours" },
+        { id: "3d",       label: "3 Days"   },
+        { id: "1w",       label: "1 Week"   },
+        { id: "flexible", label: "Flexible" },
       ]
     }
   },
   VENUES: {
     section1: {
-      title: "Target Venues",
-      description: "What type of establishment?",
-      icon: Navigation,
+      title: "Venue Setting",
+      description: "Where should the venue be located?",
+      icon: Building2,
       options: [
-        { id: "hotels", label: "Hotels & Lodges", icon: Building2 },
-        { id: "independent", label: "Independent Venues", icon: MapPin },
-        { id: "restaurants", label: "Restaurants & Clubs", icon: Store },
-        { id: "any", label: "Any Venue", icon: Search }
+        { id: "standalone",      label: "Standalone Venue",   icon: Building2 },
+        { id: "lodge_hotel",     label: "Lodge / Hotel",      icon: Hotel     },
+        { id: "outdoor_garden",  label: "Outdoor / Garden",   icon: TreePine  },
+        { id: "restaurant_club", label: "Restaurant / Club",  icon: Store     },
+        { id: "any",             label: "Any Setting",        icon: Search    },
       ]
     },
     section2: {
-      title: "Quote Parameters",
-      description: "What's most important for this booking?",
+      title: "What Matters Most",
+      description: "What's your top priority for this venue booking?",
       icon: Settings,
       options: [
-        { id: "price", label: "Lowest Price" },
-        { id: "amenities", label: "Best Amenities" },
-        { id: "terms", label: "Most Flexible Terms" },
-        { id: "rating", label: "Highest Rating" }
+        { id: "capacity",  label: "Capacity & Space"  },
+        { id: "amenities", label: "Best Amenities"    },
+        { id: "terms",     label: "Flexible Terms"    },
+        { id: "price",     label: "Best Price"        },
       ]
     },
     section3: {
@@ -142,10 +151,10 @@ const PREFERENCES_CONFIG = {
       description: "How long should quotes remain valid?",
       icon: Clock,
       options: [
-        { id: "24h", label: "24 Hours" },
-        { id: "3d", label: "3 Days" },
-        { id: "1w", label: "1 Week" },
-        { id: "flexible", label: "Flexible" }
+        { id: "24h",      label: "24 Hours" },
+        { id: "3d",       label: "3 Days"   },
+        { id: "1w",       label: "1 Week"   },
+        { id: "flexible", label: "Flexible" },
       ]
     }
   },
@@ -155,10 +164,10 @@ const PREFERENCES_CONFIG = {
       description: "Who do you want to hire?",
       icon: Navigation,
       options: [
-        { id: "certified", label: "Certified Professionals", icon: Award },
-        { id: "experienced", label: "Experienced Workers", icon: Briefcase },
-        { id: "trainees", label: "Trainees/Juniors", icon: GraduationCap },
-        { id: "any", label: "Any Available", icon: Users }
+        { id: "certified",   label: "Certified Professionals", icon: Award         },
+        { id: "experienced", label: "Experienced Workers",     icon: Briefcase     },
+        { id: "trainees",    label: "Trainees/Juniors",        icon: GraduationCap },
+        { id: "any",         label: "Any Available",           icon: Users         },
       ]
     },
     section2: {
@@ -167,9 +176,9 @@ const PREFERENCES_CONFIG = {
       icon: Settings,
       options: [
         { id: "availability", label: "Immediate Availability" },
-        { id: "rate", label: "Lowest Daily Rate" },
-        { id: "rating", label: "Highest Rating" },
-        { id: "references", label: "Verified References" }
+        { id: "rate",         label: "Lowest Daily Rate"      },
+        { id: "rating",       label: "Highest Rating"         },
+        { id: "references",   label: "Verified References"    },
       ]
     },
     section3: {
@@ -177,44 +186,73 @@ const PREFERENCES_CONFIG = {
       description: "How long should quotes remain valid?",
       icon: Clock,
       options: [
-        { id: "12h", label: "12 Hours" },
-        { id: "24h", label: "24 Hours" },
-        { id: "3d", label: "3 Days" },
-        { id: "flexible", label: "Flexible" }
+        { id: "12h",      label: "12 Hours" },
+        { id: "24h",      label: "24 Hours" },
+        { id: "3d",       label: "3 Days"   },
+        { id: "flexible", label: "Flexible" },
       ]
     }
   }
 };
 
-export default function InquiryPreferences({ categoryType, onBack, onNext }: InquiryPreferencesProps) {
-  // Ensure we fallback safely if categoryType is missing or invalid
+export default function InquiryPreferences({ categoryType, onBack, onNext, targetedShop }: InquiryPreferencesProps) {
+  const isTargeted = !!targetedShop;
   const config = PREFERENCES_CONFIG[categoryType] || PREFERENCES_CONFIG.PRODUCTS;
 
-  const [targetOption, setTargetOption] = useState<string>(config.section1.options[0].id);
+  // In targeted mode the first section is replaced with a two-option scope picker.
+  const section1 = isTargeted
+    ? {
+        title: 'Delivery Scope',
+        description: `Send to ${targetedShop!.name} only, or broadcast to all its branch locations.`,
+        icon: Store,
+        options: [
+          { id: 'this_shop', label: 'This Shop Only',       icon: Store     },
+          { id: 'chain',     label: 'This & All Branches',  icon: Building2 },
+        ],
+      }
+    : config.section1;
+
+  const [targetOption,   setTargetOption]   = useState<string>(section1.options[0].id);
   const [quoteParameter, setQuoteParameter] = useState<string>(config.section2.options[0].id);
-  const [validity, setValidity] = useState<string>(config.section3.options[0].id);
-  const [quoteCount, setQuoteCount] = useState<number>(QUOTE_COUNT_TIERS[0].count);
+  const [validity,       setValidity]       = useState<string>(config.section3.options[0].id);
+  const [quoteCount,     setQuoteCount]     = useState<number>(QUOTE_COUNT_TIERS[0].count);
 
-  // When categoryType changes (if ever), reset the state to the first option of the new config
+  // Reset when categoryType changes (preserves targeted defaults)
   useEffect(() => {
-    setTargetOption(PREFERENCES_CONFIG[categoryType]?.section1.options[0].id || PREFERENCES_CONFIG.PRODUCTS.section1.options[0].id);
-    setQuoteParameter(PREFERENCES_CONFIG[categoryType]?.section2.options[0].id || PREFERENCES_CONFIG.PRODUCTS.section2.options[0].id);
-    setValidity(PREFERENCES_CONFIG[categoryType]?.section3.options[0].id || PREFERENCES_CONFIG.PRODUCTS.section3.options[0].id);
-  }, [categoryType]);
+    const cfg = PREFERENCES_CONFIG[categoryType] || PREFERENCES_CONFIG.PRODUCTS;
+    if (!isTargeted) {
+      setTargetOption(cfg.section1.options[0].id);
+    }
+    setQuoteParameter(cfg.section2.options[0].id);
+    setValidity(cfg.section3.options[0].id);
+  }, [categoryType, isTargeted]);
 
-  const selectedTier = QUOTE_COUNT_TIERS.find((t) => t.count === quoteCount) ?? QUOTE_COUNT_TIERS[0];
+  // When the user flips to "chain", ensure the active quoteCount is within the
+  // reduced tier set.
+  useEffect(() => {
+    if (isTargeted && targetOption === 'chain') {
+      if (!CHAIN_QUOTE_TIERS.find((t) => t.count === quoteCount)) {
+        setQuoteCount(CHAIN_QUOTE_TIERS[0].count);
+      }
+    }
+  }, [targetOption, isTargeted, quoteCount]);
+
+  // "This Shop Only" always = 1 quote at minimum fee.
+  const isThisShopOnly = isTargeted && targetOption === 'this_shop';
+  const activeTiers    = isTargeted ? CHAIN_QUOTE_TIERS : QUOTE_COUNT_TIERS;
+  const selectedTier   = activeTiers.find((t) => t.count === quoteCount) ?? activeTiers[0];
 
   const handleNext = () => {
     onNext({
       targetOption,
       quoteParameter,
       validity,
-      quoteCount,
-      quoteFee: selectedTier.price,
+      quoteCount:  isThisShopOnly ? 1              : quoteCount,
+      quoteFee:    isThisShopOnly ? 10             : selectedTier.price,
     });
   };
 
-  const Section1Icon = config.section1.icon;
+  const Section1Icon = section1.icon;
   const Section2Icon = config.section2.icon;
   const Section3Icon = config.section3.icon;
 
@@ -261,7 +299,9 @@ export default function InquiryPreferences({ categoryType, onBack, onNext }: Inq
                   Preferences
                 </h1>
                 <p className="text-[14px] text-[#1a1a2e]/60 leading-relaxed font-medium">
-                  Tell us where to look, what matters most, and how many quotes you'd like to receive before we close the inquiry.
+                  {isTargeted
+                    ? `Fine-tune how your inquiry reaches ${targetedShop!.name} and tell us how many quotes you'd like back.`
+                    : "Tell us where to look, what matters most, and how many quotes you'd like to receive before we close the inquiry."}
                 </p>
               </div>
             </div>
@@ -285,12 +325,29 @@ export default function InquiryPreferences({ categoryType, onBack, onNext }: Inq
                 These settings tune which providers see your inquiry, how they compete for it, and when we stop accepting more offers.
               </p>
               <ul className="space-y-3">
-                <li className="flex items-start gap-3">
-                  <Navigation className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
-                  <p className="text-[12px] text-[#1a1a2e]/80 leading-relaxed">
-                    <span className="font-bold text-[#1a1a2e]">Target shops</span> narrow your inquiry to the right kind of seller.
-                  </p>
-                </li>
+                {isTargeted ? (
+                  <>
+                    <li className="flex items-start gap-3">
+                      <Store className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
+                      <p className="text-[12px] text-[#1a1a2e]/80 leading-relaxed">
+                        <span className="font-bold text-[#1a1a2e]">Delivery scope</span> controls whether only this specific location or all its branches can respond.
+                      </p>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <Building2 className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
+                      <p className="text-[12px] text-[#1a1a2e]/80 leading-relaxed">
+                        <span className="font-bold text-[#1a1a2e]">All branches</span> is useful when you want the best deal across multiple locations of the same chain.
+                      </p>
+                    </li>
+                  </>
+                ) : (
+                  <li className="flex items-start gap-3">
+                    <Navigation className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
+                    <p className="text-[12px] text-[#1a1a2e]/80 leading-relaxed">
+                      <span className="font-bold text-[#1a1a2e]">Target shops</span> narrow your inquiry to the right kind of seller.
+                    </p>
+                  </li>
+                )}
                 <li className="flex items-start gap-3">
                   <Settings className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
                   <p className="text-[12px] text-[#1a1a2e]/80 leading-relaxed">
@@ -316,35 +373,55 @@ export default function InquiryPreferences({ categoryType, onBack, onNext }: Inq
           {/* Right-side form */}
           <div className="flex-1 w-full">
             <div className="bg-white border border-[#f1f5f9] rounded-[32px] p-6 md:p-8 xl:p-10 shadow-sm shadow-[#1a1a2e]/[0.02] flex flex-col gap-10">
-              {/* Section 1: Target Option */}
+
+              {/* Targeted shop context banner */}
+              {isTargeted && (
+                <div className="flex items-center gap-3 px-4 py-3 bg-[#fdf6e9]/70 border border-[#C9973A]/20 rounded-2xl">
+                  <div className="w-8 h-8 rounded-xl bg-[#C9973A]/10 flex items-center justify-center shrink-0">
+                    <Store className="w-4 h-4 text-[#C9973A]" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#C9973A]">Targeted Inquiry</p>
+                    <p className="text-[12px] font-semibold text-[#1a1a2e] truncate">
+                      Sending to <span className="font-bold">{targetedShop!.name}</span>
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Section 1: Target / Delivery Scope */}
               <div className="flex flex-col gap-5">
                 <h3 className="font-sans font-bold text-[#1a1a2e] text-[13px] tracking-[0.05em] uppercase flex items-center gap-3 ml-1">
                   <div className="w-8 h-8 rounded-full bg-[rgba(201,151,58,0.08)] flex items-center justify-center">
                     <Section1Icon className="w-4 h-4 text-[#C9973A]" />
                   </div>
-                  {config.section1.title}
+                  {section1.title}
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {config.section1.options.map((opt) => {
+                <div className={`grid gap-3 ${
+                  isTargeted
+                    ? 'grid-cols-2'
+                    : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+                }`}>
+                  {section1.options.map((opt) => {
                     const Icon = opt.icon;
                     const isSelected = targetOption === opt.id;
                     return (
                       <div
                         key={opt.id}
                         onClick={() => setTargetOption(opt.id)}
-                        className={`p-4 rounded-2xl border-[1.5px] cursor-pointer transition-all relative flex flex-col items-center gap-2 text-center ${isSelected ? 'border-[#C9973A] bg-[rgba(201,151,58,0.03)]' : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'}`}
+                        className={`p-4 rounded-2xl border-[1.5px] cursor-pointer transition-all relative flex flex-col items-center gap-2 text-center ${
+                          isSelected
+                            ? 'border-[#C9973A] bg-[rgba(201,151,58,0.03)]'
+                            : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'
+                        }`}
                       >
                         {isSelected && (
                           <div className="absolute top-2 right-2 w-4 h-4 bg-[#C9973A] rounded-full flex items-center justify-center shadow-sm">
                             <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
                           </div>
                         )}
-                        <Icon
-                          className={`w-6 h-6 transition-colors ${isSelected ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`}
-                        />
-                        <p
-                          className={`font-sans font-bold text-[11px] leading-tight transition-colors ${isSelected ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}
-                        >
+                        <Icon className={`w-6 h-6 transition-colors ${isSelected ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`} />
+                        <p className={`font-sans font-bold text-[11px] leading-tight transition-colors ${isSelected ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}>
                           {opt.label}
                         </p>
                       </div>
@@ -352,7 +429,7 @@ export default function InquiryPreferences({ categoryType, onBack, onNext }: Inq
                   })}
                 </div>
                 <p className="text-[11px] font-medium text-[#94a3b8] ml-1 leading-relaxed font-sans">
-                  {config.section1.description}
+                  {section1.description}
                 </p>
               </div>
 
@@ -374,7 +451,11 @@ export default function InquiryPreferences({ categoryType, onBack, onNext }: Inq
                       <button
                         key={opt.id}
                         onClick={() => setQuoteParameter(opt.id)}
-                        className={`px-4 py-3.5 rounded-xl font-sans font-bold border-[1.5px] transition-all text-[12px] text-center ${isSelected ? 'border-[#C9973A] bg-[rgba(201,151,58,0.05)] text-[#C9973A]' : 'border-[#f1f5f9] bg-white text-[#94a3b8] hover:border-[#C9973A]/30'}`}
+                        className={`px-4 py-3.5 rounded-xl font-sans font-bold border-[1.5px] transition-all text-[12px] text-center ${
+                          isSelected
+                            ? 'border-[#C9973A] bg-[rgba(201,151,58,0.05)] text-[#C9973A]'
+                            : 'border-[#f1f5f9] bg-white text-[#94a3b8] hover:border-[#C9973A]/30'
+                        }`}
                       >
                         {opt.label}
                       </button>
@@ -383,7 +464,7 @@ export default function InquiryPreferences({ categoryType, onBack, onNext }: Inq
                 </div>
               </div>
 
-              {/* Section 3: Number of Quotations (NEW) */}
+              {/* Section 3: Number of Quotations */}
               <div className="flex flex-col gap-5">
                 <h3 className="font-sans font-bold text-[#1a1a2e] text-[13px] tracking-[0.05em] uppercase flex items-center gap-3 ml-1">
                   <div className="w-8 h-8 rounded-full bg-[rgba(201,151,58,0.08)] flex items-center justify-center">
@@ -391,60 +472,74 @@ export default function InquiryPreferences({ categoryType, onBack, onNext }: Inq
                   </div>
                   Number of Quotations
                 </h3>
-                <p className="text-[11px] font-medium text-[#94a3b8] ml-1 leading-relaxed font-sans">
-                  Choose how many quotes you'd like to receive. We'll automatically close the inquiry once your target is reached.
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2 md:gap-3">
-                  {QUOTE_COUNT_TIERS.map((tier) => {
-                    const isSelected = quoteCount === tier.count;
-                    return (
-                      <button
-                        key={tier.count}
-                        onClick={() => setQuoteCount(tier.count)}
-                        className={`relative px-3 py-4 rounded-2xl border-[1.5px] transition-all flex flex-col items-center gap-1 ${
-                          isSelected
-                            ? 'border-[#C9973A] bg-[rgba(201,151,58,0.05)] shadow-[0_8px_20px_-12px_rgba(201,151,58,0.35)]'
-                            : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'
-                        }`}
-                      >
-                        {isSelected && (
-                          <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#C9973A] rounded-full flex items-center justify-center shadow-sm">
-                            <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
-                          </div>
-                        )}
-                        <span
-                          className={`font-serif text-2xl font-bold leading-none transition-colors ${
-                            isSelected ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'
-                          }`}
-                        >
-                          {tier.count}
-                        </span>
-                        <span
-                          className={`text-[9px] font-bold uppercase tracking-[0.14em] transition-colors ${
-                            isSelected ? 'text-[#C9973A]' : 'text-[#cbd5e1]'
-                          }`}
-                        >
-                          quotes
-                        </span>
-                        <span
-                          className={`text-[12px] font-black mt-1 transition-colors ${
-                            isSelected ? 'text-[#C9973A]' : 'text-[#94a3b8]'
-                          }`}
-                        >
-                          K{tier.price}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-[#fdf6e9]/60 border border-[#C9973A]/15 mt-1">
-                  <p className="text-[11px] font-medium text-[#1a1a2e]/70 leading-snug">
-                    Inquiry auto-closes after <span className="font-black text-[#1a1a2e]">{selectedTier.count} quotes</span>
-                  </p>
-                  <p className="text-[12px] font-black text-[#C9973A] shrink-0">
-                    Service fee: K{selectedTier.price}
-                  </p>
-                </div>
+
+                {isThisShopOnly ? (
+                  /* Fixed: exactly 1 quote from this specific shop */
+                  <div className="flex items-center justify-between gap-4 px-5 py-4 rounded-2xl bg-[#fdf6e9]/60 border border-[#C9973A]/20">
+                    <div>
+                      <p className="text-[13px] font-bold text-[#1a1a2e]">1 quote expected</p>
+                      <p className="text-[11px] text-[#94a3b8] font-medium mt-0.5">
+                        You're sending directly to one shop — one quote is all you need.
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-[15px] font-black text-[#C9973A]">K10</p>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-[#94a3b8]">Service fee</p>
+                    </div>
+                  </div>
+                ) : (
+                  /* Normal / chain picker */
+                  <>
+                    <p className="text-[11px] font-medium text-[#94a3b8] ml-1 leading-relaxed font-sans">
+                      {isTargeted
+                        ? "Choose how many branch locations can respond before we close the inquiry."
+                        : "Choose how many quotes you'd like to receive. We'll automatically close the inquiry once your target is reached."}
+                    </p>
+                    <div className={`grid gap-2 md:gap-3 ${
+                      isTargeted
+                        ? 'grid-cols-3'
+                        : 'grid-cols-2 sm:grid-cols-4 xl:grid-cols-8'
+                    }`}>
+                      {activeTiers.map((tier) => {
+                        const isSelected = quoteCount === tier.count;
+                        return (
+                          <button
+                            key={tier.count}
+                            onClick={() => setQuoteCount(tier.count)}
+                            className={`relative px-3 py-4 rounded-2xl border-[1.5px] transition-all flex flex-col items-center gap-1 ${
+                              isSelected
+                                ? 'border-[#C9973A] bg-[rgba(201,151,58,0.05)] shadow-[0_8px_20px_-12px_rgba(201,151,58,0.35)]'
+                                : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'
+                            }`}
+                          >
+                            {isSelected && (
+                              <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#C9973A] rounded-full flex items-center justify-center shadow-sm">
+                                <Check className="w-2.5 h-2.5 text-white" strokeWidth={4} />
+                              </div>
+                            )}
+                            <span className={`font-serif text-2xl font-bold leading-none transition-colors ${isSelected ? 'text-[#1a1a2e]' : 'text-[#94a3b8]'}`}>
+                              {tier.count}
+                            </span>
+                            <span className={`text-[9px] font-bold uppercase tracking-[0.14em] transition-colors ${isSelected ? 'text-[#C9973A]' : 'text-[#cbd5e1]'}`}>
+                              quotes
+                            </span>
+                            <span className={`text-[12px] font-black mt-1 transition-colors ${isSelected ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`}>
+                              K{tier.price}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-[#fdf6e9]/60 border border-[#C9973A]/15 mt-1">
+                      <p className="text-[11px] font-medium text-[#1a1a2e]/70 leading-snug">
+                        Inquiry auto-closes after <span className="font-black text-[#1a1a2e]">{selectedTier.count} quotes</span>
+                      </p>
+                      <p className="text-[12px] font-black text-[#C9973A] shrink-0">
+                        Service fee: K{selectedTier.price}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Section 4: Timeline & Validity */}
@@ -465,7 +560,11 @@ export default function InquiryPreferences({ categoryType, onBack, onNext }: Inq
                       <button
                         key={opt.id}
                         onClick={() => setValidity(opt.id)}
-                        className={`py-3.5 rounded-xl font-sans font-bold border-[1.5px] transition-all text-[12px] ${isSelected ? 'border-[#C9973A] bg-[rgba(201,151,58,0.05)] text-[#C9973A]' : 'border-[#f1f5f9] bg-white text-[#94a3b8] hover:border-[#C9973A]/30'}`}
+                        className={`py-3.5 rounded-xl font-sans font-bold border-[1.5px] transition-all text-[12px] ${
+                          isSelected
+                            ? 'border-[#C9973A] bg-[rgba(201,151,58,0.05)] text-[#C9973A]'
+                            : 'border-[#f1f5f9] bg-white text-[#94a3b8] hover:border-[#C9973A]/30'
+                        }`}
                       >
                         {opt.label}
                       </button>
@@ -482,7 +581,7 @@ export default function InquiryPreferences({ categoryType, onBack, onNext }: Inq
                 >
                   <span className="text-[15px] font-bold leading-none">Confirm &amp; Continue</span>
                   <span className="text-[9px] font-bold uppercase tracking-[0.1em] opacity-70">
-                    Finalize Inquiry Preferences · K{selectedTier.price}
+                    Finalize Inquiry Preferences · K{isThisShopOnly ? 10 : selectedTier.price}
                   </span>
                 </button>
               </div>
