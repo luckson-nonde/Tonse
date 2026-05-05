@@ -102,18 +102,20 @@ export function useActiveProfileContext(): {
  * Convenience: derive the archetype the dashboard should currently
  * render for, given the active context.
  *
- *   - In `business:X` mode → X (the user's pick).
+ *   - In `business:X` mode → X, but ONLY if the owner actually serves
+ *     that archetype. Default localStorage seeds `RETAIL`, so without
+ *     this guard a single-archetype EVENTS provider would query leads
+ *     with `?variant=RETAIL` and see 0 results.
  *   - In `personal` mode   → null (no business archetype to render).
- *
- * Note: `ownerArchetypes` is no longer used here (the merged 'all'
- * mode that needed it has been removed) but kept in the signature
- * to avoid touching every call site at once. Drop the param when
- * we next refactor the consumers.
+ *   - When the context archetype isn't in the owner's set → null
+ *     (caller falls through to its own default, e.g. primary archetype
+ *     or "no variant filter").
  */
 export function resolveActiveArchetype(
   context: ActiveProfileContext,
-  _ownerArchetypes: BusinessType[],
+  ownerArchetypes: BusinessType[],
 ): BusinessType | null {
-  if (context.type === 'business') return context.archetype;
-  return null;
+  if (context.type !== 'business') return null;
+  if (!ownerArchetypes.includes(context.archetype)) return null;
+  return context.archetype;
 }
