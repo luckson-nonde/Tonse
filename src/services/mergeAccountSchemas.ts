@@ -111,14 +111,22 @@ export function pickSchemasForUser(
     return [MASTER_LABOUR_ACCOUNT_SCHEMA];
   }
 
-  // Business persona: pick the active archetype's schema (default
-  // resolves below if not set).
-  const archetype: BusinessType =
-    activeContext?.type === 'business'
+  // Business persona: pick the active archetype's schema, but ONLY
+  // if the user actually serves that archetype. The context defaults
+  // to { type: 'business', archetype: 'RETAIL' } in localStorage, so
+  // a venue provider with archetypes=['EVENTS'] would get the RETAIL
+  // schema on first login. Guard: if the context archetype is not in
+  // the user's set, ignore it and fall through to the primary archetype.
+  const contextArchetype: BusinessType | null =
+    activeContext?.type === 'business' && businessTypes.includes(activeContext.archetype)
       ? activeContext.archetype
-      : businessTypes.includes('RETAIL')
+      : null;
+
+  const archetype: BusinessType =
+    contextArchetype
+      ?? (businessTypes.includes('RETAIL')
         ? 'RETAIL'
-        : (businessTypes[0] ?? 'RETAIL');
+        : (businessTypes[0] ?? 'RETAIL'));
 
   const schema = ARCHETYPE_TO_SCHEMA[archetype];
   if (schema) return [schema];

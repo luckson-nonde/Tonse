@@ -1606,11 +1606,16 @@ export function getEffectiveBusinessType(
     | { type: 'personal' }
     | null,
 ): BusinessType {
-  if (activeContext?.type === 'business') return activeContext.archetype;
-  // No persona set → default to RETAIL (Buy New). If the seller
-  // doesn't actually serve RETAIL, fall back to their first
-  // archetype so display labels match something they can act on.
   const types = getBusinessTypes(user);
+  // Only honour the context archetype if the user actually serves it.
+  // The default context is always { type: 'business', archetype: 'RETAIL' }
+  // from localStorage — without this guard, a venue/events provider with
+  // archetypes=['EVENTS'] would permanently read as RETAIL because they
+  // never override the default context on first login.
+  if (activeContext?.type === 'business' && types.includes(activeContext.archetype)) {
+    return activeContext.archetype;
+  }
+  // No matching persona → default to the user's primary archetype.
   if (types.includes('RETAIL')) return 'RETAIL';
   return types[0] || 'RETAIL';
 }
@@ -1630,8 +1635,13 @@ export function getEffectiveBusinessTypes(
     | { type: 'personal' }
     | null,
 ): BusinessType[] {
-  if (activeContext?.type === 'business') return [activeContext.archetype];
-  return getBusinessTypes(user);
+  const types = getBusinessTypes(user);
+  // Same guard as getEffectiveBusinessType: only collapse to the context
+  // archetype if the user actually serves it.
+  if (activeContext?.type === 'business' && types.includes(activeContext.archetype)) {
+    return [activeContext.archetype];
+  }
+  return types;
 }
 
 /**
