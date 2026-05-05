@@ -20,7 +20,7 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'inquiries', label: 'My Inquiries', icon: 'MessageSquare' },
     { id: 'quotes', label: 'Received Quotes', icon: 'FileText' },
     { id: 'orders', label: 'Order History', icon: 'ShoppingBag' },
-    { id: 'shops', label: 'Saved Shops', icon: 'Store' },
+    { id: 'shops', label: 'Browse Shops', icon: 'Store' },
     { id: 'profile', label: 'Account Settings', icon: 'User' },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
   ],
@@ -37,6 +37,7 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       ],
       actions: [
         { id: 'new_inquiry', label: 'Create New Inquiry', icon: 'Plus', type: 'navigate', target: '/categories', variant: 'primary' },
+        { id: 'browse_shops', label: 'Browse Shops', icon: 'Store', type: 'navigate', target: '/shops', variant: 'secondary' },
       ]
     },
     inquiries: {
@@ -61,8 +62,8 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       dataKey: 'orders'
     },
     shops: {
-      title: "Saved Shops",
-      subtitle: "Manage your favorite stores and service providers",
+      title: "Shops & Retailers",
+      subtitle: "Browse and discover verified shops and service providers",
       componentType: 'list_renderer',
       dataKey: 'shops'
     },

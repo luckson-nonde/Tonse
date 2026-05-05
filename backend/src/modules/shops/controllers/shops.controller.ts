@@ -32,6 +32,7 @@ export class ShopsController {
   async findAll(@Query() query: any) {
     const filters = {
       search: query.search,
+      category: query.category,
       isActive: query.isActive === 'true',
       page: query.page,
       limit: query.limit,
@@ -44,6 +45,12 @@ export class ShopsController {
   @Get('seller/:sellerId')
   async findBySeller(@Param('sellerId') sellerId: string) {
     return this.shopsService.findBySellerId(sellerId);
+  }
+
+  /** Full provider profile — must be declared before @Get(':id') */
+  @Get(':id/profile')
+  async findProfile(@Param('id') profileId: string) {
+    return this.shopsService.findProfile(profileId);
   }
 
   @Get(':id')

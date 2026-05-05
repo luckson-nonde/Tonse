@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { Store, X } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import { useDashboard } from '../DashboardContext';
 import {
@@ -27,6 +28,9 @@ import { CATEGORIES_DB, getCategorySchema } from '../services/categories';
 import { Inquiry, InquiryItem, Quote } from '../types';
 import { getLabourInquirySchema } from '../services/labourSchemaRegistry';
 import FinancialPage from './FinancialPage';
+import BrowseShopsView from '../components/BrowseShopsView';
+import ShopProfileView from '../components/ShopProfileView';
+import type { ShopResult } from '../services/api/shopService';
 
 export default function BuyerDashboard() {
   const { user } = useAuth();
@@ -50,6 +54,7 @@ export default function BuyerDashboard() {
   const [selectedInquiryId, setSelectedInquiryId] = useState<string | null>(inquiryId || null);
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | number | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | number | null>(null);
+  const [selectedShopProfileId, setSelectedShopProfileId] = useState<string | null>(null);
   const [inquiryToDelete, setInquiryToDelete] = useState<any | null>(null);
   const [quoteToDelete, setQuoteToDelete] = useState<any | null>(null);
 
@@ -122,6 +127,7 @@ export default function BuyerDashboard() {
     };
     attributes?: Record<string, any>;
     processType?: 'EXPRESS' | 'STANDARD';
+    targetedShop?: { id: string; sellerId: string; name: string; categoryIds?: string[]; city?: string; province?: string; location?: string };
   }>({ items: [] });
 
   const categoryType = useMemo(() => {
@@ -130,7 +136,8 @@ export default function BuyerDashboard() {
     const lowerCats = cats.map(c => c.toLowerCase());
     const pathStr = lowerCats.join(' > ');
     
-    if (pathStr.includes('venues') || pathStr.includes('clubs')) return 'VENUES';
+    // 'venue' catches both 'event-venues' (id) and any display-name containing 'venue'
+    if (pathStr.includes('venue') || pathStr.includes('clubs')) return 'VENUES';
     if (pathStr.includes('rental') || pathStr.includes('catering') || pathStr.includes('planning') || pathStr.includes('management') || pathStr.includes('decor') || pathStr.includes('repair') || pathStr.includes('recovery') || pathStr.includes('services')) return 'SERVICES';
     
     return 'PRODUCTS';
@@ -244,6 +251,31 @@ export default function BuyerDashboard() {
           // await apiClient.patch(`/users/${user.id}`, payload);
         }
         break;
+      case 'browse_shops':
+        handleTabChange('shops');
+        break;
+      case 'view_shop_profile': {
+        setSelectedShopProfileId((payload as ShopResult).id);
+        handleTabChange('shop-profile');
+        break;
+      }
+      case 'send_inquiry_to_shop': {
+        const shop = payload as ShopResult;
+        setPendingInquiry((prev) => ({
+          ...prev,
+          targetedShop: {
+            id: shop.id,
+            sellerId: shop.sellerId,
+            name: shop.name,
+            categoryIds: shop.categoryIds ?? [],
+            city: shop.city,
+            province: shop.province,
+            location: shop.location,
+          },
+        }));
+        handleTabChange('process-selection');
+        break;
+      }
       default:
         console.log('Unhandled action:', actionId, payload);
     }
@@ -336,9 +368,37 @@ export default function BuyerDashboard() {
 
       const hasCoords =
         locationData.latitude != null && locationData.longitude != null;
+
+      // Derive the inquiry's display description from whatever long-form
+      // text the form actually captured. The form schemas vary by
+      // archetype — repair has `incidentReport` / `symptoms`, retail has
+      // `additionalDetails` / `title`, events have `description` /
+      // `additionalDetails` — so probe a priority list and stop on the
+      // first non-empty entry. Falling back to the literal placeholder
+      // string ("No description provided.") was the prior behaviour and
+      // it polluted every inquiry's description column with the same
+      // sentinel — the seller-side panel then rendered the sentinel as
+      // if it were real copy. Empty string means the renderer
+      // suppresses the panel entirely (it already short-circuits on
+      // falsy `lead.description`), which is the right outcome when the
+      // user genuinely had nothing more to add beyond the structured
+      // fields.
+      const attrs = pendingInquiry.attributes || {};
+      // Probe structured fields in priority order; fall back to a neutral
+      // placeholder that satisfies the backend's MinLength(10) constraint
+      // when the buyer filled in only structured fields (brand/model/etc.)
+      // and left the free-text area blank.
+      const description: string =
+        attrs.description ||
+        attrs.incidentReport ||
+        attrs.symptoms ||
+        attrs.additionalDetails ||
+        attrs.notes ||
+        'No additional details provided.';
+
       const inquiryData: CreateInquiryPayload = {
         title,
-        description: pendingInquiry.attributes?.description || 'No description provided.',
+        description,
         items: JSON.stringify([]),
         categoryIds,
         location: `${locationData.city}, ${locationData.province}`,
@@ -352,6 +412,9 @@ export default function BuyerDashboard() {
           latitude: locationData.latitude,
           longitude: locationData.longitude,
           radius: locationData.radius ?? 5,
+        }),
+        ...(pendingInquiry.targetedShop && {
+          targetedProviderId: pendingInquiry.targetedShop.sellerId,
         }),
       };
 
@@ -384,13 +447,25 @@ export default function BuyerDashboard() {
             onBack={() => handleTabChange('dashboard')}
           />
         );
-      case 'category-selection':
+      case 'category-selection': {
+        const shopCatIds = pendingInquiry.targetedShop?.categoryIds ?? [];
+        const shopParentId: string | undefined = (() => {
+          for (const id of shopCatIds) {
+            const cat = CATEGORIES_DB.find((c) => c.id === id);
+            if (!cat) continue;
+            if (!cat.parentId) return cat.id;
+            return cat.parentId;
+          }
+          return undefined;
+        })();
         return (
           <CategorySelection
             onBack={() => handleTabChange('process-selection')}
             onComplete={handleInquiryComplete}
+            preselectedParentId={shopParentId}
           />
         );
+      }
       case 'create-inquiry':
         const isLabour = pendingInquiry.isLabour === true;
         const rawCategoryName = isLabour
@@ -430,17 +505,33 @@ export default function BuyerDashboard() {
         }
 
         return (
-          <DynamicInquiryForm
-            schema={schema}
-            categoryName={rawCategoryName || 'Inquiry'}
-            processType={pendingInquiry.processType}
-            isLoading={isSubmitting}
-            onSubmit={(data) => {
-              setPendingInquiry((prev) => ({ ...prev, attributes: data }));
-              handleTabChange('inquiry-preferences');
-            }}
-            onBack={() => handleTabChange('category-selection')}
-          />
+          <div className="space-y-4">
+            {pendingInquiry.targetedShop && (
+              <div className="px-4 py-2.5 bg-[#fdf6e9] border border-[#d49b35]/20 rounded-xl flex items-center gap-2.5 text-[13px] text-slate-700">
+                <Store className="w-4 h-4 text-[#d49b35] shrink-0" />
+                <span>
+                  Sending to <span className="font-bold">{pendingInquiry.targetedShop.name}</span>
+                </span>
+                <button
+                  onClick={() => setPendingInquiry((p) => ({ ...p, targetedShop: undefined }))}
+                  className="ml-auto text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+            <DynamicInquiryForm
+              schema={schema}
+              categoryName={rawCategoryName || 'Inquiry'}
+              processType={pendingInquiry.processType}
+              isLoading={isSubmitting}
+              onSubmit={(data) => {
+                setPendingInquiry((prev) => ({ ...prev, attributes: data }));
+                handleTabChange('inquiry-preferences');
+              }}
+              onBack={() => handleTabChange('category-selection')}
+            />
+          </div>
         );
       case 'inquiry-preferences':
         return (
@@ -448,9 +539,31 @@ export default function BuyerDashboard() {
             categoryType={categoryType as any}
             onBack={() => handleTabChange('create-inquiry')}
             onNext={(prefs) => {
-              setPendingInquiry((prev) => ({ ...prev, preferences: prefs }));
-              handleTabChange('location-details');
+              const shop = pendingInquiry.targetedShop;
+              const isThisShopOnly = !!shop && prefs.targetOption === 'this_shop';
+
+              if (isThisShopOnly && shop) {
+                // Shop location is already known — skip the location step entirely
+                // and pre-fill from the shop's profile data.
+                setPendingInquiry((prev) => ({
+                  ...prev,
+                  preferences: prefs,
+                  location: {
+                    province: shop.province || '',
+                    city: shop.city || shop.location || '',
+                    address: undefined,
+                    latitude: undefined,
+                    longitude: undefined,
+                    radius: undefined,
+                  },
+                }));
+                handleTabChange('inquiry-payment');
+              } else {
+                setPendingInquiry((prev) => ({ ...prev, preferences: prefs }));
+                handleTabChange('location-details');
+              }
             }}
+            targetedShop={pendingInquiry.targetedShop}
           />
         );
       case 'location-details':
@@ -481,6 +594,21 @@ export default function BuyerDashboard() {
         return <InquirySuccess onGoToDashboard={() => handleTabChange('dashboard')} />;
       case 'financial':
         return <FinancialPage isInsideDashboard={true} />;
+      case 'shops':
+        return (
+          <BrowseShopsView
+            onSendInquiry={(shop) => handleAction('send_inquiry_to_shop', shop)}
+            onViewProfile={(shop) => handleAction('view_shop_profile', shop)}
+          />
+        );
+      case 'shop-profile':
+        return selectedShopProfileId ? (
+          <ShopProfileView
+            profileId={selectedShopProfileId}
+            onBack={() => handleTabChange('shops')}
+            onSendInquiry={(shop) => handleAction('send_inquiry_to_shop', shop)}
+          />
+        ) : null;
       default:
         return null;
     }
@@ -495,6 +623,8 @@ export default function BuyerDashboard() {
     'inquiry-payment',
     'inquiry-success',
     'financial',
+    'shops',
+    'shop-profile',
   ].includes(activeTab);
 
   return (
