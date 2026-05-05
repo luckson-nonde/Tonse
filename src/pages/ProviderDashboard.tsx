@@ -97,7 +97,7 @@ const renderSpecifications = (
 
 export default function ProviderDashboard() {
   const { activeTab, setActiveTab } = useDashboard();
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const navigate = useNavigate();
   const { tab } = useParams<{ tab: string }>();
 
@@ -196,9 +196,29 @@ export default function ProviderDashboard() {
     [setActiveTab, navigate]
   );
 
-  const handleAction = useCallback((actionId: string, payload?: any) => {
-    console.log('Provider Action:', actionId, payload);
-  }, []);
+  const handleAction = useCallback(
+    async (actionId: string, payload?: any) => {
+      if (actionId === 'save_profile') {
+        try {
+          // Reverse-map form field names → backend DTO field names.
+          // Form uses: logo, nrc, dob, ownerName, gps
+          // DTO expects: profilePicture, nrc, name, latitude, longitude
+          const { logo, dob: _dob, ownerName, gps, ...rest } = payload ?? {};
+          const updatePayload: Record<string, any> = { ...rest };
+          if (logo !== undefined) updatePayload.profilePicture = logo;
+          if (ownerName !== undefined) updatePayload.name = ownerName;
+          if (gps?.latitude != null) updatePayload.latitude = gps.latitude;
+          if (gps?.longitude != null) updatePayload.longitude = gps.longitude;
+          await updateUser(updatePayload);
+          showNotification('Profile saved successfully');
+        } catch {
+          showNotification('Failed to save profile. Please try again.', 'error');
+        }
+        return;
+      }
+    },
+    [updateUser]
+  );
 
   const products =
     useLiveQuery(async () => {

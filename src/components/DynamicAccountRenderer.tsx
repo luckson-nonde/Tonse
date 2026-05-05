@@ -619,7 +619,7 @@ export default function DynamicAccountRenderer({
         return renderList();
       case 'details_renderer':
         return renderDetails();
-      case 'profile_renderer':
+      case 'profile_renderer': {
         // Phase 2: LABOUR is no longer a top-level role. Labour users
         // register as SERVICE_PROVIDER but still carry labourCategory /
         // labourSubTypes as typed columns — detect by labourCategory
@@ -628,12 +628,26 @@ export default function DynamicAccountRenderer({
           ? getLabourProfileSchema(user?.labourSubTypes?.[0] ?? 'generic')
           : getProfileSchema(user?.role, user?.subRole);
 
-        console.log('PROFILE SCHEMA:', JSON.stringify(profileSchema));
-        console.log('PROFILE SCHEMA TYPE:', typeof profileSchema);
-
         if (!profileSchema) {
           return <div className="p-8 text-center text-slate-400">Profile schema not found</div>;
         }
+
+        // Map backend column names → form field names so defaultValues populate.
+        // Backend returns: profilePicture, dateOfBirth, nrcNumber, latitude, longitude
+        // Form fields expect: logo, dob, nrc, gps: { latitude, longitude }
+        const normalizedProfile = user
+          ? {
+              ...user,
+              logo: user.profilePicture ?? user.logo,
+              nrc: user.nrcNumber ?? user.nrc,
+              dob: user.dateOfBirth ?? user.dob,
+              ownerName: user.ownerName ?? user.name,
+              gps:
+                user.latitude != null && user.longitude != null
+                  ? { latitude: user.latitude, longitude: user.longitude }
+                  : user.gps,
+            }
+          : user;
 
         return (
           <div className="space-y-8">
@@ -645,7 +659,7 @@ export default function DynamicAccountRenderer({
             </div>
             <DynamicProfileForm
               schema={profileSchema as any}
-              initialData={user}
+              initialData={normalizedProfile}
               onSubmit={(updatedData) => onAction('save_profile', updatedData)}
             >
               <div className="flex justify-end pt-6">
@@ -656,6 +670,7 @@ export default function DynamicAccountRenderer({
             </DynamicProfileForm>
           </div>
         );
+      }
       case 'provider_placeholder':
         return (
           <div className="p-12 text-center bg-white rounded-4xl border border-dashed border-slate-200">

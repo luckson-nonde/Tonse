@@ -33,7 +33,7 @@ import ShopProfileView from '../components/ShopProfileView';
 import type { ShopResult } from '../services/api/shopService';
 
 export default function BuyerDashboard() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { activeTab, setActiveTab } = useDashboard();
   const navigate = useNavigate();
   const { tab, inquiryId } = useParams<{ tab: string; inquiryId?: string }>();
@@ -245,12 +245,20 @@ export default function BuyerDashboard() {
         // Print logic would go here, maybe a helper function
         console.log('Printing quote:', payload);
         break;
-      case 'save_profile':
-        if (user?.id) {
-          // TODO: Update user profile via API
-          // await apiClient.patch(`/users/${user.id}`, payload);
+      case 'save_profile': {
+        try {
+          const { logo, dob: _dob, ownerName, gps, ...rest } = payload ?? {};
+          const updatePayload: Record<string, any> = { ...rest };
+          if (logo !== undefined) updatePayload.profilePicture = logo;
+          if (ownerName !== undefined) updatePayload.name = ownerName;
+          if (gps?.latitude != null) updatePayload.latitude = gps.latitude;
+          if (gps?.longitude != null) updatePayload.longitude = gps.longitude;
+          await updateUser(updatePayload);
+        } catch {
+          // silent — updateUser already surfaces errors via AuthContext
         }
         break;
+      }
       case 'browse_shops':
         handleTabChange('shops');
         break;
