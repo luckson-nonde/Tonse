@@ -22,9 +22,39 @@ const formatPrefKey = (raw: string): string =>
   PREF_KEY_MAP[raw.toLowerCase()] ?? toTitleCase(raw.replace(/_/g, ' '));
 
 const formatPrefValue = (raw: string): string => {
-  const lower = raw.toLowerCase();
   // Strip numeric suffixes that are already in the value and title-case
   return toTitleCase(raw.replace(/_/g, ' '));
+};
+
+/**
+ * Render a preference value safely. Most values are strings/numbers,
+ * but `payment` (and potentially future composite prefs) is an object
+ * shaped { method, provider, amount, paidAt }. Naive `String(value)`
+ * yielded "[object Object]" on the seller's lead-detail view —
+ * format it humanly instead, and fall back to JSON.stringify for
+ * any other unrecognised object so we never leak the toString.
+ */
+const renderPrefValue = (key: string, value: any): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return formatPrefValue(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map((v) => renderPrefValue(key, v)).filter(Boolean).join(', ');
+  if (typeof value === 'object') {
+    // Special-case: payment object from the inquiry-preferences flow.
+    if (key.toLowerCase() === 'payment') {
+      const provider = (value.provider || value.method || '').toString().toUpperCase();
+      const amount = value.amount != null ? `ZMW ${value.amount}` : '';
+      const parts = [amount, provider].filter(Boolean);
+      return parts.length ? parts.join(' · ') : 'Paid';
+    }
+    // Generic object → flatten its scalar leaves so we never render
+    // "[object Object]" again. Drops nested objects/arrays.
+    const flat = Object.entries(value)
+      .filter(([, v]) => v != null && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'))
+      .map(([k, v]) => `${formatPrefKey(k)}: ${v}`);
+    return flat.length ? flat.join(' · ') : '';
+  }
+  return String(value);
 };
 
 export function PreferenceTags({
@@ -32,11 +62,13 @@ export function PreferenceTags({
 }: {
   preferences: Record<string, any>;
 }) {
-  const entries = Object.entries(preferences).filter(([, v]) => v !== null && v !== undefined && v !== '');
+  const entries = Object.entries(preferences)
+    .map(([key, value]) => [key, renderPrefValue(key, value)] as const)
+    .filter(([, formatted]) => formatted !== '');
   if (!entries.length) return null;
   return (
     <div className="grid grid-cols-2 gap-x-8 gap-y-6 mb-6">
-      {entries.map(([key, value]) => (
+      {entries.map(([key, formatted]) => (
         <div
           key={key}
           className="flex flex-col"
@@ -45,7 +77,7 @@ export function PreferenceTags({
             {formatPrefKey(key)}
           </span>
           <span className="text-[15px] font-black text-slate-900 leading-tight">
-            {formatPrefValue(String(value))}
+            {formatted}
           </span>
         </div>
       ))}
