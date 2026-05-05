@@ -1160,7 +1160,7 @@ export default function QuoteDetails({ quote, inquiry, onAction }: QuoteDetailsP
                   className={`w-full py-4 ${
                     quote.processType === 'EXPRESS'
                       ? 'bg-[#C9973A] hover:bg-[#b08432]'
-                      : 'bg-white text-brand-dark hover:bg-slate-200'
+                      : 'bg-white !text-[#1B3068] hover:bg-slate-100'
                   } border-none shadow-lg shadow-[#C9973A]/20`}
                 >
                   {quote.processType === 'EXPRESS' ? 'Pay & Start Service' : 'Generate Purchase Order (PO)'}
