@@ -7,6 +7,14 @@ interface FloatingInputProps extends React.InputHTMLAttributes<HTMLInputElement>
   rightElement?: React.ReactNode;
   error?: string;
   hint?: string;
+  /** Background tone of the input fill and the floating-label chip.
+   *  Must match the surrounding pane — when the pane is cream
+   *  (`bg-brand-white`, default for Register and the rest), the label
+   *  chip uses cream too; when the pane is white (Login's premium
+   *  treatment), the label uses white. A mismatch produces a visible
+   *  colour seam at the label's left/right padding when the label
+   *  sits in its resting position over the input border. */
+  tone?: 'cream' | 'white';
 }
 
 const FloatingInput: React.FC<FloatingInputProps> = ({
@@ -16,9 +24,11 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
   className = '',
   error,
   hint,
+  tone = 'cream',
   ...props
 }) => {
   const hasError = !!error;
+  const fillBg = tone === 'white' ? 'bg-white' : 'bg-brand-white';
 
   return (
     <div className="relative w-full group">
@@ -50,7 +60,7 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
           placeholder=" "
           aria-invalid={hasError || undefined}
           className={`peer block w-full ${Icon ? 'pl-[52px]' : 'pl-4'} ${rightElement ? 'pr-12' : 'pr-4'} h-[58px]
-                     bg-brand-white border
+                     ${fillBg} border
                      rounded-2xl text-[15px] text-brand-dark
                      shadow-[inset_0_1px_2px_rgba(26,22,18,0.04)]
                      outline-none transition-all duration-200 font-medium placeholder:text-transparent
@@ -66,7 +76,7 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
           className={`absolute duration-200 transform -translate-y-1/2 top-1/2 ${
             Icon ? 'left-[48px]' : 'left-[14px]'
           } z-10 origin-[0] px-1.5
-                     bg-brand-white pointer-events-none
+                     ${fillBg} pointer-events-none
                      peer-focus:top-0 peer-focus:scale-[0.78] peer-focus:-translate-y-1/2 peer-focus:left-[16px]
                      peer-[:not(:placeholder-shown)]:top-0 peer-[:not(:placeholder-shown)]:scale-[0.78] peer-[:not(:placeholder-shown)]:-translate-y-1/2 peer-[:not(:placeholder-shown)]:left-[16px]
                      font-sans font-bold text-[12px] uppercase tracking-[0.08em]
