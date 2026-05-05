@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, Clock, CheckCircle2 } from 'lucide-react';
+import { MapPin, Clock, CheckCircle2, Eye } from 'lucide-react';
 import Button from './Button';
 import { ARCHETYPE_CONFIG } from '../services/archetypeConfig';
 import { getCategorySchema } from '../services/categories';
@@ -21,11 +21,18 @@ export default function InquiryCard({
   onAction,
   onDelete,
 }: InquiryCardProps) {
-  console.log('InquiryCard rendering, inquiry:', inquiry);
-  const schema = getCategorySchema(inquiry.category);
-  const archetypeConfig = ARCHETYPE_CONFIG[inquiry.category] || {
+  // Inquiries no longer carry a `category` string column — they live
+  // in the inquiry_categories junction. The buyer endpoint hydrates
+  // `category` and `categoryIds` (parallel to the matching service);
+  // until every read path is updated, fall back across both fields so
+  // this card keeps rendering instead of crashing on `.replace()` of
+  // undefined.
+  const categoryKey: string =
+    inquiry.category || inquiry.categoryIds?.[0] || '';
+  const schema = getCategorySchema(categoryKey);
+  const archetypeConfig = ARCHETYPE_CONFIG[categoryKey] || {
     archetype: 'PRODUCT',
-    categoryName: inquiry.category,
+    categoryName: categoryKey,
   };
 
   const borderColors = {
@@ -144,7 +151,7 @@ export default function InquiryCard({
         <div className="flex items-center gap-2 mb-4">
           <div className="w-1.5 h-1.5 rounded-full bg-[#d49b35]"></div>
           <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase font-sans">
-            {archetypeConfig.archetype} SCHEMA · {inquiry.category.replace(/-/g, ' ')} ARCHETYPE
+            {archetypeConfig.archetype} SCHEMA{categoryKey && ` · ${categoryKey.replace(/-/g, ' ')} ARCHETYPE`}
           </p>
         </div>
 
@@ -200,42 +207,56 @@ export default function InquiryCard({
 
       <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-white">
         <div className="flex items-center gap-3">
-          {state === 'quoted' ? (
-            <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-full">
-              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-              <span className="text-sm font-bold text-blue-700 font-sans">
-                {quoteCount} Quotes Received
-              </span>
+          <div className="flex items-center gap-3">
+            {state === 'quoted' ? (
+              <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-full">
+                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                <span className="text-sm font-bold text-blue-700 font-sans">
+                  {quoteCount} Quotes Received
+                </span>
+              </div>
+            ) : (
+              <div className="text-xs font-medium text-slate-400 font-sans flex items-center gap-2">
+                {state === 'open' && (
+                  <>
+                    <Clock className="w-3.5 h-3.5" />
+                    {new Date(inquiry.createdAt).toLocaleDateString()}
+                  </>
+                )}
+                <span className="uppercase tracking-wider">
+                  IQR-{String(inquiry.id).substring(0, 3)}
+                </span>
+                {state === 'paid' && paidQuote && (
+                  <>
+                    <span>·</span>
+                    <span className="uppercase tracking-wider">
+                      QID-{String(paidQuote.id).substring(0, 3)}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+            <div className="flex items-center gap-1 text-[11px] font-medium text-slate-400 font-sans">
+              <Eye className="w-3.5 h-3.5" />
+              {inquiry.viewCount ?? 0}
             </div>
-          ) : (
-            <div className="text-xs font-medium text-slate-400 font-sans flex items-center gap-2">
-              {state === 'open' && (
-                <>
-                  <Clock className="w-3.5 h-3.5" />
-                  {new Date(inquiry.createdAt).toLocaleDateString()}
-                </>
-              )}
-              <span className="uppercase tracking-wider">
-                IQR-{String(inquiry.id).substring(0, 3)}
-              </span>
-              {state === 'paid' && paidQuote && (
-                <>
-                  <span>·</span>
-                  <span className="uppercase tracking-wider">
-                    QID-{String(paidQuote.id).substring(0, 3)}
-                  </span>
-                </>
-              )}
-            </div>
-          )}
+          </div>
         </div>
 
+        {/* `Button` defaults to variant='primary' which sets
+            `text-white`. Without `!` important on the InquiryCard's
+            text colour, both classes end up on the element and CSS
+            source order picks `text-white` — the cause of the
+            invisible button text in the original render. The same
+            applies to the variant's `bg-brand-yellow` and
+            `shadow-md`. Marking each conflicting utility `!important`
+            forces InquiryCard's intent to win deterministically. */}
         <Button
           onClick={onAction}
           className={
             state === 'quoted'
-              ? 'bg-[#1B3068] hover:bg-[#142550] text-white font-bold rounded-xl'
-              : 'bg-transparent border border-slate-200 hover:bg-slate-50 font-bold rounded-xl text-brand-dark'
+              ? '!bg-[#1B3068] hover:!bg-[#142550] !text-white !shadow-none font-semibold rounded-xl px-5 py-2.5 text-[13px]'
+              : '!bg-white border border-slate-200 hover:!bg-slate-50 !text-slate-700 !shadow-none font-semibold rounded-xl px-5 py-2.5 text-[13px]'
           }
         >
           {state === 'open' && 'View Details'}

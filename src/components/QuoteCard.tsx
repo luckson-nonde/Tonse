@@ -4,6 +4,7 @@ import {
   Star,
   PackageOpen,
   Calendar,
+  Wrench,
   MessageSquare,
   ArrowRight,
   Printer,
@@ -13,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { Quote } from '../types.ts';
+import { robustParse } from '../utils/jsonUtils';
 
 interface QuoteCardProps {
   quote: Quote;
@@ -22,7 +24,31 @@ interface QuoteCardProps {
   onDelete?: () => void;
 }
 
+// Derive the most meaningful left-slot detail for the 2-col grid:
+// REPAIR → turnaround; SERVICE → availability date; VENUE → capacity;
+// PRODUCT → condition; anything else → hide the slot entirely.
+function resolveConditionDetail(quote: Quote): { label: string; value: string; icon: React.ReactNode } | null {
+  const df = robustParse((quote as any).dynamicFields, {}) as Record<string, any>;
+
+  if (df.turnaroundDays) {
+    const days = Number(df.turnaroundDays);
+    return { label: 'Turnaround', value: `${days} day${days !== 1 ? 's' : ''}`, icon: <Wrench className="w-4 h-4" /> };
+  }
+  if (df.availabilityDate) {
+    return { label: 'Available', value: new Date(df.availabilityDate).toLocaleDateString(), icon: <Calendar className="w-4 h-4" /> };
+  }
+  if (df.maxCapacity) {
+    return { label: 'Capacity', value: `${df.maxCapacity} guests`, icon: <PackageOpen className="w-4 h-4" /> };
+  }
+  const c = quote.condition;
+  if (c && c !== 'N/A') {
+    return { label: 'Condition', value: c, icon: <PackageOpen className="w-4 h-4" /> };
+  }
+  return null;
+}
+
 export default function QuoteCard({ quote, onView, onPrint, onArchive, onDelete }: QuoteCardProps) {
+  const conditionDetail = resolveConditionDetail(quote);
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -85,17 +111,19 @@ export default function QuoteCard({ quote, onView, onPrint, onArchive, onDelete 
 
       {/* Offer Details Grid */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="flex items-start gap-2.5">
-          <div className="mt-0.5 p-1.5 bg-[#C9973A]/10 rounded-lg text-[#C9973A]">
-            <PackageOpen className="w-4 h-4" />
+        {conditionDetail && (
+          <div className="flex items-start gap-2.5">
+            <div className="mt-0.5 p-1.5 bg-[#C9973A]/10 rounded-lg text-[#C9973A]">
+              {conditionDetail.icon}
+            </div>
+            <div>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">
+                {conditionDetail.label}
+              </p>
+              <p className="text-xs font-bold text-[#1a1612]">{conditionDetail.value}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">
-              Condition
-            </p>
-            <p className="text-xs font-bold text-[#1a1612]">{quote.condition}</p>
-          </div>
-        </div>
+        )}
 
         {quote.expiryDuration && (
           <div className="flex items-start gap-2.5">

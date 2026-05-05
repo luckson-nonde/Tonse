@@ -163,7 +163,18 @@ function PaymentModal({
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500 font-medium">Reference</span>
-                <span className="font-mono text-xs text-slate-600">TH-{Math.random().toString(36).slice(2,8).toUpperCase()}</span>
+                {/* Derive the reference from `quote.id` (or the
+                    display-id if available) so the same transaction
+                    shows the same reference on every render. The
+                    previous `Math.random()` regenerated a fresh
+                    code per render — useless to anyone trying to
+                    quote the reference back to support. */}
+                <span className="font-mono text-xs text-slate-600">
+                  TH-{String((quote as any).displayId || quote.id || '')
+                    .replace(/-/g, '')
+                    .slice(0, 6)
+                    .toUpperCase()}
+                </span>
               </div>
             </div>
             <button

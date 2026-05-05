@@ -140,9 +140,77 @@ export class InquiriesService {
   }
 
   async findByBuyerId(buyerId: string): Promise<Inquiry[]> {
-    return await this.inquiriesRepository.find({
+    const inquiries = await this.inquiriesRepository.find({
       where: { buyerId },
       order: { createdAt: 'DESC' },
+    });
+    const withCats = await this.hydrateCategoryFields(inquiries);
+    return this.hydrateBuyerInfo(withCats);
+  }
+
+  /**
+   * Decorate a list of inquiries with `categoryIds` (the canonical
+   * stable ids from the inquiry_categories junction) and `category`
+   * (a comma-joined display name for legacy callers that still read
+   * the legacy field). Mirrors what MatchingService does for the
+   * seller-side leads endpoint — without it, buyer-side surfaces
+   * (InquiryCard, BuyerDashboard) crash on `inquiry.category.X` since
+   * the legacy column was dropped when matching moved to junction-
+   * backed categories.
+   */
+  private async hydrateCategoryFields(inquiries: Inquiry[]): Promise<Inquiry[]> {
+    if (inquiries.length === 0) return inquiries;
+    const inquiryIds = inquiries.map((i) => i.id);
+    const rows: Array<{
+      inquiryId: string;
+      categoryId: string;
+      categoryName: string;
+    }> = await this.inquiriesRepository.query(
+      `SELECT ic."inquiryId", ic."categoryId", c.name AS "categoryName"
+         FROM inquiry_categories ic
+         JOIN categories c ON c.id = ic."categoryId"
+         WHERE ic."inquiryId" = ANY($1::uuid[])`,
+      [inquiryIds],
+    );
+    const idIndex = new Map<string, string[]>();
+    const nameIndex = new Map<string, string[]>();
+    for (const r of rows) {
+      if (!idIndex.has(r.inquiryId)) idIndex.set(r.inquiryId, []);
+      if (!nameIndex.has(r.inquiryId)) nameIndex.set(r.inquiryId, []);
+      idIndex.get(r.inquiryId)!.push(r.categoryId);
+      nameIndex.get(r.inquiryId)!.push(r.categoryName);
+    }
+    return inquiries.map((inq) => {
+      (inq as any).categoryIds = idIndex.get(inq.id) || [];
+      (inq as any).category = (nameIndex.get(inq.id) || []).join(', ');
+      return inq;
+    });
+  }
+
+  /**
+   * Decorate inquiries with `buyerName` resolved from `buyer_profiles`
+   * (where the human-readable name actually lives — `users` row has
+   * no name column in this schema). The buyer-detail panel was
+   * rendering "Unknown Buyer" for every inquiry because the inquiry
+   * row alone has only `buyerId`. Batched into a single query against
+   * the unique buyer-id set.
+   */
+  private async hydrateBuyerInfo(inquiries: Inquiry[]): Promise<Inquiry[]> {
+    if (inquiries.length === 0) return inquiries;
+    const buyerIds = Array.from(new Set(inquiries.map((i) => i.buyerId).filter(Boolean)));
+    if (buyerIds.length === 0) return inquiries;
+    const rows: Array<{ userId: string; name: string }> = await this.inquiriesRepository.query(
+      `SELECT "userId", name FROM buyer_profiles WHERE "userId" = ANY($1::uuid[])`,
+      [buyerIds],
+    );
+    const nameByUserId = new Map<string, string>();
+    for (const r of rows) {
+      if (r.name) nameByUserId.set(r.userId, r.name);
+    }
+    return inquiries.map((inq) => {
+      const name = nameByUserId.get(inq.buyerId);
+      if (name) (inq as any).buyerName = name;
+      return inq;
     });
   }
 

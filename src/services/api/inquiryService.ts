@@ -35,6 +35,10 @@ export interface CreateInquiryPayload {
   preferences: string; // JSON string
   attributes: string; // JSON string
   processType: string;
+  /** When set, the inquiry is sent to this specific provider only
+   *  (targeted flow). Backend strips unknown fields via whitelist
+   *  validator; storage + matching enforcement is a future phase. */
+  targetedProviderId?: string;
 }
 
 export interface InquiryResponse {

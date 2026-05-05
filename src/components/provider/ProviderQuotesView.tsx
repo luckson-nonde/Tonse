@@ -37,11 +37,12 @@ export default function ProviderQuotesView({
   // mode is WHOLESALE.
   const { context: activeContext } = useActiveProfileContext();
   const isWholesale = getEffectiveBusinessTypes(user as any, activeContext).includes('WHOLESALE');
+  const isRepair = getEffectiveBusinessTypes(user as any, activeContext).includes('REPAIR');
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex justify-between items-center px-0 sm:px-0">
         <h2 className="text-2xl font-serif font-bold text-slate-900">
-          {isWholesale ? 'Active Quotations' : 'My Submitted Quotes'}
+          {isWholesale ? 'Active Quotations' : isRepair ? 'My Estimates' : 'My Submitted Quotes'}
         </h2>
         <div className="flex items-center gap-2">
           <button
@@ -233,14 +234,29 @@ export default function ProviderQuotesView({
                         );
                       })()}
 
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                          Condition:
-                        </span>
-                        <span className="text-[10px] font-bold text-[#d49b35] bg-white px-2 py-0.5 rounded border border-[#d49b35]/10 uppercase tracking-wider">
-                          {quote.condition}
-                        </span>
-                      </div>
+                      {(() => {
+                        const df = robustParse(quote.dynamicFields);
+                        const label = df?.turnaroundDays ? 'Turnaround'
+                          : df?.availabilityDate ? 'Available'
+                          : df?.maxCapacity ? 'Capacity'
+                          : quote.condition && quote.condition !== 'N/A' ? 'Condition'
+                          : null;
+                        const value = df?.turnaroundDays ? `${df.turnaroundDays} days`
+                          : df?.availabilityDate ? new Date(df.availabilityDate).toLocaleDateString()
+                          : df?.maxCapacity ? `${df.maxCapacity} guests`
+                          : quote.condition;
+                        if (!label) return null;
+                        return (
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                              {label}:
+                            </span>
+                            <span className="text-[10px] font-bold text-[#d49b35] bg-white px-2 py-0.5 rounded border border-[#d49b35]/10 uppercase tracking-wider">
+                              {value}
+                            </span>
+                          </div>
+                        );
+                      })()}
 
                       <p className="text-sm text-slate-600 italic">"{quote.message}"</p>
 
@@ -362,7 +378,7 @@ export default function ProviderQuotesView({
                           <div className="mb-6">
                             {renderSpecifications(
                               lead.attributes,
-                              lead.category || '',
+                              (lead as any).categoryIds?.[0] || lead.category || '',
                               'Inquiry Details'
                             )}
                           </div>
@@ -372,7 +388,7 @@ export default function ProviderQuotesView({
                           <div className="mb-6">
                             {renderSpecifications(
                               lead.entertainmentData,
-                              lead.category || '',
+                              (lead as any).categoryIds?.[0] || lead.category || '',
                               'Event Specifications'
                             )}
                           </div>
@@ -382,7 +398,7 @@ export default function ProviderQuotesView({
                           <div className="mb-6">
                             {renderSpecifications(
                               lead.repairData,
-                              lead.category || '',
+                              (lead as any).categoryIds?.[0] || lead.category || '',
                               'Repair Specifications'
                             )}
                           </div>

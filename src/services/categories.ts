@@ -1306,7 +1306,16 @@ export const fetchCategories = async (parentId: string | null = null): Promise<C
   return CATEGORIES_DB.filter(c => c.parentId === parentId);
 };
 
-export const getCategorySchema = (categoryName: string): FieldSchema[] => {
+export const getCategorySchema = (categoryName: string | null | undefined): FieldSchema[] => {
+  // Inquiries no longer carry the legacy `category` display string by
+  // default — they live in the inquiry_categories junction. Callers
+  // that haven't been migrated to read `categoryIds` still pass the
+  // (now undefined) `inquiry.category` field. Guard against that
+  // instead of crashing with `Cannot read properties of undefined
+  // (reading 'toLowerCase')` and quietly fall back to the generic
+  // schema (same outcome the function already produced for unknown
+  // category names).
+  if (!categoryName) return GENERIC_FALLBACK_SCHEMA;
   const category = CATEGORIES_DB.find(c => c.name.toLowerCase() === categoryName.toLowerCase() || c.id === categoryName);
   return category?.formSchema || GENERIC_FALLBACK_SCHEMA;
 };

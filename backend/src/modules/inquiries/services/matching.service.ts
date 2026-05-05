@@ -159,6 +159,63 @@ export class MatchingService {
     ]);
     const total = countRows[0]?.count || 0;
 
+    // Hydrate each row with its categoryIds + a legacy display string so
+    // the seller-side schema lookup (`getCategorySchema(lead.category)`)
+    // resolves to the correct per-category form schema. Without this
+    // the frontend falls back to GENERIC_FALLBACK_SCHEMA and leaks only
+    // brand/quantity/urgency from repair inquiries, hiding deviceType,
+    // primarySymptom, deviceState, incidentReport and symptoms.
+    if (rows.length > 0) {
+      const inquiryIds = rows.map((r: any) => r.id);
+      const catRows: Array<{
+        inquiryId: string;
+        categoryId: string;
+        categoryName: string;
+      }> = await this.inquiryRepository.query(
+        `SELECT ic."inquiryId", ic."categoryId", c.name AS "categoryName"
+           FROM inquiry_categories ic
+           JOIN categories c ON c.id = ic."categoryId"
+           WHERE ic."inquiryId" = ANY($1::uuid[])`,
+        [inquiryIds],
+      );
+      const idIndex = new Map<string, string[]>();
+      const nameIndex = new Map<string, string[]>();
+      for (const cr of catRows) {
+        if (!idIndex.has(cr.inquiryId)) idIndex.set(cr.inquiryId, []);
+        if (!nameIndex.has(cr.inquiryId)) nameIndex.set(cr.inquiryId, []);
+        idIndex.get(cr.inquiryId)!.push(cr.categoryId);
+        nameIndex.get(cr.inquiryId)!.push(cr.categoryName);
+      }
+      for (const row of rows as any[]) {
+        row.categoryIds = idIndex.get(row.id) || [];
+        row.category = (nameIndex.get(row.id) || []).join(', ');
+      }
+
+      // Buyer name for the lead — resolved from buyer_profiles
+      // (the users row has no name column in this schema). Without
+      // this, the seller's lead detail panel renders "Unknown Buyer"
+      // for every inquiry. Single batched query keyed by the unique
+      // buyer-id set in this page of results.
+      const buyerIds = Array.from(
+        new Set((rows as any[]).map((r) => r.buyerId).filter(Boolean)),
+      );
+      if (buyerIds.length > 0) {
+        const buyerRows: Array<{ userId: string; name: string }> =
+          await this.inquiryRepository.query(
+            `SELECT "userId", name FROM buyer_profiles WHERE "userId" = ANY($1::uuid[])`,
+            [buyerIds],
+          );
+        const nameByUserId = new Map<string, string>();
+        for (const br of buyerRows) {
+          if (br.name) nameByUserId.set(br.userId, br.name);
+        }
+        for (const row of rows as any[]) {
+          const name = nameByUserId.get(row.buyerId);
+          if (name) row.buyerName = name;
+        }
+      }
+    }
+
     this.logger.log(
       `Leads query: profile=${selector.type}/${selector.profileId} matchedCategories=[${matchedCategoryIds.length}] variant=${filters.variant ?? '(none)'} → ${rows.length} inquiries (total ${total})`,
     );

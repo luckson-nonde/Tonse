@@ -9,6 +9,8 @@ const PREF_KEY_MAP: Record<string, string> = {
   validity: 'Valid For',
   maxquotes: 'Max Quotes',
   quoteparameter: 'Quote Parameter',
+  quotecount: 'Quotes Cap',
+  quotefee: 'Quote Fee',
   leadtime: 'Lead Time',
   condition: 'Condition',
   urgency: 'Urgency',
@@ -18,12 +20,27 @@ const PREF_KEY_MAP: Record<string, string> = {
 const toTitleCase = (str: string) =>
   str.replace(/\b\w/g, (c) => c.toUpperCase());
 
-const formatPrefKey = (raw: string): string =>
-  PREF_KEY_MAP[raw.toLowerCase()] ?? toTitleCase(raw.replace(/_/g, ' '));
+// Split camelCase / PascalCase into space-separated words so unknown
+// keys like `quoteCount` render as "Quote Count" instead of "Quotecount".
+// Without this the title-case fallback merged the whole key into a
+// single capitalised blob — the cause of the QUOTECOUNT / QUOTEFEE
+// labels in the seller's inquiry panel.
+const splitCamel = (str: string) => str.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
 
-const formatPrefValue = (raw: string): string => {
-  // Strip numeric suffixes that are already in the value and title-case
-  return toTitleCase(raw.replace(/_/g, ' '));
+const formatPrefKey = (raw: string): string =>
+  PREF_KEY_MAP[raw.toLowerCase()] ??
+  toTitleCase(splitCamel(raw.replace(/_/g, ' ')));
+
+// Money-flavoured pref keys render as ZMW values — the seller cares
+// that the quote fee is 10 *kwacha*, not the bare number 10.
+const MONEY_KEYS = new Set(['quotefee', 'fee', 'amount', 'budget', 'budgetlimit']);
+
+const formatPrefValue = (key: string, raw: any): string => {
+  if (MONEY_KEYS.has(key.toLowerCase()) && (typeof raw === 'number' || /^\d+(\.\d+)?$/.test(String(raw)))) {
+    return `ZMW ${Number(raw).toLocaleString()}`;
+  }
+  if (typeof raw === 'number' || typeof raw === 'boolean') return String(raw);
+  return toTitleCase(String(raw).replace(/_/g, ' '));
 };
 
 /**
@@ -36,8 +53,8 @@ const formatPrefValue = (raw: string): string => {
  */
 const renderPrefValue = (key: string, value: any): string => {
   if (value === null || value === undefined) return '';
-  if (typeof value === 'string') return formatPrefValue(value);
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'string') return formatPrefValue(key, value);
+  if (typeof value === 'number' || typeof value === 'boolean') return formatPrefValue(key, value);
   if (Array.isArray(value)) return value.map((v) => renderPrefValue(key, v)).filter(Boolean).join(', ');
   if (typeof value === 'object') {
     // Special-case: payment object from the inquiry-preferences flow.
@@ -67,7 +84,7 @@ export function PreferenceTags({
     .filter(([, formatted]) => formatted !== '');
   if (!entries.length) return null;
   return (
-    <div className="grid grid-cols-2 gap-x-8 gap-y-6 mb-6">
+    <div className="grid grid-cols-2 gap-x-12 gap-y-7">
       {entries.map(([key, formatted]) => (
         <div
           key={key}

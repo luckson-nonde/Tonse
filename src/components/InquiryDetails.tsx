@@ -139,21 +139,35 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
               </div>
               Buyer Profile
             </h2>
+            {/* Buyer profile. `buyerName` is hydrated server-side by
+                `InquiriesService.hydrateBuyerInfo` (joins users on
+                buyerId). When still missing — e.g. legacy inquiries
+                or a backend that hasn't been restarted yet — fall back
+                to a short ID-derived label rather than the meaningless
+                "Unknown Buyer" string. The display ID is stable and
+                searchable; "Unknown" is just confusing. */}
             <div className="flex items-center gap-6 bg-slate-100/50 p-8 rounded-3xl border border-slate-200">
               <div className="w-20 h-20 rounded-2xl bg-linear-to-br from-[#C9973A] to-[#9d7328] flex items-center justify-center text-white text-4xl font-bold shadow-lg shrink-0">
-                {inquiry.buyerName?.charAt(0).toUpperCase() || 'B'}
+                {inquiry.buyerName?.charAt(0).toUpperCase() ||
+                  String(inquiry.buyerId || 'B').charAt(0).toUpperCase()}
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
                   Buyer Name
                 </p>
-                <p className="text-2xl font-bold text-slate-900 mb-3">
-                  {inquiry.buyerName || 'Unknown Buyer'}
+                <p className="text-2xl font-bold text-slate-900 mb-3 break-words">
+                  {inquiry.buyerName ||
+                    (inquiry.buyerId
+                      ? `Buyer #${String(inquiry.buyerId).slice(0, 8)}`
+                      : 'Buyer')}
                 </p>
-                <div className="flex items-center gap-4 text-sm">
-                  <span className="text-xs text-slate-500 font-medium">
-                    <span className="text-slate-700 font-bold">ID:</span> #{inquiry.buyerId}
-                  </span>
+                <div className="flex items-center gap-4 text-sm flex-wrap">
+                  {inquiry.buyerId && (
+                    <span className="text-xs text-slate-500 font-medium break-all">
+                      <span className="text-slate-700 font-bold">ID:</span> #
+                      {String(inquiry.buyerId).slice(0, 8)}
+                    </span>
+                  )}
                   <span className="text-slate-300">•</span>
                   <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
                     <CheckCircle className="w-3 h-3 text-green-500" /> Verified Buyer
@@ -180,7 +194,18 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                   {inquiry.category?.replace(/-/g, ' ').toUpperCase()}
                 </span>
               </div>
-              <p className="text-slate-600 leading-relaxed text-lg">{inquiry.description}</p>
+              {/* Filter the legacy "No description provided." sentinel
+                  (BuyerDashboard used to write this string into every
+                  inquiry's description column before the form-derivation
+                  fix). New inquiries either have real text or an empty
+                  string, so a falsy check + sentinel comparison covers
+                  both eras. */}
+              {inquiry.description &&
+                inquiry.description.trim() !== 'No description provided.' && (
+                  <p className="text-slate-600 leading-relaxed text-lg">
+                    {inquiry.description}
+                  </p>
+                )}
             </div>
 
             {/* Key Details Grid */}
@@ -214,8 +239,12 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   Views
                 </p>
+                {/* Real viewCount from the inquiry, not a randomised
+                    placeholder. The previous `Math.random()` here meant
+                    every render mutated the displayed number — visible
+                    to anyone re-opening the same inquiry. */}
                 <p className="text-sm font-bold text-slate-900">
-                  {Math.floor(Math.random() * 100) + 50}
+                  {inquiry.viewCount ?? 0}
                 </p>
               </div>
 
@@ -322,20 +351,39 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                     }
                   }
 
-                  // For non-image values, display with enhanced styling
+                  // For non-image values, display with enhanced styling.
+                  // Long text values (incident reports, symptoms,
+                  // additional details) used to overflow the panel
+                  // horizontally because the row was a `flex justify-
+                  // between` with `shrink-0` on the value — labels stayed
+                  // left, values pushed off the right edge of the card.
+                  // Now: short scalars keep the side-by-side layout;
+                  // long strings flip to stacked label-above-value with
+                  // `break-words` so the value wraps inside the panel.
+                  const valueText =
+                    typeof value === 'object' ? JSON.stringify(value) : String(value);
+                  const isLongText = valueText.length > 40;
                   return (
                     <motion.div
                       key={key}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
-                      className="flex justify-between items-center p-4 bg-linear-to-r from-slate-50/50 to-transparent rounded-2xl border border-slate-100/50 hover:border-[#C9973A]/30 hover:bg-linear-to-r hover:from-[#C9973A]/5 hover:to-transparent transition-all group"
+                      className={`p-4 bg-linear-to-r from-slate-50/50 to-transparent rounded-2xl border border-slate-100/50 hover:border-[#C9973A]/30 transition-all group ${
+                        isLongText ? 'flex flex-col gap-2' : 'flex justify-between items-center'
+                      }`}
                     >
-                      <span className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2 shrink-0">
                         <Tag className="w-3 h-3 text-slate-300 group-hover:text-[#C9973A]" />
                         {key.replace(/([A-Z])/g, ' $1').trim()}
                       </span>
-                      <span className="text-sm font-bold text-slate-900 ml-4 shrink-0">
-                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                      <span
+                        className={`text-sm font-bold text-slate-900 ${
+                          isLongText
+                            ? 'leading-relaxed break-words'
+                            : 'ml-4 shrink-0 text-right'
+                        }`}
+                      >
+                        {valueText}
                       </span>
                     </motion.div>
                   );
@@ -414,8 +462,13 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                 <p className="text-sm font-semibold text-slate-600 mb-2">
                   Awaiting Provider Responses
                 </p>
+                {/* The previous copy claimed "shared with N providers"
+                    where N was a randomised number — pure noise. The
+                    inquiry response doesn't carry a match-count, so
+                    don't fabricate one. Generic encouraging copy
+                    instead. */}
                 <p className="text-xs text-slate-500 px-4">
-                  Your inquiry has been shared with {Math.floor(Math.random() * 20) + 5} providers
+                  Matched providers will respond shortly.
                 </p>
               </motion.div>
             )}
@@ -431,22 +484,28 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
             <h4 className="font-bold text-slate-900 mb-4 text-sm flex items-center gap-2">
               <Zap className="w-4 h-4 text-amber-500" /> Quick Stats
             </h4>
+            {/* Quick Stats — every value is sourced from real inquiry
+                fields. The previous "Engagement %" was a randomised
+                fake metric and the previous "Views" was also random;
+                both removed in favour of values that actually mean
+                something (active duration, real view count, quotes
+                received). */}
             <div className="space-y-3">
               <div className="flex justify-between items-center py-2 border-b border-slate-100">
                 <span className="text-xs font-medium text-slate-600">Active Duration</span>
-                <span className="text-sm font-bold text-slate-900">{daysOld} days</span>
+                <span className="text-sm font-bold text-slate-900">
+                  {daysOld === 0 ? 'Today' : `${daysOld} day${daysOld === 1 ? '' : 's'}`}
+                </span>
               </div>
               <div className="flex justify-between items-center py-2 border-b border-slate-100">
                 <span className="text-xs font-medium text-slate-600">Views</span>
                 <span className="text-sm font-bold text-slate-900">
-                  {Math.floor(Math.random() * 200) + 50}
+                  {inquiry.viewCount ?? 0}
                 </span>
               </div>
               <div className="flex justify-between items-center py-2">
-                <span className="text-xs font-medium text-slate-600">Engagement</span>
-                <span className="text-sm font-bold text-green-600">
-                  {Math.floor(Math.random() * 80) + 20}%
-                </span>
+                <span className="text-xs font-medium text-slate-600">Quotes Received</span>
+                <span className="text-sm font-bold text-slate-900">{quotes.length}</span>
               </div>
             </div>
           </motion.div>

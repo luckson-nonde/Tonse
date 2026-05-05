@@ -19,10 +19,18 @@ interface QuoteSubmissionFormProps {
   parentQuoteId?: string;
 }
 
+// Typography tokens. The inquiry-side panels (PreferenceTags,
+// DynamicDataDisplay) use a specific, deliberate scale: 10px black
+// 0.2em-tracked uppercase labels, 15px black value text, slate-500
+// helper copy. This form lived on a parallel scale (`font-bold` vs
+// `font-black`, `tracking-widest` vs `tracking-[0.2em]`, italic helper
+// text, 14px inputs) — the panes felt randomly mismatched when seen
+// side-by-side. These tokens line both panes onto one ramp.
 const inputClass =
-  'w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] bg-white';
-const labelClass = 'block text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-1.5';
-const errorClass = 'text-[10px] text-rose-500 mt-1 font-bold';
+  'w-full px-3 py-2.5 rounded-xl border border-slate-200 text-[15px] font-bold text-slate-900 placeholder:font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] bg-white';
+const labelClass = 'block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5';
+const helpClass = 'text-[11px] text-slate-500 mt-1.5 leading-relaxed';
+const errorClass = 'text-[11px] text-rose-500 mt-1 font-bold';
 
 export default function QuoteSubmissionForm({
   inquiry,
@@ -220,12 +228,12 @@ export default function QuoteSubmissionForm({
                     <span className="absolute left-3 top-3 text-xs font-bold text-slate-400">ZMW</span>
                   </div>
                   {field.calculation === 'unit' && inquiry.attributes?.quantity && (
-                    <span className="text-[10px] text-slate-400 mt-1 block">
+                    <span className={`${helpClass} block`}>
                       × {inquiry.attributes.quantity} units = ZMW {((Number(value) || 0) * Number(inquiry.attributes.quantity)).toLocaleString()}
                     </span>
                   )}
                   {field.calculation === 'rate' && inquiry.attributes?.rentalDuration && (
-                    <span className="text-[10px] text-slate-400 mt-1 block">
+                    <span className={`${helpClass} block`}>
                       × {inquiry.attributes.rentalDuration} days = ZMW {((Number(value) || 0) * Number(inquiry.attributes.rentalDuration)).toLocaleString()}
                     </span>
                   )}
@@ -286,22 +294,33 @@ export default function QuoteSubmissionForm({
             return <></>;
           }}
         />
-        {field.helpText && <p className="text-[10px] text-slate-400 mt-1 italic">{field.helpText}</p>}
+        {field.helpText && <p className={helpClass}>{field.helpText}</p>}
         {errors[field.name] && <p className={errorClass}>{errors[field.name]?.message as string}</p>}
       </div>
     );
   };
 
   return (
-    <div className="border-t-[3px] border-[#d49b35] bg-white rounded-b-xl p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h5 className="text-sm font-bold text-slate-900">Your Quotation</h5>
-        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${inquiry.processType === 'EXPRESS' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+    <div className="bg-white">
+      {/* Strong sans header — premium B2B operational tools (Stripe,
+          Linear, Mercury) use confident sans titles, not serif. The
+          earlier serif treatment read as decorative-marketing on a
+          working form. Single accent: the EXPRESS / STANDARD chip. */}
+      <div className="flex items-center justify-between mb-7 pb-5 border-b border-slate-200">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.22em]">
+            Quotation
+          </span>
+          <h5 className="text-[20px] font-black text-slate-900 leading-none tracking-tight">
+            Your Offer
+          </h5>
+        </div>
+        <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-[0.2em] ${inquiry.processType === 'EXPRESS' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'}`}>
           {inquiry.processType || 'STANDARD'}
         </span>
       </div>
 
-      <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-3">
+      <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-5">
         {quoteSchema.map(renderField)}
 
         {/* Venue space selector — shown only when the seller is
@@ -347,9 +366,11 @@ export default function QuoteSubmissionForm({
 
         {/* Total summary */}
         {calculatedTotal > 0 && (
-          <div className="bg-[#fdf6e9] border border-[#d49b35]/20 p-3 rounded-xl">
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Total Quote Amount</p>
-            <p className="text-xl font-black text-[#d49b35]">ZMW {calculatedTotal.toLocaleString()}</p>
+          <div className="bg-[#fdf6e9] border border-[#d49b35]/20 px-4 py-3.5 rounded-xl">
+            <p className={`${labelClass} mb-1`}>Total Quote Amount</p>
+            <p className="font-serif text-[24px] font-black text-[#d49b35] leading-none">
+              ZMW {calculatedTotal.toLocaleString()}
+            </p>
           </div>
         )}
 

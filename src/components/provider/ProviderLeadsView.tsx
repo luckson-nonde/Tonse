@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
-import { MapPin, Eye, ChevronDown, ChevronUp, Package } from 'lucide-react';
+import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package } from 'lucide-react';
 import emptyLeadsImage from '../../assets/images/empty-states/owl_reading.png';
 import { uniqueKey } from '../../utils/keyUtils';
-import { PreferenceTags, ThumbnailGrid } from './LeadsHelpers';
+import { PreferenceTags, Lightbox } from './LeadsHelpers';
 import QuoteSubmissionForm from './QuoteSubmissionForm';
 import { recordInquiryView } from '../../services/api/inquiryService';
 import {
@@ -43,6 +43,11 @@ function collectLeadImages(lead: any, parsedItems: any[]): string[] {
 }
 
 // ─── Inquiry detail panel (read-only) ─────────────────────────────────────────
+//
+// Renders just the facts. The category pill row used to live here too,
+// duplicating the pill already shown in the compact row's header — pulled
+// out so the expanded panel reads as one continuous header → body, not
+// two stacked headers.
 function InquiryDetails({
   lead,
   parsedItems,
@@ -50,7 +55,6 @@ function InquiryDetails({
   itemPrices,
   onSetItemPrices,
   renderSpecifications,
-  idx,
 }: any) {
   const stripMediaKeys = (obj: Record<string, any>) => {
     const MEDIA_KEYWORDS = ['photo', 'image', 'img', 'attachment', 'media', 'budget', 'zmw', 'video', 'file', 'proof'];
@@ -68,48 +72,46 @@ function InquiryDetails({
   };
 
   return (
-    <div className="space-y-6 py-2">
-      <div className="flex flex-wrap gap-2.5">
-        {(lead.category || '').split(', ').map((cat: string, catIdx: number) => (
-          <span
-            key={uniqueKey('cat', undefined, `${lead.id}-${catIdx}`)}
-            className="px-3 py-1 bg-[#fdf6e9] text-[#d49b35] text-[10px] font-black rounded-lg uppercase tracking-[0.15em] border border-[#d49b35]/10 shadow-sm"
-          >
-            {cat}
-          </span>
-        ))}
-      </div>
-
-      {lead.description && (
-        <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 shadow-sm">
-          <p className="text-[17px] text-slate-900 leading-relaxed font-bold">{lead.description}</p>
-        </div>
+    <div className="space-y-8">
+      {/* Pre-fix inquiries persisted the literal "No description provided."
+          sentinel into the description column (BuyerDashboard used it as
+          a default before the form-derivation fix). Filter it here so
+          legacy rows render the same as new empty-description rows. */}
+      {lead.description && lead.description.trim() !== 'No description provided.' && (
+        <p className="text-[15px] text-slate-700 leading-relaxed font-medium border-l-2 border-[#d49b35]/40 pl-4">
+          {lead.description}
+        </p>
       )}
 
       {lead.preferences && Object.keys(lead.preferences).length > 0 && (
-        <div className="pt-2">
-          <PreferenceTags preferences={lead.preferences} />
-        </div>
+        <PreferenceTags preferences={lead.preferences} />
       )}
 
-      <div className="h-px bg-slate-100 my-2" />
-
+      {/* Prefer the stable categoryId — getCategorySchema accepts both
+          ids and names, but the legacy `category` display string can be
+          a comma-joined blob (e.g. "Mobile Phones & Accessories (Repair)")
+          while categoryIds[0] is the canonical "mobile-phones-repair"
+          slug. Without an id, the lookup falls back to the generic
+          schema and only renders brand/quantity/urgency. */}
       {lead.attributes && Object.keys(lead.attributes).length > 0 && (() => {
         const cleaned = stripMediaKeys(lead.attributes);
+        const cat = (lead as any).categoryIds?.[0] || lead.category || '';
         return Object.keys(cleaned).length > 0
-          ? <div className="text-sm">{renderSpecifications(cleaned, lead.category || '', 'Inquiry Details')}</div>
+          ? renderSpecifications(cleaned, cat, 'Inquiry Details')
           : null;
       })()}
       {lead.entertainmentData && (() => {
         const cleaned = stripMediaKeys(lead.entertainmentData);
+        const cat = (lead as any).categoryIds?.[0] || lead.category || '';
         return Object.keys(cleaned).length > 0
-          ? <div className="text-sm">{renderSpecifications(cleaned, lead.category || '', 'Event Specifications')}</div>
+          ? renderSpecifications(cleaned, cat, 'Event Specifications')
           : null;
       })()}
       {lead.repairData && (() => {
         const cleaned = stripMediaKeys(lead.repairData);
+        const cat = (lead as any).categoryIds?.[0] || lead.category || '';
         return Object.keys(cleaned).length > 0
-          ? <div className="text-sm">{renderSpecifications(cleaned, lead.category || '', 'Repair Specifications')}</div>
+          ? renderSpecifications(cleaned, cat, 'Repair Specifications')
           : null;
       })()}
 
@@ -174,10 +176,54 @@ function InquiryDetails({
   );
 }
 
-// ─── Divider ─────────────────────────────────────────────────────────────────
-const VDivider = () => (
-  <div className="hidden lg:block w-px bg-[#e8e0d0] self-stretch shrink-0 mx-1" />
-);
+// ─── Photo strip (premium horizontal gallery) ────────────────────────────────
+//
+// Replaces the old 3-zone layout's middle column where photos were
+// squeezed into a 20%-wide vertical stack of unreadable thumbnails.
+// Photos now run as a single full-width horizontal strip directly under
+// the header band — large enough to actually identify (140px square),
+// uniformly cropped, with a deterministic overflow indicator.
+function PhotoStrip({ images, onOpen }: { images: string[]; onOpen: (i: number) => void }) {
+  if (!images || images.length === 0) return null;
+  const VISIBLE = 6;
+  const overflow = images.length - VISIBLE;
+  const visible = images.slice(0, VISIBLE);
+  const isVideo = (src: string) => /\.(mp4|webm|mov|avi)$/i.test(src);
+  return (
+    <div className="space-y-3">
+      <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.22em]">
+        Photos · {images.length}
+      </p>
+      <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-thin">
+        {visible.map((src, i) => {
+          const isLast = i === visible.length - 1 && overflow > 0;
+          return (
+            <button
+              key={`thumb-${i}`}
+              type="button"
+              onClick={() => onOpen(i)}
+              className="relative w-[140px] h-[140px] shrink-0 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 hover:border-[#d49b35]/40 transition-colors group"
+            >
+              {isVideo(src) ? (
+                <video src={src} className="w-full h-full object-cover" />
+              ) : (
+                <img src={src} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+              )}
+              {isLast && (
+                <div className="absolute inset-0 bg-slate-900/70 flex items-center justify-center backdrop-blur-[1px]">
+                  <span className="text-white text-[20px] font-black">+{overflow}</span>
+                </div>
+              )}
+              {!isLast && (
+                <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/10 transition-colors" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
 interface ProviderLeadsViewProps {
@@ -234,6 +280,9 @@ export default function ProviderLeadsView({
   onSetRevisingQuote,
 }: ProviderLeadsViewProps) {
   const [expandedLeadId, setExpandedLeadId] = useState<number | null>(null);
+  // Lightbox state for the photo strip — keyed by lead id so each
+  // expanded row owns its own gallery without conflict.
+  const [lightbox, setLightbox] = useState<{ leadId: number; index: number } | null>(null);
   // Local viewCount overrides keyed by lead id so the UI bumps optimistically
   // the moment a provider expands a row, even before the next leads refresh.
   const [viewCounts, setViewCounts] = useState<Record<string, number>>({});
@@ -313,21 +362,18 @@ export default function ProviderLeadsView({
     return Array.isArray(legacy) && legacy.length > 0 ? legacy : null;
   })();
 
-  // Dynamic layout calculations based on leads volume
+  // Dynamic layout calculations based on leads volume.
+  //
+  // Premium spec: rhythm scales with density, but the typography ramp
+  // stays predictable. Compact mode tightens row padding and shrinks
+  // meta — but title weight, pill treatment, and disclosure chevron
+  // stay on the same scale across modes so the inbox doesn't read as
+  // "two different products" when the count crosses 8 leads.
   const leadsCount = leads.length;
   const isRelaxed = leadsCount > 0 && leadsCount <= 4;
-  const isCompact = leadsCount > 8;
 
-  const containerSpacing = isRelaxed ? 'space-y-6' : 'space-y-2';
-  const rowPadding = isRelaxed ? 'py-14' : isCompact ? 'py-2.5' : 'py-4';
-  const cardRadius = isRelaxed ? 'rounded-[32px]' : 'rounded-xl';
-  const titleTextSize = isRelaxed ? 'text-2xl' : isCompact ? 'text-sm' : 'text-base';
-  const tagTextSize = isRelaxed ? 'text-xs' : 'text-[9px]';
-  const tagPadding = isRelaxed ? 'px-4 py-2' : 'px-2 py-0.5';
-  const metaTextSize = isRelaxed ? 'text-sm' : 'text-[10px]';
-  const metaIconSize = isRelaxed ? 'w-5 h-5' : 'w-3 h-3';
-  const dateTextSize = isRelaxed ? 'text-sm' : 'text-[10px]';
-  const chevronSize = isRelaxed ? 'w-6 h-6' : 'w-4 h-4';
+  const containerSpacing = isRelaxed ? 'space-y-4' : 'space-y-3';
+  const cardRadius = 'rounded-2xl';
 
   // The in-view variant pill row is gone. The Profile popover in the
   // sidebar is now the single switch — having two competing controls
@@ -425,102 +471,187 @@ export default function ProviderLeadsView({
               ? parsedItems.reduce((s: number, _: any, i: number) => s + Number(itemPrices[`${lead.id}-${i}`] || 0), 0)
               : 0;
 
+            const fullCategory = (lead.category || '').split(', ')[0];
+            const budget = Number((lead.attributes as any)?.budget_limit || (lead.attributes as any)?.budgetLimit || 0);
+            const daysAgo = Math.floor((Date.now() - new Date(lead.createdAt).getTime()) / 86400000);
+            const descText = lead.description && lead.description.trim() !== 'No description provided.' ? lead.description.trim() : '';
+            const iqrRef = (lead as any).displayId || String(lead.id || '').replace(/-/g, '').slice(0, 6).toUpperCase();
             return (
               <div
                 key={uniqueKey('lead', lead.id, idx)}
-                className={`bg-white ${cardRadius} border shadow-sm overflow-hidden transition-all duration-200 ${selectedInquiryIds.includes(lead.id!) ? 'border-[#d49b35]' : 'border-slate-100'}`}
+                className={`bg-white ${cardRadius} border shadow-sm overflow-hidden transition-all duration-200 ${selectedInquiryIds.includes(lead.id!) ? 'border-[#d49b35]' : isExpanded ? 'border-[#d49b35]/30 shadow-md' : 'border-slate-100 hover:border-slate-200 hover:shadow-md'}`}
               >
-                {/* ── Compact row ── */}
-                <div
-                  className={`flex items-center gap-4 px-5 ${rowPadding} cursor-pointer hover:bg-slate-50/70 transition-colors`}
-                  onClick={() => {
-                    if (isExpanded) {
-                      setExpandedLeadId(null);
-                    } else {
-                      handleExpand(lead.id!, Number(lead.viewCount ?? 0));
-                    }
-                  }}
-                >
-                  {isSelectionMode && (
-                    <input
-                      type="checkbox"
-                      checked={selectedInquiryIds.includes(lead.id!)}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        if (e.target.checked) onSetSelectedInquiryIds([...selectedInquiryIds, lead.id!]);
-                        else onSetSelectedInquiryIds(selectedInquiryIds.filter((id) => id !== lead.id!));
-                      }}
-                      className="w-5 h-5 accent-[#d49b35] shrink-0"
-                    />
+                {/* ── Card header (QuoteCard pattern) ── */}
+                <div className="p-5 flex flex-col gap-4">
+                  {/* Row 1: Buyer info + Budget */}
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="flex items-center gap-3">
+                      {isSelectionMode && (
+                        <input
+                          type="checkbox"
+                          checked={selectedInquiryIds.includes(lead.id!)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            if (e.target.checked) onSetSelectedInquiryIds([...selectedInquiryIds, lead.id!]);
+                            else onSetSelectedInquiryIds(selectedInquiryIds.filter((id) => id !== lead.id!));
+                          }}
+                          className="w-5 h-5 accent-[#d49b35] shrink-0"
+                        />
+                      )}
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-500 text-base shrink-0">
+                        {((lead as any).buyerName || 'B').charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <h4 className="text-[15px] font-bold text-slate-900 leading-tight">
+                          {(lead as any).buyerName || 'Buyer'}
+                        </h4>
+                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                          {daysAgo === 0 ? 'Today' : `${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {budget > 0 ? (
+                        <>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Budget</p>
+                          <div className="flex items-start justify-end">
+                            <span className="text-[11px] font-bold text-slate-400 mt-0.5 mr-0.5">ZMW</span>
+                            <span className="text-xl font-black text-slate-900 tracking-tight leading-none">
+                              {budget.toLocaleString()}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <span className="text-[11px] font-medium text-slate-400 italic">No budget set</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Title */}
+                  <p className="text-[15px] font-bold text-slate-800 leading-snug -mt-1">{lead.title}</p>
+
+                  {/* Divider */}
+                  <div className="h-px w-full bg-gradient-to-r from-slate-100 via-slate-100 to-transparent" />
+
+                  {/* Details grid: category + location */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-start gap-2.5">
+                      <div className="mt-0.5 p-1.5 bg-[#C9973A]/10 rounded-lg text-[#C9973A] shrink-0">
+                        <Tag className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Category</p>
+                        <p className="text-[11px] font-bold text-slate-900 truncate">{fullCategory || 'General'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <div className="mt-0.5 p-1.5 bg-blue-50 rounded-lg text-blue-500 shrink-0">
+                        <MapPin className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Location</p>
+                        <p className="text-[11px] font-bold text-slate-700">{lead.location || (lead as any).city || 'Lusaka'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Description excerpt */}
+                  {descText && (
+                    <div className="bg-slate-50/80 border border-slate-100 rounded-xl p-3.5 relative overflow-hidden">
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#C9973A]/30 rounded-l-xl" />
+                      <div className="flex gap-2.5">
+                        <MessageSquare className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                        <p className="text-xs text-slate-600 italic leading-relaxed line-clamp-2">"{descText}"</p>
+                      </div>
+                    </div>
                   )}
-                  <span className={`hidden sm:inline-block ${tagPadding} bg-[#fdf6e9] text-[#d49b35] ${tagTextSize} font-black rounded-lg uppercase tracking-wider shrink-0 max-w-[120px] truncate border border-[#d49b35]/10`}>
-                    {(lead.category || '').split(', ')[0]}
-                  </span>
-                  <span className={`flex-1 ${titleTextSize} font-bold text-slate-900 truncate`}>{lead.title}</span>
-                  {parsedItems.length > 0 && (
-                    <span className={`hidden md:flex items-center gap-1.5 ${metaTextSize} font-bold text-slate-500 shrink-0`}>
-                      <Package className={metaIconSize} />{parsedItems.length} item{parsedItems.length !== 1 ? 's' : ''}
-                    </span>
-                  )}
-                  <span className={`hidden lg:block ${metaTextSize} font-bold text-slate-500 shrink-0 max-w-[130px] truncate`}>{lead.buyerName}</span>
-                  <span className={`hidden md:flex items-center gap-1.5 ${metaTextSize} font-bold text-slate-500 shrink-0`}>
-                    <MapPin className={metaIconSize} />{lead.location}
-                  </span>
-                  <span className={`${dateTextSize} font-bold text-slate-400 shrink-0`}>{new Date(lead.createdAt).toLocaleDateString()}</span>
-                  {isExpanded ? <ChevronUp className={`${chevronSize} text-slate-400 shrink-0`} /> : <ChevronDown className={`${chevronSize} text-slate-400 shrink-0`} />}
+
+                  {/* Footer: reference + items + CTA */}
+                  <div className="flex justify-between items-center pt-1">
+                    <div className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                      IQR-{iqrRef}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {parsedItems.length > 0 && (
+                        <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
+                          <Package className="w-3.5 h-3.5" />
+                          {parsedItems.length} item{parsedItems.length !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => {
+                          if (isExpanded) setExpandedLeadId(null);
+                          else handleExpand(lead.id!, Number(lead.viewCount ?? 0));
+                        }}
+                        className={`px-5 py-2.5 text-sm font-bold rounded-xl transition-all flex items-center gap-2 ${
+                          isExpanded
+                            ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                            : 'bg-[#1a1612] text-white hover:bg-black shadow-md hover:shadow-lg hover:-translate-y-0.5'
+                        }`}
+                      >
+                        {isExpanded ? 'Hide Details' : 'View Details'}
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
-                {/* ── Expanded panel — adaptive layout engine ── */}
+                {/* ── Expanded panel ──
+                    Single coherent layout: photo strip on top, body below.
+                    Body is 1-column when no quote form, 2-column (60/40)
+                    when the quote form is open. No internal scroll, no
+                    competing columns, no truncated content. */}
                 {isExpanded && (
-                  <div className="border-t border-slate-100 p-4">
-
-                    {/* RULE 1: No images, no form → single column */}
-                    {!hasImages && !isQuoting && (
-                      <div>
-                        <InquiryDetails lead={lead} parsedItems={parsedItems} quotingInquiryId={quotingInquiryId} itemPrices={itemPrices} onSetItemPrices={onSetItemPrices} renderSpecifications={renderSpecifications} idx={idx} />
-                        <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
-                          <div className="flex items-center gap-1 text-slate-400 text-[10px]"><Eye className="w-3 h-3" />{renderViewCount(lead)} views</div>
-                          <button onClick={() => onSetQuotingInquiryId(lead.id!)} className="px-5 py-2 bg-[#d49b35] text-white text-xs font-bold rounded-xl hover:bg-[#a37d35] transition-all shadow-md active:scale-95">
-                            {isWholesale ? 'Quote for Supply' : 'Submit Quote'}
-                          </button>
-                        </div>
+                  <div className="border-t border-slate-100 bg-slate-50/30">
+                    {hasImages && (
+                      <div className="px-6 pt-6">
+                        <PhotoStrip
+                          images={allImages}
+                          onOpen={(i) => setLightbox({ leadId: lead.id!, index: i })}
+                        />
                       </div>
                     )}
 
-                    {/* RULE 2: Images present, no form → 65/35 two-column */}
-                    {hasImages && !isQuoting && (
-                      <div className="flex flex-col lg:flex-row gap-4">
-                        <div className="flex-[65] min-w-0">
-                          <InquiryDetails lead={lead} parsedItems={parsedItems} quotingInquiryId={quotingInquiryId} itemPrices={itemPrices} onSetItemPrices={onSetItemPrices} renderSpecifications={renderSpecifications} idx={idx} />
-                          <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
-                            <div className="flex items-center gap-1 text-slate-400 text-[10px]"><Eye className="w-3 h-3" />{renderViewCount(lead)} views</div>
-                            <button onClick={() => onSetQuotingInquiryId(lead.id!)} className="px-5 py-2 bg-[#d49b35] text-white text-xs font-bold rounded-xl hover:bg-[#a37d35] transition-all shadow-md active:scale-95">
+                    <div className={`px-6 ${hasImages ? 'pt-8' : 'pt-6'} pb-6 grid gap-10 ${isQuoting ? 'lg:grid-cols-[1fr_minmax(360px,420px)]' : 'grid-cols-1'}`}>
+                      {/* Left column — inquiry facts + footer */}
+                      <div className="min-w-0">
+                        <InquiryDetails
+                          lead={lead}
+                          parsedItems={parsedItems}
+                          quotingInquiryId={quotingInquiryId}
+                          itemPrices={itemPrices}
+                          onSetItemPrices={onSetItemPrices}
+                          renderSpecifications={renderSpecifications}
+                        />
+                        <div className="mt-8 pt-5 border-t border-slate-100 flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-medium">
+                            <Eye className="w-3.5 h-3.5" />
+                            {renderViewCount(lead)} {renderViewCount(lead) === 1 ? 'view' : 'views'}
+                          </div>
+                          {!isQuoting ? (
+                            <button
+                              onClick={() => onSetQuotingInquiryId(lead.id!)}
+                              className="px-6 py-2.5 bg-[#d49b35] text-white text-[13px] font-bold rounded-xl hover:bg-[#b8851d] transition-colors shadow-sm active:scale-[0.98]"
+                            >
                               {isWholesale ? 'Quote for Supply' : 'Submit Quote'}
                             </button>
-                          </div>
-                        </div>
-                        <VDivider />
-                        <div className="flex-[35] lg:pt-0 pt-3 lg:border-t-0 border-t border-slate-100">
-                          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Photos</p>
-                          <ThumbnailGrid images={allImages} maxVisible={6} compact columns={2} />
+                          ) : (
+                            <button
+                              onClick={() => {
+                                onSetQuotingInquiryId(null);
+                                onSetRevisingQuote(null);
+                              }}
+                              className="text-[12px] font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                            >
+                              Cancel quote
+                            </button>
+                          )}
                         </div>
                       </div>
-                    )}
 
-                    {/* RULE 3: No images, form open → 55/45 two-column */}
-                    {!hasImages && isQuoting && (
-                      <div className="flex flex-col lg:flex-row gap-4">
-                        <div className="flex-[55] min-w-0">
-                          <InquiryDetails lead={lead} parsedItems={parsedItems} quotingInquiryId={quotingInquiryId} itemPrices={itemPrices} onSetItemPrices={onSetItemPrices} renderSpecifications={renderSpecifications} idx={idx} />
-                          <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
-                            <div className="flex items-center gap-1 text-slate-400 text-[10px]"><Eye className="w-3 h-3" />{renderViewCount(lead)} views</div>
-                            <button onClick={() => onSetQuotingInquiryId(null)} className="px-3 py-1.5 text-[10px] text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
-                              Cancel Quote
-                            </button>
-                          </div>
-                        </div>
-                        <VDivider />
-                        <div className="flex-[45] lg:max-h-[80vh] lg:overflow-y-auto">
+                      {/* Right column — quote form (only when quoting) */}
+                      {isQuoting && (
+                        <div className="lg:border-l lg:border-slate-200 lg:pl-10 min-w-0">
                           <QuoteSubmissionForm
                             inquiry={lead}
                             onSubmit={(data) => onQuoteSubmit(lead.id!, data)}
@@ -535,48 +666,16 @@ export default function ProviderLeadsView({
                             parentQuoteId={revisingQuote?.id}
                           />
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
 
-                    {/* RULE 4: Images + form open → 45/20/35 three-zone */}
-                    {hasImages && isQuoting && (
-                      <div className="flex flex-col lg:flex-row gap-0">
-                        {/* Zone 1 — inquiry details 45% */}
-                        <div className="lg:w-[45%] min-w-0 p-1 lg:pr-3">
-                          <InquiryDetails lead={lead} parsedItems={parsedItems} quotingInquiryId={quotingInquiryId} itemPrices={itemPrices} onSetItemPrices={onSetItemPrices} renderSpecifications={renderSpecifications} idx={idx} />
-                          <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
-                            <div className="flex items-center gap-1 text-slate-400 text-[10px]"><Eye className="w-3 h-3" />{renderViewCount(lead)} views</div>
-                            <button onClick={() => onSetQuotingInquiryId(null)} className="px-3 py-1.5 text-[10px] text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                        <VDivider />
-                        {/* Zone 2 — thumbnails 20% */}
-                        <div className="lg:w-[20%] shrink-0 flex flex-col gap-2 pt-3 lg:pt-1 lg:px-5 border-t lg:border-t-0 border-slate-100">
-                          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Photos</p>
-                          <ThumbnailGrid images={allImages} maxVisible={4} compact columns={1} />
-                        </div>
-                        <VDivider />
-                        {/* Zone 3 — quote form 35% */}
-                        <div className="lg:w-[35%] shrink-0 pt-3 lg:pt-0 lg:pl-3 lg:max-h-[75vh] lg:overflow-y-auto border-t lg:border-t-0 border-slate-100">
-                          <QuoteSubmissionForm
-                            inquiry={lead}
-                            onSubmit={(data) => onQuoteSubmit(lead.id!, data)}
-                            onCancel={() => {
-                              onSetQuotingInquiryId(null);
-                              onSetRevisingQuote(null);
-                            }}
-                            venueSpaces={venueSpaces}
-                            user={user}
-                            itemPricesTotal={itemPricesTotal}
-                            initialValues={revisingQuote?.dynamicFields}
-                            parentQuoteId={revisingQuote?.id}
-                          />
-                        </div>
-                      </div>
+                    {lightbox && lightbox.leadId === lead.id && (
+                      <Lightbox
+                        images={allImages}
+                        startIndex={lightbox.index}
+                        onClose={() => setLightbox(null)}
+                      />
                     )}
-
                   </div>
                 )}
               </div>

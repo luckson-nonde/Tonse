@@ -113,4 +113,11 @@ export class CreateInquiryDto {
   @IsString()
   @MaxLength(50)
   labourSubType?: string;
+
+  /** Targeted-inquiry flow: inquiry is directed at a specific provider.
+   *  Accepted and stored here; matching enforcement is a future phase. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  targetedProviderId?: string;
 }
