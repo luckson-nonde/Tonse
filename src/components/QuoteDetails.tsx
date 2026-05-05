@@ -1,4 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../AuthContext';
+import { lencoService } from '../services/api/lencoService';
+import { createOrder } from '../services/api/orderService';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Star,
@@ -28,6 +32,7 @@ import {
   Lock,
   CheckCircle2,
   Sparkles,
+  Wallet,
 } from 'lucide-react';
 import { robustParse } from '../utils/jsonUtils';
 import { Quote, Inquiry } from '../types.ts';
@@ -52,8 +57,10 @@ function PaymentModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [step, setStep] = useState<'method' | 'details' | 'processing' | 'success'>('method');
-  const [payMethod, setPayMethod] = useState<'mobile' | 'card' | 'bank'>('mobile');
+  const [payMethod, setPayMethod] = useState<'virtual' | 'mobile' | 'card' | 'bank'>('virtual');
   const [mobileNetwork, setMobileNetwork] = useState('mtn');
   const [phone, setPhone] = useState('');
   const [cardNumber, setCardNumber] = useState('');
@@ -61,6 +68,7 @@ function PaymentModal({
   const [cardCvc, setCardCvc] = useState('');
   const [cardName, setCardName] = useState('');
   const [error, setError] = useState('');
+  const [walletBalance, setWalletBalance] = useState(0);
 
   const dynamicFields = robustParse(quote.dynamicFields) || {};
   const securityDeposit = Number(dynamicFields.securityDeposit || quote.securityDeposit || 0);
@@ -71,52 +79,126 @@ function PaymentModal({
 
   const selectedNetwork = MOBILE_METHODS.find(m => m.id === mobileNetwork);
 
-  const handleProceed = () => {
+  // Mirrors FinancialPage's wallet balance computation. The /payments
+  // ledger is the single source of truth for what the buyer can spend
+  // from their virtual account.
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    db.transactions
+      .where('userId').equals(user.id as any)
+      .toArray()
+      .then((rows) => {
+        if (cancelled) return;
+        const balance = rows
+          .filter((t: any) => t.status === 'COMPLETED')
+          .reduce((sum: number, t: any) => (t.type === 'IN' ? sum + t.amount : sum - t.amount), 0);
+        setWalletBalance(balance);
+        // If the wallet can't cover the quote, fall back to mobile money
+        // by default. The user can still flip back manually.
+        if (balance < total) setPayMethod((prev) => (prev === 'virtual' ? 'mobile' : prev));
+      })
+      .catch(() => { /* keep wallet at 0 */ });
+    return () => { cancelled = true; };
+  }, [user?.id, total]);
+
+  const handleProceed = async () => {
     setError('');
+
+    // Card / Bank are not yet wired — keep the visual but block submit.
+    if (payMethod === 'card' || payMethod === 'bank') {
+      setError('This payment method is coming soon. Please use Wallet or Mobile Money.');
+      return;
+    }
+    if (payMethod === 'virtual' && walletBalance < total) {
+      setError('Insufficient wallet balance. Please top up first.');
+      return;
+    }
     if (payMethod === 'mobile' && phone.replace(/\D/g, '').length < 9) {
       setError('Please enter a valid mobile number.');
       return;
     }
-    if (payMethod === 'card') {
-      if (cardNumber.replace(/\s/g, '').length < 16) { setError('Invalid card number.'); return; }
-      if (!cardExpiry || !cardCvc || !cardName) { setError('Please fill in all card details.'); return; }
+    if (!user?.id) {
+      setError('You must be signed in to pay.');
+      return;
     }
-    setStep('processing');
-    setTimeout(async () => {
-      try {
-        // Update local DB
-        await db.quotes.update(quote.id!, {
-          status: 'PAID',
-        });
 
-        // Mark parent quote as SUPERSEDED if this is a revision
-        if ((quote as any).parentQuoteId) {
-          try {
-            await db.quotes.update((quote as any).parentQuoteId, { status: 'SUPERSEDED' as any });
-          } catch (e) {
-            console.warn('Failed to supersede parent quote:', e);
-          }
+    setStep('processing');
+    const reference = `TONSE-PAY-${quote.id}-${Date.now()}`;
+
+    try {
+      // 1. Take payment.
+      if (payMethod === 'virtual') {
+        // Wallet ledger debit — completes immediately.
+        await db.transactions.add({
+          userId: user.id as any,
+          type: 'OUT',
+          amount: total,
+          description: `Payment to ${quote.providerName} for ${quote.inquiryTitle}`,
+          category: 'PAYMENT',
+          quoteId: quote.id as any,
+          createdAt: Date.now(),
+          status: 'COMPLETED',
+        });
+      } else if (payMethod === 'mobile') {
+        // Real Lenco mobile-money collection — same call FinancialPage
+        // uses for top-ups. Settles asynchronously via webhook.
+        await lencoService.initiateMobileMoneyCollection({
+          amount: total,
+          phone,
+          operator: mobileNetwork,
+          reference,
+        });
+        await db.transactions.add({
+          userId: user.id as any,
+          type: 'OUT',
+          amount: total,
+          description: `Payment to ${quote.providerName} via ${selectedNetwork?.label ?? 'Mobile Money'}`,
+          category: 'PAYMENT',
+          quoteId: quote.id as any,
+          createdAt: Date.now(),
+          status: 'PENDING',
+        });
+      }
+
+      // 2. Create the Order row so the item lands in Order History.
+      // (Same shape as the STANDARD generate_po flow.)
+      if (typeof quote.id === 'string' && quote.providerId) {
+        try {
+          await createOrder({
+            quoteId: String(quote.id),
+            buyerId: user.id,
+            sellerId: String(quote.providerId),
+            totalAmount: total,
+          });
+        } catch (e) {
+          console.warn('Order row create failed (payment already taken):', e);
         }
-        
-        // Update Backend if quote.id is a string (API ID)
+      }
+
+      // 3. Sync quote + inquiry status (preserve existing behavior).
+      try {
+        await db.quotes.update(quote.id!, { status: 'PAID' });
+        if ((quote as any).parentQuoteId) {
+          await db.quotes.update((quote as any).parentQuoteId, { status: 'SUPERSEDED' as any });
+        }
         if (typeof quote.id === 'string') {
           await updateQuoteStatus(quote.id, 'PAID');
-          
-          // Also update inquiry status to PAID to move it to orders
           if (quote.inquiryId) {
-            try {
-              const { updateInquiryStatus } = await import('../services/api/inquiryService');
-              await updateInquiryStatus(String(quote.inquiryId), 'PAID');
-            } catch (e) {
-              console.error('Failed to update inquiry status:', e);
-            }
+            const { updateInquiryStatus } = await import('../services/api/inquiryService');
+            await updateInquiryStatus(String(quote.inquiryId), 'PAID');
           }
         }
-      } catch (err) { 
-        console.error('Failed to sync payment status to backend:', err);
+      } catch (e) {
+        console.warn('Status sync failed (payment + order succeeded):', e);
       }
+
       setStep('success');
-    }, 3000);
+    } catch (err: any) {
+      console.error('EXPRESS payment failed:', err);
+      setError(err?.message || 'Payment failed. Please try again.');
+      setStep('details');
+    }
   };
 
   return (
@@ -254,26 +336,65 @@ function PaymentModal({
             {/* Payment method tabs */}
             <div className="px-6 pt-5">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Payment Method</p>
-              <div className="grid grid-cols-3 gap-2">
-                {([ 
-                  { id: 'mobile', icon: <Smartphone className="w-4 h-4" />, label: 'Mobile' },
-                  { id: 'card', icon: <CreditCard className="w-4 h-4" />, label: 'Card' },
-                  { id: 'bank', icon: <Building2 className="w-4 h-4" />, label: 'Bank' },
+              <div className="grid grid-cols-4 gap-2">
+                {([
+                  { id: 'virtual', icon: <Wallet className="w-4 h-4" />, label: 'Wallet', soon: false },
+                  { id: 'mobile', icon: <Smartphone className="w-4 h-4" />, label: 'Mobile', soon: false },
+                  { id: 'card', icon: <CreditCard className="w-4 h-4" />, label: 'Card', soon: true },
+                  { id: 'bank', icon: <Building2 className="w-4 h-4" />, label: 'Bank', soon: true },
                 ] as const).map(m => (
                   <button
                     key={m.id}
                     onClick={() => setPayMethod(m.id)}
-                    className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border-2 text-xs font-bold transition-all ${
+                    className={`relative flex flex-col items-center gap-1.5 py-3 rounded-2xl border-2 text-xs font-bold transition-all ${
                       payMethod === m.id
                         ? 'border-[#d49b35] bg-[#fdf6e9] text-[#a37d35]'
                         : 'border-slate-200 text-slate-500 hover:border-slate-300'
                     }`}
                   >
+                    {m.soon && (
+                      <span className="absolute -top-2 right-1 px-1.5 py-0.5 bg-slate-400 text-white text-[8px] rounded-full uppercase tracking-tighter">Soon</span>
+                    )}
                     {m.icon}{m.label}
                   </button>
                 ))}
               </div>
             </div>
+
+            {/* Virtual Account / Wallet */}
+            {payMethod === 'virtual' && (
+              <div className="px-6 pt-5">
+                <div className={`rounded-2xl p-5 border-2 ${walletBalance >= total ? 'border-emerald-200 bg-emerald-50/50' : 'border-rose-200 bg-rose-50/50'}`}>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${walletBalance >= total ? 'bg-emerald-500' : 'bg-rose-500'}`}>
+                      <Wallet className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Wallet Balance</p>
+                      <p className="text-lg font-black text-slate-900">ZMW {walletBalance.toLocaleString()}</p>
+                    </div>
+                  </div>
+                  {walletBalance >= total ? (
+                    <div className="flex justify-between text-xs pt-3 border-t border-emerald-200/60">
+                      <span className="text-slate-500 font-medium">After payment</span>
+                      <span className="font-black text-slate-800">ZMW {(walletBalance - total).toLocaleString()}</span>
+                    </div>
+                  ) : (
+                    <div className="pt-3 border-t border-rose-200/60 space-y-2">
+                      <p className="text-[11px] text-rose-600 font-bold leading-relaxed">
+                        Short by ZMW {(total - walletBalance).toLocaleString()} — top up to use your wallet.
+                      </p>
+                      <button
+                        onClick={() => { onClose(); navigate('/buyer/financial'); }}
+                        className="w-full py-2.5 bg-[#1e293b] text-white text-xs font-black rounded-xl hover:bg-[#0f172a] transition-all"
+                      >
+                        Top Up Wallet →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Mobile Money */}
             {payMethod === 'mobile' && (

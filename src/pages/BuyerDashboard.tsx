@@ -271,9 +271,13 @@ export default function BuyerDashboard() {
         }
         break;
       case 'accept_quote':
-        // Refresh quotes and inquiries after acceptance/payment
+        // EXPRESS pay-on-quote success: an Order row was just created
+        // by PaymentModal; refresh everything and land the buyer on the
+        // Orders tab so they see the paid item in their history.
         refreshQuotes();
         refreshInquiries();
+        refreshOrders();
+        handleTabChange('orders');
         break;
       case 'generate_po': {
         const quote = payload as Quote;
