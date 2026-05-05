@@ -13,6 +13,7 @@ import {
 import { useUserInquiries } from '../hooks/useInquiries';
 import { useUserQuotes } from '../hooks/useQuotes';
 import { markQuoteAsRead, archiveQuote, deleteQuote } from '../services/api/quoteService';
+import { createOrder } from '../services/api/orderService';
 import { ViewType, MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
 import CategorySelection from '../components/CategorySelection';
@@ -241,6 +242,23 @@ export default function BuyerDashboard() {
         refreshQuotes();
         refreshInquiries();
         break;
+      case 'generate_po': {
+        const quote = payload as Quote;
+        if (!quote?.id || !quote?.providerId || quote?.price == null) break;
+        try {
+          await createOrder({
+            quoteId: String(quote.id),
+            sellerId: String(quote.providerId),
+            totalAmount: quote.price,
+          });
+          refreshQuotes();
+          refreshInquiries();
+          handleTabChange('orders');
+        } catch (err: any) {
+          alert(err?.response?.data?.message || err?.message || 'Failed to generate purchase order. Please try again.');
+        }
+        break;
+      }
       case 'print_quote':
         // Print logic would go here, maybe a helper function
         console.log('Printing quote:', payload);
