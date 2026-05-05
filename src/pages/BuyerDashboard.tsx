@@ -13,7 +13,7 @@ import {
 import { useUserInquiries } from '../hooks/useInquiries';
 import { useUserQuotes } from '../hooks/useQuotes';
 import { markQuoteAsRead, archiveQuote, deleteQuote } from '../services/api/quoteService';
-import { createOrder } from '../services/api/orderService';
+import { createOrder, fetchBuyerOrders, type OrderRecord } from '../services/api/orderService';
 import { ViewType, MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
 import CategorySelection from '../components/CategorySelection';
@@ -76,10 +76,43 @@ export default function BuyerDashboard() {
   // Fetch quotes from PostgreSQL backend (NO IndexedDB)
   const { quotes, loading: quotesLoading, refresh: refreshQuotes } = useUserQuotes(user?.id);
 
-  const orders = useMemo(
-    () => quotes.filter((q) => ['PAID', 'COMPLETED'].includes(q.status)),
-    [quotes]
-  );
+  const [backendOrders, setBackendOrders] = useState<OrderRecord[]>([]);
+  const [ordersRefreshKey, setOrdersRefreshKey] = useState(0);
+  const refreshOrders = () => setOrdersRefreshKey((k) => k + 1);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    fetchBuyerOrders(user.id)
+      .then((list) => { if (!cancelled) setBackendOrders(list); })
+      .catch(() => { if (!cancelled) setBackendOrders([]); });
+    return () => { cancelled = true; };
+  }, [user?.id, ordersRefreshKey]);
+
+  // Order History list: every backend Order, hydrated with its quote +
+  // inquiry data so InquiryCard renders correctly. Falls back to the
+  // bare order shape when the related quote/inquiry hasn't loaded yet.
+  const orders = useMemo(() => {
+    return backendOrders.map((o) => {
+      const quote = quotes.find((q) => String(q.id) === String(o.quoteId));
+      const inquiry = quote ? inquiries.find((i) => String(i.id) === String(quote.inquiryId)) : undefined;
+      return {
+        ...(inquiry || {}),
+        id: inquiry?.id ?? o.quoteId,
+        title: inquiry?.title || `Order ${o.orderNumber}`,
+        createdAt: inquiry?.createdAt || o.createdAt,
+        paidQuote: {
+          id: quote?.id ?? o.id,
+          price: o.totalAmount,
+          updatedAt: o.updatedAt,
+          orderNumber: o.orderNumber,
+          status: o.status,
+        },
+        orderId: o.id,
+        orderStatus: o.status,
+      };
+    });
+  }, [backendOrders, quotes, inquiries]);
 
 
   // TODO: Transactions endpoint not yet implemented on backend
@@ -254,6 +287,7 @@ export default function BuyerDashboard() {
           });
           refreshQuotes();
           refreshInquiries();
+          refreshOrders();
           handleTabChange('orders');
         } catch (err: any) {
           alert(err?.response?.data?.message || err?.message || 'Failed to generate purchase order. Please try again.');
