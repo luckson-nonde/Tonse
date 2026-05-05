@@ -106,7 +106,14 @@ export default function AuthSplitLayout({
           <span className="font-serif italic text-[#1a1612]/40">Tonse · Lusaka</span>
         </div>
 
-        <div className="w-full max-w-[440px] relative z-10 py-10 lg:py-16">
+        {/* Responsive form column. Used to be a fixed max-w-[440px]
+            on every breakpoint, which left ~60% of the right pane
+            empty on desktop and forced multi-step forms (Location,
+            Categories) into a cramped single column. Steps that
+            opt into the 2-column layout via RegistrationStepShell
+            need real horizontal room at lg+; this scaling provides
+            it without stretching the simple steps awkwardly. */}
+        <div className="w-full max-w-[440px] md:max-w-[560px] lg:max-w-[860px] xl:max-w-[1040px] relative z-10 py-10 lg:py-16">
           {/* Mobile Header (Logo + Back) */}
           <div className="lg:hidden flex items-center justify-center relative mb-10">
             {onBack && (

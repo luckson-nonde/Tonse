@@ -799,8 +799,12 @@ export default function DynamicInquiryForm({
             animate={{ opacity: 1, x: 0 }}
             className="flex-1 w-full space-y-8"
           >
-            <div className="bg-white border border-[#f1f5f9] rounded-[32px] p-6 md:p-8 xl:p-10 shadow-sm shadow-[#1a1a2e]/[0.02]">
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-6 md:gap-x-8 gap-y-8 md:gap-y-10">
+            <div className="bg-white border border-[#e8e0d0]/60 rounded-[28px] p-6 md:p-10 xl:p-12 shadow-[0_4px_24px_-8px_rgba(26,26,46,0.08)]">
+              {/* Two-column max — forms read better when each field has
+                  real horizontal room. Going wider (3-4 columns) makes
+                  labels feel cramped and bureaucratic; capped at 2 the
+                  page feels deliberate and high-end. */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 md:gap-x-10 gap-y-7 md:gap-y-9">
                 {ungroupedFields.map((field, idx) => (
                   <div
                     key={field.name || `field-${idx}`}
@@ -823,30 +827,40 @@ export default function DynamicInquiryForm({
                 ))}
 
                 {Object.entries(groupedFields).map(([groupName, fields], gIdx) => (
-                  <div key={`group-${groupName}-${gIdx}`} className="col-span-full space-y-10">
-                    <div className="pt-4">
-                      <p className="font-sans text-[11px] uppercase tracking-[0.2em] text-[#C9973A] font-bold pb-2 border-b border-[#C9973A]/20 mb-10">
-                        {groupName}
-                      </p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-x-6 md:gap-x-8 gap-y-8 md:gap-y-10">
-                        {fields.map((field, fIdx) => (
-                          <div
-                            key={field.name || `group-field-${fIdx}`}
-                            className={
-                              field.type === 'textarea' ||
-                              field.type === 'image_upload' ||
-                              field.type === 'multiselect' ||
-                              (field.type === 'select' &&
-                                field.options &&
-                                field.options.length <= 4)
-                                ? 'col-span-full'
-                                : ''
-                            }
-                          >
-                            {renderField(field)}
-                          </div>
-                        ))}
+                  <div key={`group-${groupName}-${gIdx}`} className="col-span-full">
+                    {/* Section header — deliberate visual weight. The
+                        previous thin underline read as tentative; a
+                        gold accent bar + serif-style framing tells the
+                        user "this is its own concern" without shouting. */}
+                    <div className="relative mt-8 mb-9 pb-5 border-b border-[#e8e0d0]/70">
+                      <div className="absolute left-0 top-0 bottom-5 w-[3px] rounded-full bg-[#C9973A]" />
+                      <div className="pl-5">
+                        <p className="font-sans text-[10px] uppercase tracking-[0.28em] text-[#C9973A] font-bold mb-1.5">
+                          Section
+                        </p>
+                        <h3 className="font-serif text-[20px] md:text-[22px] font-bold text-[#1a1a2e] leading-tight">
+                          {groupName}
+                        </h3>
                       </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 md:gap-x-10 gap-y-7 md:gap-y-9">
+                      {fields.map((field, fIdx) => (
+                        <div
+                          key={field.name || `group-field-${fIdx}`}
+                          className={
+                            field.type === 'textarea' ||
+                            field.type === 'image_upload' ||
+                            field.type === 'multiselect' ||
+                            (field.type === 'select' &&
+                              field.options &&
+                              field.options.length <= 4)
+                              ? 'col-span-full'
+                              : ''
+                          }
+                        >
+                          {renderField(field)}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}

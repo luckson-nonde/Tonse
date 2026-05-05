@@ -13,6 +13,13 @@ import {
   ShieldCheck,
   Mail,
   Lock,
+  MapPin,
+  Building2,
+  Truck,
+  Navigation,
+  Store,
+  RefreshCw,
+  Smartphone,
 } from 'lucide-react';
 import AuthSplitLayout from '../components/AuthSplitLayout';
 import Button from '../components/Button';
@@ -24,6 +31,7 @@ import { HeroContent } from '../types';
 import CompactIdentityCapture from '../components/CompactIdentityCapture';
 import NrcDocumentCapture from '../components/NrcDocumentCapture';
 import LocationDetails from '../components/LocationDetails';
+import RegistrationStepShell from '../components/RegistrationStepShell';
 
 // Zambian NRC format: XXXXXX/XX/X (6 digits / 2 digits / 1 digit)
 function formatNRC(raw: string): string {
@@ -408,6 +416,26 @@ export default function Register() {
 
           {/* SCREEN 1: PERSONAL INFORMATION & IDENTITY */}
           {currentStep === 1 && (
+            <RegistrationStepShell
+              eyebrow="Step 01 / Identity"
+              title="Identity Verification"
+              description="Verify your NRC so buyers know they're trading with a real Zambian business."
+              icon={<ShieldCheck className="w-8 h-8" />}
+              tips={[
+                {
+                  icon: <ShieldCheck className="w-4 h-4" />,
+                  text: <><span className="font-bold text-[#1a1a2e]">Real-world anchor</span> — your NRC is the immutable identity behind your business.</>,
+                },
+                {
+                  icon: <Hash className="w-4 h-4" />,
+                  text: <><span className="font-bold text-[#1a1a2e]">No duplicates</span> — one NRC, one account. Stops impersonation before it starts.</>,
+                },
+                {
+                  icon: <Lock className="w-4 h-4" />,
+                  text: <><span className="font-bold text-[#1a1a2e]">ZRA-compliant</span> — verifies you against the official Zambian registry.</>,
+                },
+              ]}
+            >
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {/* Section 01 — Personal details */}
               <section className="space-y-5">
@@ -546,22 +574,84 @@ export default function Register() {
                 Continue to Location <span className="text-base leading-none">→</span>
               </Button>
             </div>
+            </RegistrationStepShell>
           )}
 
           {/* SCREEN 2: LOCATION DETAILS */}
           {currentStep === 2 && (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-              <LocationDetails
-                onComplete={handleLocationComplete}
-                isStandalone={false}
-                submitLabel="Continue to Credentials →"
-                showRadius={role !== 'BUYER'}
-              />
-            </div>
+            <RegistrationStepShell
+              eyebrow="Step 02 / Where"
+              title="Your Location"
+              description="Pinpoint exactly where your shop is. The coordinates you capture become the permanent map pin buyers use to find you."
+              icon={<MapPin className="w-8 h-8" />}
+              advisory={
+                <div className="flex items-start gap-3 p-4 rounded-2xl border border-[#C9973A]/30 bg-gradient-to-br from-[#fdf6e9]/80 to-[#fdf6e9]/30">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white flex items-center justify-center shrink-0 shadow-md shadow-[#C9973A]/30">
+                    <Store className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A] mb-1">
+                      Important · Be at your shop
+                    </p>
+                    <p className="text-[13px] text-[#1a1612] font-medium leading-snug">
+                      The coordinates you capture become the <span className="font-bold">permanent map pin</span> buyers use to find this business. Capture them from inside your shop — not from home, not on the move.
+                    </p>
+                  </div>
+                </div>
+              }
+              tips={[
+                {
+                  icon: <Building2 className="w-4 h-4" />,
+                  text: <><span className="font-bold text-[#1a1a2e]">Local discovery</span> — shoppers find you by area first, exact pin second.</>,
+                },
+                {
+                  icon: <Truck className="w-4 h-4" />,
+                  text: <><span className="font-bold text-[#1a1a2e]">Delivery pricing</span> stays accurate when buyers know exactly where you are.</>,
+                },
+                {
+                  icon: <Navigation className="w-4 h-4" />,
+                  text: <><span className="font-bold text-[#1a1a2e]">GPS pin</span> gives the sharpest match — capture it from inside your shop.</>,
+                },
+                {
+                  icon: <Lock className="w-4 h-4" />,
+                  text: <><span className="font-bold text-[#1a1a2e]">Address stays private</span> until a buyer accepts your quote.</>,
+                },
+              ]}
+            >
+              <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+                <LocationDetails
+                  onComplete={handleLocationComplete}
+                  isStandalone={false}
+                  submitLabel="Continue to Credentials →"
+                  showRadius={false}
+                  embeddedInShell={true}
+                />
+              </div>
+            </RegistrationStepShell>
           )}
 
           {/* SCREEN 3: ACCOUNT CREDENTIALS */}
           {currentStep === 3 && (
+            <RegistrationStepShell
+              eyebrow="Step 03 / Access"
+              title="Account Credentials"
+              description="Set the sign-in email and password you'll use to access this account."
+              icon={<Lock className="w-8 h-8" />}
+              tips={[
+                {
+                  icon: <Lock className="w-4 h-4" />,
+                  text: <><span className="font-bold text-[#1a1a2e]">End-to-end encrypted</span> — your password is hashed before it leaves the browser.</>,
+                },
+                {
+                  icon: <RefreshCw className="w-4 h-4" />,
+                  text: <><span className="font-bold text-[#1a1a2e]">NRC-based recovery</span> — if you forget the password, your NRC anchors recovery.</>,
+                },
+                {
+                  icon: <Smartphone className="w-4 h-4" />,
+                  text: <><span className="font-bold text-[#1a1a2e]">Multi-device sign-in</span> — sign in from desktop, mobile, or tablet with the same credentials.</>,
+                },
+              ]}
+            >
             <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
               {/* Section 01 — Sign-in email */}
               <section className="space-y-5">
@@ -724,6 +814,7 @@ export default function Register() {
                     )}
               </Button>
             </div>
+            </RegistrationStepShell>
           )}
         </div>
 

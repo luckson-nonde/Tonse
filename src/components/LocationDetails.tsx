@@ -12,6 +12,7 @@ import {
   Truck,
   AlertCircle,
   Check,
+  Store,
 } from 'lucide-react';
 
 interface LocationDetailsProps {
@@ -27,6 +28,11 @@ interface LocationDetailsProps {
   submitLabel?: string;
   showRadius?: boolean;
   isStandalone?: boolean;
+  /** When true, the consuming layout (e.g. RegistrationStepShell)
+   *  already renders the eyebrow / title / description / tips / "be
+   *  at your shop" advisory in its left context panel. The form
+   *  body should skip those inline blocks to avoid duplication. */
+  embeddedInShell?: boolean;
 }
 
 const ZAMBIA_DATA: Record<string, string[]> = {
@@ -245,6 +251,7 @@ export default function LocationDetails({
   submitLabel = 'Next →',
   showRadius = true,
   isStandalone = true,
+  embeddedInShell = false,
 }: LocationDetailsProps) {
   const [country, setCountry] = useState('Zambia');
   const [province, setProvince] = useState('');
@@ -260,7 +267,6 @@ export default function LocationDetails({
   const [radius, setRadius] = useState<number>(5); // Default 5km
   const [isLocating, setIsLocating] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
-  const [useGps, setUseGps] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [resolvedNote, setResolvedNote] = useState<string | null>(null);
 
@@ -333,7 +339,6 @@ export default function LocationDetails({
       setLatitude(prevReading.lat);
       setLongitude(prevReading.lng);
       setAccuracyMeters(prevReading.accuracy);
-      setUseGps(true);
       return true;
     };
 
@@ -357,7 +362,6 @@ export default function LocationDetails({
       setLatitude(lat);
       setLongitude(lng);
       setAccuracyMeters(accuracy);
-      setUseGps(true);
       setIsLocating(false);
 
       // Reverse-geocode and auto-fill the manual fields. The actual select
@@ -475,12 +479,20 @@ export default function LocationDetails({
   const floatingLabel =
     'absolute top-0 left-[16px] -translate-y-1/2 px-1.5 bg-brand-white text-[12px] font-bold uppercase tracking-[0.08em] text-[#C9973A] pointer-events-none';
 
+  const hasCoords = latitude !== undefined && longitude !== undefined;
+  // Two intents — drives the entire form's framing:
+  //   inquiry      (showRadius=true)  — "Where is this inquiry going + how far?"
+  //   registration (showRadius=false) — "Where is your shop, exactly?"
+  // The radius block, the "be at your shop" advisory, and the
+  // section labels all branch on this single signal.
+  const isRegistration = !showRadius;
+
   const formContent = (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-7">
       {/* Section 01 — Service Area */}
       <div className="flex items-center gap-3">
         <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A] shrink-0">
-          Section 01
+          {isRegistration ? 'Section 01 · Your Shop' : 'Section 01 · Where'}
         </p>
         <div className="h-px flex-1 bg-[#e8e4dc]" />
         <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#C9973A]/10 text-[#C9973A] font-bold uppercase tracking-[0.14em] text-[10px] shrink-0">
@@ -489,335 +501,311 @@ export default function LocationDetails({
         </span>
       </div>
 
-      {/* Mode Selector — Manual is the default, GPS is an optional
-          refinement. Always rendered so the user can pin coordinates
-          even from a desktop (the GPS panel surfaces the accuracy
-          tier so they can decide whether to trust the reading). */}
-      <div className="flex p-[3px] bg-[#f1ede5] rounded-full">
-        <button
-          type="button"
-          onClick={() => setUseGps(false)}
-          className={`flex-1 h-9 rounded-full text-[10px] font-bold uppercase tracking-[0.18em] transition-all flex items-center justify-center gap-2 ${
-            !useGps
-              ? 'bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white shadow-[0_4px_12px_-6px_rgba(201,151,58,0.5)]'
-              : 'text-[#1a1612]/45 hover:text-[#1a1612]'
-          }`}
-        >
-          <MapPin className="w-3.5 h-3.5" />
-          Manual
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (!latitude) handleUseMyLocation();
-            else setUseGps(true);
-          }}
-          className={`flex-1 h-9 rounded-full text-[10px] font-bold uppercase tracking-[0.18em] transition-all flex items-center justify-center gap-2 ${
-            useGps
-              ? 'bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white shadow-[0_4px_12px_-6px_rgba(201,151,58,0.5)]'
-              : 'text-[#1a1612]/45 hover:text-[#1a1612]'
-          }`}
-        >
-          <Navigation className="w-3.5 h-3.5" />
-          GPS
-        </button>
-      </div>
+      {/* Registration-only "Be at your shop" advisory — sets expectations
+          before they capture coordinates. The captured pin becomes the
+          permanent map location buyers use to find this business, so
+          it has to come from the actual shop, not from home or in
+          transit. Inquiry context doesn't get this banner because the
+          stakes are different — inquiries are temporary, a shop pin
+          is forever-ish.
+          When `embeddedInShell` is true, RegistrationStepShell renders
+          the advisory (and the per-step context) in its own slot, so
+          we skip the inline copy here to avoid showing it twice. */}
+      {isRegistration && !embeddedInShell && (
+        <div className="flex items-start gap-3 p-4 rounded-2xl border border-[#C9973A]/30 bg-gradient-to-br from-[#fdf6e9]/80 to-[#fdf6e9]/30">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white flex items-center justify-center shrink-0 shadow-md shadow-[#C9973A]/30">
+            <Store className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A] mb-1">
+              Important · Be at your shop
+            </p>
+            <p className="text-[13px] text-[#1a1612] font-medium leading-snug">
+              The coordinates you capture become the <span className="font-bold">permanent map pin</span> buyers use to find this business. Capture them from inside your shop — not from home, not on the move.
+            </p>
+          </div>
+        </div>
+      )}
 
-      <div className="relative">
-        {useGps ? (
-          <div className="rounded-2xl border border-[#e8e0d0] bg-brand-white p-6 space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* GPS Visualizer */}
-            <div className="flex flex-col items-center justify-center py-2 relative">
-              <div className="relative w-28 h-28 flex items-center justify-center">
-                <div className="absolute inset-0 border-2 border-[#C9973A]/20 rounded-full animate-ping" />
-                <div className="absolute inset-3 border-2 border-[#C9973A]/40 rounded-full animate-pulse" />
-                <div className="absolute inset-6 border-2 border-[#C9973A]/60 rounded-full" />
-                <div className="relative w-14 h-14 bg-gradient-to-b from-[#D5A547] to-[#C9973A] rounded-full flex items-center justify-center shadow-lg shadow-[#C9973A]/30">
-                  <Navigation className="w-6 h-6 text-white" />
-                </div>
-              </div>
-              <div className="mt-3 text-center">
-                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A] mb-0.5">
-                  {isLocating
-                    ? 'Locking GPS…'
-                    : isResolving
-                      ? 'Resolving location…'
-                      : geoError
-                        ? 'GPS Issue'
-                        : 'GPS Active'}
-                </p>
-                {!isLocating && latitude !== undefined && longitude !== undefined && (
-                  <p className="text-[16px] md:text-[18px] font-mono font-bold text-[#1a1612]/75 tabular-nums tracking-tight">
-                    {latitude.toFixed(6)}, {longitude.toFixed(6)}
-                  </p>
-                )}
-                {!isLocating && accuracyMeters !== undefined && (
-                  <p
-                    className={`text-[10px] font-bold uppercase tracking-[0.18em] mt-1 tabular-nums ${
-                      accuracyMeters <= 30
-                        ? 'text-emerald-600'
-                        : accuracyMeters <= 150
-                          ? 'text-[#C9973A]'
-                          : 'text-rose-500'
-                    }`}
-                  >
-                    ± {accuracyMeters < 1000
-                      ? `${Math.round(accuracyMeters)}m`
-                      : `${(accuracyMeters / 1000).toFixed(1)}km`}{' '}
-                    accuracy
-                  </p>
-                )}
-                {!isLocating &&
-                  accuracyMeters !== undefined &&
-                  accuracyMeters > 500 && (
-                    <div className="mt-3 max-w-[280px] mx-auto">
-                      <p className="text-[11px] text-rose-500/85 leading-snug mb-2">
-                        This device has no GPS chip — the reading is triangulated from Wi-Fi/IP
-                        and isn't precise enough to match nearby providers.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setUseGps(false)}
-                        className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C9973A] hover:underline"
-                      >
-                        Switch to Manual →
-                      </button>
-                    </div>
-                  )}
-                {!isLocating &&
-                  accuracyMeters !== undefined &&
-                  accuracyMeters > 150 &&
-                  accuracyMeters <= 500 && (
-                    <p className="text-[11px] text-[#C9973A]/85 mt-1.5 max-w-[260px] mx-auto leading-snug">
-                      GPS lock is loose. Move outside or re-scan for a tighter pin.
-                    </p>
-                  )}
-              </div>
+      {/* Province + City — always visible, both required. */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="relative w-full">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-20">
+              <Map className="h-5 w-5 text-[#C9973A]/55" strokeWidth={2} />
             </div>
-
-            {/* Inline status — auto-fill confirmation OR error */}
-            {geoError ? (
-              <div className="flex items-start gap-3 p-3 rounded-xl border border-rose-200 bg-rose-50/60">
-                <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-500 flex items-center justify-center shrink-0">
-                  <AlertCircle className="w-4 h-4" strokeWidth={2} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-bold text-rose-600 leading-tight">
-                    Couldn't use GPS
-                  </p>
-                  <p className="text-[11px] text-rose-500/80 mt-0.5 leading-snug">{geoError}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setUseGps(false)}
-                  className="text-[10px] font-bold uppercase tracking-[0.14em] text-rose-600 hover:underline shrink-0 self-center"
-                >
-                  Manual
-                </button>
-              </div>
-            ) : (
-              resolvedNote && (
-                <div className="flex items-start gap-3 p-3 rounded-xl border border-emerald-200/70 bg-emerald-50/40">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                    <Check className="w-4 h-4" strokeWidth={2.5} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 mb-0.5">
-                      Auto-filled
-                    </p>
-                    <p className="text-[12px] font-bold text-[#1a1612] leading-tight">
-                      {resolvedNote}
-                    </p>
-                    {address && (
-                      <p className="text-[11px] text-[#1a1612]/55 mt-0.5 leading-snug truncate">
-                        {address}
-                      </p>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setUseGps(false)}
-                    className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#C9973A] hover:underline shrink-0 self-center"
-                  >
-                    Edit
-                  </button>
-                </div>
-              )
-            )}
-
-            {/* Radius Control */}
-            {showRadius && (
-              <div className="bg-[#faf6ee] rounded-2xl p-5 border border-[#f1ede5]">
-                <div className="flex justify-between items-center mb-4">
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#C9973A] mb-0.5">
-                      Search Radius
-                    </p>
-                    <h4 className="text-[13px] font-bold text-[#1a1612] font-sans">
-                      Coverage Area
-                    </h4>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[28px] font-bold text-[#C9973A] tabular-nums font-serif">
-                      {radius}
-                    </span>
-                    <span className="text-[11px] font-bold text-[#1a1612]/45 ml-1 uppercase">
-                      km
-                    </span>
-                  </div>
-                </div>
-
-                <div className="relative h-9 flex items-center px-1">
-                  <div className="absolute left-0 right-0 h-1.5 bg-[#e8e0d0] rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-[#C9973A] to-[#D5A547] transition-all duration-300"
-                      style={{ width: `${radius}%` }}
-                    />
-                  </div>
-                  <input
-                    type="range"
-                    min="1"
-                    max="100"
-                    step="1"
-                    value={radius}
-                    onChange={(e) => setRadius(parseInt(e.target.value))}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                  />
-                  <div
-                    className="absolute w-6 h-6 bg-white border-[3px] border-[#C9973A] rounded-full shadow-md pointer-events-none transition-all duration-300"
-                    style={{ left: `calc(${radius}% - 12px)` }}
-                  />
-                </div>
-
-                <div className="flex justify-between mt-2 px-1">
-                  {[1, 25, 50, 75, 100].map((val) => (
-                    <span
-                      key={val}
-                      className="text-[9px] font-bold text-[#1a1612]/35"
-                    >
-                      {val}km
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={handleUseMyLocation}
-              disabled={isLocating}
-              className="w-full h-11 bg-[#faf6ee] border border-[#e8e0d0] rounded-xl text-[10px] font-bold text-[#1a1612]/70 uppercase tracking-[0.18em] hover:bg-[#f1ede5] transition-all flex items-center justify-center gap-2"
+            <select
+              value={province}
+              onChange={handleProvinceChange}
+              className={fieldShell}
             >
-              <Navigation
-                className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''} text-[#C9973A]`}
+              <option value="">Select…</option>
+              {provinces.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#1a1612]/40 pointer-events-none z-20" />
+            <label className={floatingLabel}>Province</label>
+          </div>
+        </div>
+
+        <div className="relative w-full">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-20">
+              <Building2
+                className={`h-5 w-5 ${
+                  !province ? 'text-[#C9973A]/30' : 'text-[#C9973A]/55'
+                }`}
+                strokeWidth={2}
               />
-              {isLocating ? 'Scanning…' : 'Re-scan location'}
-            </button>
+            </div>
+            <select
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              disabled={!province}
+              className={`${fieldShell} disabled:opacity-60 disabled:cursor-not-allowed`}
+            >
+              <option value="">{province ? 'Select…' : '—'}</option>
+              {cities.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#1a1612]/40 pointer-events-none z-20" />
+            <label className={floatingLabel}>City</label>
           </div>
-        ) : (
-          <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
-            <div className="grid grid-cols-2 gap-4">
-              {/* Province */}
-              <div className="relative w-full">
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-20">
-                    <Map className="h-5 w-5 text-[#C9973A]/55" strokeWidth={2} />
-                  </div>
-                  <select
-                    value={province}
-                    onChange={handleProvinceChange}
-                    className={fieldShell}
-                  >
-                    <option value="">Select…</option>
-                    {provinces.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#1a1612]/40 pointer-events-none z-20" />
-                  <label className={floatingLabel}>Province</label>
-                </div>
-              </div>
-
-              {/* City */}
-              <div className="relative w-full">
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-20">
-                    <Building2
-                      className={`h-5 w-5 ${
-                        !province ? 'text-[#C9973A]/30' : 'text-[#C9973A]/55'
-                      }`}
-                      strokeWidth={2}
-                    />
-                  </div>
-                  <select
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    disabled={!province}
-                    className={`${fieldShell} disabled:opacity-60 disabled:cursor-not-allowed`}
-                  >
-                    <option value="">{province ? 'Select…' : '—'}</option>
-                    {cities.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#1a1612]/40 pointer-events-none z-20" />
-                  <label className={floatingLabel}>City</label>
-                </div>
-              </div>
-            </div>
-
-            {/* Address */}
-            <div className="relative w-full">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-20">
-                  <MapPin className="h-5 w-5 text-[#C9973A]/55" strokeWidth={2} />
-                </div>
-                <input
-                  type="text"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Street, building, landmark"
-                  className="block w-full pl-[52px] pr-4 h-[58px] bg-brand-white border border-[#e8e0d0] rounded-2xl text-[15px] text-brand-dark shadow-[inset_0_1px_2px_rgba(26,22,18,0.04)] hover:border-[#d6c8a8] focus:border-[#C9973A] focus:shadow-[0_0_0_4px_rgba(201,151,58,0.1),inset_0_1px_2px_rgba(26,22,18,0.02)] outline-none transition-all duration-200 font-medium placeholder:text-[#1a1612]/30"
-                />
-                <label className={floatingLabel}>Address (Optional)</label>
-              </div>
-            </div>
-            {/* Optional refinement nudge — coordinates aren't required, but
-                they let providers price delivery and match more precisely.
-                Without coords, matching falls back to "all providers in
-                this city". */}
-            <div className="flex items-center justify-center gap-2 pt-1">
-              <span className="text-[11px] text-[#1a1612]/45">
-                Want a tighter match?
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setUseGps(true);
-                  if (latitude === undefined) handleUseMyLocation();
-                }}
-                className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#C9973A] hover:underline"
-              >
-                Pin GPS →
-              </button>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
 
-      {/* Section 02 — Privacy */}
-      <div className="flex items-center gap-3 pt-2">
+      {/* Address — always visible, optional. */}
+      <div className="relative w-full">
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-20">
+            <MapPin className="h-5 w-5 text-[#C9973A]/55" strokeWidth={2} />
+          </div>
+          <input
+            type="text"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Street, building, landmark"
+            className="block w-full pl-[52px] pr-4 h-[58px] bg-brand-white border border-[#e8e0d0] rounded-2xl text-[15px] text-brand-dark shadow-[inset_0_1px_2px_rgba(26,22,18,0.04)] hover:border-[#d6c8a8] focus:border-[#C9973A] focus:shadow-[0_0_0_4px_rgba(201,151,58,0.1),inset_0_1px_2px_rgba(26,22,18,0.02)] outline-none transition-all duration-200 font-medium placeholder:text-[#1a1612]/30"
+          />
+          <label className={floatingLabel}>Address (Optional)</label>
+        </div>
+      </div>
+
+      {/* Section 02 — Pin location. Inline GPS picker on the same
+          screen as the manual fields. When `showRadius` is true
+          (inquiry context) we frame this as an optional refinement
+          on top of city-level matching; when false (registration
+          context) we frame it as the primary "exactly where are
+          you?" action and style it more prominently. The radius
+          slider only renders when showRadius is true. */}
+      <div className="flex items-center gap-3 pt-1">
         <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A] shrink-0">
-          Section 02
+          Section 02 · {showRadius ? 'Pin & Reach' : 'Pinpoint Your Location'}
         </p>
         <div className="h-px flex-1 bg-[#e8e4dc]" />
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#1a1612]/50 shrink-0">
-          Privacy
+        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#1a1612]/50 shrink-0">
+          {showRadius ? 'Optional · Sharper match' : 'Recommended · Be findable'}
+        </span>
+      </div>
+
+      {/* GPS pin row — compact, always visible. Click to capture.
+          In registration mode (showRadius=false) the row is taller
+          and the CTA gets the primary gold gradient — capturing the
+          exact pin is the main job, not a refinement. */}
+      <div
+        className={`rounded-2xl border bg-brand-white ${
+          !showRadius && !hasCoords
+            ? 'border-[#C9973A]/30 shadow-[0_0_0_4px_rgba(201,151,58,0.06)] p-6'
+            : 'border-[#e8e0d0] p-5'
+        }`}
+      >
+        <div className="flex items-start gap-4">
+          <div
+            className={`relative w-14 h-14 shrink-0 rounded-2xl flex items-center justify-center ${
+              hasCoords
+                ? 'bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white shadow-md shadow-[#C9973A]/30'
+                : 'bg-[#f1ede5] text-[#C9973A]/55'
+            }`}
+          >
+            {isLocating && (
+              <>
+                <div className="absolute inset-0 border-2 border-[#C9973A]/30 rounded-2xl animate-ping" />
+                <div className="absolute inset-1 border border-[#C9973A]/50 rounded-xl animate-pulse" />
+              </>
+            )}
+            <Navigation className="w-6 h-6 relative" />
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline justify-between gap-3 mb-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A]">
+                {isLocating
+                  ? 'Locking GPS…'
+                  : isResolving
+                    ? 'Resolving…'
+                    : geoError
+                      ? 'GPS Issue'
+                      : hasCoords
+                        ? 'GPS Pinned'
+                        : showRadius
+                          ? 'Pinpoint your location'
+                          : 'Where exactly are you?'}
+              </p>
+              {!isLocating && accuracyMeters !== undefined && (
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-[0.14em] tabular-nums ${
+                    accuracyMeters <= 30
+                      ? 'text-emerald-600'
+                      : accuracyMeters <= 150
+                        ? 'text-[#C9973A]'
+                        : 'text-rose-500'
+                  }`}
+                >
+                  ± {accuracyMeters < 1000
+                    ? `${Math.round(accuracyMeters)}m`
+                    : `${(accuracyMeters / 1000).toFixed(1)}km`}
+                </span>
+              )}
+            </div>
+
+            {hasCoords ? (
+              <p className="text-[14px] font-mono font-bold text-[#1a1612]/80 tabular-nums tracking-tight">
+                {latitude!.toFixed(6)}, {longitude!.toFixed(6)}
+              </p>
+            ) : showRadius ? (
+              <p className="text-[12px] text-[#1a1612]/55 leading-snug">
+                Capture your exact coordinates so providers can price delivery and reach you precisely. Optional — the radius below still works without it.
+              </p>
+            ) : (
+              <p className="text-[12px] text-[#1a1612]/65 leading-snug">
+                Capturing your exact coordinates is how buyers find you on the map. Province and city tell us your area; GPS tells us your <span className="font-bold text-[#1a1612]">exact spot</span>.
+              </p>
+            )}
+
+            {!isLocating && resolvedNote && hasCoords && (
+              <p className="text-[11px] text-emerald-700 mt-1 leading-snug">
+                <Check className="w-3 h-3 inline mr-1" strokeWidth={3} />
+                Auto-filled: {resolvedNote}
+              </p>
+            )}
+
+            {geoError && (
+              <p className="text-[11px] text-rose-500/85 mt-1 leading-snug">
+                <AlertCircle className="w-3 h-3 inline mr-1" />
+                {geoError}
+              </p>
+            )}
+
+            {!isLocating &&
+              !geoError &&
+              accuracyMeters !== undefined &&
+              accuracyMeters > 500 && (
+                <p className="text-[11px] text-rose-500/85 mt-1 leading-snug">
+                  This device has no GPS chip — reading is triangulated from Wi-Fi/IP and isn't precise enough to match nearby providers.
+                </p>
+              )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleUseMyLocation}
+            disabled={isLocating}
+            className={`self-center shrink-0 px-5 h-11 rounded-xl text-[10px] font-bold uppercase tracking-[0.16em] disabled:opacity-50 transition-all flex items-center gap-2 ${
+              !showRadius && !hasCoords
+                ? 'bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white shadow-[0_4px_12px_-4px_rgba(201,151,58,0.5)] hover:from-[#C9973A] hover:to-[#B08432]'
+                : 'bg-[#faf6ee] border border-[#e8e0d0] text-[#1a1612]/75 hover:bg-[#f1ede5]'
+            }`}
+          >
+            <Navigation
+              className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''} ${
+                !showRadius && !hasCoords ? 'text-white' : 'text-[#C9973A]'
+              }`}
+            />
+            {isLocating ? 'Scanning' : hasCoords ? 'Re-scan' : 'Capture My GPS'}
+          </button>
+        </div>
+      </div>
+
+      {/* Radius / outreach slider — always visible. Tells the buyer
+          "how far should this inquiry reach?" in plain language. */}
+      {showRadius && (
+        <div className="rounded-2xl border border-[#f1ede5] bg-[#faf6ee] p-5">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A] mb-1">
+                Outreach Radius
+              </p>
+              <h4 className="text-[14px] font-bold text-[#1a1612] font-sans leading-tight">
+                How far should this inquiry reach?
+              </h4>
+              <p className="text-[11px] text-[#1a1612]/55 mt-1 leading-snug">
+                {hasCoords
+                  ? 'Providers within this radius of your pin will see the inquiry.'
+                  : 'Providers within this radius of your selected city centre will see the inquiry.'}
+              </p>
+            </div>
+            <div className="text-right shrink-0 ml-4">
+              <span className="text-[36px] font-bold text-[#C9973A] tabular-nums font-serif leading-none">
+                {radius}
+              </span>
+              <span className="text-[12px] font-bold text-[#1a1612]/45 ml-1 uppercase tracking-wider">
+                km
+              </span>
+            </div>
+          </div>
+
+          <div className="relative h-9 flex items-center px-1">
+            <div className="absolute left-0 right-0 h-1.5 bg-[#e8e0d0] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-[#C9973A] to-[#D5A547] transition-all duration-300"
+                style={{ width: `${radius}%` }}
+              />
+            </div>
+            <input
+              type="range"
+              min="1"
+              max="100"
+              step="1"
+              value={radius}
+              onChange={(e) => setRadius(parseInt(e.target.value))}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              aria-label="Outreach radius in kilometres"
+            />
+            <div
+              className="absolute w-6 h-6 bg-white border-[3px] border-[#C9973A] rounded-full shadow-md pointer-events-none transition-all duration-300"
+              style={{ left: `calc(${radius}% - 12px)` }}
+            />
+          </div>
+
+          <div className="flex justify-between mt-2 px-1">
+            {[1, 25, 50, 75, 100].map((val) => (
+              <span
+                key={val}
+                className={`text-[9px] font-bold tabular-nums transition-colors ${
+                  Math.abs(radius - val) <= 5
+                    ? 'text-[#C9973A]'
+                    : 'text-[#1a1612]/35'
+                }`}
+              >
+                {val}km
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Section 03 — Privacy */}
+      <div className="flex items-center gap-3 pt-2">
+        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A] shrink-0">
+          Section 03 · Privacy
         </p>
+        <div className="h-px flex-1 bg-[#e8e4dc]" />
       </div>
 
       <div className="flex items-start gap-3 p-3.5 rounded-2xl border border-[#e8e4dc] bg-brand-white">

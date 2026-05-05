@@ -164,7 +164,10 @@ export default function CustomDropdown({
         aria-expanded={isOpen}
         aria-label={placeholder}
       >
-        <span className={`flex-1 text-left ${!selectedOption ? 'text-[#94a3b8]' : ''}`}>
+        <span
+          className={`flex-1 text-left truncate ${!selectedOption ? 'text-[#94a3b8]' : ''}`}
+          title={displayLabel}
+        >
           {displayLabel}
         </span>
         <ChevronDown
