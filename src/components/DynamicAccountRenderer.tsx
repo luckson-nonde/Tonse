@@ -26,6 +26,7 @@ import {
   XCircle,
   Archive,
   ChevronLeft,
+  Store,
 } from 'lucide-react';
 import { INQUIRY_STATUS_SCHEMA } from '../services/buyerAccountSchema';
 import { MasterAccountSchema } from '../services/accountSchemaTypes';
@@ -70,6 +71,7 @@ const ICON_MAP: Record<string, any> = {
   Archive,
   MapPin,
   Calendar,
+  Store,
 };
 
 import LabourHomeView from './labour/LabourHomeView';

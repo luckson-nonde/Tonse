@@ -77,6 +77,9 @@ interface CategorySelectionProps {
   categoryFilter?: (category: Category) => boolean;
   hideSubmitButton?: boolean;
   onSubcategoryViewChange?: (isViewing: boolean) => void;
+  /** When set, skips the parent-category grid and opens directly into the
+   *  specialty step for this parent ID.  Used by the targeted-shop flow. */
+  preselectedParentId?: string;
 }
 
 const getCategoryStyles = (id: string) => {
@@ -505,6 +508,7 @@ export default function CategorySelection({
   categoryFilter,
   hideSubmitButton = false,
   onSubcategoryViewChange,
+  preselectedParentId,
 }: CategorySelectionProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredCategory, setHoveredCategory] = useState<Category | null>(null);
@@ -534,6 +538,19 @@ export default function CategorySelection({
 
   const nextStepRef = useRef<HTMLDivElement>(null);
   const previousSelectionCount = useRef(0);
+  const didAutoExplore = useRef(false);
+
+  // Targeted-shop flow: skip the parent grid and open the specialty step
+  // directly for the preselected parent category.
+  useEffect(() => {
+    if (!preselectedParentId || loading || generalCategories.length === 0 || didAutoExplore.current) return;
+    const parentCat = generalCategories.find((c) => c.id === preselectedParentId);
+    if (parentCat) {
+      didAutoExplore.current = true;
+      handleExplore(parentCat);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preselectedParentId, loading, generalCategories]);
 
   // When the user makes their first selection, intentionally reveal the next step
   // (workflow explainer + continue CTA) with a smooth, deliberate scroll.
@@ -781,10 +798,10 @@ export default function CategorySelection({
               <div className="mb-5 flex items-center justify-between">
                 <button
                   type="button"
-                  onClick={() => setActiveParent(null)}
+                  onClick={() => preselectedParentId ? onBack?.() : setActiveParent(null)}
                   className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[#C9973A] hover:gap-2.5 transition-all"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5" /> Back
+                  <ArrowLeft className="w-3.5 h-3.5" /> {preselectedParentId ? 'Back to shops' : 'Back'}
                 </button>
                 <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#C9973A]/10 text-[#C9973A] font-bold uppercase tracking-[0.14em] text-[10px]">
                   {activeParent.name}
@@ -793,10 +810,10 @@ export default function CategorySelection({
             ) : (
               <div className="mb-8 sm:mb-10">
                 <button
-                  onClick={() => setActiveParent(null)}
+                  onClick={() => preselectedParentId ? onBack?.() : setActiveParent(null)}
                   className="flex items-center gap-2 text-slate-400 font-bold text-sm mb-5 hover:text-[#C9973A] transition-colors"
                 >
-                  <ArrowLeft className="w-4 h-4" /> Back to categories
+                  <ArrowLeft className="w-4 h-4" /> {preselectedParentId ? 'Back to shops' : 'Back to categories'}
                 </button>
                 <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#C9973A] mb-3">
                   {activeParent.name} <span className="text-slate-300 mx-1">·</span> Step 02 / Specialty
@@ -970,10 +987,10 @@ export default function CategorySelection({
             {!hideSubmitButton && (
               <div className="mt-10 sm:mt-12 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 sm:gap-4">
                 <button
-                  onClick={() => setActiveParent(null)}
+                  onClick={() => preselectedParentId ? onBack?.() : setActiveParent(null)}
                   className="px-8 sm:px-10 py-3.5 sm:py-4 bg-white text-slate-600 rounded-full font-bold uppercase tracking-widest text-[11px] hover:bg-slate-50 hover:border-slate-300 hover:text-[#1a1a2e] transition-all border border-slate-200"
                 >
-                  Change Industry
+                  {preselectedParentId ? 'Back to shops' : 'Change Industry'}
                 </button>
                 <button
                   onClick={handleCompleteFinal}
@@ -1047,6 +1064,16 @@ export default function CategorySelection({
                 ))}
               </div>
             )}
+          </div>
+        ) : preselectedParentId ? (
+          // Targeted-shop flow: skip the parent grid entirely while waiting for
+          // handleExplore to fire. Shows the same spinner the specialty view uses
+          // so the transition feels like a single continuous load, not a missed step.
+          <div className={`flex flex-col items-center justify-center gap-4 ${hideHeader ? 'py-12' : 'py-24'}`}>
+            <Loader2 className="w-8 h-8 animate-spin text-[#C9973A]" />
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Loading specialties
+            </p>
           </div>
         ) : (
           <div className={`flex flex-col ${hideHeader ? 'gap-5' : 'gap-10 sm:gap-12 lg:gap-16'}`}>

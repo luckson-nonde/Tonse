@@ -129,11 +129,16 @@ export default function DynamicDataDisplay({ schema, attributes }: DynamicDataDi
       )}
 
       {Object.entries(groupedData).map(([groupName, items]) => (
-        <div key={groupName} className="space-y-8">
-          <h4 className="text-[13px] font-black text-[#d49b35] uppercase tracking-[0.25em] border-b-2 border-[#d49b35]/10 pb-4 mb-8">
+        <div key={groupName} className="space-y-7 pt-4">
+          {/* Group header sits in slate-700 with a thin slate rule —
+              the earlier gold treatment competed with the category
+              pill and the total amount for the eye. Premium uses one
+              accent at a time. */}
+          <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-[0.28em] flex items-center gap-3 pb-3 border-b border-slate-200">
+            <span className="block w-6 h-px bg-slate-300" />
             {groupName}
           </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-9">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-8">
             {items.map((item, idx) => (
               <div
                 key={`grouped-${groupName}-${item.label}-${idx}`}
@@ -142,7 +147,7 @@ export default function DynamicDataDisplay({ schema, attributes }: DynamicDataDi
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5">
                   {item.label}
                 </span>
-                <div className="text-[16px] font-black text-slate-900 leading-tight">
+                <div className="text-[15px] font-black text-slate-900 leading-tight">
                   {renderValue(item)}
                 </div>
               </div>
