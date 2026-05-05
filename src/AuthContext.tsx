@@ -30,6 +30,12 @@ export interface User {
   email: string;
   phone?: string;
   nrc?: string;
+  /** Backend column name — flattenWithProfile spreads nrcNumber from the User entity */
+  nrcNumber?: string;
+  /** Backend column name for profile picture URL */
+  profilePicture?: string;
+  /** Backend column name for date of birth */
+  dateOfBirth?: string;
   tpin?: string;
   incorporationCertUrl?: string;
   location?: string;

@@ -68,7 +68,12 @@ export default function BuyerProfilePage() {
   const handleSaveChanges = async (data: Record<string, any>) => {
     setIsSaving(true);
     try {
-      await updateUser(data);
+      const { logo, dob: _dob, ownerName, gps, ...rest } = data;
+      const payload: Record<string, any> = { ...rest };
+      if (logo !== undefined) payload.profilePicture = logo;
+      if (ownerName !== undefined) payload.name = ownerName;
+      if (gps?.latitude != null) { payload.latitude = gps.latitude; payload.longitude = gps.longitude; }
+      await updateUser(payload);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
       setIsEditModalOpen(false);
@@ -504,7 +509,16 @@ export default function BuyerProfilePage() {
               <div className="p-8 overflow-y-auto flex-1 custom-scrollbar">
                 <DynamicProfileForm
                   schema={{ sections: schema.sections.filter((s) => s.type === 'fields') }}
-                  initialData={user || {}}
+                  initialData={user ? {
+                    ...user,
+                    logo: user.profilePicture ?? user.logo,
+                    nrc: user.nrcNumber ?? user.nrc,
+                    dob: user.dateOfBirth,
+                    ownerName: user.name,
+                    gps: user.latitude != null && user.longitude != null
+                      ? { latitude: user.latitude, longitude: user.longitude }
+                      : undefined,
+                  } : {}}
                   onSubmit={handleSaveChanges}
                   isSubmitting={isSaving}
                 />

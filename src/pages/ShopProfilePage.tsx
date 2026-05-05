@@ -39,14 +39,16 @@ export default function ShopProfilePage() {
     if (!user) return {};
     return {
       ...user,
+      // Map backend column names → form field names
+      logo: user.profilePicture ?? user.logo,
+      nrc: user.nrcNumber ?? user.nrc,
+      dob: user.dateOfBirth,
+      ownerName: user.name,
       storePhotoFront: user.storePhotos?.front || '',
       storePhotoInterior: user.storePhotos?.interior || '',
       gps:
-        user.latitude && user.longitude
-          ? {
-              latitude: user.latitude,
-              longitude: user.longitude,
-            }
+        user.latitude != null && user.longitude != null
+          ? { latitude: user.latitude, longitude: user.longitude }
           : undefined,
     };
   }, [user]);
@@ -57,13 +59,17 @@ export default function ShopProfilePage() {
     setSaveSuccess(false);
 
     try {
-      const updates = { ...data };
+      const { logo, dob: _dob, ownerName, gps, ...rest } = data;
+      const updates: Record<string, any> = { ...rest };
+
+      // Reverse-map form field names → backend DTO field names
+      if (logo !== undefined) updates.profilePicture = logo;
+      if (ownerName !== undefined) updates.name = ownerName;
 
       // Handle GPS data
-      if (data.gps) {
-        updates.latitude = data.gps.latitude;
-        updates.longitude = data.gps.longitude;
-        delete updates.gps;
+      if (gps?.latitude != null) {
+        updates.latitude = gps.latitude;
+        updates.longitude = gps.longitude;
       }
 
       // Handle Store Photos mapping
@@ -89,7 +95,7 @@ export default function ShopProfilePage() {
 
         const shopUpdates = {
           name: updates.name || user.name,
-          logo: updates.logo || user.logo,
+          logo: logo || user.logo,
           coverImage: updates.coverImage || user.coverImage,
           location: updates.location || user.location,
           latitude: updates.latitude || user.latitude,
