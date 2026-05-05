@@ -330,16 +330,24 @@ export default function DashboardLayout({
       if (item.roleFilter && !item.roleFilter.includes(user.role)) return false;
       if (item.excludeRoles && item.excludeRoles.includes(user.role)) return false;
 
-      if (item.categoryFilter && user.categories) {
+      if (item.categoryFilter) {
+        const displayNames: string[] = user.categories ?? [];
+        // Sellers don't have user.categories — fall back to categoryIds
+        // (e.g. ['event-venues']) by normalising dashes → spaces so the
+        // filter string 'event venues' still matches 'event-venues'.
+        const categoryIds: string[] = (user as any).categoryIds ?? [];
+        const idNormalised = categoryIds.map((id: string) => id.replace(/-/g, ' ').toLowerCase());
+        const allNames = [...displayNames.map((c: string) => c.toLowerCase()), ...idNormalised];
+
         if (typeof item.categoryFilter === 'function') {
-          if (!item.categoryFilter(user.role, user.categories)) return false;
-        } else {
-          const userCategoriesLower = user.categories.map((c: string) => c.toLowerCase());
+          if (!item.categoryFilter(user.role, displayNames.length ? displayNames : idNormalised)) return false;
+        } else if (allNames.length > 0) {
           const hasMatchingCategory = item.categoryFilter.some((filterCat) =>
-            userCategoriesLower.some((userCat: string) => userCat.includes(filterCat.toLowerCase()))
+            allNames.some((userCat: string) => userCat.includes(filterCat.toLowerCase()))
           );
           if (!hasMatchingCategory) return false;
         }
+        // If allNames is empty (no categories at all), skip filter and show the item
       }
 
       // BusinessType-based filtering — lets a schema item declare "only show

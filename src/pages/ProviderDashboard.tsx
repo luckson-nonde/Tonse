@@ -80,8 +80,14 @@ const renderSpecifications = (
   const schema = getCategorySchema(category);
 
   return (
-    <div className="space-y-6">
-      <h5 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.25em] border-b border-slate-100 pb-3 mb-4">
+    <div className="space-y-7">
+      {/* Section header in confident slate-700 with strong tracking.
+          Earlier slate-400 read as faded — section titles need to feel
+          present, not whispered. Single shared treatment across all
+          spec blocks (Inquiry / Event / Repair) so the eye recognises
+          the rhythm. */}
+      <h5 className="text-[11px] font-black text-slate-700 uppercase tracking-[0.28em] flex items-center gap-3">
+        <span className="block w-6 h-px bg-slate-300" />
         {title}
       </h5>
       <DynamicDataDisplay schema={schema} attributes={parsedData} />
@@ -127,6 +133,7 @@ export default function ProviderDashboard() {
   }, [user, activeContext]);
 
   const effectiveProviderId = user?.parentProviderId || user?.id;
+  const [quotesRefreshKey, setQuotesRefreshKey] = useState(0);
 
   // RBAC Redirect Logic — Phase 2 dropped PROVIDER_STAFF from the role enum;
   // staff users (if reintroduced later) would be a SELLER subRole, not a
@@ -148,7 +155,8 @@ export default function ProviderDashboard() {
   // Bookings".
   const isBookingBased =
     getEffectiveBusinessTypes(user as any, activeContext).includes('EVENTS') ||
-    getEffectiveBusinessTypes(user as any, activeContext).includes('ENTERTAINMENT');
+    getEffectiveBusinessTypes(user as any, activeContext).includes('ENTERTAINMENT') ||
+    getEffectiveBusinessTypes(user as any, activeContext).includes('BOOKING');
 
   const isServiceOrEvent = (inquiry: Inquiry) => {
     return (
@@ -216,7 +224,7 @@ export default function ProviderDashboard() {
         })
       );
       return enrichedQuotes;
-    }, [effectiveProviderId]) || [];
+    }, [effectiveProviderId, quotesRefreshKey]) || [];
 
   const schedules =
     useLiveQuery(async () => {
@@ -261,7 +269,7 @@ export default function ProviderDashboard() {
       });
 
       return last7Days;
-    }, [user, myQuotes]) || [];
+    }, [user, myQuotes, quotesRefreshKey]) || [];
 
   // Phase: matching — leads come from the server-side category-aware
   // endpoint. The backend resolves the active profile, expands the
@@ -624,6 +632,7 @@ export default function ProviderDashboard() {
       };
 
       const quoteId = await db.quotes.add(newQuote);
+      setQuotesRefreshKey(k => k + 1);
       console.log('[Quote] saved with id:', quoteId);
 
       // Inquiry status transition to QUOTED happens server-side now —

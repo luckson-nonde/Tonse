@@ -522,19 +522,17 @@ export class UsersService {
   }
 
   /**
-   * Read the archetype set the active profile serves. Multi-archetype
-   * sellers (e.g. mobile-phones-buy + mobile-phones-repair) get
-   * multiple rows here; single-archetype sellers get one.
+   * Read the archetype set the active profile serves by re-resolving
+   * from the category junction. This always reflects the current
+   * archetype values on the categories table (updated by the seeder on
+   * every boot), so a seeder change (e.g. re-classifying event-venues
+   * from BOOKING → EVENTS) takes effect for all existing users on the
+   * next login without a separate migration.
    */
   async loadActiveProfileArchetypes(user: User): Promise<Archetype[]> {
-    if (!user?.activeProfileId || !user?.activeProfileType) return [];
-    const junction = this.archetypeJunctionFor(user.activeProfileType);
-    if (!junction) return [];
-    const rows = await junction.repo.find({
-      where: { [junction.profileColumn]: user.activeProfileId } as any,
-      select: ['archetype'] as any,
-    });
-    return rows.map((r: any) => r.archetype as Archetype);
+    const categoryIds = await this.loadActiveProfileCategoryIds(user);
+    if (categoryIds.length === 0) return [];
+    return this.archetypeResolver.resolve(categoryIds);
   }
 
   // ===== BACKWARD COMPATIBILITY METHODS (kept for existing code) =====

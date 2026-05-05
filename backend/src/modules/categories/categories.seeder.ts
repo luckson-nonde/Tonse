@@ -80,7 +80,11 @@ function deriveArchetype(
   // Keep this list tight — the cleaner path is renaming the sub.
   const lower = entry.name.toLowerCase();
   if (/\brental\b/.test(lower)) return 'RENTAL';
-  if (/\bvenue\b|\bhall\b|\bspace\b/.test(lower) && parentArchetype === 'EVENTS') return 'BOOKING';
+  // Venue-named subcategories of EVENTS remain EVENTS — the events
+  // dashboard (not the appointment-slot BOOKING dashboard) is correct
+  // for event hall / venue providers. BOOKING is reserved for
+  // appointment-based businesses (hotels, salons, clinics) that live
+  // under their own parent category.
   if (/\bdj\b|\bband\b|\bperformer\b|\bmc\b|\bmusician\b/.test(lower)) return 'ENTERTAINMENT';
 
   return parentArchetype || 'RETAIL';
