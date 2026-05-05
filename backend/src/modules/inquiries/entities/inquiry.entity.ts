@@ -98,6 +98,26 @@ export class Inquiry {
   @Column({ type: 'integer', default: 0 })
   viewCount: number;
 
+  /**
+   * How many quotes the buyer wants to receive before the slot is full.
+   * EXPRESS defaults to 1 (first-quote-wins style); STANDARD to 3
+   * (room to compare). Once `quotes.length >= maxQuotes`, providers
+   * who haven't yet quoted see the lead marked as full and the front-
+   * end stops alerting them.
+   */
+  @Column({ type: 'integer', default: 3 })
+  maxQuotes: number;
+
+  /**
+   * Hard deadline by which providers must respond. Defaults set on
+   * create:  EXPRESS = createdAt + 1h, STANDARD = createdAt + 24h.
+   * Past this point the lead is "expired" client-side; the matching
+   * service still returns it (no auto-close cron yet) but the UI
+   * suppresses alerts and shows "Response window closed".
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  responseDeadlineAt: Date;
+
   @Column({ type: 'simple-array', default: '' })
   archivedBy: string[];
 

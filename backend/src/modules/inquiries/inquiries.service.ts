@@ -28,7 +28,22 @@ export class InquiriesService {
       const inquiryRepo = manager.getRepository(Inquiry);
       const junctionRepo = manager.getRepository(InquiryCategory);
 
-      const inquiry = inquiryRepo.create(rest);
+      // Default the response window + slot count if the buyer didn't
+      // pick. EXPRESS = 1h / 1 quote (first-quote-wins); STANDARD = 24h
+      // / 3 quotes (compare-then-pick). Both fields are user-overridable
+      // via the DTO when we expose the controls in the inquiry form.
+      const isExpress = rest.processType === 'EXPRESS';
+      const defaults: Partial<Inquiry> = {};
+      if (rest.maxQuotes == null) {
+        defaults.maxQuotes = isExpress ? 1 : 3;
+      }
+      if (rest.responseDeadlineAt == null) {
+        const now = Date.now();
+        const windowMs = isExpress ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+        defaults.responseDeadlineAt = new Date(now + windowMs);
+      }
+
+      const inquiry = inquiryRepo.create({ ...defaults, ...rest });
       let saved = await inquiryRepo.save(inquiry);
       saved.displayId = DisplayIdUtil.generateDisplayId(saved.id);
       saved = await inquiryRepo.save(saved);

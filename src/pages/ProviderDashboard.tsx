@@ -63,6 +63,8 @@ import Button from '../components/Button';
 import ConfirmModal from '../components/ConfirmModal';
 import ProviderHomeView from '../components/provider/ProviderHomeView';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
+import IncomingLeadAlert from '../components/IncomingLeadAlert';
+import type { InquiryResponse } from '../services/api/inquiryService';
 import { robustParse } from '../utils/jsonUtils';
 import { resolveSchemaForUser } from '../services/mergeAccountSchemas';
 
@@ -331,11 +333,40 @@ export default function ProviderDashboard() {
   React.useEffect(() => {
     setSelectedVariant(initialVariant);
   }, [initialVariant]);
+  // Queue of new leads waiting to be alerted on. The hook reports
+  // every freshly-arrived lead via onNewLeads; we surface them one at
+  // a time so the provider isn't drowned by a stack of full-screen
+  // overlays. A small Set of dismissed-this-session ids prevents the
+  // same lead from re-alerting on toggle / variant change.
+  const [alertQueue, setAlertQueue] = useState<InquiryResponse[]>([]);
+  const dismissedAlertIdsRef = React.useRef<Set<string>>(new Set());
+  const handleNewLeads = useCallback((fresh: InquiryResponse[]) => {
+    setAlertQueue((prev) => {
+      const have = new Set([...prev.map((p) => String(p.id)), ...dismissedAlertIdsRef.current]);
+      const adds = fresh.filter((f: any) => f.id && !have.has(String(f.id)));
+      return adds.length > 0 ? [...prev, ...adds] : prev;
+    });
+  }, []);
   const { inquiries: matchedLeads } = useMatchedLeads(
     user?.id,
     undefined,
     selectedVariant,
+    handleNewLeads,
   );
+  const currentAlertLead = alertQueue[0] ?? null;
+  const dismissAlert = useCallback(() => {
+    setAlertQueue((prev) => {
+      if (prev.length === 0) return prev;
+      const [head, ...rest] = prev;
+      if (head?.id) dismissedAlertIdsRef.current.add(String(head.id));
+      return rest;
+    });
+  }, []);
+  const acceptAlert = useCallback((lead: InquiryResponse) => {
+    if (lead?.id) dismissedAlertIdsRef.current.add(String(lead.id));
+    setAlertQueue((prev) => prev.slice(1));
+    handleTabClick('leads');
+  }, []);
   const allLeads = React.useMemo(
     () =>
       [...matchedLeads].sort(
@@ -1074,6 +1105,15 @@ export default function ProviderDashboard() {
           user={user}
         />
       )}
+
+      {/* Incoming-lead alert — uber-driver-style overlay. Fires when
+          useMatchedLeads detects a new id in its poll. Fully blocks the
+          UI until the provider taps Quote Now or Later. */}
+      <IncomingLeadAlert
+        lead={currentAlertLead}
+        onAccept={acceptAlert}
+        onDismiss={dismissAlert}
+      />
 
       <AnimatePresence>
         {/* QR Scanner Modal */}

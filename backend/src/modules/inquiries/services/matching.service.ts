@@ -191,6 +191,25 @@ export class MatchingService {
         row.category = (nameIndex.get(row.id) || []).join(', ');
       }
 
+      // Per-inquiry quote count — drives the "X / Y slots remaining"
+      // indicator on the lead card and stops the new-lead alert from
+      // firing once the slot is full. Single batched COUNT(*).
+      const quoteRows: Array<{ inquiryId: string; count: string }> =
+        await this.inquiryRepository.query(
+          `SELECT "inquiryId", COUNT(*)::int AS count
+             FROM quotes
+             WHERE "inquiryId" = ANY($1::uuid[])
+             GROUP BY "inquiryId"`,
+          [inquiryIds],
+        );
+      const quoteCountByInquiry = new Map<string, number>();
+      for (const qr of quoteRows) {
+        quoteCountByInquiry.set(qr.inquiryId, Number(qr.count));
+      }
+      for (const row of rows as any[]) {
+        row.quoteCount = quoteCountByInquiry.get(row.id) ?? 0;
+      }
+
       // Buyer name for the lead — resolved from buyer_profiles
       // (the users row has no name column in this schema). Without
       // this, the seller's lead detail panel renders "Unknown Buyer"

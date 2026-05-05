@@ -1,5 +1,5 @@
-import React from 'react';
-import { MapPin, Clock, CheckCircle2, Eye } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { MapPin, Clock, CheckCircle2, Eye, Users } from 'lucide-react';
 import Button from './Button';
 import { ARCHETYPE_CONFIG } from '../services/archetypeConfig';
 import { getCategorySchema } from '../services/categories';
@@ -143,10 +143,26 @@ export default function InquiryCard({
           })()}
         </h3>
 
-        <div className="flex items-center text-slate-500 text-sm font-sans mb-6">
+        <div className="flex items-center text-slate-500 text-sm font-sans mb-3">
           <MapPin className="w-4 h-4 mr-1" />
           Lusaka, Lusaka
         </div>
+
+        {/* Slot + countdown strip — providers only need to see this on
+            OPEN leads (the ones they can still quote on). Updates once
+            per second so the time-remaining ticks live; slot count
+            ticks each /inquiries/leads/me poll (every 8s) as peers
+            quote on the same inquiry. */}
+        {state === 'open' && (inquiry.maxQuotes || inquiry.responseDeadlineAt) && (
+          <UrgencyStrip
+            maxQuotes={inquiry.maxQuotes}
+            quoteCount={inquiry.quoteCount}
+            responseDeadlineAt={inquiry.responseDeadlineAt}
+          />
+        )}
+        {!(state === 'open' && (inquiry.maxQuotes || inquiry.responseDeadlineAt)) && (
+          <div className="mb-3" />
+        )}
 
         <div className="flex items-center gap-2 mb-4">
           <div className="w-1.5 h-1.5 rounded-full bg-[#d49b35]"></div>
@@ -264,6 +280,85 @@ export default function InquiryCard({
           {state === 'paid' && 'View Receipt'}
         </Button>
       </div>
+    </div>
+  );
+}
+
+interface UrgencyStripProps {
+  maxQuotes?: number;
+  quoteCount?: number;
+  responseDeadlineAt?: string;
+}
+
+/**
+ * Compact "X / Y slots · Closes in 12m" strip on open leads. Two
+ * tone-colored chips so the provider can read urgency at a glance:
+ *   slots full   → rose
+ *   < 3 slots    → amber
+ *   plenty left  → slate
+ *   deadline <30m→ amber pulse
+ *   deadline past→ rose
+ */
+function UrgencyStrip({ maxQuotes, quoteCount, responseDeadlineAt }: UrgencyStripProps) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!responseDeadlineAt) return;
+    const id = window.setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [responseDeadlineAt]);
+
+  const taken = quoteCount ?? 0;
+  const total = maxQuotes ?? 0;
+  const remaining = Math.max(0, total - taken);
+  const slotsFull = total > 0 && remaining === 0;
+  const slotsLow = total > 0 && remaining > 0 && remaining <= 2;
+
+  let deadlineLabel = '';
+  let deadlineUrgent = false;
+  let deadlineExpired = false;
+  if (responseDeadlineAt) {
+    const ms = new Date(responseDeadlineAt).getTime() - Date.now();
+    if (ms <= 0) {
+      deadlineLabel = 'Closed';
+      deadlineExpired = true;
+    } else {
+      const totalSec = Math.floor(ms / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      deadlineLabel =
+        h > 0 ? `${h}h ${m}m`
+        : m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s`
+        : `${s}s`;
+      deadlineUrgent = ms < 30 * 60 * 1000;
+    }
+  }
+
+  const slotClass = slotsFull
+    ? 'bg-rose-50 text-rose-600 border border-rose-200'
+    : slotsLow
+      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+      : 'bg-slate-50 text-slate-600 border border-slate-200';
+  const deadlineClass = deadlineExpired
+    ? 'bg-rose-50 text-rose-600 border border-rose-200'
+    : deadlineUrgent
+      ? 'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse'
+      : 'bg-slate-50 text-slate-600 border border-slate-200';
+
+  return (
+    <div className="flex items-center gap-2 mb-4">
+      {total > 0 && (
+        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${slotClass}`}>
+          <Users className="w-3 h-3" />
+          {slotsFull ? 'Slots full' : `${remaining} / ${total} slots`}
+        </div>
+      )}
+      {deadlineLabel && (
+        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${deadlineClass}`}>
+          <Clock className="w-3 h-3" />
+          {deadlineExpired ? 'Closed' : `Respond in ${deadlineLabel}`}
+        </div>
+      )}
     </div>
   );
 }

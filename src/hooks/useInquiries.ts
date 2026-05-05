@@ -3,7 +3,7 @@
  * Replaces IndexedDB queries with API calls
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   fetchUserInquiries,
   fetchOpenInquiries,
@@ -93,12 +93,16 @@ export function useMatchedLeads(
   userId?: string,
   refetch?: boolean,
   variant?: string,
+  onNewLeads?: (newLeads: InquiryResponse[]) => void,
 ) {
   const [inquiries, setInquiries] = useState<InquiryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refetchTrigger, setRefetchTrigger] = useState(0);
   const refresh = () => setRefetchTrigger((prev) => prev + 1);
+  const seenIdsRef = useRef<Set<string> | null>(null);
+  const onNewLeadsRef = useRef(onNewLeads);
+  useEffect(() => { onNewLeadsRef.current = onNewLeads; }, [onNewLeads]);
 
   useEffect(() => {
     if (!userId) {
@@ -112,6 +116,26 @@ export function useMatchedLeads(
         setError(null);
         const data = await fetchLeadsForMe(variant ? { variant } : undefined);
         setInquiries(data);
+
+        // New-lead detection. The first poll after mount establishes a
+        // baseline (no alert — these are pre-existing leads); subsequent
+        // polls compare against it and fire onNewLeads for any id not
+        // in the baseline. Lets the consumer pop a loud alert without
+        // bothering the provider with stale leads on every page load.
+        const ids = new Set(
+          data.map((d: any) => String(d.id)).filter(Boolean),
+        );
+        if (seenIdsRef.current === null) {
+          seenIdsRef.current = ids;
+        } else {
+          const fresh = data.filter(
+            (d: any) => d.id && !seenIdsRef.current!.has(String(d.id)),
+          );
+          if (fresh.length > 0 && onNewLeadsRef.current) {
+            onNewLeadsRef.current(fresh);
+          }
+          seenIdsRef.current = ids;
+        }
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to fetch matched leads'));
         setInquiries([]);
@@ -120,9 +144,11 @@ export function useMatchedLeads(
       }
     };
     loadLeads();
-    // Poll every 30 seconds so providers see new matched inquiries
-    // without manually refreshing.
-    const interval = setInterval(loadLeads, 30000);
+    // Poll every 8 seconds — fast enough that a provider hears the
+    // alert "live" while the buyer is still on the new-inquiry success
+    // screen, slow enough not to hammer the API for leads that almost
+    // never change minute-to-minute.
+    const interval = setInterval(loadLeads, 8000);
     return () => clearInterval(interval);
   }, [userId, refetch, refetchTrigger, variant]);
 

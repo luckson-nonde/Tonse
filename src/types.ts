@@ -139,6 +139,9 @@ export interface Inquiry {
   labourGroup?: string;
   labourSubType?: string;
   targetedProviderId?: string; // ID of the specific provider if it's a direct inquiry
+  maxQuotes?: number; // Buyer's quote-slot budget (default 1 EXPRESS / 3 STANDARD)
+  responseDeadlineAt?: string; // ISO timestamp — alerts stop firing past this
+  quoteCount?: number; // Quotes already submitted; drives slot-depletion UI
 }
 
 export interface Quote {

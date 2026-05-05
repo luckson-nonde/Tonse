@@ -76,6 +76,13 @@ export interface InquiryResponse {
   /** When set, only this provider may see / quote this inquiry
    *  (broadcast vs targeted distinction). */
   targetedProviderId?: string;
+  /** Number of quotes the buyer wants. Drives slots-remaining UI. */
+  maxQuotes?: number;
+  /** Hard deadline for providers to respond. ISO timestamp. */
+  responseDeadlineAt?: string;
+  /** Quotes already submitted on this inquiry. Drives slot-depletion
+   *  indicator. Hydrated by the matching service. */
+  quoteCount?: number;
 }
 
 /**

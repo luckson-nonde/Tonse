@@ -8,10 +8,14 @@ import {
   IsBoolean,
   IsEnum,
   IsArray,
+  IsDate,
   ArrayNotEmpty,
+  Min,
+  Max,
   MinLength,
   MaxLength,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateInquiryDto {
   @IsString()
@@ -120,4 +124,25 @@ export class CreateInquiryDto {
   @IsString()
   @MaxLength(255)
   targetedProviderId?: string;
+
+  /**
+   * Number of quotes the buyer wants. Drives the "X / Y slots remaining"
+   * indicator providers see. Defaults applied server-side: EXPRESS=1,
+   * STANDARD=3.
+   */
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(20)
+  maxQuotes?: number;
+
+  /**
+   * Hard response window. Defaults set server-side: EXPRESS=createdAt+1h,
+   * STANDARD=createdAt+24h. Past this point providers see the lead as
+   * "closed" and alerts stop firing.
+   */
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  responseDeadlineAt?: Date;
 }
