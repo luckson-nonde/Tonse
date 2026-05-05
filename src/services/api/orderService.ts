@@ -2,6 +2,7 @@ import { apiClient } from './client';
 
 export interface CreateOrderPayload {
   quoteId: string;
+  buyerId: string;
   sellerId: string;
   totalAmount: number;
   notes?: string;

@@ -250,6 +250,7 @@ export default function BuyerDashboard() {
             quoteId: String(quote.id),
             sellerId: String(quote.providerId),
             totalAmount: quote.price,
+            buyerId: user!.id,
           });
           refreshQuotes();
           refreshInquiries();
