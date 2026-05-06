@@ -200,14 +200,25 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
   const config = PREFERENCES_CONFIG[categoryType] || PREFERENCES_CONFIG.PRODUCTS;
 
   // In targeted mode the first section is replaced with a two-option scope picker.
+  // Wording adapts to what the buyer is actually targeting — "Shop"
+  // reads wrong when the target is a venue, service provider, or labour
+  // worker. (Spotted on the screenshot: "This Shop Only" appearing
+  // when sending direct to an event venue.)
+  const targetNoun =
+    categoryType === 'VENUES'   ? 'Venue'
+    : categoryType === 'SERVICES' ? 'Provider'
+    : categoryType === 'LABOR'    ? 'Worker'
+    : 'Shop';
+  const PrimaryIcon = categoryType === 'VENUES' ? Building2 : Store;
+
   const section1 = isTargeted
     ? {
         title: 'Delivery Scope',
         description: `Send to ${targetedShop!.name} only, or broadcast to all its branch locations.`,
-        icon: Store,
+        icon: PrimaryIcon,
         options: [
-          { id: 'this_shop', label: 'This Shop Only',       icon: Store     },
-          { id: 'chain',     label: 'This & All Branches',  icon: Building2 },
+          { id: 'this_shop', label: `This ${targetNoun} Only`,       icon: PrimaryIcon },
+          { id: 'chain',     label: 'This & All Branches',           icon: Building2   },
         ],
       }
     : config.section1;
@@ -479,7 +490,7 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
                     <div>
                       <p className="text-[13px] font-bold text-[#1a1a2e]">1 quote expected</p>
                       <p className="text-[11px] text-[#94a3b8] font-medium mt-0.5">
-                        You're sending directly to one shop — one quote is all you need.
+                        You're sending directly to one {targetNoun.toLowerCase()} — one quote is all you need.
                       </p>
                     </div>
                     <div className="text-right shrink-0">
