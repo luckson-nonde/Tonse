@@ -15,6 +15,7 @@ export default defineConfig(({mode}) => {
     ],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      'process.env.LENCO_API_KEY': JSON.stringify(env.LENCO_API_KEY),
       'global': 'window.global',
       'globalThis': 'window.global',
       'self': 'window.global',

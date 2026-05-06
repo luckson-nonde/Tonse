@@ -4,7 +4,13 @@
  */
 
 const LENCO_API_BASE_URL = 'https://api.lenco.co/access/v2';
-const LENCO_API_KEY = 'xo+CAiijrIy9XvZCYyhjrv0fpSAL6CfU8CgA+up1NXqK'; // Provided as example
+// Pull from env so the live key isn't checked into git. Falls back to
+// the original example token (which Lenco has since revoked → 401), so
+// payment calls fail loudly with a clear "Mobile money is not yet
+// configured" message rather than a generic Unauthorized.
+const LENCO_API_KEY: string =
+  (typeof process !== 'undefined' && (process as any).env?.LENCO_API_KEY) ||
+  'xo+CAiijrIy9XvZCYyhjrv0fpSAL6CfU8CgA+up1NXqK';
 
 export interface LencoCollection {
   id: string;
@@ -165,6 +171,11 @@ export const lencoService = {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(
+            'Mobile money payments are not configured. Set LENCO_API_KEY in your .env.local and restart the dev server, or pay with Wallet.'
+          );
+        }
         throw new Error(errorData.message || `Mobile money collection failed: ${response.status}`);
       }
 
