@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { lencoService } from '../services/api/lencoService';
 import { createOrder } from '../services/api/orderService';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -141,23 +140,22 @@ function PaymentModal({
           status: 'COMPLETED',
         });
       } else if (payMethod === 'mobile') {
-        // Real Lenco mobile-money collection — same call FinancialPage
-        // uses for top-ups. Settles asynchronously via webhook.
-        await lencoService.initiateMobileMoneyCollection({
-          amount: total,
-          phone,
-          operator: mobileNetwork,
-          reference,
-        });
+        // SIMULATED mobile-money collection — the real Lenco call is
+        // deferred until production keys are wired. We mimic the USSD
+        // round-trip with a short delay so the modal's "Processing"
+        // state feels real, then drop a COMPLETED ledger row (rather
+        // than PENDING) so the wallet balance + Order History reflect
+        // the payment immediately.
+        await new Promise((resolve) => setTimeout(resolve, 2000));
         await db.transactions.add({
           userId: user.id as any,
           type: 'OUT',
           amount: total,
-          description: `Payment to ${quote.providerName} via ${selectedNetwork?.label ?? 'Mobile Money'}`,
+          description: `Payment to ${quote.providerName} via ${selectedNetwork?.label ?? 'Mobile Money'} (simulated)`,
           category: 'PAYMENT',
           quoteId: quote.id as any,
           createdAt: Date.now(),
-          status: 'PENDING',
+          status: 'COMPLETED',
         });
       }
 
