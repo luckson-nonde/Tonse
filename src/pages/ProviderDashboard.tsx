@@ -64,7 +64,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import ProviderHomeView from '../components/provider/ProviderHomeView';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
 import IncomingLeadAlert from '../components/IncomingLeadAlert';
-import type { InquiryResponse } from '../services/api/inquiryService';
+import { recordInquiryView, type InquiryResponse } from '../services/api/inquiryService';
 import { robustParse } from '../utils/jsonUtils';
 import { resolveSchemaForUser } from '../services/mergeAccountSchemas';
 
@@ -363,7 +363,14 @@ export default function ProviderDashboard() {
     });
   }, []);
   const acceptAlert = useCallback((lead: InquiryResponse) => {
-    if (lead?.id) dismissedAlertIdsRef.current.add(String(lead.id));
+    if (lead?.id) {
+      dismissedAlertIdsRef.current.add(String(lead.id));
+      // Tapping "Quote Now" counts as the provider viewing the lead.
+      // Backend dedups: BUYER/ADMIN/owner hits don't count, providers
+      // opening their own dashboard alert do. Best-effort, fire-and-
+      // forget — failure must not block the navigation.
+      recordInquiryView(lead.id).catch(() => {});
+    }
     setAlertQueue((prev) => prev.slice(1));
     handleTabClick('leads');
   }, []);

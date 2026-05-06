@@ -634,11 +634,7 @@ export default function BuyerDashboard() {
       case 'location-details':
         return (
           <LocationDetails
-            onBack={() =>
-              pendingInquiry.processType === 'EXPRESS'
-                ? handleTabChange('create-inquiry')
-                : handleTabChange('inquiry-preferences')
-            }
+            onBack={() => handleTabChange('inquiry-preferences')}
             onComplete={handleLocationComplete}
           />
         );
