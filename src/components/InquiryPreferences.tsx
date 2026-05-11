@@ -31,6 +31,11 @@ interface InquiryPreferencesProps {
   /** When set, the form is in targeted-shop mode: "Target Destination" is replaced
    *  with a two-option "Delivery Scope" (this shop only vs. all branches). */
   targetedShop?: { id: string; sellerId: string; name: string; categoryIds?: string[] };
+  /** Optional category id (e.g. 'event-equipment-rental'). When present and a
+   *  matching override exists in PREFERENCES_OVERRIDES, the per-category
+   *  labels/options replace the archetype defaults. Falls back to the
+   *  archetype config when missing or unknown. */
+  categoryKey?: string;
 }
 
 // Tiered pricing for the quote-count cap. Buyer pays the fee; system auto-closes
@@ -195,9 +200,154 @@ const PREFERENCES_CONFIG = {
   }
 };
 
-export default function InquiryPreferences({ categoryType, onBack, onNext, targetedShop }: InquiryPreferencesProps) {
+type SectionShape = typeof PREFERENCES_CONFIG.SERVICES.section1;
+type ParamSection = typeof PREFERENCES_CONFIG.SERVICES.section2;
+
+// Per-category overrides keyed by the stable category id. Each section is
+// replaced wholesale; sections not overridden fall back to the archetype
+// default. Use this when the labels should differ for the specific subtype
+// even though the archetype is the same — e.g. all event subtypes are
+// SERVICES, but the trade-offs a buyer cares about for renting equipment are
+// not the trade-offs they care about for hiring a planner.
+const PREFERENCES_OVERRIDES: Record<
+  string,
+  Partial<{ section1: SectionShape; section2: ParamSection; section3: ParamSection }>
+> = {
+  'event-equipment-rental': {
+    section1: {
+      title: 'Target Suppliers',
+      description: 'Where would you like to source the equipment from?',
+      icon: Store,
+      options: [
+        { id: 'local',       label: 'Local Rental Houses',   icon: Store     },
+        { id: 'established', label: 'Established Suppliers', icon: Building2 },
+        { id: 'top_rated',   label: 'Top Rated Only',        icon: Star      },
+        { id: 'any',         label: 'Any Supplier',          icon: Users     },
+      ],
+    },
+    section2: {
+      title: 'What Matters Most',
+      description: "What's your top priority for this rental?",
+      icon: Settings,
+      options: [
+        { id: 'price',     label: 'Lowest Price'     },
+        { id: 'condition', label: 'Newest Equipment' },
+        { id: 'selection', label: 'Widest Selection' },
+        { id: 'setup',     label: 'Fastest Setup'    },
+      ],
+    },
+  },
+  'event-catering': {
+    section1: {
+      title: 'Target Caterers',
+      description: 'Who do you want preparing your menu?',
+      icon: Navigation,
+      options: [
+        { id: 'independent', label: 'Independent Caterers', icon: User      },
+        { id: 'companies',   label: 'Catering Companies',   icon: Building2 },
+        { id: 'hotel',       label: 'Hotel Kitchens',       icon: Hotel     },
+        { id: 'any',         label: 'Any Caterer',          icon: Users     },
+      ],
+    },
+    section2: {
+      title: 'Quote Parameters',
+      description: "What's most important for the catering?",
+      icon: Settings,
+      options: [
+        { id: 'price',      label: 'Lowest Price'        },
+        { id: 'variety',    label: 'Menu Variety'        },
+        { id: 'dietary',    label: 'Dietary Specialists' },
+        { id: 'experience', label: 'Most Experience'     },
+      ],
+    },
+  },
+  'event-decor': {
+    section1: {
+      title: 'Target Decorators',
+      description: 'Who do you want styling the event?',
+      icon: Navigation,
+      options: [
+        { id: 'independent', label: 'Independent Decorators', icon: User      },
+        { id: 'studios',     label: 'Decor Studios',          icon: Building2 },
+        { id: 'top_rated',   label: 'Top Rated Only',         icon: Star      },
+        { id: 'any',         label: 'Any Decorator',          icon: Users     },
+      ],
+    },
+    section2: {
+      title: 'Quote Parameters',
+      description: "What's most important for the decor?",
+      icon: Settings,
+      options: [
+        { id: 'price',      label: 'Lowest Price'    },
+        { id: 'creativity', label: 'Most Creative'   },
+        { id: 'catalog',    label: 'Largest Catalog' },
+        { id: 'specialty',  label: 'Theme Specialty' },
+      ],
+    },
+  },
+  'event-planning': {
+    section1: {
+      title: 'Target Planners',
+      description: 'Who do you want planning the event?',
+      icon: Navigation,
+      options: [
+        { id: 'independent', label: 'Independent Planners', icon: User      },
+        { id: 'agencies',    label: 'Planning Agencies',    icon: Building2 },
+        { id: 'top_rated',   label: 'Top Rated Only',       icon: Star      },
+        { id: 'any',         label: 'Any Planner',          icon: Users     },
+      ],
+    },
+    section2: {
+      title: 'Quote Parameters',
+      description: "What's most important for planning?",
+      icon: Settings,
+      options: [
+        { id: 'price',      label: 'Lowest Price'    },
+        { id: 'experience', label: 'Most Experience' },
+        { id: 'network',    label: 'Vendor Network'  },
+        { id: 'reviews',    label: 'Best Reviews'    },
+      ],
+    },
+  },
+  'event-management': {
+    section1: {
+      title: 'Target Managers',
+      description: 'Who do you want running the event?',
+      icon: Navigation,
+      options: [
+        { id: 'independent', label: 'Independent Managers',  icon: Briefcase },
+        { id: 'agencies',    label: 'Management Agencies',   icon: Building2 },
+        { id: 'top_rated',   label: 'Top Rated Only',        icon: Star      },
+        { id: 'any',         label: 'Any Manager',           icon: Users     },
+      ],
+    },
+    section2: {
+      title: 'Quote Parameters',
+      description: "What's most important for event management?",
+      icon: Settings,
+      options: [
+        { id: 'price',        label: 'Lowest Price'         },
+        { id: 'experience',   label: 'Most Experience'      },
+        { id: 'coordination', label: 'On-Day Coordination'  },
+        { id: 'reviews',      label: 'Best Reviews'         },
+      ],
+    },
+  },
+};
+
+function resolveConfig(categoryType: CategoryType, categoryKey?: string) {
+  const base = PREFERENCES_CONFIG[categoryType] || PREFERENCES_CONFIG.PRODUCTS;
+  const overrides = categoryKey ? PREFERENCES_OVERRIDES[categoryKey] : undefined;
+  return {
+    section1: overrides?.section1 ?? base.section1,
+    section2: overrides?.section2 ?? base.section2,
+    section3: overrides?.section3 ?? base.section3,
+  };
+}
+
+export default function InquiryPreferences({ categoryType, onBack, onNext, targetedShop, categoryKey }: InquiryPreferencesProps) {
   const isTargeted = !!targetedShop;
-  const config = PREFERENCES_CONFIG[categoryType] || PREFERENCES_CONFIG.PRODUCTS;
+  const config = resolveConfig(categoryType, categoryKey);
 
   // In targeted mode the first section is replaced with a two-option scope picker.
   // Wording adapts to what the buyer is actually targeting — "Shop"
@@ -228,15 +378,15 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
   const [validity,       setValidity]       = useState<string>(config.section3.options[0].id);
   const [quoteCount,     setQuoteCount]     = useState<number>(QUOTE_COUNT_TIERS[0].count);
 
-  // Reset when categoryType changes (preserves targeted defaults)
+  // Reset when categoryType or categoryKey changes (preserves targeted defaults)
   useEffect(() => {
-    const cfg = PREFERENCES_CONFIG[categoryType] || PREFERENCES_CONFIG.PRODUCTS;
+    const cfg = resolveConfig(categoryType, categoryKey);
     if (!isTargeted) {
       setTargetOption(cfg.section1.options[0].id);
     }
     setQuoteParameter(cfg.section2.options[0].id);
     setValidity(cfg.section3.options[0].id);
-  }, [categoryType, isTargeted]);
+  }, [categoryType, categoryKey, isTargeted]);
 
   // When the user flips to "chain", ensure the active quoteCount is within the
   // reduced tier set.

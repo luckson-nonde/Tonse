@@ -260,7 +260,15 @@ export async function updateInquiryStatus(
 export async function deleteInquiry(inquiryId: string): Promise<void> {
   try {
     await apiClient.delete(`/inquiries/${inquiryId}`);
-  } catch (error) {
+  } catch (error: any) {
+    // A 404 means the row is already gone (stale UI cache, double-click,
+    // or the user re-tried after a successful delete). Treat it as a
+    // successful no-op so the caller can refresh its list without
+    // surfacing a scary error to the buyer.
+    const msg = String(error?.message || '').toLowerCase();
+    if (msg.includes('not found') || msg.includes('404')) {
+      return;
+    }
     console.error('Error deleting inquiry:', error);
     throw error;
   }

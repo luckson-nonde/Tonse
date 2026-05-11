@@ -40,7 +40,14 @@ export default function Login() {
         navigate('/');
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to login');
+      const raw = err?.message || '';
+      if (/failed to fetch|network|networkerror/i.test(raw)) {
+        setError("Couldn't reach the server. Check your connection and try again.");
+      } else if (/credential|password|invalid|unauthor|not found|no user/i.test(raw)) {
+        setError("That email and password don't match. Double-check both, or reset your password.");
+      } else {
+        setError(raw || 'Sign-in failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }

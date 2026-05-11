@@ -106,6 +106,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
+        <ErrorBoundary>
         <DashboardProvider>
           <Router>
             <Routes>
@@ -366,6 +367,7 @@ export default function App() {
             </Routes>
           </Router>
         </DashboardProvider>
+        </ErrorBoundary>
       </AuthProvider>
     </ErrorBoundary>
   );

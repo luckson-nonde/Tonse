@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { createOrder } from '../services/api/orderService';
@@ -10,9 +10,7 @@ import {
   MessageSquare,
   ArrowRight,
   Printer,
-  Archive,
   Check,
-  ChevronLeft,
   MapPin,
   ShieldCheck,
   Truck,
@@ -24,29 +22,25 @@ import {
   DollarSign,
   AlertCircle,
   X,
-  Loader2,
-  CreditCard,
-  Smartphone,
-  Building2,
-  Lock,
   CheckCircle2,
   Sparkles,
-  Wallet,
 } from 'lucide-react';
 import { robustParse } from '../utils/jsonUtils';
 import { Quote, Inquiry } from '../types.ts';
 import Button from '../components/Button';
 import QuoteInvoice from '../components/QuoteInvoice';
 import { db } from '../services/api/database';
-import { updateQuoteStatus } from '../services/api/quoteService';
 
-// ─── Payment Modal ──────────────────────────────────────────────────────────
-const MOBILE_METHODS = [
-  { id: 'mtn', label: 'MTN Mobile Money', color: '#FFC300', logo: '🟡', prefix: '+260 96', recommended: true },
-  { id: 'airtel', label: 'Airtel Money', color: '#E40000', logo: '🔴', prefix: '+260 97' },
-  { id: 'zamtel', label: 'Zamtel Kwacha', color: '#008000', logo: '🟢', prefix: '+260 95' },
-];
+import PaymentSheet from './PaymentSheet';
 
+/**
+ * Thin wrapper around the shared {@link PaymentSheet} component. Owns
+ * only the side-effects specific to paying for a quote: simulate the
+ * gateway round-trip, create the Order row, mark the quote + inquiry
+ * PAID, and bubble success up to the parent. The Wallet method
+ * redirects to /buyer/financial with the quote in location.state so
+ * the buyer reviews their balance + the basket before debiting.
+ */
 function PaymentModal({
   quote,
   onClose,
@@ -58,444 +52,76 @@ function PaymentModal({
 }) {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [step, setStep] = useState<'method' | 'details' | 'processing' | 'success'>('method');
-  const [payMethod, setPayMethod] = useState<'virtual' | 'mobile' | 'card' | 'bank'>('virtual');
-  const [mobileNetwork, setMobileNetwork] = useState('mtn');
-  const [phone, setPhone] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvc, setCardCvc] = useState('');
-  const [cardName, setCardName] = useState('');
-  const [error, setError] = useState('');
-  const [walletBalance, setWalletBalance] = useState(0);
-
-  const dynamicFields = robustParse(quote.dynamicFields) || {};
-  const securityDeposit = Number(dynamicFields.securityDeposit || quote.securityDeposit || 0);
   const total = quote.price;
-  const isVenue = !!(securityDeposit || dynamicFields.venueAmenities);
-  const depositAmount = isVenue && securityDeposit > 0 ? securityDeposit : 0;
-  const hireAmount = isVenue ? total : total;
 
-  const selectedNetwork = MOBILE_METHODS.find(m => m.id === mobileNetwork);
+  const handlePaymentSubmit = async () => {
+    if (!user?.id) throw new Error('You must be signed in to pay.');
+    // Gateway integration is intentionally deferred. Simulate the USSD
+    // round-trip so the spinner button feels real.
+    await new Promise((resolve) => setTimeout(resolve, 1800));
 
-  // Mirrors FinancialPage's wallet balance computation. The /payments
-  // ledger is the single source of truth for what the buyer can spend
-  // from their virtual account.
-  useEffect(() => {
-    if (!user?.id) return;
-    let cancelled = false;
-    db.transactions
-      .where('userId').equals(user.id as any)
-      .toArray()
-      .then((rows) => {
-        if (cancelled) return;
-        const balance = rows
-          .filter((t: any) => t.status === 'COMPLETED')
-          .reduce((sum: number, t: any) => (t.type === 'IN' ? sum + t.amount : sum - t.amount), 0);
-        setWalletBalance(balance);
-        // If the wallet can't cover the quote, fall back to mobile money
-        // by default. The user can still flip back manually.
-        if (balance < total) setPayMethod((prev) => (prev === 'virtual' ? 'mobile' : prev));
-      })
-      .catch(() => { /* keep wallet at 0 */ });
-    return () => { cancelled = true; };
-  }, [user?.id, total]);
-
-  const handleProceed = async () => {
-    setError('');
-
-    // Card / Bank are not yet wired — keep the visual but block submit.
-    if (payMethod === 'card' || payMethod === 'bank') {
-      setError('This payment method is coming soon. Please use Wallet or Mobile Money.');
-      return;
-    }
-    if (payMethod === 'virtual' && walletBalance < total) {
-      setError('Insufficient wallet balance. Please top up first.');
-      return;
-    }
-    if (payMethod === 'mobile' && phone.replace(/\D/g, '').length < 9) {
-      setError('Please enter a valid mobile number.');
-      return;
-    }
-    if (!user?.id) {
-      setError('You must be signed in to pay.');
-      return;
-    }
-
-    setStep('processing');
-    const reference = `TONSE-PAY-${quote.id}-${Date.now()}`;
-
-    try {
-      // 1. Take payment.
-      if (payMethod === 'virtual') {
-        // Wallet ledger debit — completes immediately.
-        await db.transactions.add({
-          userId: user.id as any,
-          type: 'OUT',
-          amount: total,
-          description: `Payment to ${quote.providerName} for ${quote.inquiryTitle}`,
-          category: 'PAYMENT',
-          quoteId: quote.id as any,
-          createdAt: Date.now(),
-          status: 'COMPLETED',
-        });
-      } else if (payMethod === 'mobile') {
-        // SIMULATED mobile-money collection — the real Lenco call is
-        // deferred until production keys are wired. We mimic the USSD
-        // round-trip with a short delay so the modal's "Processing"
-        // state feels real, then drop a COMPLETED ledger row (rather
-        // than PENDING) so the wallet balance + Order History reflect
-        // the payment immediately.
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        await db.transactions.add({
-          userId: user.id as any,
-          type: 'OUT',
-          amount: total,
-          description: `Payment to ${quote.providerName} via ${selectedNetwork?.label ?? 'Mobile Money'} (simulated)`,
-          category: 'PAYMENT',
-          quoteId: quote.id as any,
-          createdAt: Date.now(),
-          status: 'COMPLETED',
-        });
-      }
-
-      // 2. Create the Order row so the item lands in Order History.
-      // (Same shape as the STANDARD generate_po flow.)
-      if (typeof quote.id === 'string' && quote.providerId) {
-        try {
-          await createOrder({
-            quoteId: String(quote.id),
-            buyerId: user.id,
-            sellerId: String(quote.providerId),
-            totalAmount: total,
-          });
-        } catch (e) {
-          console.warn('Order row create failed (payment already taken):', e);
-        }
-      }
-
-      // 3. Sync quote + inquiry status (preserve existing behavior).
+    // Create the Order row so the item lands in Order History.
+    if (typeof quote.id === 'string' && quote.providerId) {
       try {
-        await db.quotes.update(quote.id!, { status: 'PAID' });
-        if ((quote as any).parentQuoteId) {
-          await db.quotes.update((quote as any).parentQuoteId, { status: 'SUPERSEDED' as any });
-        }
-        if (typeof quote.id === 'string') {
-          await updateQuoteStatus(quote.id, 'PAID');
-          if (quote.inquiryId) {
-            const { updateInquiryStatus } = await import('../services/api/inquiryService');
-            await updateInquiryStatus(String(quote.inquiryId), 'PAID');
-          }
-        }
+        await createOrder({
+          quoteId: String(quote.id),
+          buyerId: user.id,
+          sellerId: String(quote.providerId),
+          totalAmount: total,
+        });
       } catch (e) {
-        console.warn('Status sync failed (payment + order succeeded):', e);
+        console.warn('Order row create failed (payment already taken):', e);
       }
-
-      setStep('success');
-    } catch (err: any) {
-      console.error('EXPRESS payment failed:', err);
-      setError(err?.message || 'Payment failed. Please try again.');
-      setStep('details');
     }
+
+    // Inquiry status sync (the buyer owns the inquiry, so this is
+    // allowed). Quote status updates are intentionally NOT made here:
+    // the backend authorizes PATCH /quotes/:id to the seller only
+    // ("You can only update your own quotes"), and the cascade from
+    // order → quote PAID is a backend concern. Calling it from the
+    // buyer side reliably 403s and pollutes the console.
+    // Inquiry status enum on the backend is ['OPEN', 'QUOTED', 'CLOSED'] —
+    // 'PAID' isn't a valid value (that lives on the quote / order, not
+    // the inquiry). Mark the inquiry CLOSED so it stops accepting new
+    // quotes and disappears from the buyer's open-inquiry views.
+    if (quote.inquiryId) {
+      try {
+        const { updateInquiryStatus } = await import('../services/api/inquiryService');
+        await updateInquiryStatus(String(quote.inquiryId), 'CLOSED');
+      } catch (e) {
+        console.warn('Inquiry status sync failed (payment + order succeeded):', e);
+      }
+    }
+
+    onSuccess();
+    onClose();
   };
 
   return (
-    <motion.div
-      key="paymentBackdrop"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center bg-slate-900/75 backdrop-blur-md p-0 sm:p-4"
-      onClick={step !== 'processing' ? onClose : undefined}
-    >
-      <motion.div
-        initial={{ y: 80, opacity: 0, scale: 0.96 }}
-        animate={{ y: 0, opacity: 1, scale: 1 }}
-        exit={{ y: 80, opacity: 0, scale: 0.96 }}
-        transition={{ type: 'spring', damping: 22, stiffness: 220 }}
-        onClick={e => e.stopPropagation()}
-        className="bg-white w-full sm:max-w-md rounded-t-[32px] sm:rounded-[32px] overflow-hidden shadow-2xl"
-      >
-        {/* ── Success ── */}
-        {step === 'success' && (
-          <div className="p-8 flex flex-col items-center text-center gap-4">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', damping: 10 }}
-              className="w-24 h-24 rounded-full bg-emerald-500 flex items-center justify-center shadow-xl shadow-emerald-500/30 mb-2"
-            >
-              <CheckCircle2 className="w-12 h-12 text-white" />
-            </motion.div>
-            <h3 className="text-2xl font-serif font-black text-slate-900">Payment Sent!</h3>
-            <p className="text-slate-500 text-sm leading-relaxed max-w-xs">
-              Your payment of <span className="font-black text-slate-800">ZMW {total.toLocaleString()}</span> has been initiated.
-              The provider will confirm your booking shortly.
-            </p>
-            <div className="w-full bg-slate-50 rounded-2xl p-4 text-left space-y-2 mt-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500 font-medium">Provider</span>
-                <span className="font-bold text-slate-800">{quote.providerName}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500 font-medium">Amount</span>
-                <span className="font-black text-[#C9973A]">ZMW {total.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500 font-medium">Reference</span>
-                {/* Derive the reference from `quote.id` (or the
-                    display-id if available) so the same transaction
-                    shows the same reference on every render. The
-                    previous `Math.random()` regenerated a fresh
-                    code per render — useless to anyone trying to
-                    quote the reference back to support. */}
-                <span className="font-mono text-xs text-slate-600">
-                  TH-{String((quote as any).displayId || quote.id || '')
-                    .replace(/-/g, '')
-                    .slice(0, 6)
-                    .toUpperCase()}
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={() => { onSuccess(); onClose(); }}
-              className="w-full py-4 mt-2 bg-[#1e293b] text-white font-black text-sm rounded-2xl hover:bg-[#0f172a] transition-all active:scale-[0.98]"
-            >
-              Done
-            </button>
-          </div>
-        )}
-
-        {/* ── Processing ── */}
-        {step === 'processing' && (
-          <div className="p-12 flex flex-col items-center text-center gap-6">
-            <div className="relative">
-              <div className="w-20 h-20 rounded-full bg-[#fdf6e9] border-4 border-[#d49b35]/20 flex items-center justify-center">
-                <Loader2 className="w-10 h-10 text-[#d49b35] animate-spin" />
-              </div>
-              <motion.div
-                className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#d49b35]"
-                animate={{ scale: [1, 1.4, 1] }}
-                transition={{ repeat: Infinity, duration: 1.5 }}
-              />
-            </div>
-            <div>
-              <h3 className="text-xl font-serif font-black text-slate-900">Processing Payment</h3>
-              <p className="text-slate-400 text-sm mt-1">Please wait, do not close this screen…</p>
-            </div>
-            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-              <motion.div
-                className="h-full bg-[#d49b35] rounded-full"
-                animate={{ width: ['0%', '100%'] }}
-                transition={{ duration: 3, ease: 'easeInOut' }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* ── Method / Details ── */}
-        {(step === 'method' || step === 'details') && (
-          <>
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100">
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Secure Payment</p>
-                <h3 className="text-xl font-serif font-black text-slate-900 flex items-center gap-2">
-                  ZMW {total.toLocaleString()}
-                  <Lock className="w-4 h-4 text-emerald-500" />
-                </h3>
-              </div>
-              <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                <X className="w-5 h-5 text-slate-400" />
-              </button>
-            </div>
-
-            {/* Venue deposit breakdown */}
-            {isVenue && depositAmount > 0 && (
-              <div className="mx-6 mt-4 bg-[#fdf6e9] border border-[#d49b35]/20 rounded-2xl p-4 space-y-2">
-                <p className="text-[9px] font-black text-[#a37d35] uppercase tracking-widest flex items-center gap-1.5">
-                  <Sparkles className="w-3 h-3" /> Venue Booking Breakdown
-                </p>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-600 font-medium">Venue Hire Fee</span>
-                  <span className="font-black text-slate-800">ZMW {(hireAmount - depositAmount).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-600 font-medium">Security Deposit</span>
-                  <span className="font-black text-slate-800">ZMW {depositAmount.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm border-t border-[#d49b35]/20 pt-2 mt-1">
-                  <span className="font-black text-slate-800">Total Due</span>
-                  <span className="font-black text-[#d49b35] text-base">ZMW {total.toLocaleString()}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Payment method tabs */}
-            <div className="px-6 pt-5">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Payment Method</p>
-              <div className="grid grid-cols-4 gap-2">
-                {([
-                  { id: 'virtual', icon: <Wallet className="w-4 h-4" />, label: 'Wallet', soon: false },
-                  { id: 'mobile', icon: <Smartphone className="w-4 h-4" />, label: 'Mobile', soon: false },
-                  { id: 'card', icon: <CreditCard className="w-4 h-4" />, label: 'Card', soon: true },
-                  { id: 'bank', icon: <Building2 className="w-4 h-4" />, label: 'Bank', soon: true },
-                ] as const).map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => setPayMethod(m.id)}
-                    className={`relative flex flex-col items-center gap-1.5 py-3 rounded-2xl border-2 text-xs font-bold transition-all ${
-                      payMethod === m.id
-                        ? 'border-[#d49b35] bg-[#fdf6e9] text-[#a37d35]'
-                        : 'border-slate-200 text-slate-500 hover:border-slate-300'
-                    }`}
-                  >
-                    {m.soon && (
-                      <span className="absolute -top-2 right-1 px-1.5 py-0.5 bg-slate-400 text-white text-[8px] rounded-full uppercase tracking-tighter">Soon</span>
-                    )}
-                    {m.icon}{m.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Virtual Account / Wallet */}
-            {payMethod === 'virtual' && (
-              <div className="px-6 pt-5">
-                <div className={`rounded-2xl p-5 border-2 ${walletBalance >= total ? 'border-emerald-200 bg-emerald-50/50' : 'border-rose-200 bg-rose-50/50'}`}>
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${walletBalance >= total ? 'bg-emerald-500' : 'bg-rose-500'}`}>
-                      <Wallet className="w-5 h-5 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Wallet Balance</p>
-                      <p className="text-lg font-black text-slate-900">ZMW {walletBalance.toLocaleString()}</p>
-                    </div>
-                  </div>
-                  {walletBalance >= total ? (
-                    <div className="flex justify-between text-xs pt-3 border-t border-emerald-200/60">
-                      <span className="text-slate-500 font-medium">After payment</span>
-                      <span className="font-black text-slate-800">ZMW {(walletBalance - total).toLocaleString()}</span>
-                    </div>
-                  ) : (
-                    <div className="pt-3 border-t border-rose-200/60 space-y-2">
-                      <p className="text-[11px] text-rose-600 font-bold leading-relaxed">
-                        Short by ZMW {(total - walletBalance).toLocaleString()} — top up to use your wallet.
-                      </p>
-                      <button
-                        onClick={() => { onClose(); navigate('/buyer/financial'); }}
-                        className="w-full py-2.5 bg-[#1e293b] text-white text-xs font-black rounded-xl hover:bg-[#0f172a] transition-all"
-                      >
-                        Top Up Wallet →
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Mobile Money */}
-            {payMethod === 'mobile' && (
-              <div className="px-6 pt-5 space-y-4">
-                <div className="grid grid-cols-3 gap-2">
-                  {MOBILE_METHODS.map(net => (
-                    <button
-                      key={net.id}
-                      onClick={() => setMobileNetwork(net.id)}
-                      className={`py-3 rounded-2xl border-2 text-xs font-black transition-all relative ${
-                        mobileNetwork === net.id ? 'border-[#d49b35] bg-[#fdf6e9]' : 'border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      {net.recommended && (
-                        <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-[#d49b35] text-white text-[8px] rounded-full uppercase tracking-tighter">Recommended</span>
-                      )}
-                      <span className="text-base">{net.logo}</span>
-                      <p className="mt-0.5 truncate px-1" style={{ color: mobileNetwork === net.id ? net.color : '#64748b' }}>{net.label.split(' ')[0]}</p>
-                    </button>
-                  ))}
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Mobile Number</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">{selectedNetwork?.prefix}</span>
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={e => setPhone(e.target.value)}
-                      placeholder="XXXXXXX"
-                      className="w-full pl-[80px] pr-4 py-3.5 rounded-xl border-2 border-slate-200 focus:border-[#d49b35] focus:outline-none text-sm font-bold"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Card */}
-            {payMethod === 'card' && (
-              <div className="px-6 pt-5 space-y-3">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Cardholder Name</label>
-                  <input value={cardName} onChange={e => setCardName(e.target.value)} placeholder="John Mwanza" className="w-full px-4 py-3.5 rounded-xl border-2 border-slate-200 focus:border-[#d49b35] focus:outline-none text-sm font-bold" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Card Number</label>
-                  <input
-                    value={cardNumber}
-                    onChange={e => setCardNumber(e.target.value.replace(/\D/g,'').replace(/(\d{4})/g,'$1 ').trim().slice(0,19))}
-                    placeholder="0000 0000 0000 0000"
-                    className="w-full px-4 py-3.5 rounded-xl border-2 border-slate-200 focus:border-[#d49b35] focus:outline-none text-sm font-bold tracking-widest"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Expiry</label>
-                    <input value={cardExpiry} onChange={e => setCardExpiry(e.target.value.replace(/\D/g,'').replace(/(\d{2})(\d)/,'$1/$2').slice(0,5))} placeholder="MM/YY" className="w-full px-4 py-3.5 rounded-xl border-2 border-slate-200 focus:border-[#d49b35] focus:outline-none text-sm font-bold" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">CVC</label>
-                    <input value={cardCvc} onChange={e => setCardCvc(e.target.value.slice(0,4))} placeholder="• • •" type="password" className="w-full px-4 py-3.5 rounded-xl border-2 border-slate-200 focus:border-[#d49b35] focus:outline-none text-sm font-bold" />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Bank Transfer */}
-            {payMethod === 'bank' && (
-              <div className="px-6 pt-5">
-                <div className="bg-slate-50 rounded-2xl p-5 space-y-3 border border-slate-200">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Transfer To</p>
-                  {[['Bank', 'Stanbic Bank Zambia'], ['Account Name', 'Tonse Hub Ltd'], ['Account No.', '9100012345678'], ['Branch Code', '200514'], ['Reference', `QT-${String(quote.id).slice(0,6).toUpperCase()}`]].map(([k, v]) => (
-                    <div key={k} className="flex justify-between text-sm">
-                      <span className="text-slate-500">{k}</span>
-                      <span className="font-black text-slate-800 font-mono">{v}</span>
-                    </div>
-                  ))}
-                  <p className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-200 leading-relaxed">
-                    After transferring, click Confirm below. Your booking will be activated within 2 business hours.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {error && <p className="mx-6 mt-3 text-xs text-rose-500 font-bold">{error}</p>}
-
-            {/* CTA */}
-            <div className="p-6 pt-4">
-              <button
-                onClick={handleProceed}
-                className="w-full py-4 bg-[#d49b35] text-white font-black text-sm rounded-2xl hover:bg-[#b8862d] transition-all shadow-lg shadow-[#d49b35]/25 active:scale-[0.98] flex items-center justify-center gap-2"
-              >
-                <Lock className="w-4 h-4" />
-                {payMethod === 'bank' ? 'Confirm Transfer' : `Pay ZMW ${total.toLocaleString()}`}
-              </button>
-              <p className="text-center text-[10px] text-slate-400 mt-3 flex items-center justify-center gap-1">
-                <ShieldCheck className="w-3 h-3" /> Secured by 256-bit SSL encryption
-              </p>
-            </div>
-          </>
-        )}
-      </motion.div>
-    </motion.div>
+    <PaymentSheet
+      open
+      onClose={onClose}
+      title="Pay Provider"
+      subtitle="Secure Transaction"
+      headerStat={{ label: 'Amount Due', amount: total }}
+      amountMode="fixed"
+      fixedAmount={total}
+      defaultPhone={(user as any)?.phone || ''}
+      methods={['wallet', 'mobile_money', 'card']}
+      defaultMethod="mobile_money"
+      onWalletSelected={() => {
+        // Wallet payments go through /buyer/financial so the buyer
+        // reviews their balance + the basket before the debit.
+        onClose();
+        navigate('/buyer/financial', { state: { payQuote: quote } });
+      }}
+      actionLabel={(amt) => `Pay ZMW ${amt.toLocaleString()}`}
+      onSubmit={handlePaymentSubmit}
+      context={[
+        { label: 'Provider', value: quote.providerName || 'Provider' },
+        { label: 'For', value: quote.inquiryTitle || 'Quote' },
+      ]}
+    />
   );
 }
 
@@ -503,6 +129,14 @@ interface QuoteDetailsProps {
   quote: Quote;
   inquiry?: Inquiry;
   onAction: (actionId: string, payload?: any) => void;
+  /** Auto-open the payment modal once on mount. Set when the buyer
+   *  clicked "Make a Payment" on the QuoteCard footer — the navigation
+   *  lands here and the modal pops without a second click. The flag
+   *  fires `auto_pay_handled` back to the parent after consuming so a
+   *  re-mount of the same quote doesn't keep popping the modal. Only
+   *  applies to EXPRESS quotes; STANDARD quotes go through the explicit
+   *  Generate PO button. */
+  autoOpenPay?: boolean;
 }
 
 // Collapsible Section Component
@@ -548,8 +182,25 @@ function CollapsibleSection({
   );
 }
 
-export default function QuoteDetails({ quote, inquiry, onAction }: QuoteDetailsProps) {
+export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: QuoteDetailsProps) {
   const [showPayModal, setShowPayModal] = useState(false);
+  const [hasAutoOpened, setHasAutoOpened] = useState(false);
+
+  // One-shot auto-open when the buyer arrived here from the QuoteCard's
+  // "Make a Payment" button. STANDARD quotes don't have a modal; they
+  // use the Generate PO flow, so the flag is ignored for them.
+  React.useEffect(() => {
+    if (
+      autoOpenPay &&
+      !hasAutoOpened &&
+      quote.processType === 'EXPRESS' &&
+      !['PAID', 'COMPLETED', 'EXPIRED', 'REJECTED', 'CANCELLED'].includes((quote.status || '').toUpperCase())
+    ) {
+      setShowPayModal(true);
+      setHasAutoOpened(true);
+      onAction('auto_pay_handled', quote);
+    }
+  }, [autoOpenPay, hasAutoOpened, quote, onAction]);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [paid, setPaid] = useState(false);
   const [parentQuote, setParentQuote] = useState<Quote | null>(null);

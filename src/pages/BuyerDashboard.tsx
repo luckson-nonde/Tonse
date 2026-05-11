@@ -14,9 +14,10 @@ import { useUserInquiries } from '../hooks/useInquiries';
 import { useUserQuotes } from '../hooks/useQuotes';
 import { markQuoteAsRead, archiveQuote, deleteQuote } from '../services/api/quoteService';
 import { createOrder, fetchBuyerOrders, type OrderRecord } from '../services/api/orderService';
+import { isActiveInquiry, isActiveQuote } from '../services/lifecycleFilters';
 import { ViewType, MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
-import CategorySelection from '../components/CategorySelection';
+import BuyerCategoryPicker from '../components/buyer/BuyerCategoryPicker';
 import ProcessSelection from '../components/ProcessSelection';
 import DynamicInquiryForm from '../components/DynamicInquiryForm';
 import InquiryPreferences from '../components/InquiryPreferences';
@@ -58,6 +59,12 @@ export default function BuyerDashboard() {
   const [selectedShopProfileId, setSelectedShopProfileId] = useState<string | null>(null);
   const [inquiryToDelete, setInquiryToDelete] = useState<any | null>(null);
   const [quoteToDelete, setQuoteToDelete] = useState<any | null>(null);
+  // Set when the buyer clicks "Make a Payment" on a quote card. The
+  // navigation lands them on QuoteDetails; the flag tells QuoteDetails
+  // to auto-open the payment modal on mount instead of making them hunt
+  // for the Pay button. Cleared by QuoteDetails after one open so a
+  // back-navigation doesn't keep firing the modal.
+  const [autoPayQuoteId, setAutoPayQuoteId] = useState<string | number | null>(null);
 
   // Update selectedInquiryId when URL changes
   useEffect(() => {
@@ -177,35 +184,65 @@ export default function BuyerDashboard() {
     return 'PRODUCTS';
   }, [pendingInquiry.categories, pendingInquiry.isLabour]);
 
-  const dashboardData = useMemo(
-    () => ({
-      inquiries,
-      quotes: quotes.filter((q) => !['PAID', 'COMPLETED'].includes(q.status) && !q.isArchived),
+  const dashboardData = useMemo(() => {
+    // Lifecycle slices — see src/services/lifecycleFilters.ts. Each
+    // surface lists items at one stage only; the helpers are the
+    // single source of truth for "what counts as active here".
+    const activeInquiries = inquiries.filter(isActiveInquiry);
+    const activeQuotes = quotes.filter(isActiveQuote);
+
+    // Recent activity: one card per inquiry, labelled by its
+    // most-advanced known stage (Order Placed > Quote Received >
+    // Inquiry Created). The previous version emitted separate cards
+    // from `inquiries` and `quotes` slices, so an inquiry that had
+    // received a quote showed up twice in the right rail.
+    const recentActivity = inquiries.slice(0, 5).map((i) => {
+      const order = orders.find(
+        (o) => o.id === i.id || (o as any).paidQuote?.inquiryId === i.id,
+      );
+      if (order) {
+        return {
+          id: `o-${i.id}`,
+          title: i.title,
+          subtitle: 'Order Placed',
+          time: 'Recently',
+          icon: 'Truck',
+        };
+      }
+      const liveQuote = quotes.find(
+        (q) => q.inquiryId === i.id && !q.isArchived,
+      );
+      if (liveQuote) {
+        return {
+          id: `q-${i.id}`,
+          title: i.title,
+          subtitle: `Quote Received · K${(liveQuote.price || 0).toLocaleString()}`,
+          time: 'Recently',
+          icon: 'FileText',
+        };
+      }
+      return {
+        id: `i-${i.id}`,
+        title: i.title,
+        subtitle: 'Inquiry Created',
+        time: 'Recently',
+        icon: 'MessageSquare',
+      };
+    });
+
+    return {
+      inquiries: activeInquiries,
+      quotes: activeQuotes,
       orders,
       balance,
       escrowBalance,
       selectedInquiry: inquiries.find((i) => i.id === selectedInquiryId),
       selectedQuote: quotes.find((q) => q.id === selectedQuoteId),
       selectedOrder: orders.find((o) => o.id === selectedOrderId),
-      recentActivity: [
-        ...inquiries.slice(0, 2).map((i) => ({
-          id: `i-${i.id}`,
-          title: i.title,
-          subtitle: 'Inquiry Created',
-          time: 'Recently',
-          icon: 'MessageSquare',
-        })),
-        ...quotes.slice(0, 2).filter(q => !q.isArchived).map((q) => ({
-          id: `q-${q.id}`,
-          title: `Quote from ${q.providerName}`,
-          subtitle: `K${(q.price || 0).toLocaleString()}`,
-          time: 'Recently',
-          icon: 'FileText',
-        })),
-      ],
-    }),
-    [inquiries, quotes, orders, selectedInquiryId, selectedQuoteId, selectedOrderId, balance, escrowBalance]
-  );
+      autoPayQuoteId,
+      recentActivity,
+    };
+  }, [inquiries, quotes, orders, selectedInquiryId, selectedQuoteId, selectedOrderId, balance, escrowBalance, autoPayQuoteId]);
 
   const handleTabChange = (tab: string, id?: string) => {
     setActiveTab(tab);
@@ -251,6 +288,28 @@ export default function BuyerDashboard() {
             console.error('Failed to mark quote as read:', error);
           }
         }
+        break;
+      case 'pay_quote':
+        // Same navigation as view_quote, plus an auto-open hint so the
+        // payment modal pops on entry. Buyer doesn't have to click Pay
+        // again on the details page.
+        if (payload?.id) {
+          setSelectedQuoteId(payload.id);
+          setAutoPayQuoteId(payload.id);
+          handleTabChange('quote_details');
+          try {
+            await markQuoteAsRead(payload.id);
+            refreshQuotes();
+          } catch (error) {
+            console.error('Failed to mark quote as read:', error);
+          }
+        }
+        break;
+      case 'auto_pay_handled':
+        // QuoteDetails fires this once it has consumed the autoOpenPay
+        // flag (post-mount), so a later re-mount of the same quote
+        // doesn't keep popping the modal.
+        setAutoPayQuoteId(null);
         break;
       case 'view_order':
         if (payload?.id) {
@@ -524,7 +583,7 @@ export default function BuyerDashboard() {
           return undefined;
         })();
         return (
-          <CategorySelection
+          <BuyerCategoryPicker
             onBack={() => handleTabChange('process-selection')}
             onComplete={handleInquiryComplete}
             preselectedParentId={shopParentId}
@@ -552,22 +611,15 @@ export default function BuyerDashboard() {
           schema = getCategorySchema(rawCategoryName || '');
         }
 
-        // If express, filter to core fields only to make it faster
-        if (pendingInquiry.processType === 'EXPRESS' && !isLabour) {
-          const coreFieldNames = [
-            'title',
-            'brand',
-            'model',
-            'quantity',
-            'budget_limit',
-            'urgency',
-            'images',
-            'problemCategory',
-            'itemType',
-            'eventType',
-          ];
-          schema = schema.filter((f: any) => f.required || coreFieldNames.includes(f.name));
-        }
+        // EXPRESS-mode filtering is handled inside DynamicInquiryForm
+        // ([components/DynamicInquiryForm.tsx] activeSchema). The
+        // earlier hardcoded `coreFieldNames` list duplicated that work
+        // and stripped any field whose name wasn't in a fixed allow-list,
+        // ignoring the per-field `keepInExpress` flag entirely. That's
+        // why a richly-defined schema like eventDecorSchema rendered as
+        // only Decor Style — every optional decor-specific field got
+        // killed here before the form even saw it. One filter, one
+        // place, single source of truth.
 
         return (
           <div className="space-y-4">
@@ -602,6 +654,7 @@ export default function BuyerDashboard() {
         return (
           <InquiryPreferences
             categoryType={categoryType as any}
+            categoryKey={pendingInquiry.categories?.[0]}
             onBack={() => handleTabChange('create-inquiry')}
             onNext={(prefs) => {
               const shop = pendingInquiry.targetedShop;

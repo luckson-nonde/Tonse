@@ -7,11 +7,10 @@ import {
   Wrench,
   MessageSquare,
   ArrowRight,
-  Printer,
-  Archive,
   Check,
   Sparkles,
-  X,
+  Trash2,
+  CreditCard,
 } from 'lucide-react';
 import { Quote } from '../types.ts';
 import { robustParse } from '../utils/jsonUtils';
@@ -19,10 +18,15 @@ import { robustParse } from '../utils/jsonUtils';
 interface QuoteCardProps {
   quote: Quote;
   onView: () => void;
-  onPrint?: () => void;
-  onArchive?: () => void;
+  onPay?: () => void;
   onDelete?: () => void;
 }
+
+// Quote states where payment is no longer applicable. For everything else
+// the buyer should see the "Make a Payment" CTA on the card. Print and
+// archive used to crowd this footer; they're now scoped to the full
+// View Offer screen so the card stays a 3-action surface.
+const NON_PAYABLE_STATUSES = new Set(['PAID', 'COMPLETED', 'EXPIRED', 'REJECTED', 'CANCELLED']);
 
 // Derive the most meaningful left-slot detail for the 2-col grid:
 // REPAIR → turnaround; SERVICE → availability date; VENUE → capacity;
@@ -47,8 +51,9 @@ function resolveConditionDetail(quote: Quote): { label: string; value: string; i
   return null;
 }
 
-export default function QuoteCard({ quote, onView, onPrint, onArchive, onDelete }: QuoteCardProps) {
+export default function QuoteCard({ quote, onView, onPay, onDelete }: QuoteCardProps) {
   const conditionDetail = resolveConditionDetail(quote);
+  const canPay = !!onPay && !NON_PAYABLE_STATUSES.has((quote.status || '').toUpperCase());
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -163,59 +168,53 @@ export default function QuoteCard({ quote, onView, onPrint, onArchive, onDelete 
         </div>
       )}
 
-      {/* Footer: Meta & Actions */}
-      <div className="flex justify-between items-center pt-1 mt-1">
+      {/* Footer: meta + three explicit CTAs.
+          Print and archive used to live here as ambiguous icon buttons
+          alongside View Offer. They're now scoped to the detail view —
+          the card stays a focused 3-action surface so the buyer can
+          decide quickly: kill it, pay it, or open it. */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 pt-1 mt-1">
         <div className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
           QID-{quote.id}
         </div>
 
-        <div className="flex items-center gap-2">
-          {onPrint && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onPrint();
-              }}
-              className="p-2.5 text-slate-400 hover:text-[#C9973A] hover:bg-[#C9973A]/10 rounded-xl transition-all"
-              title="Print Quotation"
-            >
-              <Printer className="w-4 h-4" />
-            </button>
-          )}
-          {onArchive && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onArchive();
-              }}
-              className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all"
-              title="Archive Quote"
-            >
-              <Archive className="w-4 h-4" />
-            </button>
-          )}
+        <div className="flex items-center gap-2 flex-wrap">
           {onDelete && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete();
               }}
-              className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+              className="px-4 py-2.5 text-[12px] font-bold rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 transition-all flex items-center gap-1.5"
               title="Delete Quote"
             >
-              <X className="w-4 h-4" />
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete
+            </button>
+          )}
+          {canPay && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onPay!();
+              }}
+              className="px-4 py-2.5 text-[12px] font-bold rounded-xl bg-[#C9973A] text-white hover:bg-[#b08432] shadow-sm shadow-[#C9973A]/20 transition-all flex items-center gap-1.5"
+              title="Make a Payment"
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              Make a Payment
             </button>
           )}
           <button
             onClick={onView}
-            className={`px-5 py-2.5 text-sm font-bold rounded-xl transition-all flex items-center gap-2 ${
+            className={`px-5 py-2.5 text-[12px] font-bold rounded-xl transition-all flex items-center gap-1.5 ${
               !quote.isRead
                 ? 'bg-[#1a1612] text-white hover:bg-black shadow-md hover:shadow-lg hover:-translate-y-0.5'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
             View Offer
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>

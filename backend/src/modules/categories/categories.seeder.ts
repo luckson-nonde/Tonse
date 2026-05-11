@@ -80,11 +80,13 @@ function deriveArchetype(
   // Keep this list tight — the cleaner path is renaming the sub.
   const lower = entry.name.toLowerCase();
   if (/\brental\b/.test(lower)) return 'RENTAL';
-  // Venue-named subcategories of EVENTS remain EVENTS — the events
-  // dashboard (not the appointment-slot BOOKING dashboard) is correct
-  // for event hall / venue providers. BOOKING is reserved for
-  // appointment-based businesses (hotels, salons, clinics) that live
-  // under their own parent category.
+  // Service-shaped event sub-categories (catering / decor / planning /
+  // management) resolve to SERVICE so caterers/decorators land on the
+  // services dashboard ("Service Requests / My Proposals / Service
+  // Catalog") instead of the venue-themed events one. EVENTS stays
+  // reserved for the venue/hall side which carries its own bespoke
+  // venue-spaces view.
+  if (/\b(catering|decor|planning|management)\b/.test(lower)) return 'SERVICE';
   if (/\bdj\b|\bband\b|\bperformer\b|\bmc\b|\bmusician\b/.test(lower)) return 'ENTERTAINMENT';
 
   return parentArchetype || 'RETAIL';

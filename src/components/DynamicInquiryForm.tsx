@@ -50,6 +50,7 @@ export default function DynamicInquiryForm({
   >(null);
   const [tempItemData, setTempItemData] = useState<Record<string, any>>({});
   const [uploadingFields, setUploadingFields] = useState<Set<string>>(new Set());
+  const [itemsError, setItemsError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -58,6 +59,7 @@ export default function DynamicInquiryForm({
       ? schema.filter(
           (f) =>
             f.required ||
+            f.keepInExpress ||
             f.name === 'images' ||
             f.name === 'budget_limit' ||
             f.name === 'description'
@@ -85,10 +87,23 @@ export default function DynamicInquiryForm({
 
   const formValues = watch();
 
-  const isEquipmentRental = categoryName.toLowerCase().includes('equipment rental');
+  const isEquipmentRental = categoryName
+    .toLowerCase()
+    .replace(/-/g, ' ')
+    .includes('equipment rental');
+
+  useEffect(() => {
+    if (Object.keys(selectedItems).length > 0 && itemsError) {
+      setItemsError(null);
+    }
+  }, [selectedItems, itemsError]);
 
   const onFormSubmit = (data: Record<string, any>) => {
-    // Combine core data with selected items
+    if (isEquipmentRental && Object.keys(selectedItems).length === 0) {
+      setItemsError('Add at least one item from the catalog before submitting.');
+      return;
+    }
+    setItemsError(null);
     const finalData = {
       ...data,
       rentalItems: selectedItems,
@@ -479,86 +494,122 @@ export default function DynamicInquiryForm({
   };
 
   if (view === 'catalog') {
+    const selectedCount = Object.keys(selectedItems).length;
     return (
-      <div className="max-w-[480px] mx-auto w-full min-h-screen bg-[#f8fafc]">
+      <div className="w-full min-h-screen bg-[#f5f2ed]">
         {/* Catalog Header */}
-        <div className="sticky top-0 z-30 px-4 pt-4 pb-5 bg-white border-b border-[#f1f5f9]">
-          <div className="flex items-center justify-between">
+        <div className="sticky top-0 z-30 bg-[#f5f2ed]/95 backdrop-blur-md border-b border-[#1B3068]/5">
+          <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-8 py-5 sm:py-7 flex items-center gap-4">
             <motion.button
+              type="button"
               whileTap={{ scale: 0.92 }}
               onClick={() => setView('form')}
-              className="w-10 h-10 -ml-2 flex items-center justify-center"
+              className="w-10 h-10 -ml-2 flex items-center justify-center text-[#1a1a2e] rounded-full hover:bg-white/60 transition-colors"
+              aria-label="Back to inquiry"
             >
-              <ChevronLeft className="w-5 h-5 text-[#1a1a2e]" />
+              <ChevronLeft className="w-5 h-5" />
             </motion.button>
-            <h2 className="font-serif text-[18px] font-bold text-[#1a1a2e]">Item Catalog</h2>
-            <div className="w-10" />
+            <div className="flex-1 min-w-0">
+              <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">
+                Item Catalog
+              </p>
+              <h2 className="font-serif text-[22px] sm:text-[28px] font-bold text-[#1a1a2e] leading-tight mt-1">
+                Build your event toolkit
+              </h2>
+              <p className="hidden sm:block text-[13px] text-[#64748b] mt-1.5">
+                Pick the equipment you need — providers will quote based on your selection.
+              </p>
+            </div>
+            {selectedCount > 0 && (
+              <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-[#C9973A]/25 shadow-sm">
+                <ShoppingBasket className="w-4 h-4 text-[#C9973A]" />
+                <span className="text-[13px] font-bold text-[#1a1a2e]">
+                  {selectedCount} selected
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Catalog Grid */}
-        <div className="p-4 grid grid-cols-2 gap-4 pb-32">
-          {RENTAL_CATALOG_ITEMS.map((item) => {
-            const isSelected = !!selectedItems[item.id];
-            const quantity = selectedItems[item.id]?.quantity || 0;
+        <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-8 py-6 sm:py-10 pb-32">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+            {RENTAL_CATALOG_ITEMS.map((item) => {
+              const isSelected = !!selectedItems[item.id];
+              const quantity = selectedItems[item.id]?.quantity || 0;
 
-            return (
-              <motion.button
-                key={item.id}
-                whileTap={{ scale: 0.96 }}
-                onClick={() => {
-                  setCurrentDetailItem(item);
-                  setTempItemData(selectedItems[item.id] || {});
-                }}
-                className="relative bg-white rounded-3xl overflow-hidden shadow-sm border border-[#f1f5f9] flex flex-col group"
-              >
-                <div className="aspect-square overflow-hidden">
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                    referrerPolicy="no-referrer"
-                  />
-                  {isSelected && (
-                    <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-[#C9973A] text-white flex items-center justify-center shadow-lg font-bold text-[12px] z-10">
-                      {quantity || '✓'}
-                    </div>
-                  )}
-                </div>
-                <div className="p-4 text-left">
-                  <p className="font-serif text-[15px] font-bold text-[#1a1a2e]">{item.name}</p>
-                  <p className="text-[11px] text-[#94a3b8] mt-1">Tap to specify</p>
-                </div>
-              </motion.button>
-            );
-          })}
+              return (
+                <motion.button
+                  key={item.id}
+                  type="button"
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => {
+                    setCurrentDetailItem(item);
+                    setTempItemData(selectedItems[item.id] || {});
+                  }}
+                  className={`relative bg-white rounded-3xl overflow-hidden flex flex-col text-left group transition-all duration-300 ${
+                    isSelected
+                      ? 'ring-2 ring-[#C9973A] shadow-xl shadow-[#C9973A]/15'
+                      : 'shadow-sm border border-[#1B3068]/5 hover:shadow-xl hover:shadow-[#1B3068]/10 hover:-translate-y-1'
+                  }`}
+                >
+                  <div className="aspect-[4/5] sm:aspect-square overflow-hidden relative">
+                    <img
+                      src={item.image}
+                      alt={item.name}
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    {isSelected && (
+                      <div className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#C9973A] text-white shadow-lg z-10">
+                        <Check className="w-3.5 h-3.5" />
+                        <span className="font-bold text-[12px]">
+                          {quantity > 1 ? `${quantity}` : 'Selected'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4 sm:p-5 flex flex-col gap-1">
+                    <p className="font-serif text-[16px] sm:text-[18px] font-bold text-[#1a1a2e]">
+                      {item.name}
+                    </p>
+                    <p className="text-[11px] sm:text-[12px] text-[#64748b]">
+                      {isSelected ? 'Tap to edit specifications' : 'Tap to specify'}
+                    </p>
+                  </div>
+                </motion.button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Sticky Review Bar */}
         <AnimatePresence>
-          {Object.keys(selectedItems).length > 0 && (
+          {selectedCount > 0 && (
             <motion.div
               initial={{ y: 100 }}
               animate={{ y: 0 }}
               exit={{ y: 100 }}
-              className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-[#f1f5f9] z-[120]"
+              className="fixed bottom-0 left-0 right-0 bg-white/85 backdrop-blur-md border-t border-[#1B3068]/8 z-[120] shadow-[0_-4px_24px_rgba(27,48,104,0.08)]"
             >
-              <div className="max-w-[448px] mx-auto flex items-center justify-between gap-4">
+              <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-8 py-4 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#C9973A]/10 flex items-center justify-center">
+                  <div className="w-11 h-11 rounded-full bg-[#C9973A]/10 flex items-center justify-center">
                     <ShoppingBasket className="w-5 h-5 text-[#C9973A]" />
                   </div>
                   <div>
-                    <p className="text-[14px] font-bold text-[#1a1a2e]">
-                      {Object.keys(selectedItems).length} Categories
+                    <p className="text-[15px] font-bold text-[#1a1a2e]">
+                      {selectedCount} {selectedCount === 1 ? 'item' : 'items'} selected
                     </p>
-                    <p className="text-[11px] text-[#94a3b8]">Ready to return</p>
+                    <p className="text-[11px] text-[#64748b]">Ready to return to your request</p>
                   </div>
                 </div>
                 <motion.button
+                  type="button"
                   whileTap={{ scale: 0.97 }}
                   onClick={() => setView('form')}
-                  className="bg-[#1a1a2e] text-white px-6 py-3 rounded-full font-sans text-[14px] font-semibold flex items-center gap-2 shadow-lg"
+                  className="bg-[#1a1a2e] text-white px-6 sm:px-8 py-3 sm:py-3.5 rounded-full font-sans text-[14px] sm:text-[15px] font-semibold flex items-center gap-2 shadow-lg hover:bg-black transition-colors"
                 >
                   Confirm & Return
                   <Check className="w-4 h-4" />
@@ -584,32 +635,45 @@ export default function DynamicInquiryForm({
                 animate={{ y: 0 }}
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="relative w-full max-w-[480px] bg-white rounded-t-4xl sm:rounded-4xl shadow-2xl overflow-hidden"
+                className="relative w-full max-w-[640px] bg-white rounded-t-4xl sm:rounded-4xl shadow-2xl overflow-hidden flex flex-col"
               >
-                <div className="p-6 border-b border-[#f1f5f9] flex items-center justify-between">
-                  <div>
-                    <h3 className="font-serif text-[22px] font-bold text-[#1a1a2e]">
-                      {currentDetailItem.name}
-                    </h3>
-                    <p className="text-[12px] text-[#94a3b8]">Specify your requirements</p>
-                  </div>
+                {/* Hero image header */}
+                <div className="relative h-32 sm:h-40 overflow-hidden flex-shrink-0">
+                  <img
+                    src={currentDetailItem.image}
+                    alt={currentDetailItem.name}
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
                   <button
+                    type="button"
                     onClick={() => setCurrentDetailItem(null)}
-                    className="w-10 h-10 rounded-full bg-[#f8fafc] flex items-center justify-center text-[#94a3b8]"
+                    className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/95 backdrop-blur flex items-center justify-center text-[#1a1a2e] shadow-lg hover:bg-white transition-colors"
+                    aria-label="Close"
                   >
                     <X className="w-5 h-5" />
                   </button>
+                  <div className="absolute bottom-4 left-6 right-16">
+                    <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">
+                      Specify your requirements
+                    </p>
+                    <h3 className="font-serif text-[22px] sm:text-[26px] font-bold text-white leading-tight mt-1">
+                      {currentDetailItem.name}
+                    </h3>
+                  </div>
                 </div>
 
-                <div className="p-6 max-h-[70vh] overflow-y-auto flex flex-col gap-8">
-                  {currentDetailItem.schema.map((field, idx) => (
+                <div className="p-6 sm:p-8 max-h-[60vh] overflow-y-auto flex flex-col gap-6">
+                  {currentDetailItem.schema.map((field) => (
                     <div key={field.name}>{renderField(field, true)}</div>
                   ))}
                 </div>
 
-                <div className="p-6 bg-[#f8fafc] flex gap-3">
+                <div className="p-5 sm:p-6 bg-[#f8fafc] flex gap-3 border-t border-[#f1f5f9]">
                   {selectedItems[currentDetailItem.id] && (
                     <button
+                      type="button"
                       onClick={() => {
                         setSelectedItems((prev) => {
                           const next = { ...prev };
@@ -618,14 +682,14 @@ export default function DynamicInquiryForm({
                         });
                         setCurrentDetailItem(null);
                       }}
-                      className="flex-1 h-13.5 border border-brand-error text-[#ef4444] rounded-[50px] font-sans text-[15px] font-semibold"
+                      className="flex-1 h-13.5 border border-brand-error text-[#ef4444] rounded-[50px] font-sans text-[15px] font-semibold hover:bg-brand-error/5 transition-colors"
                     >
                       Remove
                     </button>
                   )}
                   <button
+                    type="button"
                     onClick={() => {
-                      // Extract quantity if exists
                       const quantityKey = currentDetailItem.schema.find((f) =>
                         f.name.toLowerCase().includes('quantity')
                       )?.name;
@@ -640,7 +704,7 @@ export default function DynamicInquiryForm({
                       }));
                       setCurrentDetailItem(null);
                     }}
-                    className="flex-[2] h-13.5 bg-[#C9973A] rounded-[50px] font-sans text-[15px] font-semibold text-white shadow-lg"
+                    className="flex-[2] h-13.5 bg-[#C9973A] rounded-[50px] font-sans text-[15px] font-semibold text-white shadow-lg hover:bg-[#b88532] transition-colors"
                   >
                     {selectedItems[currentDetailItem.id] ? 'Update Item' : 'Add to List'}
                   </button>
@@ -868,8 +932,111 @@ export default function DynamicInquiryForm({
 
               {/* Selected Items Summary Section */}
               {isEquipmentRental && (
-                <div className="mt-12 flex flex-col gap-6">
-                  {/* ... (keep existing rental items logic if needed) ... */}
+                <div className="mt-12 flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-serif text-[18px] font-bold text-[#1a1a2e]">
+                        Equipment Items
+                      </h3>
+                      <p className="text-[12px] text-[#94a3b8] mt-1">
+                        Pick what you need from the catalog
+                      </p>
+                    </div>
+                    <motion.button
+                      type="button"
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => setView('catalog')}
+                      className="bg-[#1a1a2e] text-white px-4 py-2.5 rounded-full font-sans text-[13px] font-semibold flex items-center gap-2"
+                    >
+                      <PlusCircle className="w-4 h-4" />
+                      Browse Catalog
+                    </motion.button>
+                  </div>
+
+                  {Object.keys(selectedItems).length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setView('catalog')}
+                      className={`w-full rounded-2xl border-2 border-dashed p-8 flex flex-col items-center justify-center gap-2 transition-colors ${
+                        itemsError
+                          ? 'border-brand-error/60 bg-brand-error/5'
+                          : 'border-[#e2e8f0] bg-white hover:border-[#C9973A]/60 hover:bg-[#C9973A]/5'
+                      }`}
+                    >
+                      <ShoppingBasket className="w-8 h-8 text-[#C9973A]" />
+                      <p className="font-serif text-[15px] font-bold text-[#1a1a2e]">
+                        No items selected yet
+                      </p>
+                      <p className="text-[12px] text-[#94a3b8]">
+                        Tap to browse chairs, tables, tents, catering, decor
+                      </p>
+                    </button>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {Object.entries(selectedItems).map(([itemId, itemData]) => {
+                        const catalogItem = RENTAL_CATALOG_ITEMS.find((i) => i.id === itemId);
+                        if (!catalogItem) return null;
+                        const summaryParts = catalogItem.schema
+                          .map((f) => itemData[f.name])
+                          .filter((v) => v !== undefined && v !== null && v !== '')
+                          .map(String);
+                        return (
+                          <div
+                            key={itemId}
+                            className="bg-white rounded-2xl border border-[#f1f5f9] p-4 flex items-center gap-3"
+                          >
+                            <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0">
+                              <img
+                                src={catalogItem.image}
+                                alt={catalogItem.name}
+                                className="w-full h-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-serif text-[15px] font-bold text-[#1a1a2e]">
+                                {catalogItem.name}
+                              </p>
+                              <p className="text-[12px] text-[#94a3b8] truncate">
+                                {summaryParts.join(' · ') || 'Tap edit to specify'}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCurrentDetailItem(catalogItem);
+                                setTempItemData(itemData);
+                              }}
+                              className="text-[12px] font-semibold text-[#1a1a2e] px-3 py-2 rounded-full bg-[#f8fafc] hover:bg-[#f1f5f9]"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedItems((prev) => {
+                                  const next = { ...prev };
+                                  delete next[itemId];
+                                  return next;
+                                });
+                              }}
+                              className="w-8 h-8 rounded-full bg-[#f8fafc] hover:bg-brand-error/10 flex items-center justify-center text-[#94a3b8] hover:text-brand-error"
+                              aria-label={`Remove ${catalogItem.name}`}
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {itemsError && (
+                    <div className="flex items-center gap-2 text-brand-error text-[13px] font-medium">
+                      <AlertCircle className="w-4 h-4" />
+                      <span>{itemsError}</span>
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -12,6 +12,7 @@ import {
   HttpStatus,
   HttpCode,
   ForbiddenException,
+  NotFoundException,
   UseInterceptors,
   UploadedFile,
   UploadedFiles,
@@ -187,6 +188,9 @@ export class InquiriesController {
   ) {
     // Verify inquiry ownership
     const inquiry = await this.inquiriesService.findOne(inquiryId);
+    if (!inquiry) {
+      throw new NotFoundException(`Inquiry ${inquiryId} not found`);
+    }
     if (inquiry.buyerId !== req.user.id) {
       throw new ForbiddenException('You can only upload images to your own inquiries');
     }
@@ -214,6 +218,9 @@ export class InquiriesController {
   ) {
     // Verify inquiry ownership
     const inquiry = await this.inquiriesService.findOne(inquiryId);
+    if (!inquiry) {
+      throw new NotFoundException(`Inquiry ${inquiryId} not found`);
+    }
     if (inquiry.buyerId !== req.user.id) {
       throw new ForbiddenException('You can only upload images to your own inquiries');
     }
@@ -240,6 +247,9 @@ export class InquiriesController {
   ) {
     // Verify inquiry ownership
     const inquiry = await this.inquiriesService.findOne(inquiryId);
+    if (!inquiry) {
+      throw new NotFoundException(`Inquiry ${inquiryId} not found`);
+    }
     if (inquiry.buyerId !== req.user.id) {
       throw new ForbiddenException('You can only delete images from your own inquiries');
     }
@@ -291,6 +301,9 @@ export class InquiriesController {
     @Request() req: AuthenticatedRequest
   ) {
     const inquiry = await this.inquiriesService.findOne(id);
+    if (!inquiry) {
+      throw new NotFoundException(`Inquiry ${id} not found`);
+    }
     // ENFORCE: Only the inquiry owner can update it
     if (inquiry.buyerId !== req.user.id) {
       throw new ForbiddenException('You can only update your own inquiries');
@@ -306,6 +319,9 @@ export class InquiriesController {
     @Request() req: AuthenticatedRequest
   ) {
     const inquiry = await this.inquiriesService.findOne(id);
+    if (!inquiry) {
+      throw new NotFoundException(`Inquiry ${id} not found`);
+    }
     // ENFORCE: Only the inquiry owner can change its status
     if (inquiry.buyerId !== req.user.id) {
       throw new ForbiddenException('You can only update your own inquiries');
@@ -318,6 +334,14 @@ export class InquiriesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     const inquiry = await this.inquiriesService.findOne(id);
+    // 404 when the row doesn't exist (already deleted, stale UI cache,
+    // or wrong id sent). Without this guard the next line dereferenced
+    // null and the controller crashed with a 500 + raw "Cannot read
+    // properties of null (reading 'buyerId')" leaking the stack to
+    // the client.
+    if (!inquiry) {
+      throw new NotFoundException(`Inquiry ${id} not found`);
+    }
     // ENFORCE: Users can only delete their own inquiries
     if (inquiry.buyerId !== req.user.id) {
       throw new ForbiddenException('You can only delete your own inquiries');

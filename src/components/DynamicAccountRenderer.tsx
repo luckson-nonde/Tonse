@@ -494,16 +494,18 @@ export default function DynamicAccountRenderer({
                     key={uniqueKey('quote', item.id, idx)}
                     quote={item}
                     onView={() => onAction('view_quote', item)}
-                    onPrint={() => onAction('print_quote', item)}
-                    onArchive={() => onAction('archive_quote', item)}
+                    onPay={() => onAction('pay_quote', item)}
                     onDelete={() => onAction('delete_quote', item)}
                   />
                 );
               }
               if (view === 'orders') {
+                // Key by `orderId` (the row's own primary key), not
+                // `item.id` — that one is the inquiry id and collides
+                // when two orders point at the same quote/inquiry.
                 return (
                   <InquiryCard
-                    key={uniqueKey('order', item.id, idx)}
+                    key={uniqueKey('order', (item as any).orderId ?? item.id, idx)}
                     inquiry={item}
                     state="paid"
                     paidQuote={item.paidQuote}
@@ -588,6 +590,7 @@ export default function DynamicAccountRenderer({
             quote={item}
             inquiry={data?.inquiries?.find((i: Inquiry) => i.id === item.inquiryId)}
             onAction={onAction}
+            autoOpenPay={data?.autoPayQuoteId === item.id}
           />
         ) : view === 'order_details' ? (
           <OrderDetails

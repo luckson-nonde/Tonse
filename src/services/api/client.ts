@@ -3,7 +3,7 @@
  * Simple API calls using v1
  */
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+const API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:3001';
 
 interface ApiResponse<T> {
   data?: T;
@@ -136,8 +136,14 @@ export const apiCall = async <T = any>(
       headers: headersInit,
     });
 
-    // Handle 401 Unauthorized (token might be invalid)
-    if (response.status === 401) {
+    // Handle 401 Unauthorized (token might be invalid).
+    // Skip the bounce-to-login redirect when the failing call IS the auth
+    // attempt itself — wrong credentials are an expected outcome of
+    // /auth/login, not a session-expired condition. Falling through lets
+    // the backend's error body ("invalid credentials") reach the caller's
+    // catch block instead of a hard page reload.
+    const isAuthAttempt = /^\/auth\/(login|register|refresh)/.test(endpoint);
+    if (response.status === 401 && !isAuthAttempt) {
       tokenManager.clearTokens();
       window.location.href = '/login';
       throw new Error('Unauthorized. Please login again.');

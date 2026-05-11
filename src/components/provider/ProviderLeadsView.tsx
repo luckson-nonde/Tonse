@@ -9,6 +9,7 @@ import {
   getEffectiveBusinessType,
   getEffectiveBusinessTypes,
   CATEGORIES_DB,
+  RENTAL_CATALOG_ITEMS,
 } from '../../services/categories';
 import { useActiveProfileContext } from '../../hooks/useActiveProfileContext';
 
@@ -84,17 +85,86 @@ function InquiryDetails({
       )}
 
       {lead.preferences && Object.keys(lead.preferences).length > 0 && (
-        <PreferenceTags preferences={lead.preferences} />
+        <div>
+          <p className="text-[10px] font-black text-[#C9973A] uppercase tracking-[0.28em] mb-4 flex items-center gap-3">
+            <span className="w-[3px] h-5 rounded-full bg-[#C9973A] inline-block" />
+            Buyer Preferences
+          </p>
+          <PreferenceTags preferences={lead.preferences} />
+        </div>
       )}
+
+      {/* Equipment items grid — central context for an event-equipment-rental
+          quote. Without this the provider sees only event metadata (date,
+          guest count) and has nothing to price. Each card shows the
+          catalog thumbnail, item name, and the populated sub-fields the
+          buyer typed (chair type, tent size, etc.). */}
+      {(() => {
+        const rentalItems = lead.attributes?.rentalItems as Record<string, any> | undefined;
+        if (!rentalItems || Object.keys(rentalItems).length === 0) return null;
+        return (
+          <div>
+            <p className="text-[10px] font-black text-[#C9973A] uppercase tracking-[0.28em] mb-4 flex items-center gap-3">
+              <span className="w-[3px] h-5 rounded-full bg-[#C9973A] inline-block" />
+              Equipment Items · {Object.keys(rentalItems).length}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {Object.entries(rentalItems).map(([itemId, itemData]: [string, any]) => {
+                const catalogItem = RENTAL_CATALOG_ITEMS.find((i) => i.id === itemId);
+                if (!catalogItem) return null;
+                const summaryParts = catalogItem.schema
+                  .map((f) => itemData[f.name])
+                  .filter((v: any) => v !== undefined && v !== null && v !== '')
+                  .map(String);
+                const qty = Number(itemData.quantity) || 0;
+                return (
+                  <div
+                    key={itemId}
+                    className="bg-white rounded-2xl border border-[#C9973A]/15 p-4 flex items-center gap-3 hover:border-[#C9973A]/40 hover:shadow-md transition-all"
+                  >
+                    <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0">
+                      <img
+                        src={catalogItem.image}
+                        alt={catalogItem.name}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <p className="font-serif text-[15px] font-bold text-[#1a1a2e] truncate">
+                          {catalogItem.name}
+                        </p>
+                        {qty > 1 && (
+                          <span className="text-[10px] font-black text-white bg-[#C9973A] px-2 py-0.5 rounded-full shrink-0">
+                            ×{qty}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[12px] text-slate-500 leading-snug line-clamp-2">
+                        {summaryParts.join(' · ') || 'No details specified'}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Prefer the stable categoryId — getCategorySchema accepts both
           ids and names, but the legacy `category` display string can be
           a comma-joined blob (e.g. "Mobile Phones & Accessories (Repair)")
           while categoryIds[0] is the canonical "mobile-phones-repair"
           slug. Without an id, the lookup falls back to the generic
-          schema and only renders brand/quantity/urgency. */}
+          schema and only renders brand/quantity/urgency. The
+          `rentalItems` key is filtered here too — it's already rendered
+          as the cards above and would otherwise leak as a JSON blob
+          into renderSpecifications. */}
       {lead.attributes && Object.keys(lead.attributes).length > 0 && (() => {
-        const cleaned = stripMediaKeys(lead.attributes);
+        const { rentalItems: _ri, ...attrsWithoutRental } = lead.attributes;
+        const cleaned = stripMediaKeys(attrsWithoutRental);
         const cat = (lead as any).categoryIds?.[0] || lead.category || '';
         return Object.keys(cleaned).length > 0
           ? renderSpecifications(cleaned, cat, 'Inquiry Details')
@@ -340,11 +410,22 @@ export default function ProviderLeadsView({
   // `buy` and parent rows (no type); REPAIR keeps `repair` + `restore`;
   // other personas don't filter (show everything matching).
   const visibleCategoryNames = (() => {
-    const ids: string[] | undefined = (user as any)?.categoryIds;
-    if (Array.isArray(ids) && ids.length > 0) {
-      const matched = ids
+    const rawIds: string[] | undefined = (user as any)?.categoryIds;
+    if (Array.isArray(rawIds) && rawIds.length > 0) {
+      // Mirror the backend matching scope: dedupe + drop parent rows
+      // when the seller has any specific child of that parent. Onboarding
+      // auto-adds the parent slug ("events") whenever a sub-category
+      // ("event-planning") is picked, so without this the subtitle
+      // reads "EVENTS, EVENT PLANNING" while the actual match scope is
+      // just event-planning — buyers (and providers) read that and
+      // think the system is broadcasting too widely.
+      const idSet = new Set(rawIds);
+      const cats = Array.from(idSet)
         .map((id) => CATEGORIES_DB.find((c) => c.id === id))
-        .filter((c): c is NonNullable<typeof c> => !!c)
+        .filter((c): c is NonNullable<typeof c> => !!c);
+      const childIds = new Set(cats.map((c) => c.parentId).filter(Boolean) as string[]);
+      const effectiveCats = cats.filter((c) => !childIds.has(c.id));
+      const matched = effectiveCats
         .filter((c) => {
           if (effectiveType === 'RETAIL') {
             // Keep buy variants and parent rows (no type), drop repair.

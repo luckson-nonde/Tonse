@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Order } from './entities/order.entity';
+import { Quote } from '../quotes/entities/quote.entity';
+import { Inquiry } from '../inquiries/entities/inquiry.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 
@@ -10,15 +12,39 @@ export class OrdersService {
   constructor(
     @InjectRepository(Order)
     private ordersRepository: Repository<Order>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async create(createOrderDto: CreateOrderDto): Promise<Order> {
     const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substring(7).toUpperCase()}`;
-    const order = this.ordersRepository.create({
-      ...createOrderDto,
-      orderNumber,
+
+    // The order is the moment of payment in this app's lifecycle:
+    //   • the linked quote moves PENDING → PAID (so it leaves the
+    //     buyer's "Received Quotes" surface)
+    //   • the linked inquiry moves QUOTED → CLOSED (so it leaves the
+    //     buyer's "My Inquiries" surface and stops accepting more quotes)
+    // Both cascades ride on the same transaction as the order write —
+    // either everything advances or nothing does. Status writes here
+    // are server-authoritative; clients shouldn't try to PATCH status
+    // separately (and for the buyer they're not authorised to anyway).
+    return this.dataSource.transaction(async (m) => {
+      const order = await m.getRepository(Order).save(
+        m.getRepository(Order).create({ ...createOrderDto, orderNumber }),
+      );
+
+      if (createOrderDto.quoteId) {
+        await m.getRepository(Quote).update(createOrderDto.quoteId, { status: 'PAID' });
+        const quote = await m.getRepository(Quote).findOne({
+          where: { id: createOrderDto.quoteId },
+          select: ['id', 'inquiryId'],
+        });
+        if (quote?.inquiryId) {
+          await m.getRepository(Inquiry).update(quote.inquiryId, { status: 'CLOSED' });
+        }
+      }
+
+      return order;
     });
-    return this.ordersRepository.save(order);
   }
 
   async findAll(filters: any = {}): Promise<{ data: Order[]; total: number }> {

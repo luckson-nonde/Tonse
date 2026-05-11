@@ -210,6 +210,31 @@ const getCategoryStyles = (id: string) => {
   );
 };
 
+const LABOUR_GROUP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  CONSTRUCTION: HardHat,
+  DOMESTIC: Home,
+  INDUSTRIAL: Factory,
+  SKILLED_TRADES: Wrench,
+  AGRICULTURAL: Sprout,
+  TRANSPORT: Truck,
+};
+
+// Labour sub-type icons — only includes icons already imported in this file.
+// Anything not in this map falls back to the group's icon (or Wrench as a
+// final fallback). Add more entries here as new sub-types arrive; expanding
+// the lucide imports is the only other thing required.
+const LABOUR_SUB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  HardHat,
+  Hammer,
+  Home,
+  Sparkles,
+  Briefcase,
+  Wrench,
+  Truck,
+  Sprout,
+  Factory,
+};
+
 const getSubCategoryIcon = (name: string) => {
   const lowercaseName = name.toLowerCase();
   if (lowercaseName.includes('phone') || lowercaseName.includes('mobile')) return Smartphone;
@@ -1027,42 +1052,108 @@ export default function CategorySelection({
             )}
           </div>
         ) : activeLabourGroup ? (
-          <div className="animate-in slide-in-from-right duration-500">
-            <button
-              onClick={() => setActiveLabourGroup(null)}
-              className="flex items-center gap-2 text-slate-400 font-bold mb-8 hover:text-[#C9973A] transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" /> Back
-            </button>
-            <h1 className="text-4xl font-serif font-black text-[#1a1a2e] mb-12">Labour & Skills</h1>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-12">
-              {LABOUR_CATEGORY_GROUPS.map((g) => (
-                <div
-                  key={g.id}
-                  onClick={() => handleLabourGroupClick(g)}
-                  className={`p-6 rounded-[24px] bg-white border-2 text-center cursor-pointer transition-all ${activeLabourGroup.id === g.id ? 'border-[#C9973A]' : 'border-slate-200'}`}
-                >
-                  <h4 className="font-bold text-xs uppercase tracking-tight text-[#1a1a2e]">
-                    {g.label}
-                  </h4>
-                </div>
-              ))}
+          <div className="flex flex-col animate-in slide-in-from-right duration-500">
+            <div className="mb-8 sm:mb-10">
+              <button
+                onClick={() => setActiveLabourGroup(null)}
+                className="flex items-center gap-2 text-slate-400 font-bold text-sm mb-5 hover:text-[#C9973A] transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" /> Back to categories
+              </button>
+              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#C9973A] mb-3">
+                Labour and Skills <span className="text-slate-300 mx-1">·</span> Step 02 / Specialty
+              </p>
+              <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-[#1a1a2e] tracking-tight leading-[1.1] mb-3 sm:mb-4">
+                Choose your <span className="text-[#C9973A]">specialty</span>
+              </h1>
+              <p className="text-slate-500 text-sm sm:text-base font-medium max-w-xl leading-relaxed">
+                Pick the type of skilled professional you need. Browse all six tracks or jump straight to the trade you're hiring for.
+              </p>
             </div>
-            {activeLabourGroup !== 'ROOT' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {LABOUR_CATEGORIES.filter((c) => c.category === activeLabourGroup.id).map((s) => (
-                  <div
-                    key={s.id}
-                    onClick={() => handleLabourSubTypeSelect(s)}
-                    className={`p-6 rounded-[24px] bg-white border-2 flex items-center justify-between cursor-pointer transition-all ${selectedCategories.some((c) => c.id === s.id) ? 'border-[#C9973A]' : 'border-slate-200'}`}
+
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-10">
+              {LABOUR_CATEGORY_GROUPS.map((g) => {
+                const GroupIcon = LABOUR_GROUP_ICONS[g.id] || Wrench;
+                const isActive =
+                  activeLabourGroup !== 'ROOT' && activeLabourGroup.id === g.id;
+                return (
+                  <button
+                    type="button"
+                    key={g.id}
+                    onClick={() => handleLabourGroupClick(g)}
+                    className={`group/card relative p-5 rounded-[20px] bg-white border transition-all duration-500 ease-out flex flex-col items-center gap-3 text-center ${
+                      isActive
+                        ? 'border-[#C9973A]/60 shadow-[0_18px_40px_-12px_rgba(201,151,58,0.22)]'
+                        : 'border-[#C9973A]/20 hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-12px_rgba(201,151,58,0.18)]'
+                    }`}
                   >
-                    <span className="font-bold text-sm text-[#1a1a2e]">{s.label}</span>
-                    {selectedCategories.some((c) => c.id === s.id) && (
-                      <Check className="w-5 h-5 text-[#C9973A]" />
+                    {isActive && (
+                      <div
+                        aria-hidden="true"
+                        className="absolute top-3 right-3 w-1.5 h-1.5 rounded-full bg-[#C9973A] shadow-[0_0_0_5px_rgba(201,151,58,0.18)]"
+                      />
                     )}
-                  </div>
-                ))}
-              </div>
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+                      <GroupIcon className="w-5 h-5" />
+                    </div>
+                    <h3 className="font-bold text-[#1a1a2e] text-[12px] sm:text-[13px] uppercase tracking-[0.08em] leading-tight">
+                      {g.label}
+                    </h3>
+                  </button>
+                );
+              })}
+            </div>
+
+            {activeLabourGroup !== 'ROOT' && (
+              <>
+                <div className="mb-6 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-[#C9973A]/15" />
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#C9973A] whitespace-nowrap">
+                    {activeLabourGroup.label} · Pick a trade
+                  </p>
+                  <div className="h-px flex-1 bg-[#C9973A]/15" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+                  {LABOUR_CATEGORIES.filter((c) => c.category === activeLabourGroup.id).map(
+                    (s) => {
+                      const TradeIcon =
+                        LABOUR_SUB_ICONS[s.icon] ||
+                        LABOUR_GROUP_ICONS[activeLabourGroup.id] ||
+                        Wrench;
+                      const selected = selectedCategories.some((c) => c.id === s.id);
+                      return (
+                        <button
+                          type="button"
+                          key={s.id}
+                          onClick={() => handleLabourSubTypeSelect(s)}
+                          className={`group/card relative p-5 rounded-[20px] bg-white border text-left transition-all duration-500 ease-out flex items-start gap-4 ${
+                            selected
+                              ? 'border-[#C9973A]/60 shadow-[0_18px_40px_-12px_rgba(201,151,58,0.22)]'
+                              : 'border-[#C9973A]/20 hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-12px_rgba(201,151,58,0.18)]'
+                          }`}
+                        >
+                          <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+                            <TradeIcon className="w-5 h-5" />
+                          </div>
+                          <div className="min-w-0 flex-1 pt-0.5">
+                            <h4 className="font-bold text-[#1a1a2e] text-[15px] leading-snug tracking-tight">
+                              {s.label}
+                            </h4>
+                            <p className="text-[12px] text-slate-500 mt-1 leading-relaxed line-clamp-2">
+                              {s.description}
+                            </p>
+                          </div>
+                          {selected && (
+                            <div className="w-6 h-6 rounded-full bg-[#C9973A] flex items-center justify-center shrink-0 shadow-sm">
+                              <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    },
+                  )}
+                </div>
+              </>
             )}
           </div>
         ) : preselectedParentId ? (

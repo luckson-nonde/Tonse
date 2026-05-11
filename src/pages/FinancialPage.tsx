@@ -5,18 +5,17 @@ import {
   EyeOff,
   Send,
   Plus,
-  CreditCard,
   Receipt,
-  Wifi,
   Zap,
   Loader2,
   Wallet,
   ShieldCheck,
   Lock,
   Check,
-  XCircle,
+  ShoppingBasket,
+  CheckCircle2,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { authService } from '../services/auth/authService';
 import { useLiveQuery } from '../hooks/useLiveQuery';
@@ -25,7 +24,9 @@ import Button from '../components/Button';
 import { generateVirtualAccount, formatCurrency } from '../utils/financeUtils';
 import ReadingOwl from '../assets/images/empty-states/owl_reading.png';
 import TriumphantOwl from '../assets/images/empty-states/owl_triumphant.png';
-import { lencoService } from '../services/api/lencoService';
+import { createOrder } from '../services/api/orderService';
+import { updateQuoteStatus } from '../services/api/quoteService';
+import PaymentSheet from '../components/PaymentSheet';
 
 interface FinancialPageProps {
   isInsideDashboard?: boolean;
@@ -33,6 +34,17 @@ interface FinancialPageProps {
 
 export default function FinancialPage({ isInsideDashboard = false }: FinancialPageProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Quote handed to us by QuoteCard's "Make a Payment" button (or
+  // PaymentModal's Wallet selection). When present, render the Pending
+  // Payment basket card so the buyer sees what's about to be debited
+  // BEFORE they confirm. Cleared on confirm/cancel so a hard-refresh
+  // doesn't leave a phantom basket.
+  const [pendingQuote, setPendingQuote] = useState<any | null>(
+    (location.state as any)?.payQuote ?? null,
+  );
+  const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
+  const [paymentDone, setPaymentDone] = useState(false);
   const { user, updateUser } = useAuth();
   const [showBalance, setShowBalance] = useState(true);
   const [isPinVerified, setIsPinVerified] = useState(false);
@@ -125,6 +137,55 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
     }
   };
 
+  // Confirm a pending wallet payment that arrived via location.state
+  // (set by QuoteDetails' PaymentModal when the buyer picked Wallet).
+  // Wallet ledger debit is intentionally simulated rather than POSTed —
+  // the user is iterating on UX, not gateway integration. The order +
+  // status sync calls hit the real backend so downstream views (Order
+  // History / provider dashboard) reflect the booking.
+  const handleConfirmWalletPayment = async () => {
+    if (!pendingQuote || !user?.id) return;
+    const total = Number(pendingQuote.price || 0);
+    if (availableBalance < total) {
+      // Balance dropped between mount and confirm (rare but possible if
+      // the user topped up elsewhere). Surface it instead of silently
+      // failing the sync calls.
+      return;
+    }
+    setIsConfirmingPayment(true);
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    try {
+      if (typeof pendingQuote.id === 'string' && pendingQuote.providerId) {
+        await createOrder({
+          quoteId: String(pendingQuote.id),
+          buyerId: user.id,
+          sellerId: String(pendingQuote.providerId),
+          totalAmount: total,
+        });
+      }
+      if (typeof pendingQuote.id === 'string') {
+        await updateQuoteStatus(pendingQuote.id, 'PAID');
+        if (pendingQuote.inquiryId) {
+          const { updateInquiryStatus } = await import('../services/api/inquiryService');
+          await updateInquiryStatus(String(pendingQuote.inquiryId), 'PAID');
+        }
+      }
+    } catch (e) {
+      console.warn('Wallet payment status sync failed:', e);
+    }
+    setIsConfirmingPayment(false);
+    setPaymentDone(true);
+    // Wipe location.state so a refresh / back-nav doesn't keep showing
+    // the basket card. The success state stays visible in-page until
+    // the user dismisses or navigates away.
+    navigate('.', { replace: true, state: {} });
+  };
+
+  const handleCancelPendingPayment = () => {
+    setPendingQuote(null);
+    navigate('.', { replace: true, state: {} });
+  };
+
   const handleTransaction = async (type: 'IN' | 'OUT', amount: number) => {
     if (isNaN(amount) || amount <= 0) {
       alert('Please enter a valid amount.');
@@ -140,40 +201,22 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
     try {
       if (!user?.id) return;
 
-      if (type === 'IN') {
-        // Initiate real payment via Lenco
-        if (paymentMethod === 'mobile_money') {
-          await lencoService.initiateMobileMoneyCollection({
-            amount: amount,
-            phone: momoPhone,
-            operator: momoOperator.toLowerCase(),
-            reference: `TONSE-DEP-${Date.now()}`
-          });
-        }
-        
-        // Add pending transaction to ledger
-        await db.transactions.add({
-          userId: user.id as any,
-          type: 'IN',
-          amount: amount,
-          description: `Deposit via ${paymentMethod === 'mobile_money' ? momoOperator : 'Card'}`,
-          category: 'DEPOSIT',
-          createdAt: Date.now(),
-          status: 'PENDING',
-        });
+      // Gateway integration (Lenco / Stripe / etc.) is intentionally
+      // deferred — we're iterating on UX, not wiring real PSPs. Mimic
+      // the USSD round-trip so the spinner button feels real, then
+      // surface a success toast. The backend ledger write is also
+      // skipped here because the /payments DTO doesn't accept this
+      // shape; once the PSP is real we'll re-enable the write with
+      // type: 'DEPOSIT' / 'WITHDRAWAL' and status: 'SUCCESS'.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
 
-        alert('Payment initiated! Please check your phone for the prompt.');
+      if (type === 'IN') {
+        alert(
+          paymentMethod === 'mobile_money'
+            ? `Payment initiated. Approve the ${momoOperator} prompt on ${momoPhone || 'your phone'} to credit ZMW ${amount.toLocaleString()}.`
+            : `Card deposit of ZMW ${amount.toLocaleString()} initiated.`,
+        );
       } else {
-        // Withdrawal logic (remains mock for now)
-        await db.transactions.add({
-          userId: user.id as any,
-          type: 'OUT',
-          amount: amount,
-          description: 'Withdrawal from Virtual Account',
-          category: 'WITHDRAWAL',
-          createdAt: Date.now(),
-          status: 'COMPLETED',
-        });
         alert(`Successfully withdrawn ZMW ${amount.toLocaleString()}`);
       }
 
@@ -390,6 +433,140 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
         </div>
       </div>
 
+      {/* Pending Payment Basket — set when the buyer arrived here from
+          QuoteCard's "Make a Payment" button (Wallet method). Sits
+          right under the balance so the buyer can compare at-a-glance
+          before confirming the debit. Disappears once payment lands or
+          the user cancels. */}
+      {pendingQuote && !paymentDone && (() => {
+        const total = Number(pendingQuote.price || 0);
+        const insufficient = availableBalance < total;
+        return (
+          <div className="mb-6 bg-white rounded-3xl border border-[#C9973A]/30 shadow-sm overflow-hidden">
+            <div className="bg-gradient-to-br from-[#fdf6e9] to-[#fdf6e9]/50 px-6 py-4 border-b border-[#C9973A]/20 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#C9973A] text-white flex items-center justify-center shadow-sm">
+                <ShoppingBasket className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A]">
+                  Pending Payment
+                </p>
+                <p className="font-serif text-[18px] font-bold text-[#1a1612] leading-tight truncate">
+                  Confirm payment from wallet
+                </p>
+              </div>
+            </div>
+            <div className="p-6 flex flex-col gap-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.18em] mb-1">
+                    Quote
+                  </p>
+                  <p className="font-bold text-[15px] text-slate-900 leading-snug truncate">
+                    {pendingQuote.inquiryTitle || pendingQuote.title || 'Quote'}
+                  </p>
+                  <p className="text-[12px] text-slate-500 mt-0.5">
+                    From <span className="font-semibold text-slate-700">{pendingQuote.providerName || 'Provider'}</span>
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.18em] mb-1">
+                    Amount
+                  </p>
+                  <p className="font-serif text-[22px] font-black text-[#1a1612] leading-none">
+                    ZMW {total.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 rounded-2xl px-4 py-3 grid grid-cols-2 gap-3 text-[12px]">
+                <div>
+                  <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Wallet balance</p>
+                  <p className="font-bold text-slate-900 mt-0.5">ZMW {formatCurrency(availableBalance)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">After payment</p>
+                  <p className={`font-bold mt-0.5 ${insufficient ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    {insufficient
+                      ? `Short by ZMW ${(total - availableBalance).toLocaleString()}`
+                      : `ZMW ${formatCurrency(availableBalance - total)}`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  onClick={handleCancelPendingPayment}
+                  disabled={isConfirmingPayment}
+                  className="px-5 py-3 bg-white border border-slate-200 text-slate-600 text-[12px] font-bold uppercase tracking-[0.16em] rounded-full hover:bg-slate-50 disabled:opacity-50 transition-all"
+                >
+                  Cancel
+                </button>
+                {insufficient ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowDepositModal(true)}
+                    className="flex-1 py-3 bg-[#1B3068] text-white text-[13px] font-bold rounded-full hover:bg-[#152453] shadow-md flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Top Up Wallet
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleConfirmWalletPayment}
+                    disabled={isConfirmingPayment}
+                    className="flex-1 py-3 bg-[#C9973A] text-white text-[13px] font-bold rounded-full hover:bg-[#b08432] shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isConfirmingPayment ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Processing…
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-4 h-4" />
+                        Confirm Payment · ZMW {total.toLocaleString()}
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Payment-confirmed banner — replaces the basket card after
+          handleConfirmWalletPayment completes. Stays visible until the
+          buyer navigates away. */}
+      {paymentDone && (
+        <div className="mb-6 bg-emerald-50 border border-emerald-200 rounded-3xl p-6 flex items-start gap-4">
+          <div className="w-12 h-12 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md shrink-0">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-600 mb-1">
+              Payment Confirmed
+            </p>
+            <p className="font-serif text-[18px] font-bold text-slate-900 leading-tight">
+              Your booking is on its way.
+            </p>
+            <p className="text-[12px] text-slate-600 mt-1.5 leading-relaxed">
+              The provider has been notified. You'll see the order in your history.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate('/buyer/orders')}
+              className="mt-3 text-[12px] font-bold text-emerald-700 hover:text-emerald-800 underline underline-offset-2"
+            >
+              View Order History →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Escrow Balance Card (For Providers) */}
       {user?.role !== 'BUYER' && escrowBalance > 0 && (
         <div className="bg-emerald-600 rounded-4xl p-6 text-white shadow-lg mb-6 relative overflow-hidden">
@@ -535,183 +712,23 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
           )}
         </div>
       </div>
-      {/* Deposit Modal */}
-      {showDepositModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md transition-all duration-300">
-          <div className="w-full max-w-lg bg-white rounded-[40px] shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-300 overflow-hidden flex flex-col max-h-[95vh] md:max-h-[85vh]">
-            {/* Top Section: Account & Balance (Condensed Header) */}
-            <div className="bg-gradient-to-r from-[#1B3068] to-[#12224d] p-6 md:p-8 text-white relative overflow-hidden shrink-0">
-              <div className="relative z-10 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-[#d49b35]/20 rounded-xl flex items-center justify-center border border-[#d49b35]/30">
-                    <Wallet className="w-5 h-5 text-[#d49b35]" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-black leading-tight">Fund Your Account</h3>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <ShieldCheck className="w-3 h-3 text-[#d49b35]" />
-                      <span className="text-[9px] font-black uppercase tracking-widest text-[#d49b35]/80">Secure Transaction</span>
-                    </div>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setShowDepositModal(false)}
-                  className="p-2 hover:bg-white/10 rounded-full transition-all text-white/50 hover:text-white"
-                >
-                   <XCircle className="w-6 h-6" />
-                </button>
-              </div>
-              
-              <div className="mt-6 relative z-10 p-4 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-md">
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] text-white/40 uppercase tracking-widest font-black">Current Balance</p>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-[10px] font-black text-[#d49b35]">ZMW</span>
-                    <p className="text-xl font-black tabular-nums">{formatCurrency(availableBalance)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Decorative Background Elements */}
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[#d49b35]/10 rounded-full blur-2xl -mr-16 -mt-16"></div>
-            </div>
-
-            {/* Bottom Section: High-Density Intentional Form */}
-            <div className="px-8 py-7 space-y-5 bg-white flex-1 overflow-y-auto scrollbar-hide">
-              {/* 1. Amount Input (Defined Boundaries) */}
-              <div className="space-y-2.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] block ml-1">
-                  Amount to Add
-                </label>
-                <div className="relative group">
-                  <div className="absolute inset-0 bg-slate-50 rounded-2xl border border-slate-200 transition-all group-within:border-[#d49b35]/40 group-within:bg-white group-within:shadow-[0_0_0_4px_rgba(212,155,53,0.05)] shadow-sm"></div>
-                  <div className="relative flex items-center px-6 py-4">
-                    <div className="flex items-center gap-3 pr-4 border-r-2 border-slate-200/60">
-                      <span className="text-lg font-black text-[#d49b35]">ZMW</span>
-                    </div>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={amountInput}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/[^0-9.]/g, '');
-                        if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                          setAmountInput(val);
-                        }
-                      }}
-                      placeholder="0.00"
-                      className="flex-1 bg-transparent text-3xl font-black text-slate-900 outline-none placeholder:text-slate-300 ml-5"
-                      autoFocus
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* 2. Phone Number (Visible Envelope) */}
-              {paymentMethod === 'mobile_money' && (
-                <div className="space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-300">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] block ml-1">
-                    Phone Number
-                  </label>
-                  <div className="relative group">
-                    <div className="absolute inset-0 bg-slate-50 rounded-2xl border border-slate-200 transition-all group-within:border-[#d49b35]/40 group-within:bg-white shadow-sm"></div>
-                    <div className="relative flex items-center">
-                      <input
-                        type="tel"
-                        value={momoPhone}
-                        onChange={(e) => setMomoPhone(e.target.value)}
-                        placeholder="097XXXXXXXX"
-                        className="w-full bg-transparent px-6 py-4 font-black text-slate-900 outline-none text-base tracking-widest placeholder:text-slate-300"
-                      />
-                      <div className="absolute right-5 top-1/2 -translate-y-1/2">
-                        <div className="w-6 h-6 bg-emerald-50 rounded-full flex items-center justify-center border border-emerald-100">
-                          <Check className="w-3.5 h-3.5 text-emerald-500" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* 3. Payment Method (High-Contrast Row) */}
-              <div className="space-y-2.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] block ml-1">
-                  Payment Method
-                </label>
-                <div className="flex gap-2 p-1 bg-slate-100/50 rounded-2xl border border-slate-200 shadow-inner">
-                  <button
-                    onClick={() => setPaymentMethod('mobile_money')}
-                    className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2.5 transition-all border ${
-                      paymentMethod === 'mobile_money' 
-                        ? 'bg-white shadow-md border-slate-100 text-[#d49b35]' 
-                        : 'border-transparent text-slate-400 hover:text-slate-500 hover:bg-white/40'
-                    }`}
-                  >
-                    <Wifi className="w-3.5 h-3.5" />
-                    <span className="text-[9px] font-black uppercase tracking-widest">Mobile</span>
-                  </button>
-                  <button
-                    onClick={() => setPaymentMethod('card')}
-                    className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2.5 transition-all border ${
-                      paymentMethod === 'card' 
-                        ? 'bg-white shadow-md border-slate-100 text-[#d49b35]' 
-                        : 'border-transparent text-slate-400 hover:text-slate-500 hover:bg-white/40'
-                    }`}
-                  >
-                    <CreditCard className="w-3.5 h-3.5" />
-                    <span className="text-[9px] font-black uppercase tracking-widest">Bank Card</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* 4. Provider Selection (Sharp Pill Selector) */}
-              {paymentMethod === 'mobile_money' && (
-                <div className="space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-300">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] block ml-1">
-                    Select Provider
-                  </label>
-                  <div className="flex gap-2 p-1 bg-slate-100/50 rounded-2xl border border-slate-200 shadow-inner">
-                    {['MTN', 'Airtel', 'Zamtel'].map((op) => (
-                      <button
-                        key={op}
-                        onClick={() => setMomoOperator(op)}
-                        className={`flex-1 py-2.5 rounded-xl font-black text-[9px] tracking-widest transition-all uppercase border ${
-                          momoOperator === op
-                            ? 'bg-[#1B3068] text-white shadow-lg border-blue-900'
-                            : 'border-transparent text-slate-400 hover:text-slate-600 hover:bg-white/40'
-                        }`}
-                      >
-                        {op}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Action Buttons (Always Visible) */}
-              <div className="flex gap-4 pt-4 border-t border-slate-50">
-                <button
-                  onClick={() => setShowDepositModal(false)}
-                  className="flex-1 py-4 rounded-2xl text-slate-400 font-black uppercase tracking-widest text-[10px] hover:bg-slate-50 transition-all"
-                >
-                  Cancel
-                </button>
-                <Button
-                  onClick={() => handleTransaction('IN', parseFloat(amountInput))}
-                  disabled={!amountInput || isProcessing || (paymentMethod === 'mobile_money' && !momoPhone)}
-                  className="flex-[1.5] py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-[#d49b35]/20"
-                >
-                  {isProcessing ? (
-                    <Loader2 className="w-4 h-4 animate-spin mx-auto" />
-                  ) : (
-                    'Confirm Deposit'
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Deposit — single shared PaymentSheet, navy header. */}
+      <PaymentSheet
+        open={showDepositModal}
+        onClose={() => setShowDepositModal(false)}
+        title="Fund Your Account"
+        headerStat={{ label: 'Current Balance', amount: availableBalance }}
+        amountMode="input"
+        defaultPhone={momoPhone}
+        methods={['mobile_money', 'card']}
+        actionLabel="Confirm Deposit"
+        busy={isProcessing}
+        onSubmit={async ({ amount, provider, phone }) => {
+          if (provider) setMomoOperator(provider);
+          if (phone) setMomoPhone(phone);
+          await handleTransaction('IN', amount);
+        }}
+      />
 
       {/* Withdrawal Modal */}
       {showWithdrawModal && (

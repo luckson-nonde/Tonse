@@ -314,14 +314,20 @@ export default function ProviderDashboard() {
     [user],
   );
   const initialVariant = React.useMemo<string | undefined>(() => {
-    // Priority: staff lock > Profile-popover persona > primary archetype
-    // for multi-archetype owners > undefined for single-archetype.
+    // Priority: staff lock > Profile-popover persona > the seller's only
+    // archetype (single-archetype) > primary archetype for multi.
+    // Previously single-archetype owners returned undefined here, which
+    // told the leads endpoint not to filter by archetype at all — so a
+    // catering provider also matched event-venues / event-equipment-rental
+    // through the recursive parent-expansion of "events". Auto-setting
+    // the variant to their one archetype scopes the leads correctly.
     if (user?.assignedArchetype) return user.assignedArchetype;
     const personaArchetype = resolveActiveArchetype(
       activeContext,
       sellerArchetypes as any,
     );
     if (personaArchetype) return personaArchetype;
+    if (sellerArchetypes.length === 1) return sellerArchetypes[0];
     if (sellerArchetypes.length > 1) return getPrimaryBusinessType(user as any);
     return undefined;
   }, [user, sellerArchetypes, activeContext]);

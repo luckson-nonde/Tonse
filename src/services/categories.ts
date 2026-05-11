@@ -13,6 +13,11 @@ export interface FieldSchema {
     field: string;
     value: any;
   };
+  /** Force this field to stay visible in EXPRESS mode even when not required.
+   *  Use for category-specific optional fields that materially shape the quote
+   *  (cuisine for catering, decor style for decor, planning stage for planning).
+   *  Without it the EXPRESS filter strips them and the form looks generic. */
+  keepInExpress?: boolean;
 }
 
 export interface Category {
@@ -172,10 +177,9 @@ const entertainmentPerformersSchema: FieldSchema[] = [
   { name: "duration", label: "Duration (hours)", type: "counter", required: true, min: 1, max: 24, group: "Event Details" },
   { name: "location_name", label: "Venue Location", type: "text", required: true, placeholder: "e.g. Lusaka, Levy Mall", group: "Event Details" },
   { name: "quantity", label: "Expected Guests", type: "number", required: true, min: 1, group: "Event Details" },
-  { name: "performanceType", label: "Performance Type", type: "select", required: true, options: ["Live Band", "DJ", "Solo Artist", "MC/Host", "Dancer", "Comedian", "Public Speaker", "Influencer", "Spoken Word", "Other"], group: "Performance Requirements" },
-  { name: "musicGenre", label: "Music Genre", type: "select", required: false, options: ["Afrobeats", "Zambian Music", "Gospel", "RnB/Soul", "Hip Hop", "Jazz", "Classical", "Pop", "Any"], group: "Performance Requirements" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Terms", helpText: "Optional - leave blank to receive price offers from shops" },
-  { name: "specialRequests", label: "Special Requirements", type: "textarea", required: false, placeholder: "Any special requests or rider requirements...", group: "Budget & Terms" }
+  { name: "musicGenre", label: "Music Genre", type: "select", required: false, keepInExpress: true, options: ["Afrobeats", "Zambian Music", "Gospel", "RnB/Soul", "Hip Hop", "Jazz", "Classical", "Pop", "Any"], group: "Performance Requirements" },
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Terms", helpText: "Optional - leave blank to receive price offers from shops" },
+  { name: "specialRequests", label: "Special Requirements", type: "textarea", required: false, placeholder: "Any special requests or rider requirements...", group: "Budget and Terms" }
 ];
 
 const venuesClubsSchema: FieldSchema[] = [
@@ -220,24 +224,6 @@ export const RENTAL_CATALOG_ITEMS: { id: string; name: string; image: string; sc
       { name: "tentDetails", label: "Details", type: "textarea", required: false, placeholder: "Mention flooring, lighting, etc..." }
     ]
   },
-  { 
-    id: "catering", 
-    name: "Catering", 
-    image: "https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&q=80&w=400&h=400",
-    schema: [
-      { name: "cateringItems", label: "Items Needed", type: "textarea", required: true, placeholder: "e.g. Plates, Side plates, Dessert bowls, Spoons, Forks..." },
-      { name: "cateringQuantity", label: "Quantity per Item", type: "number", required: true, placeholder: "e.g. 200" }
-    ]
-  },
-  { 
-    id: "decor", 
-    name: "Decor", 
-    image: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&q=80&w=400&h=400",
-    schema: [
-      { name: "decorItems", label: "Decor Items", type: "textarea", required: true, placeholder: "e.g. Red carpet, Centerpieces, Flower vases..." },
-      { name: "decorDetails", label: "Style / Theme", type: "text", required: false, placeholder: "e.g. Rustic, Gold & White" }
-    ]
-  }
 ];
 
 export const equipmentRentalCoreSchema: FieldSchema[] = [
@@ -496,9 +482,9 @@ const carAccessoriesSchema: FieldSchema[] = [
   { name: "condition", label: "Condition", type: "select", required: true, options: ["Brand New", "Used - Good", "Any"], group: "Accessory Details" },
   { name: "installationRequired", label: "Installation Required?", type: "toggle", required: false, helpText: "Toggle if you need the accessory fitted / installed", group: "Accessory Details" },
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1, group: "Accessory Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific color, size, compatibility requirements...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific color, size, compatibility requirements...", group: "Budget and Urgency" }
 ];
 
 const carBreakdownRecoverySchema: FieldSchema[] = [
@@ -526,9 +512,9 @@ const motorcyclesPartsSchema: FieldSchema[] = [
   { name: "partDescription", label: "Part / Item Description", type: "textarea", required: false, placeholder: "e.g. Front brake pads, Chain and sprocket kit, Side mirrors", group: "Motorcycle Details" },
   { name: "condition", label: "Condition", type: "select", required: true, options: ["Brand New", "Used - Good", "Used - Fair", "Any"], group: "Motorcycle Details" },
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1, group: "Motorcycle Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific requirements or additional information...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific requirements or additional information...", group: "Budget and Urgency" }
 ];
 
 const automotiveToolsSchema: FieldSchema[] = [
@@ -539,9 +525,9 @@ const automotiveToolsSchema: FieldSchema[] = [
   { name: "purposeOfUse", label: "Purpose of Use", type: "select", required: false, options: ["Personal / Home Use", "Professional Workshop", "Fleet Management", "One-Time Project", "Other"], group: "Tool Details" },
   { name: "condition", label: "Condition", type: "select", required: true, options: ["Brand New", "Used - Good", "Any"], group: "Tool Details" },
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1, group: "Tool Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific requirements, power source, compatibility needs...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific requirements, power source, compatibility needs...", group: "Budget and Urgency" }
 ];
 
 const eventManagementSchema: FieldSchema[] = [
@@ -552,14 +538,13 @@ const eventManagementSchema: FieldSchema[] = [
   { name: "quantity", label: "Expected Guest Count", type: "number", required: true, min: 1, group: "Event Overview" },
   { name: "location_name", label: "Event Location / Venue", type: "text", required: true, placeholder: "e.g. Lusaka, Heroes Stadium, Radisson Blu Hotel", group: "Event Overview" },
   { name: "servicesNeeded", label: "Services Required", type: "select", required: true, options: ["Full Event Management", "Partial Coordination Only", "Day-Of Coordination Only", "Planning & Vendor Sourcing", "Not Sure - Need Consultation"], group: "Services Required" },
-  { name: "cateringRequired", label: "Catering Required?", type: "toggle", required: false, group: "Services Required" },
-  { name: "decorRequired", label: "Decor & Styling Required?", type: "toggle", required: false, group: "Services Required" },
-  { name: "entertainmentRequired", label: "Entertainment Required?", type: "toggle", required: false, group: "Services Required" },
-  { name: "photographyRequired", label: "Photography / Videography?", type: "toggle", required: false, group: "Services Required" },
-  { name: "theme", label: "Event Theme", type: "text", required: false, placeholder: "e.g. Black & Gold, Garden Party, Rustic, Traditional", group: "Theme & Style" },
-  { name: "budget_limit", label: "Total Budget (ZMW)", type: "currency", required: false, group: "Budget & Timeline" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Timeline" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific requirements, cultural considerations, or special requests...", group: "Budget & Timeline" }
+  { name: "cateringRequired", label: "Catering Required?", type: "toggle", required: false, keepInExpress: true, group: "Services Required" },
+  { name: "decorRequired", label: "Decor & Styling Required?", type: "toggle", required: false, keepInExpress: true, group: "Services Required" },
+  { name: "entertainmentRequired", label: "Entertainment Required?", type: "toggle", required: false, keepInExpress: true, group: "Services Required" },
+  { name: "photographyRequired", label: "Photography / Videography?", type: "toggle", required: false, keepInExpress: true, group: "Services Required" },
+  { name: "theme", label: "Event Theme", type: "text", required: false, keepInExpress: true, placeholder: "e.g. Black & Gold, Garden Party, Rustic, Traditional", group: "Theme and Style" },
+  { name: "budget_limit", label: "Total Budget (ZMW)", type: "currency", required: false, group: "Budget and Timeline" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific requirements, cultural considerations, or special requests...", group: "Budget and Timeline" }
 ];
 
 const eventCateringSchema: FieldSchema[] = [
@@ -569,13 +554,18 @@ const eventCateringSchema: FieldSchema[] = [
   { name: "quantity", label: "Number of Guests", type: "number", required: true, min: 1, group: "Event Details" },
   { name: "location_name", label: "Event Location", type: "text", required: true, placeholder: "e.g. Lusaka, Ndola, specific venue name", group: "Event Details" },
   { name: "serviceStyle", label: "Service Style", type: "select", required: true, options: ["Buffet", "Plated / Sit Down", "Cocktail / Finger Foods", "Food Stations", "Box Meals", "BBQ / Braai", "Not Sure"], group: "Catering Requirements" },
-  { name: "cuisineType", label: "Cuisine Preference", type: "select", required: false, options: ["Zambian / African Traditional", "International / Continental", "Indian", "Chinese", "Italian", "Mixed / Variety", "No Preference"], group: "Catering Requirements" },
-  { name: "dietaryRequirements", label: "Dietary Requirements", type: "select", required: false, options: ["None", "Vegetarian Options Needed", "Vegan Options Needed", "Halal Only", "Gluten Free", "Multiple Requirements"], group: "Catering Requirements" },
-  { name: "drinksIncluded", label: "Drinks / Beverages Included?", type: "toggle", required: false, group: "Catering Requirements" },
-  { name: "staffRequired", label: "Serving Staff Required?", type: "toggle", required: false, helpText: "Toggle if you need waiters and serving staff provided", group: "Catering Requirements" },
-  { name: "equipmentRequired", label: "Equipment / Crockery Included?", type: "toggle", required: false, helpText: "Plates, cutlery, chafing dishes etc.", group: "Catering Requirements" },
+  { name: "mealSessions", label: "Meal Sessions Needed", type: "select", required: false, keepInExpress: true, options: ["Lunch Only", "Dinner Only", "Lunch and Dinner", "Breakfast and Lunch", "Tea Break and Lunch", "Full Day (Breakfast, Lunch, Dinner)", "Cocktail Reception Only", "Snacks and Drinks"], helpText: "Which sittings should the menu cover?", group: "Catering Requirements" },
+  { name: "serviceWindow", label: "Service Window", type: "text", required: false, keepInExpress: true, placeholder: "e.g. 12:00 PM – 4:00 PM", helpText: "When food should be served on the day", group: "Catering Requirements" },
+  { name: "cuisineType", label: "Cuisine Preference", type: "select", required: false, keepInExpress: true, options: ["Zambian / African Traditional", "International / Continental", "Indian", "Chinese", "Italian", "Mixed / Variety", "No Preference"], group: "Catering Requirements" },
+  { name: "dietaryRequirements", label: "Dietary Requirements", type: "select", required: false, keepInExpress: true, options: ["None", "Vegetarian Options Needed", "Vegan Options Needed", "Halal Only", "Gluten Free", "Multiple Requirements"], group: "Catering Requirements" },
+  { name: "guestPreferences", label: "Guest Preferences", type: "textarea", required: false, keepInExpress: true, placeholder: "VIP guests, allergies, religious requirements, kids menu, elderly guests…", helpText: "Anything specific about the guests that should shape the menu", group: "Catering Requirements" },
+  { name: "presentation", label: "Presentation Style", type: "select", required: false, keepInExpress: true, options: ["Casual", "Formal / Elegant", "Themed", "Cultural / Traditional", "Outdoor / Garden", "Not Sure"], group: "Catering Requirements" },
+  { name: "venueAccess", label: "Venue Kitchen Access", type: "select", required: false, options: ["Full Kitchen Available", "Limited Prep Area", "No Kitchen – Bring Own Setup", "Outdoor Cooking Allowed", "Not Sure"], helpText: "Tells caterers if they need to bring full mobile setup", group: "Catering Requirements" },
+  { name: "drinksIncluded", label: "Drinks / Beverages Included?", type: "toggle", required: false, keepInExpress: true, group: "Catering Requirements" },
+  { name: "staffRequired", label: "Serving Staff Required?", type: "toggle", required: false, keepInExpress: true, helpText: "Toggle if you need waiters and serving staff provided", group: "Catering Requirements" },
+  { name: "equipmentRequired", label: "Equipment / Crockery Included?", type: "toggle", required: false, keepInExpress: true, helpText: "Plates, cutlery, chafing dishes etc.", group: "Catering Requirements" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget" },
-  { name: "budgetType", label: "Budget Type", type: "select", required: false, options: ["Total Budget for Event", "Per Person / Per Head", "Not Sure"], group: "Budget" },
+  { name: "budgetType", label: "Budget Type", type: "select", required: false, keepInExpress: true, options: ["Total Budget for Event", "Per Person / Per Head", "Not Sure"], group: "Budget" },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Menu preferences, allergies, cultural food requirements...", group: "Budget" }
 ];
 
@@ -586,11 +576,10 @@ const eventPlanningSchema: FieldSchema[] = [
   { name: "quantity", label: "Expected Guest Count", type: "number", required: true, min: 1, group: "Event Overview" },
   { name: "eventLocation", label: "Event Location", type: "text", required: true, placeholder: "City or specific venue", group: "Event Overview" },
   { name: "planningStage", label: "Current Planning Stage", type: "select", required: true, options: ["Just Starting - Need Full Help", "Have Venue - Need Other Vendors", "Have Most Vendors - Need Coordinator", "Need Day-Of Management Only"], group: "Planning Needs" },
-  { name: "vendorsNeeded", label: "Vendors Still Needed", type: "select", required: false, options: ["Venue", "Catering", "Decor", "Photography", "Entertainment", "Transportation", "Cake", "All of the above", "Not Sure"], group: "Planning Needs" },
-  { name: "theme", label: "Event Theme / Style", type: "text", required: false, placeholder: "e.g. Elegant Gold, Traditional Zambian, Modern Minimalist", group: "Planning Needs" },
-  { name: "budget_limit", label: "Total Budget (ZMW)", type: "currency", required: false, group: "Budget & Timeline" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Timeline" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific vision, cultural requirements, or special requests...", group: "Budget & Timeline" }
+  { name: "vendorsNeeded", label: "Vendors Still Needed", type: "select", required: false, keepInExpress: true, options: ["Venue", "Catering", "Decor", "Photography", "Entertainment", "Transportation", "Cake", "All of the above", "Not Sure"], group: "Planning Needs" },
+  { name: "theme", label: "Event Theme / Style", type: "text", required: false, keepInExpress: true, placeholder: "e.g. Elegant Gold, Traditional Zambian, Modern Minimalist", group: "Planning Needs" },
+  { name: "budget_limit", label: "Total Budget (ZMW)", type: "currency", required: false, group: "Budget and Timeline" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific vision, cultural requirements, or special requests...", group: "Budget and Timeline" }
 ];
 
 const eventDecorSchema: FieldSchema[] = [
@@ -600,12 +589,19 @@ const eventDecorSchema: FieldSchema[] = [
   { name: "location_name", label: "Venue / Location", type: "text", required: true, placeholder: "e.g. Lusaka, specific venue", group: "Event Details" },
   { name: "quantity", label: "Expected Guests", type: "number", required: true, min: 1, group: "Event Details" },
   { name: "decorStyle", label: "Decor Style", type: "select", required: true, options: ["Elegant / Luxury", "Traditional / Cultural", "Modern / Minimalist", "Rustic / Natural", "Floral / Garden", "Themed / Specific Concept", "Not Sure - Open to Ideas"], group: "Decor Requirements" },
-  { name: "colorScheme", label: "Color Scheme", type: "text", required: false, placeholder: "e.g. Gold & White, Navy & Blush, Not decided", group: "Decor Requirements" },
-  { name: "decorElements", label: "Decor Elements Needed", type: "select", required: false, options: ["Full Venue Decor", "Table Centerpieces Only", "Backdrop / Stage Only", "Floral Arrangements", "Lighting & Ambiance", "Chair Covers & Sashes", "Balloon Installations", "Complete Package"], group: "Decor Requirements" },
-  { name: "setupRequired", label: "Setup & Breakdown Required?", type: "toggle", required: false, helpText: "Toggle if you need the decorator to set up and pack down after the event", group: "Decor Requirements" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget" },
-  { name: "urgency", label: "How Soon?", type: "select", required: true, options: ["Less than 2 weeks", "2 weeks - 1 month", "1 - 3 months", "More than 3 months"], group: "Budget" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Specific flowers, cultural elements, any must-haves...", group: "Budget" }
+  { name: "themeName", label: "Theme Name or Concept", type: "text", required: false, keepInExpress: true, placeholder: "e.g. Enchanted Garden, Black-Tie Gala, Lobola Ceremony", helpText: "Helps decorators visualise mood-board direction", group: "Decor Requirements" },
+  { name: "colorScheme", label: "Color Scheme", type: "text", required: false, keepInExpress: true, placeholder: "e.g. Gold and White, Navy and Blush, Not decided", group: "Decor Requirements" },
+  { name: "decorElements", label: "Decor Elements Needed", type: "select", required: false, keepInExpress: true, options: ["Full Venue Decor", "Table Centerpieces Only", "Backdrop / Stage Only", "Floral Arrangements", "Lighting and Ambiance", "Chair Covers and Sashes", "Balloon Installations", "Complete Package"], group: "Decor Requirements" },
+  { name: "centerpieces", label: "Centerpiece Style", type: "select", required: false, keepInExpress: true, options: ["Floral", "Candle / Lantern", "Mixed (Floral and Candle)", "Greenery / Foliage", "Minimalist", "None Needed", "Other"], group: "Decor Requirements" },
+  { name: "floralRequired", label: "Fresh Flowers Required?", type: "toggle", required: false, keepInExpress: true, helpText: "Toggle on if fresh florals are essential", group: "Decor Requirements" },
+  { name: "lightingRequired", label: "Lighting / Ambience Required?", type: "toggle", required: false, keepInExpress: true, helpText: "Fairy lights, uplighting, spotlights, candles", group: "Decor Requirements" },
+  { name: "backdropRequired", label: "Backdrop / Photo Wall?", type: "toggle", required: false, keepInExpress: true, helpText: "Focal point for photographs and the entrance", group: "Decor Requirements" },
+  { name: "setupRequired", label: "Setup and Breakdown Required?", type: "toggle", required: false, keepInExpress: true, helpText: "Toggle if you need the decorator to set up and pack down after the event", group: "Decor Requirements" },
+  { name: "venueAccess", label: "Venue Setup Access", type: "select", required: false, keepInExpress: true, options: ["Day Before (Full Access)", "Same Day Morning (4+ Hours)", "Same Day Limited (1-3 Hours)", "Outdoor / No Restrictions", "Not Sure"], helpText: "How early the decorator can start setting up", group: "Decor Requirements" },
+  { name: "inspirationLink", label: "Inspiration Link", type: "text", required: false, keepInExpress: true, placeholder: "Pinterest board, Instagram post, or web URL", helpText: "Easiest way to communicate the look you want", group: "Decor Requirements" },
+  { name: "specificItems", label: "Specific Items / Must-Haves", type: "textarea", required: false, keepInExpress: true, placeholder: "Balloon arch, gold table runners, floral centerpieces with white roses, fairy lights…", helpText: "Concrete items the decorator must include", group: "Decor Requirements" },
+  { name: "specialRequests", label: "Special Requests / Other Details", type: "textarea", required: false, keepInExpress: true, placeholder: "Cultural elements, weather contingencies, accessibility, kids zones, religious requirements, anything else…", helpText: "Free-form — anything the structured fields above don't capture", group: "Decor Requirements" },
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget" }
 ];
 
 const buildingMaterialsSchema: FieldSchema[] = [
@@ -615,10 +611,10 @@ const buildingMaterialsSchema: FieldSchema[] = [
   { name: "brand", label: "Brand Preference", type: "text", required: false, placeholder: "e.g. Zambezi Portland, Any brand", group: "Material Details" },
   { name: "specifications", label: "Specifications / Grade", type: "text", required: false, placeholder: "e.g. 42.5N cement, 6mm rebar, 600x600 tiles", group: "Material Details" },
   { name: "quantity", label: "Quantity", type: "text", required: true, placeholder: "e.g. 50 bags, 1000 bricks, 20 sheets", group: "Material Details" },
-  { name: "deliveryRequested", label: "Do you need delivery? (Additional fees may apply)", type: "toggle", required: false, helpText: "Default: You will pick up from the shop. Toggle if you need items delivered.", group: "Delivery & Timeline" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Project size, site access, any specific requirements...", group: "Budget & Urgency" }
+  { name: "deliveryRequested", label: "Do you need delivery? (Additional fees may apply)", type: "toggle", required: false, helpText: "Default: You will pick up from the shop. Toggle if you need items delivered.", group: "Delivery and Timeline" },
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Project size, site access, any specific requirements...", group: "Budget and Urgency" }
 ];
 
 const plumbingFixturesSchema: FieldSchema[] = [
@@ -628,9 +624,9 @@ const plumbingFixturesSchema: FieldSchema[] = [
   { name: "propertyType", label: "Property Type", type: "select", required: false, options: ["Residential House", "Apartment / Flat", "Commercial / Office", "Industrial", "Other"], group: "Service Details" },
   { name: "location", label: "Property Location", type: "text", required: true, placeholder: "e.g. Lusaka, Chilanga, Kitwe", group: "Service Details" },
   { name: "issueDescription", label: "Describe the Issue or Requirement", type: "textarea", required: true, placeholder: "e.g. Burst pipe in kitchen, Need new toilet installed, Water not reaching upper floor", group: "Service Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any other details that would help the provider...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any other details that would help the provider...", group: "Budget and Urgency" }
 ];
 
 const electricalSuppliesSchema: FieldSchema[] = [
@@ -641,9 +637,9 @@ const electricalSuppliesSchema: FieldSchema[] = [
   { name: "location", label: "Property Location", type: "text", required: true, placeholder: "e.g. Lusaka, Ndola, Kitwe", group: "Work Details" },
   { name: "issueDescription", label: "Describe the Work Required", type: "textarea", required: true, placeholder: "e.g. Rewire 3 bedroom house, Install solar system 5KVA, Fix electrical fault in kitchen", group: "Work Details" },
   { name: "materialsRequired", label: "Materials Required?", type: "toggle", required: false, helpText: "Toggle if you need the provider to supply materials", group: "Work Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Property size, number of rooms, existing electrical setup...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Property size, number of rooms, existing electrical setup...", group: "Budget and Urgency" }
 ];
 
 const hardwareToolsSchema: FieldSchema[] = [
@@ -654,23 +650,23 @@ const hardwareToolsSchema: FieldSchema[] = [
   { name: "purposeOfUse", label: "Purpose of Use", type: "select", required: false, options: ["Home / DIY Use", "Professional / Trade Use", "Construction Site", "Workshop", "One-Time Project"], group: "Tool Details" },
   { name: "condition", label: "Condition", type: "select", required: true, options: ["Brand New", "Used - Good", "Any"], group: "Tool Details" },
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1, group: "Tool Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific requirements, power source, compatibility needs...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific requirements, power source, compatibility needs...", group: "Budget and Urgency" }
 ];
 
 const constructionMachinerySchema: FieldSchema[] = [
   { name: "images", label: "Reference Photos", type: "image_upload", required: false, helpText: "Upload photos of the machinery or project site", group: "Machinery Details" },
   { name: "inquiryType", label: "What Do You Need?", type: "select", required: true, options: ["Hire / Rent Machinery", "Purchase Machinery", "Machinery Operator Only", "Machinery with Operator"], group: "Machinery Details" },
   { name: "machineryType", label: "Type of Machinery", type: "select", required: true, options: ["Excavator / Digger", "Bulldozer", "Grader", "Tipper Truck", "Concrete Mixer", "Crane", "Forklift", "Compactor / Roller", "Generator", "Scaffolding", "Concrete Pump", "Other"], group: "Machinery Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
   { name: "location_name", label: "Project / Site Location", type: "text", required: true, placeholder: "e.g. Lusaka, Kafue, Ndola", group: "Project Details" },
   { name: "projectDescription", label: "Project Description", type: "textarea", required: true, placeholder: "e.g. Excavation for foundation of 4 bedroom house, Road grading 2km stretch", group: "Project Details" },
   { name: "duration", label: "Duration Needed (Days)", type: "counter", required: true, min: 1, group: "Project Details" },
   { name: "operatorRequired", label: "Operator Required?", type: "toggle", required: false, helpText: "Toggle if you need a qualified operator provided with the machinery", group: "Project Details" },
   { name: "equipmentTransfer", label: "Equipment Handover", type: "select", required: true, options: ["I will collect from your yard (standard)", "Deliver to my site (additional transport fee)", "Operator brings to site (included with operator service)"], group: "Project Details" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Site access details, soil type, project scope, any special requirements...", group: "Budget & Urgency" }
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Site access details, soil type, project scope, any special requirements...", group: "Budget and Urgency" }
 ];
 
 const freshProduceSchema: FieldSchema[] = [
@@ -682,9 +678,9 @@ const freshProduceSchema: FieldSchema[] = [
   { name: "quantity", label: "Approximate Total Quantity", type: "text", required: true, placeholder: "e.g. 10kg mixed vegetables, Weekly supply for family of 5", group: "Order Details" },
   { name: "orderFrequency", label: "Order Frequency", type: "select", required: true, options: ["One Time Order", "Daily Supply", "Weekly Supply", "Bi-Weekly Supply", "Monthly Supply"], group: "Order Details" },
   { name: "deliveryRequested", label: "Do you need delivery? (Additional fees may apply)", type: "toggle", required: false, helpText: "Default: You will pick up from the shop. Toggle if you need items delivered.", group: "Order Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Ripeness preference, packaging requirements, any allergies...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Ripeness preference, packaging requirements, any allergies...", group: "Budget and Urgency" }
 ];
 
 const pantryStaplesSchema: FieldSchema[] = [
@@ -694,9 +690,9 @@ const pantryStaplesSchema: FieldSchema[] = [
   { name: "specificItems", label: "List of Items Needed", type: "textarea", required: true, placeholder: "e.g. 25kg Roller Meal x2, 5L cooking oil x3, 2kg sugar x4", group: "Product Details" },
   { name: "orderFrequency", label: "Order Frequency", type: "select", required: true, options: ["One Time Order", "Weekly Supply", "Monthly Supply", "Bulk / Wholesale Order"], group: "Order Details" },
   { name: "deliveryRequested", label: "Do you need delivery? (Additional fees may apply)", type: "toggle", required: false, helpText: "Default: You will pick up from the shop. Toggle if you need items delivered.", group: "Order Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Packaging size preference, bulk discount requirements...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Packaging size preference, bulk discount requirements...", group: "Budget and Urgency" }
 ];
 
 const beveragesSchema: FieldSchema[] = [
@@ -708,9 +704,9 @@ const beveragesSchema: FieldSchema[] = [
   { name: "quantity", label: "Number of Guests (if for event)", type: "number", required: false, min: 1, group: "Order Details" },
   { name: "orderFrequency", label: "Order Frequency", type: "select", required: true, options: ["One Time Order", "Weekly Supply", "Monthly Supply", "Bulk / Wholesale"], group: "Order Details" },
   { name: "deliveryRequested", label: "Do you need delivery? (Additional fees may apply)", type: "toggle", required: false, helpText: "Default: You will pick up from the shop. Toggle if you need items delivered.", group: "Order Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Temperature requirements, packaging preferences, any specific needs...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Temperature requirements, packaging preferences, any specific needs...", group: "Budget and Urgency" }
 ];
 
 const snacksSweetsSchema: FieldSchema[] = [
@@ -723,9 +719,9 @@ const snacksSweetsSchema: FieldSchema[] = [
   { name: "dietaryRequirements", label: "Dietary Requirements", type: "select", required: false, options: ["None", "Halal Only", "Vegetarian", "Vegan", "Gluten Free", "Sugar Free / Diabetic Friendly", "Nut Free"], group: "Order Details" },
   { name: "orderFrequency", label: "Order Frequency", type: "select", required: true, options: ["One Time Order", "Weekly Supply", "Monthly Supply", "Bulk / Wholesale"], group: "Order Details" },
   { name: "deliveryRequested", label: "Do you need delivery? (Additional fees may apply)", type: "toggle", required: false, helpText: "Default: You will pick up from the shop. Toggle if you need items delivered.", group: "Order Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Packaging preferences, gift wrapping needed, any allergies...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Packaging preferences, gift wrapping needed, any allergies...", group: "Budget and Urgency" }
 ];
 
 const lightingLampsSchema: FieldSchema[] = [
@@ -737,9 +733,9 @@ const lightingLampsSchema: FieldSchema[] = [
   { name: "brand", label: "Brand Preference", type: "text", required: false, placeholder: "e.g. Philips, Any brand", group: "Product Details" },
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1, group: "Order Details" },
   { name: "installationRequired", label: "Installation Required?", type: "toggle", required: false, helpText: "Toggle if you need the lighting fitted and installed", group: "Order Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Room dimensions, ceiling height, wattage requirements...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Room dimensions, ceiling height, wattage requirements...", group: "Budget and Urgency" }
 ];
 
 const wallArtMirrorsSchema: FieldSchema[] = [
@@ -751,9 +747,9 @@ const wallArtMirrorsSchema: FieldSchema[] = [
   { name: "roomType", label: "Room / Area", type: "select", required: false, options: ["Living Room", "Bedroom", "Dining Room", "Bathroom", "Office", "Hallway", "Other"], group: "Product Details" },
   { name: "isCustom", label: "Custom Made?", type: "toggle", required: false, helpText: "Toggle if you want a custom commissioned piece", group: "Order Details" },
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1, group: "Order Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Wall dimensions, existing decor style, any specific themes...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Wall dimensions, existing decor style, any specific themes...", group: "Budget and Urgency" }
 ];
 
 const rugsCarpetsSchema: FieldSchema[] = [
@@ -765,9 +761,9 @@ const rugsCarpetsSchema: FieldSchema[] = [
   { name: "colorScheme", label: "Color Scheme", type: "text", required: false, placeholder: "e.g. Neutral tones, Blue & Grey, Match my sofa", group: "Product Details" },
   { name: "roomType", label: "Room / Area", type: "select", required: false, options: ["Living Room", "Bedroom", "Dining Room", "Hallway", "Office", "Outdoor", "Other"], group: "Product Details" },
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1, group: "Order Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Traffic level in room, children or pets at home, any specific requirements...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Traffic level in room, children or pets at home, any specific requirements...", group: "Budget and Urgency" }
 ];
 
 const curtainsBlindsSchema: FieldSchema[] = [
@@ -780,9 +776,9 @@ const curtainsBlindsSchema: FieldSchema[] = [
   { name: "quantity", label: "Number of Windows", type: "counter", required: true, min: 1, group: "Order Details" },
   { name: "installationRequired", label: "Installation Required?", type: "toggle", required: false, helpText: "Toggle if you need curtains fitted and hung", group: "Order Details" },
   { name: "isCustomMade", label: "Custom Made?", type: "toggle", required: false, helpText: "Toggle if you need made-to-measure curtains", group: "Order Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Existing curtain rail type, room style, any specific requirements...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Existing curtain rail type, room style, any specific requirements...", group: "Budget and Urgency" }
 ];
 
 const softwareWebDevSchema: FieldSchema[] = [
@@ -794,10 +790,10 @@ const softwareWebDevSchema: FieldSchema[] = [
   { name: "existingSystem", label: "Existing System / Website?", type: "toggle", required: false, helpText: "Toggle if you have an existing system that needs updating", group: "Technical Requirements" },
   { name: "techPreference", label: "Technology Preference", type: "text", required: false, placeholder: "e.g. React, Laravel, WordPress, No preference", group: "Technical Requirements" },
   { name: "hostingRequired", label: "Hosting & Domain Required?", type: "toggle", required: false, helpText: "Toggle if you need the developer to set up hosting and domain", group: "Technical Requirements" },
-  { name: "timeline", label: "Project Timeline", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Timeline" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Timeline" },
-  { name: "maintenanceRequired", label: "Ongoing Maintenance Required?", type: "toggle", required: false, helpText: "Toggle if you need monthly support after launch", group: "Budget & Timeline" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any other requirements, integrations needed, competitors to reference...", group: "Budget & Timeline" }
+  { name: "timeline", label: "Project Timeline", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Timeline" },
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Timeline" },
+  { name: "maintenanceRequired", label: "Ongoing Maintenance Required?", type: "toggle", required: false, helpText: "Toggle if you need monthly support after launch", group: "Budget and Timeline" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any other requirements, integrations needed, competitors to reference...", group: "Budget and Timeline" }
 ];
 
 const networkingSecuritySchema: FieldSchema[] = [
@@ -810,9 +806,9 @@ const networkingSecuritySchema: FieldSchema[] = [
   { name: "issueDescription", label: "Describe Your Requirements", type: "textarea", required: true, placeholder: "e.g. Need WiFi covering entire office, CCTV for 4 entry points, Network keeps dropping", group: "Service Details" },
   { name: "existingInfrastructure", label: "Existing Infrastructure?", type: "toggle", required: false, helpText: "Toggle if you have existing network equipment installed", group: "Technical Details" },
   { name: "equipmentSupplyNeeded", label: "Equipment Supply Needed?", type: "toggle", required: false, helpText: "Toggle if you need the provider to supply routers, cameras etc.", group: "Technical Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific brands, security certifications required, other details...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific brands, security certifications required, other details...", group: "Budget and Urgency" }
 ];
 
 const itSupportMaintenanceSchema: FieldSchema[] = [
@@ -826,9 +822,9 @@ const itSupportMaintenanceSchema: FieldSchema[] = [
   { name: "remoteSupport", label: "Remote Support Acceptable?", type: "toggle", required: false, helpText: "Toggle if the technician can assist you remotely without visiting", group: "Support Details" },
   { name: "ongoingContract", label: "Ongoing Support Contract?", type: "toggle", required: false, helpText: "Toggle if you need regular monthly IT support", group: "Contract Details" },
   { name: "numberOfStaff", label: "Number of Staff / Users", type: "number", required: false, min: 1, group: "Contract Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any error messages, when issue started, previous repairs done...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any error messages, when issue started, previous repairs done...", group: "Budget and Urgency" }
 ];
 
 const ispSchema: FieldSchema[] = [
@@ -841,10 +837,10 @@ const ispSchema: FieldSchema[] = [
   { name: "primaryUse", label: "Primary Use", type: "select", required: true, options: ["Home Use / Entertainment", "Remote Work / Work From Home", "Business Operations", "Gaming", "CCTV / IoT Devices", "Mixed Use"], group: "Connection Details" },
   { name: "existingProvider", label: "Current Internet Provider", type: "text", required: false, placeholder: "e.g. Airtel, MTN, Liquid, None", group: "Current Situation" },
   { name: "currentIssue", label: "Current Issue / Reason for Inquiry", type: "select", required: false, options: ["No Internet Currently", "Too Slow", "Too Expensive", "Unreliable Connection", "New Property / Installation", "Upgrading Plan", "Other"], group: "Current Situation" },
-  { name: "contractPreference", label: "Contract Preference", type: "select", required: false, options: ["Month to Month", "6 Month Contract", "12 Month Contract", "24 Month Contract", "No Preference"], group: "Budget & Preferences" },
-  { name: "budget_limit", label: "Monthly Budget (ZMW)", type: "currency", required: false, group: "Budget & Preferences" },
-  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Preferences" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Building type, floor level, any specific requirements...", group: "Budget & Preferences" }
+  { name: "contractPreference", label: "Contract Preference", type: "select", required: false, options: ["Month to Month", "6 Month Contract", "12 Month Contract", "24 Month Contract", "No Preference"], group: "Budget and Preferences" },
+  { name: "budget_limit", label: "Monthly Budget (ZMW)", type: "currency", required: false, group: "Budget and Preferences" },
+  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Preferences" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Building type, floor level, any specific requirements...", group: "Budget and Preferences" }
 ];
 
 const mobileNetworkServicesSchema: FieldSchema[] = [
@@ -855,9 +851,9 @@ const mobileNetworkServicesSchema: FieldSchema[] = [
   { name: "dataRequirement", label: "Monthly Data Requirement", type: "select", required: false, options: ["Basic - Under 5GB", "Standard - 5 to 20GB", "Heavy - 20 to 50GB", "Unlimited Data", "Not Sure"], group: "Service Details" },
   { name: "businessUse", label: "For Business Use?", type: "toggle", required: false, helpText: "Toggle if this is for a business or organisation", group: "Service Details" },
   { name: "companyName", label: "Company / Organisation Name", type: "text", required: false, placeholder: "e.g. ABC Company Ltd", group: "Service Details" },
-  { name: "budget_limit", label: "Monthly Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Number portability needed, specific features required, coverage area concerns...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Monthly Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Number portability needed, specific features required, coverage area concerns...", group: "Budget and Urgency" }
 ];
 
 const satelliteVsatInstallationSchema: FieldSchema[] = [
@@ -870,9 +866,9 @@ const satelliteVsatInstallationSchema: FieldSchema[] = [
   { name: "quantity", label: "Number of Connection Points", type: "counter", required: false, min: 1, helpText: "Number of TVs or devices to connect", group: "Installation Details" },
   { name: "roofType", label: "Roof / Mounting Type", type: "select", required: false, options: ["Tiled Roof", "Iron Sheet Roof", "Concrete / Flat Roof", "Wall Mount", "Ground Mount / Pole", "Not Sure"], group: "Technical Details" },
   { name: "powerAvailable", label: "Reliable Power Available?", type: "toggle", required: false, helpText: "Toggle if site has reliable electricity. If not, solar options may be discussed", group: "Technical Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "When Do You Need Installation?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "GPS coordinates if remote, access road details, power situation...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "When Do You Need Installation?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "GPS coordinates if remote, access road details, power situation...", group: "Budget and Urgency" }
 ];
 
 const boreholeDrillingSchema: FieldSchema[] = [
@@ -886,9 +882,9 @@ const boreholeDrillingSchema: FieldSchema[] = [
   { name: "pumpSystem", label: "Pump & Power System", type: "select", required: true, options: ["Solar Powered System", "Electric (ZESCO) Pump", "Hand Pump", "Submersible Pump Only", "Full Installation (Pump + Tank + Stand)", "No Pump - Drilling Only"], group: "Technical Requirements" },
   { name: "tankNeeded", label: "Water Tank Needed?", type: "toggle", required: false, group: "Technical Requirements" },
   { name: "tankStandNeeded", label: "Tank Stand Needed?", type: "toggle", required: false, group: "Technical Requirements" },
-  { name: "budget_limit", label: "Total Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Requirements", type: "textarea", required: false, placeholder: "Geological info if known, specific pump brand, water testing requirements...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Total Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Requirements", type: "textarea", required: false, placeholder: "Geological info if known, specific pump brand, water testing requirements...", group: "Budget and Urgency" }
 ];
 
 const miningExplorationSchema: FieldSchema[] = [
@@ -902,10 +898,10 @@ const miningExplorationSchema: FieldSchema[] = [
   { name: "waterSource", label: "Water Source for Drilling", type: "select", required: true, options: ["Available on Site", "Need Water Bowsing / Trucking", "Natural Source Nearby", "Contractor to Provide"], group: "Logistics" },
   { name: "campServices", label: "Camp Services Needed?", type: "toggle", required: false, helpText: "Does the contractor need to provide their own accommodation/camp?", group: "Logistics" },
   { name: "environmentalCompliance", label: "Environmental Permits Ready?", type: "toggle", required: true, group: "Compliance" },
-  { name: "budget_limit", label: "Project Budget (ZMW)", type: "currency", required: false, group: "Budget & Timeline" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget & Timeline" },
-  { name: "timeline", label: "Project Start Date", type: "date", required: true, group: "Budget & Timeline" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Sample handling requirements, safety standards (ISO/NOSA), specific rig requirements...", group: "Budget & Timeline" }
+  { name: "budget_limit", label: "Project Budget (ZMW)", type: "currency", required: false, group: "Budget and Timeline" },
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Timeline" },
+  { name: "timeline", label: "Project Start Date", type: "date", required: true, group: "Budget and Timeline" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Sample handling requirements, safety standards (ISO/NOSA), specific rig requirements...", group: "Budget and Timeline" }
 ];
 
 const geotechnicalDrillingSchema: FieldSchema[] = [
@@ -918,9 +914,9 @@ const geotechnicalDrillingSchema: FieldSchema[] = [
   { name: "coreRecovery", label: "Core Recovery Required?", type: "toggle", required: false, group: "Technical Scope" },
   { name: "labTesting", label: "Laboratory Testing Needed?", type: "toggle", required: false, helpText: "Soil analysis, rock strength, moisture content, etc.", group: "Technical Scope" },
   { name: "siteAccessibility", label: "Site Accessibility", type: "select", required: true, options: ["Easy Access", "Restricted Space (Indoor/Basement)", "Sloped / Difficult Terrain", "Over Water / Barge Needed"], group: "Site Conditions" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Urgency" },
-  { name: "urgency", label: "How Soon?", type: "select", required: true, options: ["Immediately", "Within 1 week", "Within 1 month", "Planning Ahead"], group: "Budget & Urgency" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Specific standards (ASTM/BS), reporting requirements, site safety inductions...", group: "Budget & Urgency" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
+  { name: "urgency", label: "How Soon?", type: "select", required: true, options: ["Immediately", "Within 1 week", "Within 1 month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Specific standards (ASTM/BS), reporting requirements, site safety inductions...", group: "Budget and Urgency" }
 ];
 
 const businessComputersSchema: FieldSchema[] = [
@@ -990,8 +986,8 @@ const poultryFarmingSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity / Amount", type: "text", required: true, placeholder: "e.g. 500 chicks, 10 bags of feed", group: "Inquiry Details" },
   { name: "urgency", label: "When do you need it?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Inquiry Details" },
   { name: "pickupArrangement", label: "How will you collect?", type: "select", required: true, options: ["I will pick up from shop", "I need delivery (additional fee)", "Farm visit/collection"], group: "Inquiry Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Preferences" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Specific brands, delivery requirements, etc.", group: "Budget & Preferences" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Preferences" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Specific brands, delivery requirements, etc.", group: "Budget and Preferences" }
 ];
 
 const aquacultureSchema: FieldSchema[] = [
@@ -1000,8 +996,8 @@ const aquacultureSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity / Amount", type: "text", required: true, placeholder: "e.g. 1000 fingerlings, 5 bags of feed", group: "Inquiry Details" },
   { name: "urgency", label: "When do you need it?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Inquiry Details" },
   { name: "pickupArrangement", label: "How will you collect?", type: "select", required: true, options: ["I will pick up from shop", "I need delivery (additional fee)", "Farm visit/collection"], group: "Inquiry Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Preferences" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Specific species, pond size, delivery requirements, etc.", group: "Budget & Preferences" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Preferences" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Specific species, pond size, delivery requirements, etc.", group: "Budget and Preferences" }
 ];
 
 const cropProductionSchema: FieldSchema[] = [
@@ -1010,8 +1006,8 @@ const cropProductionSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity / Amount", type: "text", required: true, placeholder: "e.g. 5 bags of fertilizer, 10kg seeds", group: "Inquiry Details" },
   { name: "urgency", label: "When do you need it?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Inquiry Details" },
   { name: "pickupArrangement", label: "How will you collect?", type: "select", required: true, options: ["I will pick up from shop", "I need delivery (additional fee)", "Farm visit/collection"], group: "Inquiry Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Preferences" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Crop type, field size, specific brands, etc.", group: "Budget & Preferences" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Preferences" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Crop type, field size, specific brands, etc.", group: "Budget and Preferences" }
 ];
 
 const livestockVeterinarySchema: FieldSchema[] = [
@@ -1020,8 +1016,8 @@ const livestockVeterinarySchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity / Amount", type: "text", required: true, placeholder: "e.g. 5 bags of feed, 2 bottles of dewormer", group: "Inquiry Details" },
   { name: "urgency", label: "When do you need it?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Inquiry Details" },
   { name: "pickupArrangement", label: "How will you collect?", type: "select", required: true, options: ["I will pick up from shop", "I need delivery (additional fee)", "Farm visit/collection"], group: "Inquiry Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Preferences" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Animal type, specific health concerns, etc.", group: "Budget & Preferences" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Preferences" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Animal type, specific health concerns, etc.", group: "Budget and Preferences" }
 ];
 
 const irrigationHardwareSchema: FieldSchema[] = [
@@ -1030,16 +1026,16 @@ const irrigationHardwareSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity / Amount", type: "text", required: true, placeholder: "e.g. 1 solar pump, 100m piping", group: "Inquiry Details" },
   { name: "urgency", label: "When do you need it?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Inquiry Details" },
   { name: "pickupArrangement", label: "How will you collect?", type: "select", required: true, options: ["I will pick up from shop", "I need delivery (additional fee)", "Farm visit/collection"], group: "Inquiry Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Preferences" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Farm size, water source, specific requirements, etc.", group: "Budget & Preferences" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Preferences" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Farm size, water source, specific requirements, etc.", group: "Budget and Preferences" }
 ];
 
 const agroTechServicesSchema: FieldSchema[] = [
   { name: "images", label: "Reference Photos", type: "image_upload", required: false, helpText: "Upload photos of your farm or area for service", group: "Service Details" },
   { name: "serviceType", label: "Type of Service", type: "select", required: true, options: ["Soil Testing Services", "Consulting", "Solar Lighting for Farms", "Drone Spraying", "Other"], group: "Service Details" },
   { name: "urgency", label: "When do you need it?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Service Details" },
-  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget & Preferences" },
-  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Farm location, specific challenges, goals, etc.", group: "Budget & Preferences" }
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Preferences" },
+  { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Farm location, specific challenges, goals, etc.", group: "Budget and Preferences" }
 ];
 
 const BASE_CATEGORIES_DB: Category[] = [
@@ -1508,21 +1504,78 @@ export function getBusinessTypes(
   if (role === 'BUYER') return ['BUYER'];
   if (role === 'ADMIN') return ['ADMIN'];
 
-  // Backend-cached set wins when present — built from stable category
-  // IDs by ArchetypeResolverService, recomputed on every category-
-  // junction write. Multi-archetype sellers land here.
+  // Backend-cached set is the base — built from stable category IDs by
+  // ArchetypeResolverService, recomputed on every category-junction
+  // write. We then *reconcile* it with category-based detection so that
+  // a frontend-known archetype (e.g. RENTAL for event-equipment-rental)
+  // doesn't get lost when the backend resolver disagrees, and so that a
+  // backend-spurious archetype (EVENTS lumped onto a rental-only seller)
+  // gets dropped. The intent: one category picked → one persona; multiple
+  // categories picked → multiple personas.
   const fromArchetypes = archetypesToBusinessTypes(user.archetypes);
-  if (fromArchetypes.length > 0) return fromArchetypes;
+  if (fromArchetypes.length > 0) {
+    const augmented = new Set<BusinessType>(fromArchetypes);
+    // Backend's flattenWithProfile ships category ids on `categoryIds`
+    // (not `categories`). Legacy surfaces still pass `categories`. Read
+    // both so the augmentation regex can actually see the seller's
+    // selections — the previous version was always running on []
+    // because /auth/me returns categoryIds, which silently disabled
+    // the EVENTS-stripping / SERVICE-adding logic.
+    const cats = (user.categoryIds && user.categoryIds.length > 0)
+      ? user.categoryIds
+      : (user.categories || []);
+    if (categoriesMatch(cats, /\b(rental|hire)s?\b/i)) augmented.add('RENTAL');
+    if (categoriesMatch(cats, /\b(repair|restoration|recovery|upholstery)\b/i)) augmented.add('REPAIR');
+
+    // Add SERVICE for the event sub-archetypes that are SERVICE on the
+    // frontend (catering / decor / planning / management). Backends
+    // sometimes lump them into EVENTS via a broad "event" match — that
+    // routes the seller to the venue-themed events dashboard ("Buyer
+    // Inquiries / Inventory / Orders") instead of MASTER_SERVICE_ACCOUNT_SCHEMA
+    // which carries Service Requests / My Proposals / Service Catalog
+    // / Active Engagements. Without this they look like a generic
+    // retailer despite running a service practice.
+    const hasServiceEvent = categoriesMatch(cats, /\b(catering|decor|planning|management)\b/i);
+    if (hasServiceEvent) augmented.add('SERVICE');
+
+    // EVENTS is meaningful only when the seller has a venue-shaped
+    // category (its bespoke views — venue-spaces, paid bookings — live
+    // in MASTER_EVENTS_ACCOUNT_SCHEMA). The 'events' master parent on
+    // its own DOESN'T count: it's auto-added when a buyer picks any
+    // event sub-category, so its presence is uninformative. Drop
+    // EVENTS unless the seller actually offers a venue / wedding /
+    // conference / stage.
+    const hasVenueEvent = categoriesMatch(
+      cats,
+      /\bvenues?\b|\bwedding\b|\bconference\b|\bstage\b/i,
+    );
+    if (augmented.has('EVENTS') && !hasVenueEvent) {
+      augmented.delete('EVENTS');
+    }
+    return Array.from(augmented);
+  }
 
   // ===== Legacy fallback (single-element result) =====
   // Phase 2 tightened the role enum to BUYER / SELLER / SERVICE_PROVIDER /
   // ADMIN. Legacy values (EVENTS, ENTERTAINMENT, SUPPLIER, LABOUR) were
   // backfilled into the categories array, so detection happens entirely
   // through category-name predicates below. Runs only when the backend
-  // hasn't published an archetype set yet (mid-onboarding rows).
-  const categories = user.categories || [];
+  // hasn't published an archetype set yet (mid-onboarding rows). Read
+  // categoryIds first (the modern shape from /auth/me) and fall back
+  // to categories for legacy callers.
+  const categories =
+    (user.categoryIds && user.categoryIds.length > 0)
+      ? user.categoryIds
+      : (user.categories || []);
   const subRole = (user.subRole || '').toUpperCase();
 
+  // RENTAL / SERVICE specific checks run BEFORE the EVENTS one so an
+  // event-equipment-rental seller lands on RENTAL and an event-catering
+  // (or decor / planning / management) seller lands on SERVICE.
+  // EVENT_CATEGORY_PATTERN below otherwise catches the word "event" in
+  // those slugs first and routes them to the venue dashboard.
+  if (categoriesMatch(categories, /\b(rental|hire)s?\b/i)) return ['RENTAL'];
+  if (categoriesMatch(categories, /\b(catering|decor|planning|management)\b/i)) return ['SERVICE'];
   if (categoriesMatch(categories, EVENT_CATEGORY_PATTERN)) return ['EVENTS'];
   if (categoriesMatch(categories, ENTERTAINMENT_CATEGORY_PATTERN)) return ['ENTERTAINMENT'];
 

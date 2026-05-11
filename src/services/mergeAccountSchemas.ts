@@ -122,11 +122,17 @@ export function pickSchemasForUser(
       ? activeContext.archetype
       : null;
 
+  // Default-pick priority (used when no persona is selected, or the
+  // selected one isn't in the seller's archetype set). RENTAL beats
+  // EVENTS so a seller with both ['EVENTS','RENTAL'] (e.g. an event
+  // venue that also rents equipment, or a backend that wrote both for
+  // event-equipment-rental) defaults to the rental-tailored dashboard.
+  // Sellers can switch back via the persona picker.
   const archetype: BusinessType =
     contextArchetype
-      ?? (businessTypes.includes('RETAIL')
-        ? 'RETAIL'
-        : (businessTypes[0] ?? 'RETAIL'));
+      ?? (businessTypes.includes('RETAIL') ? 'RETAIL'
+          : businessTypes.includes('RENTAL') ? 'RENTAL'
+          : (businessTypes[0] ?? 'RETAIL'));
 
   const schema = ARCHETYPE_TO_SCHEMA[archetype];
   if (schema) return [schema];

@@ -63,14 +63,51 @@ export class MatchingService {
 
     // Pull just the matched category ids first — used for both the
     // result query and the observability log line.
+    //
+    // Two cases the seller's junction can be in:
+    //
+    //   1. Pure parent subscription — seller picked just "electronics"
+    //      (no specific sub). They're a generalist; expand to every
+    //      descendant so they match every electronics inquiry.
+    //
+    //   2. Parent + specific child — onboarding auto-adds the parent
+    //      slug ("events") whenever a buyer or seller picks any sub
+    //      ("event-decor"). The child is the seller's authoritative
+    //      subscription; the parent is incidental. Without removing it
+    //      from the seed, the recursive expansion sweeps in every
+    //      sibling — a decor provider sees catering / planning /
+    //      management / venues inquiries too. We drop those parents
+    //      from the seed before recursing so the seller's actual
+    //      choice wins.
+    //
+    // `effective_seeds` is the seller's junction MINUS any row that
+    // has a child of itself in the same junction. Then the recursive
+    // CTE expands only the leaves.
     const matchedRows: Array<{ id: string }> = await this.inquiryRepository.query(
       `
-      WITH RECURSIVE seller_cats AS (
-        SELECT "categoryId" AS id FROM ${junctionTable} WHERE "${profileColumn}" = $1
-        UNION
-        SELECT c.id FROM categories c
-        JOIN seller_cats sc ON c."parentId" = sc.id
-      )
+      WITH RECURSIVE
+        seller_explicit AS (
+          SELECT "categoryId" AS id FROM ${junctionTable} WHERE "${profileColumn}" = $1
+        ),
+        parents_with_specific_children AS (
+          SELECT se.id FROM seller_explicit se
+          WHERE EXISTS (
+            SELECT 1 FROM categories child
+            JOIN seller_explicit se2 ON se2.id = child.id
+            WHERE child."parentId" = se.id
+          )
+        ),
+        effective_seeds AS (
+          SELECT id FROM seller_explicit
+          EXCEPT
+          SELECT id FROM parents_with_specific_children
+        ),
+        seller_cats AS (
+          SELECT id FROM effective_seeds
+          UNION
+          SELECT c.id FROM categories c
+          JOIN seller_cats sc ON c."parentId" = sc.id
+        )
       SELECT id FROM seller_cats
       `,
       [selector.profileId],

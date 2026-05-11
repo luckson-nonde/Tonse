@@ -2,11 +2,44 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion, AnimatePresence } from 'motion/react';
-import { Camera, X, ImagePlus, Loader2, UploadCloud } from 'lucide-react';
-import { generateQuoteSchema } from '../../services/quoteSchemaGenerator';
+import { Camera, X, Loader2, UploadCloud, Send } from 'lucide-react';
+import { generateQuoteSchema, QuoteField } from '../../services/quoteSchemaGenerator';
 import { getEffectiveBusinessTypes } from '../../services/categories';
 import { useActiveProfileContext } from '../../hooks/useActiveProfileContext';
 import { uniqueKey } from '../../utils/keyUtils';
+
+// Field-name → section fallback when a QuoteField doesn't carry an
+// explicit `group`. Keeps the existing archetype-based schemas
+// (REPAIR / PRODUCT / SERVICE / VENUE / LABOUR / GENERIC) rendering
+// under the new section dividers without per-field annotation.
+const PRICING_NAMES = new Set([
+  'price', 'securityDeposit', 'setupFee', 'deliveryFee', 'optionalDeliveryFee',
+  'optionalDeliveryOffer', 'diagnosisFee', 'partsCost', 'labourHours', 'labourRate',
+  'rateUnit', 'damageDeposit', 'cleaningFee', 'condition', 'warranty', 'maxCapacity',
+  'numberOfWorkers', 'venueAmenities',
+]);
+const LOGISTICS_NAMES = new Set([
+  'availabilityDate', 'leadTime', 'expiryDuration', 'turnaroundDays', 'warrantyDays',
+]);
+
+const sectionFor = (field: QuoteField): 'Pricing' | 'Logistics & Timing' | 'Notes & Photos' => {
+  if (field.group) return field.group;
+  if (PRICING_NAMES.has(field.name)) return 'Pricing';
+  if (LOGISTICS_NAMES.has(field.name)) return 'Logistics & Timing';
+  return 'Notes & Photos';
+};
+
+function SectionDivider({ eyebrow, title }: { eyebrow: string; title: string }) {
+  return (
+    <div className="flex items-center gap-3 pt-2">
+      <div className="w-[3px] h-9 rounded-full bg-[#C9973A]" />
+      <div>
+        <p className="text-[9px] font-black uppercase tracking-[0.28em] text-[#C9973A]">{eyebrow}</p>
+        <h4 className="font-serif text-[17px] font-bold text-slate-900 leading-tight">{title}</h4>
+      </div>
+    </div>
+  );
+}
 
 interface QuoteSubmissionFormProps {
   inquiry: any;
@@ -300,34 +333,77 @@ export default function QuoteSubmissionForm({
     );
   };
 
+  // Group dynamic schema fields into the three section buckets so the
+  // form reads as Pricing → Logistics → Notes instead of an
+  // undifferentiated stack. Renderable fields only (some are filtered
+  // by renderField — e.g. the Labour rate-with-unit pair handles itself
+  // and skips its sibling).
+  const grouped: Record<'Pricing' | 'Logistics & Timing' | 'Notes & Photos', QuoteField[]> = {
+    Pricing: [],
+    'Logistics & Timing': [],
+    'Notes & Photos': [],
+  };
+  quoteSchema.forEach((f) => grouped[sectionFor(f)].push(f));
+
+  const showVenueSpaces =
+    getEffectiveBusinessTypes(user as any, activeContext).includes('EVENTS') &&
+    venueSpaces.length > 0;
+
   return (
     <div className="bg-white">
-      {/* Strong sans header — premium B2B operational tools (Stripe,
-          Linear, Mercury) use confident sans titles, not serif. The
-          earlier serif treatment read as decorative-marketing on a
-          working form. Single accent: the EXPRESS / STANDARD chip. */}
-      <div className="flex items-center justify-between mb-7 pb-5 border-b border-slate-200">
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.22em]">
-            Quotation
+      {/* Premium card-style header — gold eyebrow + serif title, with a
+          running-total summary strip when the form has resolved a
+          number. The EXPRESS / STANDARD chip stays as the single
+          coloured accent on the right. */}
+      <div className="mb-7 pb-5 border-b border-slate-200">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <span className="text-[10px] font-black text-[#C9973A] uppercase tracking-[0.28em]">
+              Quotation
+            </span>
+            <h5 className="font-serif text-[24px] font-bold text-slate-900 leading-none tracking-tight">
+              Your Offer
+            </h5>
+            <p className="text-[12px] text-slate-500 font-medium mt-1.5 leading-relaxed">
+              Fill what's required. The buyer will review side-by-side with other quotes.
+            </p>
+          </div>
+          <span className={`shrink-0 px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-[0.2em] ${inquiry.processType === 'EXPRESS' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'}`}>
+            {inquiry.processType || 'STANDARD'}
           </span>
-          <h5 className="text-[20px] font-black text-slate-900 leading-none tracking-tight">
-            Your Offer
-          </h5>
         </div>
-        <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-[0.2em] ${inquiry.processType === 'EXPRESS' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'}`}>
-          {inquiry.processType || 'STANDARD'}
-        </span>
+        {calculatedTotal > 0 && (
+          <div className="mt-5 bg-gradient-to-br from-[#fdf6e9] to-[#fdf6e9]/60 border border-[#C9973A]/25 px-4 py-3.5 rounded-2xl flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A] mb-1">
+                Running Total
+              </p>
+              <p className="font-serif text-[22px] font-black text-[#1a1a2e] leading-none">
+                ZMW {calculatedTotal.toLocaleString()}
+              </p>
+            </div>
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C9973A]/70 text-right max-w-[140px] leading-tight">
+              Auto-calculated as you type
+            </span>
+          </div>
+        )}
       </div>
 
-      <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-5">
-        {quoteSchema.map(renderField)}
+      <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-7">
+        {/* ── Pricing section ── */}
+        {grouped['Pricing'].length > 0 && (
+          <div className="space-y-5">
+            <SectionDivider eyebrow="Section 01" title="Pricing" />
+            <div className="space-y-5 pl-5">
+              {grouped['Pricing'].map(renderField)}
+            </div>
+          </div>
+        )}
 
-        {/* Venue space selector — shown only when the seller is
-            ACTIVELY in events persona. A multi-archetype seller in
-            RETAIL persona shouldn't see venue picking on a quote. */}
-        {getEffectiveBusinessTypes(user as any, activeContext).includes('EVENTS') && venueSpaces.length > 0 && (
-          <div className="pt-2 border-t border-slate-100 space-y-3">
+        {/* Venue space selector — events persona only, slotted into
+            Pricing visually since the deposit/cleaning fees live here. */}
+        {showVenueSpaces && (
+          <div className="space-y-3 pl-5">
             <div>
               <label className={labelClass}>Venue Space (Optional)</label>
               <Controller
@@ -364,65 +440,82 @@ export default function QuoteSubmissionForm({
           </div>
         )}
 
-        {/* Total summary */}
-        {calculatedTotal > 0 && (
-          <div className="bg-[#fdf6e9] border border-[#d49b35]/20 px-4 py-3.5 rounded-xl">
-            <p className={`${labelClass} mb-1`}>Total Quote Amount</p>
-            <p className="font-serif text-[24px] font-black text-[#d49b35] leading-none">
-              ZMW {calculatedTotal.toLocaleString()}
-            </p>
+        {/* ── Logistics & Timing section ── */}
+        {grouped['Logistics & Timing'].length > 0 && (
+          <div className="space-y-5">
+            <SectionDivider eyebrow="Section 02" title="Logistics and Timing" />
+            <div className="space-y-5 pl-5">
+              {grouped['Logistics & Timing'].map(renderField)}
+            </div>
           </div>
         )}
 
-        {/* Reference Photos Preview/Button */}
-        <div className="pt-2">
-          {referencePhotos.length > 0 ? (
-            <div className="flex flex-wrap gap-2 mb-3">
-              {referencePhotos.map((url, i) => (
-                <div key={i} className="relative w-12 h-12 rounded-lg overflow-hidden border border-slate-200">
-                  <img src={url} className="w-full h-full object-cover" />
-                  <button 
-                    type="button" 
-                    onClick={() => removePhoto(i)}
-                    className="absolute top-0 right-0 p-0.5 bg-black/50 text-white rounded-bl-lg"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => setIsPhotoModalOpen(true)}
-                className="w-12 h-12 rounded-lg border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-400 hover:border-[#d49b35]/30 hover:text-[#d49b35] transition-all"
-              >
-                <Camera className="w-5 h-5" />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setIsPhotoModalOpen(true)}
-              className="w-full py-3 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center gap-2 text-slate-400 font-bold text-xs hover:border-[#d49b35]/30 hover:bg-[#fdf6e9]/30 hover:text-[#d49b35] transition-all"
-            >
-              <Camera className="w-4 h-4" />
-              Add Reference Photos
-            </button>
-          )}
-        </div>
+        {/* ── Notes & Photos section ── */}
+        {(grouped['Notes & Photos'].length > 0 || true) && (
+          <div className="space-y-5">
+            <SectionDivider eyebrow="Section 03" title="Notes and Photos" />
+            <div className="space-y-5 pl-5">
+              {grouped['Notes & Photos'].map(renderField)}
 
-        <div className="flex gap-2 pt-2">
+              {/* Reference Photos preview / picker — lives in this
+                  section because it's accompanying context for the
+                  buyer rather than pricing or scheduling data. */}
+              {referencePhotos.length > 0 ? (
+                <div>
+                  <label className={labelClass}>Reference Photos</label>
+                  <div className="flex flex-wrap gap-2">
+                    {referencePhotos.map((url, i) => (
+                      <div key={i} className="relative w-14 h-14 rounded-xl overflow-hidden border border-slate-200">
+                        <img src={url} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(i)}
+                          className="absolute top-0 right-0 p-0.5 bg-black/50 text-white rounded-bl-xl"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setIsPhotoModalOpen(true)}
+                      className="w-14 h-14 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-400 hover:border-[#C9973A]/40 hover:text-[#C9973A] hover:bg-[#fdf6e9]/40 transition-all"
+                    >
+                      <Camera className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsPhotoModalOpen(true)}
+                  className="w-full py-3.5 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center gap-2 text-slate-500 font-bold text-[12px] uppercase tracking-[0.14em] hover:border-[#C9973A]/40 hover:bg-[#fdf6e9]/40 hover:text-[#C9973A] transition-all"
+                >
+                  <Camera className="w-4 h-4" />
+                  Add Reference Photos
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Sticky action footer — keeps Submit reachable without
+            scrolling on long quotes. Backdrop blur matches the buyer
+            catalog review bar. */}
+        <div className="sticky bottom-0 -mx-5 sm:-mx-6 px-5 sm:px-6 py-4 bg-white/85 backdrop-blur-md border-t border-slate-200/70 flex gap-3">
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-xl hover:bg-slate-50 transition-all"
+            className="px-5 py-3 bg-white border border-slate-200 text-slate-600 text-[12px] font-bold uppercase tracking-[0.16em] rounded-full hover:bg-slate-50 transition-all"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="flex-2 py-2.5 bg-[#1e293b] text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-all shadow-md"
+            className="flex-1 py-3 bg-[#1a1a2e] text-white text-[13px] font-bold rounded-full hover:bg-black transition-all shadow-md flex items-center justify-center gap-2"
           >
-            {parentQuoteId ? 'Send Revised Quotation' : 'Submit Quotation'}
+            <span>{parentQuoteId ? 'Send Revised Quotation' : 'Submit Quotation'}</span>
+            <Send className="w-4 h-4" />
           </button>
         </div>
       </form>
