@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Star,
@@ -11,9 +11,11 @@ import {
   Sparkles,
   Trash2,
   CreditCard,
+  Music,
 } from 'lucide-react';
 import { Quote } from '../types.ts';
 import { robustParse } from '../utils/jsonUtils';
+import PortfolioModal from './PortfolioModal';
 
 interface QuoteCardProps {
   quote: Quote;
@@ -54,6 +56,8 @@ function resolveConditionDetail(quote: Quote): { label: string; value: string; i
 export default function QuoteCard({ quote, onView, onPay, onDelete }: QuoteCardProps) {
   const conditionDetail = resolveConditionDetail(quote);
   const canPay = !!onPay && !NON_PAYABLE_STATUSES.has((quote.status || '').toUpperCase());
+  const providerId = quote.providerId ? String(quote.providerId) : '';
+  const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -179,6 +183,23 @@ export default function QuoteCard({ quote, onView, onPay, onDelete }: QuoteCardP
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Performance catalog — visible whenever we have a provider id.
+              Modal is empty-state aware (renders a friendly "nothing
+              published yet" if the artist hasn't added clips), so this
+              link is safe to always show. */}
+          {providerId && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsCatalogOpen(true);
+              }}
+              className="px-3 py-2.5 text-[12px] font-bold rounded-xl border border-[#c9973a]/40 text-[#c9973a] hover:bg-[#c9973a]/10 transition-all flex items-center gap-1.5"
+              title="View this provider's past performances"
+            >
+              <Music className="w-3.5 h-3.5" />
+              Catalog
+            </button>
+          )}
           {onDelete && (
             <button
               onClick={(e) => {
@@ -218,6 +239,15 @@ export default function QuoteCard({ quote, onView, onPay, onDelete }: QuoteCardP
           </button>
         </div>
       </div>
+
+      {providerId && (
+        <PortfolioModal
+          providerId={providerId}
+          providerName={quote.providerName || undefined}
+          isOpen={isCatalogOpen}
+          onClose={() => setIsCatalogOpen(false)}
+        />
+      )}
     </motion.div>
   );
 }

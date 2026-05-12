@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   format,
   addMonths,
@@ -19,17 +19,16 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  Search,
   Calendar as CalendarIcon,
   Clock,
   CheckCircle2,
   Circle,
-  AlertCircle,
   Bell,
-  BellOff,
   MoreVertical,
   Trash2,
   Edit2,
+  Sparkles,
+  Coins,
 } from 'lucide-react';
 import { useLiveQuery } from '../hooks/useLiveQuery';
 import { db } from '../services/api/database';
@@ -37,13 +36,39 @@ import { useAuth } from '../AuthContext';
 import { useDashboard } from '../DashboardContext';
 import { CalendarEvent } from '../types';
 import Button from '../components/Button';
+import {
+  fetchBuyerOrders,
+  fetchSellerOrders,
+  type OrderRecord,
+} from '../services/api/orderService';
+import {
+  deriveGigEventsFromOrders,
+  type DerivedGigEvent,
+} from '../services/derivedGigEvents';
 
-const CATEGORIES = [
-  { id: 'WORK', label: 'Work', color: 'bg-blue-500' },
-  { id: 'PERSONAL', label: 'Personal', color: 'bg-purple-500' },
-  { id: 'HEALTH', label: 'Health', color: 'bg-green-500' },
-  { id: 'OTHER', label: 'Other', color: 'bg-gray-500' },
+const MANUAL_CATEGORIES = [
+  { id: 'WORK',     label: 'Work',     dot: '#3399C9' },
+  { id: 'PERSONAL', label: 'Personal', dot: '#8E6FD8' },
+  { id: 'HEALTH',   label: 'Health',   dot: '#3FA98B' },
+  { id: 'OTHER',    label: 'Other',    dot: '#64748B' },
 ];
+
+interface MergedEvent {
+  key: string;
+  date: string;            // yyyy-MM-dd
+  startTime: string;
+  endTime: string;
+  title: string;
+  note?: string;
+  /** Discriminator: 'gig' is read-only / system-derived; 'manual' is
+   *  user-added via the FAB. */
+  kind: 'gig' | 'manual';
+  status: string;
+  /** Gig-only metadata; undefined for manual events. */
+  gig?: DerivedGigEvent;
+  /** Manual-only metadata. */
+  manual?: CalendarEvent;
+}
 
 export default function SchedulePage() {
   const { user } = useAuth();
@@ -58,25 +83,104 @@ export default function SchedulePage() {
     setActiveTab('schedule');
   }, [setActiveTab]);
 
-  const events = useLiveQuery(
+  // Manual notes (Dexie/IndexedDB) — buyer/provider personal reminders.
+  const manualEvents = useLiveQuery(
     () =>
       db.calendarEvents
         .where('userId')
         .equals(user?.id || 0)
         .toArray(),
-    [user?.id]
+    [user?.id],
   );
 
+  // Derived gig events from paid orders. We pull from BOTH perspectives so
+  // a user who is sometimes the buyer and sometimes the seller (the
+  // common multi-archetype case) sees every booking they're involved in.
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
+  useEffect(() => {
+    const id = user?.id ? String(user.id) : '';
+    if (!id) return;
+    let cancelled = false;
+    Promise.allSettled([fetchSellerOrders(id), fetchBuyerOrders(id)]).then((results) => {
+      if (cancelled) return;
+      const merged: OrderRecord[] = [];
+      const seen = new Set<string>();
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          for (const o of r.value) {
+            if (!seen.has(o.id)) {
+              seen.add(o.id);
+              merged.push(o);
+            }
+          }
+        }
+      }
+      setOrders(merged);
+    });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  const derivedGigs = useMemo<DerivedGigEvent[]>(() => {
+    const id = user?.id ? String(user.id) : '';
+    return orders.flatMap((o) => {
+      const perspective = o.sellerId === id ? 'seller' : 'buyer';
+      return deriveGigEventsFromOrders([o], perspective);
+    });
+  }, [orders, user?.id]);
+
+  const allEvents = useMemo<MergedEvent[]>(() => {
+    const out: MergedEvent[] = [];
+    if (manualEvents) {
+      for (const e of manualEvents) {
+        out.push({
+          key: `m-${e.id}`,
+          date: e.date,
+          startTime: e.startTime,
+          endTime: e.endTime,
+          title: e.title,
+          note: e.note,
+          kind: 'manual',
+          status: e.status,
+          manual: e,
+        });
+      }
+    }
+    for (const g of derivedGigs) {
+      out.push({
+        key: g.id,
+        date: g.date,
+        startTime: g.startTime,
+        endTime: g.endTime,
+        title: g.title,
+        note: g.note,
+        kind: 'gig',
+        status: g.status,
+        gig: g,
+      });
+    }
+    return out;
+  }, [manualEvents, derivedGigs]);
+
   const selectedDateEvents = useMemo(() => {
-    if (!events) return [];
-    return events
+    return allEvents
       .filter((event) => isSameDay(parseISO(event.date), selectedDate))
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
-  }, [events, selectedDate]);
+  }, [allEvents, selectedDate]);
 
-  const hasEventsOnDay = (day: Date) => {
-    if (!events) return false;
-    return events.some((event) => isSameDay(parseISO(event.date), day));
+  const eventBucketsByDay = useMemo(() => {
+    const map = new Map<string, { gig: number; manual: number }>();
+    for (const e of allEvents) {
+      const bucket = map.get(e.date) ?? { gig: 0, manual: 0 };
+      if (e.kind === 'gig') bucket.gig += 1;
+      else bucket.manual += 1;
+      map.set(e.date, bucket);
+    }
+    return map;
+  }, [allEvents]);
+
+  const dayMeta = (day: Date) => {
+    const key = format(day, 'yyyy-MM-dd');
+    return eventBucketsByDay.get(key) ?? { gig: 0, manual: 0 };
   };
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -89,7 +193,7 @@ export default function SchedulePage() {
   };
 
   const handleDeleteEvent = async (id: number) => {
-    if (confirm('Are you sure you want to delete this event?')) {
+    if (confirm('Delete this note? Gig records cannot be deleted from the calendar.')) {
       await db.calendarEvents.delete(id);
     }
   };
@@ -103,35 +207,57 @@ export default function SchedulePage() {
     await db.calendarEvents.update(event.id!, { status: nextStatus[event.status] });
   };
 
+  const totalGigs = derivedGigs.length;
+  const upcomingGigs = useMemo(() => {
+    const now = new Date();
+    return derivedGigs.filter((g) => parseISO(g.date) >= startOfMonth(now)).length;
+  }, [derivedGigs]);
+
   return (
-    <div className="flex flex-col font-sans">
-      {/* Calendar Header */}
-      <div className="bg-[#C9973A] text-white p-6 pb-12 rounded-b-[40px] shadow-lg relative z-10 -mx-4 sm:-mx-8 -mt-4 sm:-mt-7 mb-6">
-        <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-2">
-            <CalendarIcon className="w-6 h-6" />
-            <h1 className="text-2xl font-bold font-serif">{format(currentMonth, 'MMMM yyyy')}</h1>
-          </div>
-          <div className="flex items-center gap-4">
+    <div className="flex flex-col font-sans w-full max-w-6xl mx-auto pb-20">
+      {/* Calendar Card — restrained brand palette, replaces the dominant gold panel */}
+      <div className="bg-white rounded-[28px] border border-slate-200 shadow-sm p-5 sm:p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => {}}
-              className="p-2 hover:bg-white/20 rounded-full transition-colors"
+              onClick={prevMonth}
+              aria-label="Previous month"
+              className="w-9 h-9 rounded-xl bg-[#f5f2ed] text-brand-dark hover:bg-[#c9973a] hover:text-white transition-colors flex items-center justify-center"
             >
-              <Search className="w-5 h-5" />
+              <ChevronLeft className="w-5 h-5" />
             </button>
+            <h1 className="font-serif text-xl sm:text-2xl font-bold text-brand-dark tracking-tight">
+              {format(currentMonth, 'MMMM yyyy')}
+            </h1>
             <button
-              onClick={goToToday}
-              className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
+              onClick={nextMonth}
+              aria-label="Next month"
+              className="w-9 h-9 rounded-xl bg-[#f5f2ed] text-brand-dark hover:bg-[#c9973a] hover:text-white transition-colors flex items-center justify-center"
             >
-              Today
+              <ChevronRight className="w-5 h-5" />
             </button>
           </div>
+          <button
+            onClick={goToToday}
+            className="px-3 py-1.5 bg-[#f5f2ed] hover:bg-[#c9973a]/10 text-brand-dark border border-slate-200 rounded-lg text-[12px] font-bold transition-colors"
+          >
+            Today
+          </button>
         </div>
 
-        {/* Calendar Grid */}
-        <div className="grid grid-cols-7 gap-1 mb-4">
+        {/* Stat strip */}
+        <div className="grid grid-cols-3 gap-2 mb-5 text-[11px]">
+          <Stat icon={Sparkles} label="Total gigs" value={totalGigs} />
+          <Stat icon={CalendarIcon} label="This month" value={upcomingGigs} />
+          <Stat icon={Coins} label="Notes" value={manualEvents?.length ?? 0} />
+        </div>
+
+        <div className="grid grid-cols-7 gap-1 mb-2">
           {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => (
-            <div key={`${day}-${i}`} className="text-center text-xs font-bold opacity-60 py-2">
+            <div
+              key={`${day}-${i}`}
+              className="text-center text-[10px] font-extrabold text-slate-400 tracking-[0.2em] py-2"
+            >
               {day}
             </div>
           ))}
@@ -142,72 +268,101 @@ export default function SchedulePage() {
             currentMonth={currentMonth}
             selectedDate={selectedDate}
             onDateSelect={setSelectedDate}
-            hasEventsOnDay={hasEventsOnDay}
+            dayMeta={dayMeta}
             isCollapsed={isCollapsed}
           />
         </motion.div>
 
-        {/* Collapse Handle */}
-        <div className="absolute -bottom-3 left-1/2 -translate-x-1/2">
+        <div className="mt-3 flex justify-center">
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="w-12 h-1.5 bg-white/40 rounded-full hover:bg-white/60 transition-colors"
+            aria-label={isCollapsed ? 'Expand calendar' : 'Collapse to current week'}
+            className="w-12 h-1.5 bg-slate-200 hover:bg-[#c9973a]/60 rounded-full transition-colors"
           />
         </div>
       </div>
 
-      {/* Events List */}
-      <div className="flex-1 p-0 overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-brand-dark font-serif">
-            {isToday(selectedDate) ? 'Today' : format(selectedDate, 'EEEE, MMM d')}
-          </h2>
-          <span className="text-sm text-slate-500 font-medium">
-            {selectedDateEvents.length} events
-          </span>
+      {/* Events list */}
+      <div className="flex-1 mt-6">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h2 className="text-lg sm:text-xl font-bold text-brand-dark font-serif tracking-tight">
+              {isToday(selectedDate) ? 'Today' : format(selectedDate, 'EEEE, MMM d')}
+            </h2>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {selectedDateEvents.length === 0
+                ? 'No events'
+                : `${selectedDateEvents.length} ${selectedDateEvents.length === 1 ? 'event' : 'events'}`}
+            </p>
+          </div>
+          <Legend />
         </div>
 
         {selectedDateEvents.length > 0 ? (
-          <div className="space-y-6 relative">
-            {/* Timeline Axis */}
-            <div className="absolute left-2.75 top-4 bottom-4 w-0.5 bg-gray-200" />
-
-            {selectedDateEvents.map((event, index) => (
+          <div className="space-y-3 sm:space-y-4">
+            {selectedDateEvents.map((event) => (
               <EventCard
-                key={event.id}
+                key={event.key}
                 event={event}
-                onDelete={() => handleDeleteEvent(event.id!)}
-                onEdit={() => {
-                  setEditingEvent(event);
-                  setIsAddModalOpen(true);
-                }}
-                onToggleStatus={() => handleToggleStatus(event)}
+                onDelete={
+                  event.kind === 'manual' && event.manual?.id
+                    ? () => handleDeleteEvent(event.manual!.id!)
+                    : undefined
+                }
+                onEdit={
+                  event.kind === 'manual' && event.manual
+                    ? () => {
+                        setEditingEvent(event.manual!);
+                        setIsAddModalOpen(true);
+                      }
+                    : undefined
+                }
+                onToggleStatus={
+                  event.kind === 'manual' && event.manual
+                    ? () => handleToggleStatus(event.manual!)
+                    : undefined
+                }
               />
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <CalendarIcon className="w-10 h-10 text-gray-300" />
+          <div className="flex flex-col items-center justify-center py-16 text-center bg-white rounded-2xl border border-dashed border-slate-200">
+            <div className="w-16 h-16 bg-[#f5f2ed] rounded-full flex items-center justify-center mb-4">
+              <CalendarIcon className="w-8 h-8 text-slate-300" />
             </div>
-            <h3 className="text-lg font-bold text-gray-400">No events scheduled</h3>
-            <p className="text-gray-400 text-sm mt-1">Tap the + button to add your first event</p>
+            <h3 className="text-base font-bold text-slate-500">No events scheduled</h3>
+            <p className="text-slate-400 text-[13px] mt-1">
+              Paid bookings appear here automatically. Tap + to add a personal note.
+            </p>
           </div>
         )}
       </div>
 
-      {/* Floating Action Button */}
+      {/* Upcoming Gigs — explicit chronological list of every paid gig
+          on or after today. Lets the provider see every booking they
+          owe service on, regardless of which day is currently selected
+          on the grid. The grid's gold ring + count badge shows where;
+          this list shows when, what, and how much. */}
+      <UpcomingGigsList
+        gigs={derivedGigs}
+        onJumpToDate={(date) => {
+          setSelectedDate(date);
+          setCurrentMonth(date);
+        }}
+      />
+
+      {/* FAB — manual notes only */}
       <button
         onClick={() => {
           setEditingEvent(null);
           setIsAddModalOpen(true);
         }}
-        className="fixed bottom-24 right-8 w-16 h-16 bg-[#C9973A] text-white rounded-2xl shadow-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-20"
+        aria-label="Add personal note"
+        className="fixed bottom-24 right-8 w-14 h-14 sm:w-16 sm:h-16 bg-[#c9973a] text-white rounded-2xl shadow-lg shadow-[#c9973a]/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-20"
       >
-        <Plus className="w-8 h-8" strokeWidth={3} />
+        <Plus className="w-7 h-7" strokeWidth={3} />
       </button>
 
-      {/* Add/Edit Modal */}
       <AnimatePresence>
         {isAddModalOpen && (
           <AddEventModal
@@ -221,13 +376,155 @@ export default function SchedulePage() {
   );
 }
 
+function Stat({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: number }) {
+  return (
+    <div className="bg-[#f5f2ed] rounded-xl px-3 py-2.5 flex items-center gap-2">
+      <div className="w-7 h-7 rounded-lg bg-white text-[#c9973a] flex items-center justify-center">
+        <Icon className="w-3.5 h-3.5" />
+      </div>
+      <div className="min-w-0">
+        <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold truncate">{label}</div>
+        <div className="text-sm font-extrabold text-brand-dark leading-tight">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function Legend() {
+  return (
+    <div className="hidden sm:flex items-center gap-3 text-[10px]">
+      <div className="flex items-center gap-1.5">
+        <span className="w-2 h-2 rounded-full bg-[#c9973a]" />
+        <span className="font-bold text-slate-500 uppercase tracking-wider">Gig</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="w-2 h-2 rounded-full bg-slate-400" />
+        <span className="font-bold text-slate-500 uppercase tracking-wider">Note</span>
+      </div>
+    </div>
+  );
+}
+
+function UpcomingGigsList({
+  gigs,
+  onJumpToDate,
+}: {
+  gigs: DerivedGigEvent[];
+  onJumpToDate: (d: Date) => void;
+}) {
+  const upcoming = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return gigs
+      .filter((g) => parseISO(g.date) >= today)
+      .sort((a, b) => {
+        const d = a.date.localeCompare(b.date);
+        return d !== 0 ? d : a.startTime.localeCompare(b.startTime);
+      });
+  }, [gigs]);
+
+  if (upcoming.length === 0) return null;
+
+  const fmtDateChip = (iso: string) => {
+    const d = parseISO(iso);
+    return {
+      day: format(d, 'd'),
+      month: format(d, 'MMM').toUpperCase(),
+      weekday: format(d, 'EEE').toUpperCase(),
+      isToday: isToday(d),
+    };
+  };
+
+  return (
+    <div className="mt-8">
+      <div className="flex items-end justify-between mb-3">
+        <div>
+          <h2 className="text-lg sm:text-xl font-bold text-brand-dark font-serif tracking-tight">
+            Upcoming Gigs
+          </h2>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            Every paid booking on or after today — sorted by date.
+          </p>
+        </div>
+        <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#c9973a] bg-[#fdf6e9] px-2 py-1 rounded-md">
+          {upcoming.length} {upcoming.length === 1 ? 'gig' : 'gigs'}
+        </span>
+      </div>
+
+      <div className="space-y-2.5">
+        {upcoming.map((g) => {
+          const chip = fmtDateChip(g.date);
+          return (
+            <button
+              key={g.id}
+              type="button"
+              onClick={() => onJumpToDate(parseISO(g.date))}
+              className="w-full flex items-center gap-3 sm:gap-4 bg-white rounded-2xl border border-slate-200 hover:border-[#c9973a]/50 hover:shadow-md transition-all p-3 sm:p-4 text-left"
+            >
+              <div
+                className={`flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex flex-col items-center justify-center ${
+                  chip.isToday
+                    ? 'bg-[#c9973a] text-white shadow-md shadow-[#c9973a]/30'
+                    : 'bg-[#fdf6e9] text-[#c9973a] border border-[#c9973a]/20'
+                }`}
+              >
+                <span className="text-[9px] font-extrabold tracking-wider opacity-80">{chip.month}</span>
+                <span className="text-xl sm:text-2xl font-black leading-none">{chip.day}</span>
+                <span className="text-[8px] font-bold tracking-wider opacity-70 mt-0.5">{chip.weekday}</span>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-bold text-brand-dark text-[14px] truncate tracking-tight">
+                    {g.title}
+                  </h3>
+                  {chip.isToday && (
+                    <span className="text-[9px] uppercase tracking-[0.18em] font-extrabold px-2 py-0.5 rounded-md bg-[#c9973a]/10 text-[#c9973a]">
+                      Today
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 sm:gap-3 text-[11px] text-slate-500 mt-1 flex-wrap">
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {g.startTime} – {g.endTime}
+                  </span>
+                  {g.counterparty && (
+                    <span className="text-slate-400 truncate">· {g.counterparty}</span>
+                  )}
+                  <span className="text-slate-400">· #{g.orderNumber}</span>
+                </div>
+              </div>
+
+              <div className="text-right flex-shrink-0">
+                <div className="text-[14px] sm:text-[15px] font-extrabold text-brand-dark whitespace-nowrap">
+                  K{g.amountZmw.toLocaleString()}
+                </div>
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 mt-0.5">
+                  {g.status === 'PENDING' ? 'Awaiting' : g.status.toLowerCase()}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function CalendarGrid({
   currentMonth,
   selectedDate,
   onDateSelect,
-  hasEventsOnDay,
+  dayMeta,
   isCollapsed,
-}: any) {
+}: {
+  currentMonth: Date;
+  selectedDate: Date;
+  onDateSelect: (d: Date) => void;
+  dayMeta: (d: Date) => { gig: number; manual: number };
+  isCollapsed: boolean;
+}) {
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(monthStart);
   const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -248,30 +545,65 @@ function CalendarGrid({
   return (
     <>
       {displayDays.map((day) => {
-        const isSelected = isSameDay(day, selectedDate);
+        const isSelected     = isSameDay(day, selectedDate);
         const isCurrentMonth = isSameMonth(day, monthStart);
-        const hasEvents = hasEventsOnDay(day);
-        const isCurrentDay = isToday(day);
+        const meta           = dayMeta(day);
+        const isCurrentDay   = isToday(day);
+        const hasGig         = meta.gig > 0;
+        const hasManual      = meta.manual > 0;
+
+        // Days with gigs get a gold ring + tinted background so the
+        // provider can scan the month at a glance and immediately see
+        // which dates need them on stage. Tiny dots are still rendered
+        // for granularity; the ring + tint is the at-a-glance signal.
+        const baseClass =
+          'relative flex flex-col items-center justify-center py-2 rounded-xl transition-all border-[1.5px]';
+        const stateClass = isSelected
+          ? 'bg-[#c9973a] text-white shadow-lg shadow-[#c9973a]/30 scale-105 z-10 border-[#c9973a]'
+          : hasGig
+            ? 'bg-[#fdf6e9] text-brand-dark border-[#c9973a]/55 hover:border-[#c9973a]'
+            : isCurrentDay
+              ? 'bg-[#f5f2ed] text-brand-dark border-transparent'
+              : 'text-brand-dark hover:bg-[#f5f2ed] border-transparent';
 
         return (
           <button
             key={day.toISOString()}
             onClick={() => onDateSelect(day)}
-            className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-all ${
-              isSelected ? 'bg-white text-[#C9973A] shadow-md scale-110 z-10' : 'hover:bg-white/10'
-            }`}
+            className={`${baseClass} ${stateClass}`}
+            aria-label={
+              hasGig
+                ? `${format(day, 'PPPP')} — ${meta.gig} ${meta.gig === 1 ? 'gig' : 'gigs'}`
+                : format(day, 'PPPP')
+            }
           >
             <span
-              className={`text-sm font-bold ${
-                !isCurrentMonth && !isCollapsed ? 'opacity-30' : ''
-              } ${isCurrentDay && !isSelected ? 'text-white underline decoration-2 underline-offset-4' : ''}`}
+              className={[
+                'text-sm font-bold',
+                !isCurrentMonth && !isCollapsed ? 'opacity-30' : '',
+                isCurrentDay && !isSelected ? 'text-[#c9973a]' : '',
+              ].join(' ')}
             >
               {format(day, 'd')}
             </span>
-            {hasEvents && (
-              <div
-                className={`w-1 h-1 rounded-full mt-1 ${isSelected ? 'bg-[#C9973A]' : 'bg-white'}`}
-              />
+            {(hasGig || hasManual) && (
+              <div className="flex gap-0.5 mt-1 items-center">
+                {hasGig && (
+                  <span
+                    className={`min-w-[14px] h-[14px] rounded-full text-[9px] font-extrabold flex items-center justify-center px-1 ${
+                      isSelected ? 'bg-white text-[#c9973a]' : 'bg-[#c9973a] text-white'
+                    }`}
+                  >
+                    {meta.gig}
+                  </span>
+                )}
+                {hasManual && (
+                  <span
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ background: isSelected ? 'rgba(255,255,255,0.7)' : '#94a3b8' }}
+                  />
+                )}
+              </div>
             )}
           </button>
         );
@@ -286,120 +618,150 @@ function EventCard({
   onEdit,
   onToggleStatus,
 }: {
-  event: CalendarEvent;
-  onDelete: () => void;
-  onEdit: () => void;
-  onToggleStatus: () => void;
+  event: MergedEvent;
+  onDelete?: () => void;
+  onEdit?: () => void;
+  onToggleStatus?: () => void;
 }) {
   const [showActions, setShowActions] = useState(false);
+  const isGig = event.kind === 'gig';
 
-  const statusColors = {
-    PENDING: 'bg-gray-100 text-gray-500',
-    ACTIVE: 'bg-yellow-100 text-yellow-600',
-    COMPLETED: 'bg-orange-100 text-orange-600',
-  };
+  const statusPill = (() => {
+    if (isGig) {
+      const map: Record<string, { label: string; bg: string; fg: string }> = {
+        PENDING:   { label: 'Awaiting',  bg: 'bg-amber-100',  fg: 'text-amber-600' },
+        CONFIRMED: { label: 'Confirmed', bg: 'bg-emerald-50', fg: 'text-emerald-600' },
+        SHIPPED:   { label: 'In Transit', bg: 'bg-blue-50',   fg: 'text-blue-600' },
+        DELIVERED: { label: 'Delivered', bg: 'bg-emerald-50', fg: 'text-emerald-600' },
+        COMPLETED: { label: 'Done',      bg: 'bg-slate-100',  fg: 'text-slate-500' },
+      };
+      return map[event.status] ?? { label: event.status, bg: 'bg-slate-100', fg: 'text-slate-500' };
+    }
+    const map: Record<string, { label: string; bg: string; fg: string }> = {
+      PENDING:   { label: 'Pending',   bg: 'bg-slate-100', fg: 'text-slate-500' },
+      ACTIVE:    { label: 'Active',    bg: 'bg-amber-100', fg: 'text-amber-600' },
+      COMPLETED: { label: 'Done',      bg: 'bg-emerald-50', fg: 'text-emerald-600' },
+    };
+    return map[event.status] ?? { label: event.status, bg: 'bg-slate-100', fg: 'text-slate-500' };
+  })();
 
-  const categoryColor = CATEGORIES.find((c) => c.id === event.category)?.color || 'bg-gray-500';
+  const accent = isGig ? '#c9973a' : (MANUAL_CATEGORIES.find((c) => c.id === event.manual?.category)?.dot ?? '#64748B');
 
   return (
-    <div className="flex gap-4 group">
+    <div className="flex gap-3 group">
       <div className="relative z-10 mt-1">
         <button
           onClick={onToggleStatus}
-          className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
-            event.status === 'COMPLETED'
-              ? 'bg-orange-500 text-white'
-              : 'bg-white border-2 border-gray-200'
-          }`}
+          disabled={!onToggleStatus}
+          className={[
+            'w-6 h-6 rounded-full flex items-center justify-center transition-all',
+            isGig
+              ? 'bg-[#c9973a] text-white cursor-default'
+              : event.manual?.status === 'COMPLETED'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-white border-2 border-slate-200',
+          ].join(' ')}
         >
-          {event.status === 'COMPLETED' ? (
+          {isGig ? (
+            <Sparkles className="w-3 h-3" />
+          ) : event.manual?.status === 'COMPLETED' ? (
             <CheckCircle2 className="w-4 h-4" />
-          ) : event.status === 'ACTIVE' ? (
-            <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
+          ) : event.manual?.status === 'ACTIVE' ? (
+            <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
           ) : (
-            <Circle className="w-4 h-4 text-gray-200" />
+            <Circle className="w-4 h-4 text-slate-200" />
           )}
         </button>
       </div>
 
-      <div className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all relative overflow-hidden">
-        <div className={`absolute left-0 top-0 bottom-0 w-1 ${categoryColor}`} />
+      <div className="flex-1 bg-white p-4 rounded-2xl border border-slate-200 hover:shadow-md transition-all relative overflow-hidden">
+        <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: accent }} />
 
-        <div className="flex justify-between items-start mb-2">
-          <div className="flex flex-col">
-            <h3
-              className={`font-bold text-lg ${event.status === 'COMPLETED' ? 'line-through text-gray-400' : 'text-[#1a1a1a]'}`}
-            >
+        <div className="flex justify-between items-start gap-3 mb-2">
+          <div className="flex flex-col min-w-0">
+            <h3 className="font-bold text-[15px] text-brand-dark tracking-tight truncate">
               {event.title}
             </h3>
-            <div className="flex items-center gap-2 text-xs text-gray-400 font-medium mt-1">
+            <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium mt-1">
               <Clock className="w-3 h-3" />
               {event.startTime} - {event.endTime}
+              {isGig && event.gig?.counterparty && (
+                <span className="text-slate-400">· {event.gig.counterparty}</span>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span
-              className={`text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-lg ${statusColors[event.status]}`}
-            >
-              {event.status.replace('_', ' ')}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {isGig && (
+              <span className="text-[9px] uppercase tracking-[0.18em] font-extrabold px-2 py-1 rounded-md bg-[#c9973a]/10 text-[#c9973a]">
+                Gig
+              </span>
+            )}
+            <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md ${statusPill.bg} ${statusPill.fg}`}>
+              {statusPill.label}
             </span>
-            <div className="relative">
-              <button
-                onClick={() => setShowActions(!showActions)}
-                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <MoreVertical className="w-4 h-4 text-gray-400" />
-              </button>
-
-              <AnimatePresence>
-                {showActions && (
-                  <>
-                    <div className="fixed inset-0 z-20" onClick={() => setShowActions(false)} />
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                      className="absolute right-0 mt-2 w-32 bg-white rounded-xl shadow-xl border border-gray-100 z-30 py-1"
-                    >
-                      <button
-                        onClick={() => {
-                          onEdit();
-                          setShowActions(false);
-                        }}
-                        className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 text-gray-600"
+            {(onEdit || onDelete) && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowActions(!showActions)}
+                  className="p-1 hover:bg-[#f5f2ed] rounded-lg transition-colors"
+                >
+                  <MoreVertical className="w-4 h-4 text-slate-400" />
+                </button>
+                <AnimatePresence>
+                  {showActions && (
+                    <>
+                      <div className="fixed inset-0 z-20" onClick={() => setShowActions(false)} />
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                        className="absolute right-0 mt-2 w-32 bg-white rounded-xl shadow-lg border border-slate-200 z-30 py-1"
                       >
-                        <Edit2 className="w-4 h-4" /> Edit
-                      </button>
-                      <button
-                        onClick={() => {
-                          onDelete();
-                          setShowActions(false);
-                        }}
-                        className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 text-red-500"
-                      >
-                        <Trash2 className="w-4 h-4" /> Delete
-                      </button>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
+                        {onEdit && (
+                          <button
+                            onClick={() => { onEdit(); setShowActions(false); }}
+                            className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-[#f5f2ed] text-slate-600"
+                          >
+                            <Edit2 className="w-4 h-4" /> Edit
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button
+                            onClick={() => { onDelete(); setShowActions(false); }}
+                            className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-[#f5f2ed] text-red-500"
+                          >
+                            <Trash2 className="w-4 h-4" /> Delete
+                          </button>
+                        )}
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
         </div>
 
-        {event.note && (
-          <p className="text-sm text-gray-500 line-clamp-2 mt-2 leading-relaxed">{event.note}</p>
+        {(event.note || (isGig && event.gig?.amountZmw)) && (
+          <div className="mt-2 flex items-center gap-3 text-[12px] text-slate-500">
+            {event.note && <span className="line-clamp-2 leading-relaxed">{event.note}</span>}
+            {isGig && event.gig && (
+              <span className="ml-auto font-extrabold text-brand-dark whitespace-nowrap">
+                K{event.gig.amountZmw.toLocaleString()}
+              </span>
+            )}
+          </div>
         )}
 
-        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${categoryColor}`} />
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-              {event.category}
+            <div className="w-2 h-2 rounded-full" style={{ background: accent }} />
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              {isGig ? `Order #${event.gig?.orderNumber ?? ''}` : event.manual?.category ?? 'NOTE'}
             </span>
           </div>
-          {event.reminderEnabled && <Bell className="w-3 h-3 text-[#C9973A]" />}
+          {event.manual?.reminderEnabled && <Bell className="w-3 h-3 text-[#c9973a]" />}
         </div>
       </div>
     </div>
@@ -421,7 +783,7 @@ function AddEventModal({
   const [startTime, setStartTime] = useState(editingEvent?.startTime || '09:00');
   const [endTime, setEndTime] = useState(editingEvent?.endTime || '10:00');
   const [category, setCategory] = useState<CalendarEvent['category']>(
-    editingEvent?.category || 'WORK'
+    editingEvent?.category || 'WORK',
   );
   const [reminderEnabled, setReminderEnabled] = useState(editingEvent?.reminderEnabled || false);
 
@@ -464,114 +826,121 @@ function AddEventModal({
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
-        className="relative w-full max-w-lg bg-white rounded-t-[40px] sm:rounded-[40px] overflow-hidden shadow-2xl"
+        className="relative w-full max-w-lg bg-white rounded-t-[32px] sm:rounded-[32px] overflow-hidden shadow-xl border border-slate-200"
       >
-        <div className="bg-[#C9973A] p-8 text-white">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold font-serif">
-              {editingEvent ? 'Edit Event' : 'Add Note'}
-            </h2>
+        <div className="px-7 pt-7 pb-5 border-b border-slate-100">
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#c9973a]">
+                Personal note
+              </p>
+              <h2 className="mt-1 text-xl font-bold font-serif text-brand-dark tracking-tight">
+                {editingEvent ? 'Edit note' : 'New note'}
+              </h2>
+            </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white/20 rounded-full transition-colors"
+              aria-label="Close"
+              className="p-2 hover:bg-[#f5f2ed] rounded-full transition-colors text-slate-500"
             >
-              <Plus className="w-6 h-6 rotate-45" />
+              <Plus className="w-5 h-5 rotate-45" />
             </button>
           </div>
-          <p className="opacity-80 text-sm font-sans">{format(selectedDate, 'EEEE, MMMM do')}</p>
+          <p className="text-slate-500 text-[13px] font-sans">
+            {format(selectedDate, 'EEEE, MMMM do')}
+          </p>
         </div>
 
         <form
           onSubmit={handleSave}
-          className="p-8 space-y-6 max-h-70vh overflow-y-auto scrollbar-hide bg-brand-white"
+          className="px-7 py-6 space-y-5 max-h-[70vh] overflow-y-auto"
         >
-          {/* Time Selection */}
-          <div className="space-y-4">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-              Time Range
+          <div className="space-y-3">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+              Time range
             </label>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <span className="text-[10px] text-slate-400">Start Time</span>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <span className="text-[10px] text-slate-400">Start</span>
                 <input
                   type="time"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full p-3 bg-white border border-slate-100 rounded-xl outline-none focus:border-[#C9973A] transition-all"
+                  className="w-full p-3 bg-[#f5f2ed] border border-slate-200 rounded-xl outline-none focus:border-[#c9973a] transition-all text-brand-dark"
                 />
               </div>
-              <div className="space-y-2">
-                <span className="text-[10px] text-slate-400">End Time</span>
+              <div className="space-y-1.5">
+                <span className="text-[10px] text-slate-400">End</span>
                 <input
                   type="time"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full p-3 bg-white border border-slate-100 rounded-xl outline-none focus:border-[#C9973A] transition-all"
+                  className="w-full p-3 bg-[#f5f2ed] border border-slate-200 rounded-xl outline-none focus:border-[#c9973a] transition-all text-brand-dark"
                 />
               </div>
             </div>
           </div>
 
-          {/* Title */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
               Title
             </label>
             <input
               type="text"
-              placeholder="Write the title"
+              placeholder="What's the note about?"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              className="w-full p-4 bg-white border border-slate-100 rounded-2xl outline-none focus:border-[#C9973A] transition-all text-lg font-medium font-serif"
+              className="w-full p-3.5 bg-[#f5f2ed] border border-slate-200 rounded-xl outline-none focus:border-[#c9973a] transition-all text-base font-medium font-serif text-brand-dark placeholder-slate-400"
             />
           </div>
 
-          {/* Note */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-              Note
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+              Notes
             </label>
             <textarea
-              placeholder="Write your important note"
+              placeholder="Optional details"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              rows={4}
-              className="w-full p-4 bg-white border border-slate-100 rounded-2xl outline-none focus:border-[#C9973A] transition-all resize-none font-sans"
+              rows={3}
+              className="w-full p-3.5 bg-[#f5f2ed] border border-slate-200 rounded-xl outline-none focus:border-[#c9973a] transition-all resize-none font-sans text-brand-dark placeholder-slate-400"
             />
           </div>
 
-          {/* Category & Alarm */}
-          <div className="grid grid-cols-2 gap-8">
-            <div className="space-y-3">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                Color
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                Category
               </label>
-              <div className="flex gap-3">
-                {CATEGORIES.map((cat) => (
+              <div className="flex gap-2.5">
+                {MANUAL_CATEGORIES.map((cat) => (
                   <button
                     key={cat.id}
                     type="button"
                     onClick={() => setCategory(cat.id as any)}
-                    className={`w-6 h-6 rounded-full transition-all ${cat.color} ${
+                    aria-label={cat.label}
+                    className={`w-6 h-6 rounded-full transition-all ${
                       category === cat.id
-                        ? 'ring-4 ring-slate-100 scale-125'
+                        ? 'ring-4 ring-[#f5f2ed] scale-110'
                         : 'opacity-40 hover:opacity-100'
                     }`}
+                    style={{ background: cat.dot }}
                   />
                 ))}
               </div>
             </div>
 
-            <div className="space-y-3">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                Alarm
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                Reminder
               </label>
               <button
                 type="button"
                 onClick={() => setReminderEnabled(!reminderEnabled)}
+                aria-pressed={reminderEnabled}
                 className={`w-12 h-6 rounded-full relative transition-all ${
-                  reminderEnabled ? 'bg-[#C9973A]' : 'bg-slate-200'
+                  reminderEnabled ? 'bg-[#c9973a]' : 'bg-slate-200'
                 }`}
               >
                 <div
@@ -583,12 +952,12 @@ function AddEventModal({
             </div>
           </div>
 
-          <div className="pt-4">
+          <div className="pt-2">
             <Button
               type="submit"
-              className="w-full py-5 bg-brand-dark text-white text-xl font-bold rounded-2xl shadow-xl shadow-slate-200"
+              className="w-full py-4 bg-[#c9973a] text-white text-base font-bold rounded-xl shadow-lg shadow-[#c9973a]/30"
             >
-              Save
+              {editingEvent ? 'Save changes' : 'Save note'}
             </Button>
           </div>
         </form>

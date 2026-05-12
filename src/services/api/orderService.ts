@@ -1,5 +1,29 @@
 import { apiClient } from './client';
 
+/** Shape of the related inquiry surfaced by the backend's order endpoints
+ *  when relations are eager-loaded. We only depend on the buyer-supplied
+ *  date attributes, the title, and the categories, so other fields stay
+ *  loosely typed. */
+export interface OrderInquirySnapshot {
+  id: string;
+  title?: string;
+  categories?: string[];
+  attributes?: Record<string, any>;
+}
+
+export interface OrderQuoteSnapshot {
+  id: string;
+  inquiryId?: string;
+  inquiry?: OrderInquirySnapshot;
+}
+
+export interface OrderUserSnapshot {
+  id: string;
+  fullName?: string;
+  businessName?: string;
+  email?: string;
+}
+
 export interface OrderRecord {
   id: string;
   quoteId: string;
@@ -11,6 +35,12 @@ export interface OrderRecord {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+  /** Populated when the backend eager-loads relations (buyer/seller order
+   *  endpoints do this so the gig calendar can read the inquiry's
+   *  buyer-indicated event date without a second roundtrip). */
+  quote?: OrderQuoteSnapshot;
+  buyer?: OrderUserSnapshot;
+  seller?: OrderUserSnapshot;
 }
 
 export interface CreateOrderPayload {
@@ -28,5 +58,10 @@ export async function createOrder(payload: CreateOrderPayload) {
 
 export async function fetchBuyerOrders(buyerId: string): Promise<OrderRecord[]> {
   const res = await apiClient.get<OrderRecord[]>(`/orders/buyer/${buyerId}`);
+  return res.data ?? [];
+}
+
+export async function fetchSellerOrders(sellerId: string): Promise<OrderRecord[]> {
+  const res = await apiClient.get<OrderRecord[]>(`/orders/seller/${sellerId}`);
   return res.data ?? [];
 }

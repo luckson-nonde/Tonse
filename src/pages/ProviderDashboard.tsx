@@ -103,7 +103,17 @@ export default function ProviderDashboard() {
   const navigate = useNavigate();
   const { tab } = useParams<{ tab: string }>();
 
-  // Synchronize URL tab parameter with Dashboard Context
+  // Synchronize URL tab parameter with Dashboard Context.
+  // The exclusion list is for tabs that have a DEDICATED route in
+  // App.tsx mounting their own page component (ShopProfilePage,
+  // SuppliersPage, VenueSpacesManager, AuditTrailPage, ArchivedLeadsPage)
+  // — for those, ProviderDashboard isn't mounted so syncing activeTab
+  // would just clobber a stale value. `financial` does NOT have a
+  // dedicated route — it falls through to /provider/:tab and is rendered
+  // BY ProviderDashboard via DynamicAccountRenderer (view="financial").
+  // Excluding it left activeTab stuck on 'home', so deep-links and the
+  // "My Account" button on the provider home view silently rendered the
+  // wrong screen.
   useEffect(() => {
     if (
       tab &&
@@ -111,7 +121,6 @@ export default function ProviderDashboard() {
       ![
         'profile',
         'suppliers',
-        'financial',
         'venue-spaces',
         'audit-trail',
         'archived-leads',
@@ -390,13 +399,17 @@ export default function ProviderDashboard() {
     [matchedLeads],
   );
 
+  // Coerce price to Number — backend returns DECIMAL columns as strings
+  // ("14000.00"), so a bare `sum + q.price` triggers string concatenation
+  // ("0" + "14000.00" = "014000.00"), which is exactly the leading-zero
+  // balance the buyer was seeing.
   const availableBalance = displayQuotes
     .filter((q) => q.status === 'COMPLETED' || q.status === 'PAID')
-    .reduce((sum, q) => sum + q.price, 0);
+    .reduce((sum, q) => sum + Number(q.price || 0), 0);
 
   const pendingClearance = displayQuotes
     .filter((q) => q.status === 'ACCEPTED')
-    .reduce((sum, q) => sum + q.price, 0);
+    .reduce((sum, q) => sum + Number(q.price || 0), 0);
 
   const [quotingInquiryId, setQuotingInquiryId] = useState<number | null>(null);
   const [expandedInquiryId, setExpandedInquiryId] = useState<number | null>(null);

@@ -143,13 +143,19 @@ export default function ProviderHomeView({
     [displayQuotes]
   );
 
-  const pendingPickupCount = React.useMemo(
+  const confirmedBookings = React.useMemo(
     () =>
       displayQuotes.filter(
-        (q) => q.status === 'PAID' || q.status === 'PENDING_COLLECTION' || q.status === 'AWAITING_PICKUP'
-      ).length,
-    [displayQuotes]
+        (q) =>
+          q.status === 'PAID' ||
+          q.status === 'PENDING_COLLECTION' ||
+          q.status === 'AWAITING_PICKUP' ||
+          q.status === 'COMPLETED' ||
+          q.status === 'HANDED_OVER',
+      ),
+    [displayQuotes],
   );
+  const pendingPickupCount = confirmedBookings.length;
 
   const activeJobsCount = React.useMemo(
     () => displayQuotes.filter((q) => q.status === 'ACCEPTED' || q.status === 'PAID').length,
@@ -854,7 +860,7 @@ export default function ProviderHomeView({
             {leads.length === 0 ? (
               <div className="bg-white rounded-2xl sm:rounded-[24px] p-6 sm:p-8 text-center border border-slate-100">
                 <p className="text-slate-400 text-xs font-medium italic">
-                  No booking requests found.
+                  No new booking requests right now.
                 </p>
               </div>
             ) : (
@@ -907,6 +913,83 @@ export default function ProviderHomeView({
             )}
           </div>
         </div>
+
+        {/* Confirmed Bookings — paid quotes the provider has lined up.
+            Surfaces what they need to perform / fulfil even when no new
+            requests are in the queue. Without this section the home view
+            looked empty for a provider with paid gigs awaiting service —
+            "Performance Bookings" said zero while Confirmed Gigs in the
+            sidebar said 2. */}
+        {confirmedBookings.length > 0 && (
+          <div className="mt-6">
+            <div className="flex justify-between items-center mb-3 sm:mb-4 px-1">
+              <div>
+                <h3 className="text-lg font-serif font-black text-slate-900">
+                  {isBookingBased ? 'Confirmed Bookings' : 'Confirmed Orders'}
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Paid &mdash; awaiting your service.
+                </p>
+              </div>
+              <button
+                onClick={() => onTabClick('paid-orders')}
+                className="text-xs font-bold text-[#d49b35] hover:underline"
+              >
+                View all
+              </button>
+            </div>
+            <div className="space-y-3">
+              {confirmedBookings.slice(0, 3).map((booking, idx) => {
+                const eventDate =
+                  (booking as any).attributes?.eventDate ||
+                  (booking as any).inquiry?.attributes?.eventDate ||
+                  null;
+                const fmtEvent = (raw: string) => {
+                  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                  if (!m) return raw;
+                  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                  return `${months[parseInt(m[2],10)-1]} ${parseInt(m[3],10)}, ${m[1]}`;
+                };
+                return (
+                  <button
+                    key={uniqueKey('home-confirmed', booking.id, idx)}
+                    type="button"
+                    onClick={() => onTabClick('paid-orders')}
+                    className="w-full bg-white rounded-2xl sm:rounded-[24px] p-4 sm:p-5 shadow-sm border border-slate-100 hover:border-emerald-300 hover:shadow-md flex items-start gap-3 sm:gap-4 transition-all text-left"
+                  >
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 border border-emerald-200">
+                      <Check className="w-5 h-5" strokeWidth={2.5} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start gap-2 mb-1">
+                        <h4 className="font-bold text-slate-900 text-sm truncate">
+                          {(booking as any).inquiryTitle || booking.title || 'Confirmed booking'}
+                        </h4>
+                        <span className="text-[9px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600 flex-shrink-0">
+                          {booking.status === 'PAID' ? 'Paid' : booking.status === 'COMPLETED' || booking.status === 'HANDED_OVER' ? 'Done' : 'Awaiting'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 sm:gap-3 text-[11.5px] text-slate-500 flex-wrap">
+                        <span className="font-bold text-slate-700">
+                          K{Number(booking.price || 0).toLocaleString()}
+                        </span>
+                        {eventDate && (
+                          <span className="inline-flex items-center gap-1 text-[#d49b35] font-bold">
+                            <Calendar className="w-3 h-3" />
+                            {fmtEvent(eventDate)}
+                          </span>
+                        )}
+                        {(booking as any).buyerName && (
+                          <span className="text-slate-400 truncate">· {(booking as any).buyerName}</span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     );
   };

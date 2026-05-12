@@ -12,6 +12,23 @@ import {
 } from '../services/api/inquiryService';
 
 /**
+ * Cross-component invalidation event. Code that mutates a buyer's
+ * inquiry list (delete, create, post-pay status flip) should call
+ * `notifyInquiriesChanged()` so every mounted `useUserInquiries`
+ * refetches immediately. Without this, the dashboard's stat cards and
+ * the calendar widget (separate hook instances) drift out of sync until
+ * the next 30s poll tick — the symptom the buyer was hitting where
+ * deleting an inquiry left the calendar count stale.
+ */
+const INQUIRIES_CHANGED_EVENT = 'tonse:inquiries-changed';
+
+export function notifyInquiriesChanged() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(INQUIRIES_CHANGED_EVENT));
+  }
+}
+
+/**
  * Hook to fetch user's own inquiries from backend
  */
 export function useUserInquiries(userId?: string, refetch?: boolean) {
@@ -46,7 +63,20 @@ export function useUserInquiries(userId?: string, refetch?: boolean) {
 
     // Poll every 30 seconds so buyer sees inquiry status changes (e.g. OPEN → QUOTED)
     const interval = setInterval(loadInquiries, 30000);
-    return () => clearInterval(interval);
+
+    // React immediately to local mutations so all hook instances stay
+    // in sync without waiting for the next poll.
+    const onChanged = () => loadInquiries();
+    if (typeof window !== 'undefined') {
+      window.addEventListener(INQUIRIES_CHANGED_EVENT, onChanged);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener(INQUIRIES_CHANGED_EVENT, onChanged);
+      }
+    };
   }, [userId, refetchTrigger]);
 
   return { inquiries, loading, error, refresh };

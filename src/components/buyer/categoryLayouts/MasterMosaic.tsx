@@ -5,16 +5,14 @@ import MasterGrid from './MasterGrid';
 interface Props {
   items: Category[];
   subCounts: Record<string, number>;
-  selectedCounts: Record<string, number>;
   onPick: (master: Category) => void;
 }
 
-export default function MasterMosaic({ items, subCounts, selectedCounts, onPick }: Props) {
+export default function MasterMosaic({ items, subCounts, onPick }: Props) {
   if (!items.length) return null;
   const [hero, ...rest] = items;
   const heroMeta = getMeta(hero.id);
   const HeroIcon = heroMeta.icon;
-  const heroSelected = selectedCounts[hero.id] ?? 0;
 
   return (
     <div className="flex flex-col gap-3">
@@ -40,14 +38,9 @@ export default function MasterMosaic({ items, subCounts, selectedCounts, onPick 
           </div>
           <div className="text-lg sm:text-xl font-extrabold mt-0.5 tracking-tight truncate">{hero.name}</div>
           <div className="text-xs sm:text-[13px] text-white/70 mt-1">{heroMeta.tagline || 'Tap to explore'}</div>
-          {heroSelected > 0 && (
-            <div className="inline-block mt-2 bg-brand-gold text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-              {heroSelected} selected
-            </div>
-          )}
         </div>
       </button>
-      <MasterGrid items={rest} subCounts={subCounts} selectedCounts={selectedCounts} onPick={onPick} />
+      <MasterGrid items={rest} subCounts={subCounts} onPick={onPick} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Search, Plus, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Search, Plus, ChevronLeft } from 'lucide-react';
 import type { Category } from '../../services/categories';
 import { SubLayoutToggle } from './LayoutToggle';
 import SubList from './categoryLayouts/SubList';
@@ -11,13 +11,10 @@ import type { SubLayout } from './useLayoutPreference';
 interface Props {
   master: Category;
   subs: Category[];
-  selected: Set<string>;
-  totalSelected: number;
   subLayout: SubLayout;
   onSubLayoutChange: (l: SubLayout) => void;
-  onToggleSub: (sub: Category) => void;
+  onPickSub: (sub: Category) => void;
   onBackToMasters: () => void;
-  onContinue: () => void;
   isEntryPoint: boolean;
   onExit: () => void;
 }
@@ -40,13 +37,10 @@ const StepBar = ({ step, total }: { step: number; total: number }) => (
 export default function SubcategoryScreen({
   master,
   subs,
-  selected,
-  totalSelected,
   subLayout,
   onSubLayoutChange,
-  onToggleSub,
+  onPickSub,
   onBackToMasters,
-  onContinue,
   isEntryPoint,
   onExit,
 }: Props) {
@@ -64,17 +58,14 @@ export default function SubcategoryScreen({
     );
   }, [subs, query]);
 
-  const localSelected = subs.filter((s) => selected.has(s.id)).length;
-  const ctaDisabled = totalSelected === 0;
-
   return (
-    <div className="w-full max-w-5xl mx-auto pb-32">
+    <div className="w-full max-w-5xl mx-auto pb-8">
       <div className="flex items-center gap-3 mb-3">
         <button
           type="button"
           onClick={isEntryPoint ? onExit : onBackToMasters}
           aria-label={isEntryPoint ? 'Exit' : 'Back to categories'}
-          className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-brand-dark hover:bg-brand-light transition-colors"
+          className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-brand-dark hover:bg-[#f5f2ed] transition-colors"
         >
           <ChevronLeft size={18} />
         </button>
@@ -117,14 +108,14 @@ export default function SubcategoryScreen({
 
       <div className="mt-4">
         <h2 className="font-serif text-[20px] sm:text-2xl lg:text-[26px] font-bold text-brand-dark leading-tight tracking-tight">
-          Tell us exactly what you need.
+          What exactly do you need?
         </h2>
         <p className="text-[13px] sm:text-sm text-slate-500 mt-1.5 leading-relaxed">
-          Pick one or more subcategories so vendors can quote accurately.
+          Tap a subcategory to continue to the inquiry details.
         </p>
       </div>
 
-      <div className="mt-4 flex items-center gap-2 bg-white border-[1.5px] border-slate-200 rounded-2xl pl-3.5 pr-1.5 py-1.5 focus-within:border-brand-gold/50 transition-colors">
+      <div className="mt-4 flex items-center gap-2 bg-white border-[1.5px] border-slate-200 rounded-2xl pl-3.5 pr-1.5 py-1.5 focus-within:border-[#c9973a]/50 transition-colors">
         <Search size={16} className="text-slate-500 flex-shrink-0" />
         <input
           value={query}
@@ -142,50 +133,20 @@ export default function SubcategoryScreen({
           </div>
         ) : (
           <>
-            {subLayout === 'list'  && <SubList  items={filtered} selected={selected} accent={meta.accent} onToggle={onToggleSub} />}
-            {subLayout === 'cards' && <SubCards items={filtered} selected={selected} accent={meta.accent} onToggle={onToggleSub} />}
-            {subLayout === 'chips' && <SubChips items={filtered} selected={selected} accent={meta.accent} onToggle={onToggleSub} />}
+            {subLayout === 'list'  && <SubList  items={filtered} accent={meta.accent} onPick={onPickSub} />}
+            {subLayout === 'cards' && <SubCards items={filtered} accent={meta.accent} onPick={onPickSub} />}
+            {subLayout === 'chips' && <SubChips items={filtered} accent={meta.accent} onPick={onPickSub} />}
           </>
         )}
 
         <button
           type="button"
           onClick={onBackToMasters}
-          className="mt-4 w-full max-w-3xl mx-auto block bg-transparent border-[1.5px] border-dashed border-slate-300 text-brand-dark rounded-2xl py-3.5 text-[13px] font-bold flex items-center justify-center gap-1.5 hover:border-brand-gold/60 hover:text-brand-gold transition-colors"
+          className="mt-4 w-full max-w-3xl mx-auto block bg-transparent border-[1.5px] border-dashed border-slate-300 text-brand-dark rounded-2xl py-3.5 text-[13px] font-bold flex items-center justify-center gap-1.5 hover:border-[#c9973a]/60 hover:text-[#c9973a] transition-colors"
         >
           <Plus size={16} strokeWidth={2.4} />
           Can&apos;t find it? Browse other categories
         </button>
-      </div>
-
-      <div className="sticky bottom-4 mt-6 z-10">
-        <div className="max-w-3xl mx-auto flex flex-col gap-2">
-          {!isEntryPoint && localSelected > 0 && (
-            <button
-              type="button"
-              onClick={onBackToMasters}
-              className="w-full px-4 py-2.5 bg-white/85 backdrop-blur-md border border-slate-200 text-brand-dark rounded-xl text-[12.5px] font-bold transition-colors hover:bg-white"
-            >
-              Done — {localSelected} selected in {master.name}
-            </button>
-          )}
-          <button
-            type="button"
-            disabled={ctaDisabled}
-            onClick={onContinue}
-            className={[
-              'w-full px-4 py-3.5 border-none rounded-2xl text-[14.5px] font-extrabold tracking-tight flex items-center justify-center gap-2 transition-all duration-200',
-              ctaDisabled
-                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                : 'bg-brand-gold text-white shadow-gold-glow hover:brightness-110 active:scale-[0.99]',
-            ].join(' ')}
-          >
-            {ctaDisabled
-              ? 'Pick a subcategory'
-              : `Continue with ${totalSelected} ${totalSelected === 1 ? 'item' : 'items'}`}
-            {!ctaDisabled && <ChevronRight size={18} strokeWidth={2.2} />}
-          </button>
-        </div>
       </div>
     </div>
   );

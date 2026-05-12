@@ -30,7 +30,7 @@ function Toggle<T extends string>({ value, options, onChange }: Props<T>) {
     <div
       role="radiogroup"
       aria-label="View layout"
-      className="flex gap-0.5 bg-brand-light rounded-[10px] p-[3px]"
+      className="flex gap-0.5 bg-[#f5f2ed] rounded-[10px] p-[3px]"
     >
       {options.map((opt) => {
         const Icon = opt.icon;

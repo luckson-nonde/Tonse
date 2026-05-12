@@ -21,6 +21,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { FilesModule } from './modules/files/files.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { TeamModule } from './modules/team/team.module';
+import { PortfolioModule } from './modules/portfolio/portfolio.module';
 
 // Common
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -69,6 +70,7 @@ import encryptionConfig from './config/encryption.config';
     FilesModule,
     CategoriesModule,
     TeamModule,
+    PortfolioModule,
   ],
   providers: [
     {

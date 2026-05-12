@@ -1361,6 +1361,63 @@ export type BusinessType =
   | 'ADMIN'
   | 'UNKNOWN';
 
+/** Buyer preferences variant — drives which Section 1/2/3 config the
+ *  inquiry-preferences screen renders. Matches CategoryType in
+ *  components/InquiryPreferences.tsx. */
+export type CategoryType = 'PRODUCTS' | 'SERVICES' | 'VENUES' | 'LABOR';
+
+const MASTER_CATEGORY_TYPE: Record<string, CategoryType> = {
+  electronics:         'PRODUCTS',
+  furniture:           'PRODUCTS',
+  fashion:             'PRODUCTS',
+  'home-decor':        'PRODUCTS',
+  automotive:          'PRODUCTS',
+  groceries:           'PRODUCTS',
+  beauty:              'PRODUCTS',
+  construction:        'PRODUCTS',
+  agriculture:         'PRODUCTS',
+  'it-products':       'PRODUCTS',
+  entertainment:       'SERVICES',
+  events:              'SERVICES',
+  telecommunications:  'SERVICES',
+  'it-services':       'SERVICES',
+  'drilling-services': 'SERVICES',
+};
+
+const SUB_CATEGORY_TYPE_OVERRIDES: Record<string, CategoryType> = {
+  // Booking a venue is structurally different from buying a product or
+  // hiring a service — needs the VENUES preferences config (capacity,
+  // accessibility, available dates, etc.).
+  'event-venues':           'VENUES',
+  // Lives under automotive (PRODUCTS) but is a callout/breakdown service.
+  'car-breakdown-recovery': 'SERVICES',
+};
+
+/**
+ * Resolve which preferences variant a buyer should see for a given
+ * category id. Replaces the old substring-matching heuristic in
+ * BuyerDashboard which silently mis-classified entertainment,
+ * telecommunications, and it-services as PRODUCTS.
+ *
+ * Order: explicit sub override → repair/restore variants → master
+ * map → PRODUCTS fallback.
+ */
+export function getCategoryType(categoryId: string | null | undefined): CategoryType {
+  if (!categoryId) return 'PRODUCTS';
+  const override = SUB_CATEGORY_TYPE_OVERRIDES[categoryId];
+  if (override) return override;
+
+  const cat = CATEGORIES_DB.find((c) => c.id === categoryId);
+  if (!cat) return 'PRODUCTS';
+
+  // Action variants are work performed on the buyer's existing item —
+  // always a service interaction regardless of the master's nature.
+  if (cat.type === 'repair' || cat.type === 'restore') return 'SERVICES';
+
+  const masterId = cat.parentId ?? cat.id;
+  return MASTER_CATEGORY_TYPE[masterId] ?? 'PRODUCTS';
+}
+
 export const REPAIR_ACTION_PATTERN =
   /\((repair|restoration|upholstery|recovery|service|maintenance|fix)\b[^)]*\)/i;
 export const BUY_NEW_ACTION_PATTERN =

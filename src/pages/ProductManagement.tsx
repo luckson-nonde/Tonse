@@ -7,6 +7,7 @@ import { Plus, Trash2, Edit2, Package, Image as ImageIcon, Loader2, X } from 'lu
 import { uniqueKey } from '../utils/keyUtils';
 import { getEffectiveBusinessTypes } from '../services/categories';
 import { useActiveProfileContext } from '../hooks/useActiveProfileContext';
+import PerformanceCatalog from './PerformanceCatalog';
 
 export default function ProductManagement() {
   const { user } = useAuth();
@@ -14,7 +15,17 @@ export default function ProductManagement() {
   // the events bucket. A multi-archetype seller in RETAIL persona
   // sees product copy even if they ALSO serve EVENTS.
   const { context: activeContext } = useActiveProfileContext();
-  const isEventsBusiness = getEffectiveBusinessTypes(user as any, activeContext).includes('EVENTS');
+  const effectiveTypes = getEffectiveBusinessTypes(user as any, activeContext);
+  const isEventsBusiness = effectiveTypes.includes('EVENTS');
+
+  // Entertainment providers (DJs, bands, MCs, dancers, etc.) don't sell
+  // stock — their "catalog" is a portfolio of past gigs as social proof.
+  // Backend-stored so buyers viewing a quote can render the embeds. The
+  // products IndexedDB table stays untouched for retail/rental sellers
+  // who legitimately list inventory.
+  if (effectiveTypes.includes('ENTERTAINMENT')) {
+    return <PerformanceCatalog />;
+  }
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);

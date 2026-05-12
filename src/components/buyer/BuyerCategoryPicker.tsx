@@ -6,10 +6,11 @@ import SubcategoryScreen from './SubcategoryScreen';
 import { useLayoutPreference } from './useLayoutPreference';
 
 interface Props {
-  /** Called when the buyer commits their selection.
-   *  Payload matches the existing CategorySelection contract: an array
-   *  of category IDs that BuyerDashboard.handleInquiryComplete writes
-   *  into pendingInquiry.categories. */
+  /** Called when the buyer picks a subcategory. Payload matches the
+   *  existing CategorySelection contract: an array of category IDs that
+   *  BuyerDashboard.handleInquiryComplete writes into
+   *  pendingInquiry.categories. Single-select drill-down — picking a sub
+   *  immediately advances the parent flow to the next step. */
   onComplete: (selectedCategoryIds: string[]) => void;
   onBack: () => void;
   /** Targeted-shop flow: skip the master grid, mount directly on the
@@ -40,8 +41,6 @@ export default function BuyerCategoryPicker({ onComplete, onBack, preselectedPar
     ? masters.find((m) => m.id === preselectedParentId) ?? null
     : null;
 
-  // selections grouped by master id so we can show per-tile badges
-  const [selections, setSelections] = useState<Record<string, Set<string>>>({});
   const [stage, setStage] = useState<'master' | 'sub'>(initialMaster ? 'sub' : 'master');
   const [activeMaster, setActiveMaster] = useState<Category | null>(initialMaster);
 
@@ -54,39 +53,8 @@ export default function BuyerCategoryPicker({ onComplete, onBack, preselectedPar
     }
   }, [preselectedParentId, masters]);
 
-  const selectedCounts = useMemo(() => {
-    const out: Record<string, number> = {};
-    for (const [mid, set] of Object.entries(selections)) out[mid] = set.size;
-    return out;
-  }, [selections]);
-
-  const totalSelected = useMemo(
-    () => Object.values(selections).reduce((acc, s) => acc + s.size, 0),
-    [selections],
-  );
-
-  const allSelectedIds = useMemo(() => {
-    const out: string[] = [];
-    for (const set of Object.values(selections)) for (const id of set) out.push(id);
-    return out;
-  }, [selections]);
-
-  const toggleSub = (sub: Category) => {
-    if (!sub.parentId) return;
-    setSelections((prev) => {
-      const next = { ...prev };
-      const current = new Set(next[sub.parentId!] ?? []);
-      if (current.has(sub.id)) current.delete(sub.id);
-      else current.add(sub.id);
-      if (current.size === 0) delete next[sub.parentId!];
-      else next[sub.parentId!] = current;
-      return next;
-    });
-  };
-
-  const handleContinue = () => {
-    if (allSelectedIds.length === 0) return;
-    onComplete(allSelectedIds);
+  const pickSub = (sub: Category) => {
+    onComplete([sub.id]);
   };
 
   return (
@@ -102,16 +70,12 @@ export default function BuyerCategoryPicker({ onComplete, onBack, preselectedPar
           <MasterCategoryScreen
             masters={masters}
             subCounts={subCounts}
-            selectedCounts={selectedCounts}
-            totalSelected={totalSelected}
             layout={layout}
             onLayoutChange={setLayout}
             onPickMaster={(m) => {
               setActiveMaster(m);
               setStage('sub');
             }}
-            onContinue={handleContinue}
-            onBack={onBack}
           />
         </motion.div>
       )}
@@ -127,13 +91,10 @@ export default function BuyerCategoryPicker({ onComplete, onBack, preselectedPar
           <SubcategoryScreen
             master={activeMaster}
             subs={subsByMaster[activeMaster.id] ?? []}
-            selected={selections[activeMaster.id] ?? new Set()}
-            totalSelected={totalSelected}
             subLayout={subLayout}
             onSubLayoutChange={setSubLayout}
-            onToggleSub={toggleSub}
+            onPickSub={pickSub}
             onBackToMasters={() => setStage('master')}
-            onContinue={handleContinue}
             isEntryPoint={isEntryPoint}
             onExit={onBack}
           />

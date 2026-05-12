@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Search, ChevronRight } from 'lucide-react';
+import { Search } from 'lucide-react';
 import type { Category } from '../../services/categories';
 import { MasterLayoutToggle } from './LayoutToggle';
 import MasterGrid from './categoryLayouts/MasterGrid';
@@ -11,15 +11,9 @@ import type { MasterLayout } from './useLayoutPreference';
 interface Props {
   masters: Category[];
   subCounts: Record<string, number>;
-  selectedCounts: Record<string, number>;
-  totalSelected: number;
   layout: MasterLayout;
   onLayoutChange: (l: MasterLayout) => void;
   onPickMaster: (master: Category) => void;
-  onContinue: () => void;
-  /** Reserved — currently the dashboard sidebar handles back nav. Keep
-   *  for parity with SubcategoryScreen and future use. */
-  onBack: () => void;
 }
 
 const StepBar = ({ step, total }: { step: number; total: number }) => (
@@ -42,12 +36,9 @@ const StepBar = ({ step, total }: { step: number; total: number }) => (
 export default function MasterCategoryScreen({
   masters,
   subCounts,
-  selectedCounts,
-  totalSelected,
   layout,
   onLayoutChange,
   onPickMaster,
-  onContinue,
 }: Props) {
   const [query, setQuery] = useState('');
   const filtered = useMemo(() => {
@@ -60,7 +51,7 @@ export default function MasterCategoryScreen({
   }, [masters, query]);
 
   return (
-    <div className="w-full max-w-5xl mx-auto pb-28">
+    <div className="w-full max-w-5xl mx-auto pb-8">
       <StepBar step={1} total={3} />
 
       <div className="mt-4 sm:mt-5">
@@ -72,7 +63,7 @@ export default function MasterCategoryScreen({
         </p>
       </div>
 
-      <div className="mt-4 flex items-center gap-2 bg-white border-[1.5px] border-slate-200 rounded-2xl pl-3.5 pr-1.5 py-1.5 focus-within:border-brand-gold/50 transition-colors">
+      <div className="mt-4 flex items-center gap-2 bg-white border-[1.5px] border-slate-200 rounded-2xl pl-3.5 pr-1.5 py-1.5 focus-within:border-[#c9973a]/50 transition-colors">
         <Search size={16} className="text-slate-500 flex-shrink-0" />
         <input
           value={query}
@@ -90,30 +81,12 @@ export default function MasterCategoryScreen({
           </div>
         ) : (
           <>
-            {layout === 'grid'   && <MasterGrid   items={filtered} subCounts={subCounts} selectedCounts={selectedCounts} onPick={onPickMaster} />}
-            {layout === 'mosaic' && <MasterMosaic items={filtered} subCounts={subCounts} selectedCounts={selectedCounts} onPick={onPickMaster} />}
-            {layout === 'list'   && <MasterList   items={filtered} subCounts={subCounts} selectedCounts={selectedCounts} onPick={onPickMaster} />}
+            {layout === 'grid'   && <MasterGrid   items={filtered} subCounts={subCounts} onPick={onPickMaster} />}
+            {layout === 'mosaic' && <MasterMosaic items={filtered} subCounts={subCounts} onPick={onPickMaster} />}
+            {layout === 'list'   && <MasterList   items={filtered} subCounts={subCounts} onPick={onPickMaster} />}
           </>
         )}
       </div>
-
-      {totalSelected > 0 && (
-        <div className="sticky bottom-4 mt-6 z-10">
-          <div className="max-w-3xl mx-auto bg-white/85 backdrop-blur-md border border-slate-200 rounded-2xl p-2 shadow-premium-lg flex items-center gap-2">
-            <div className="px-3 py-1.5 text-[12px] font-bold text-brand-dark">
-              {totalSelected} {totalSelected === 1 ? 'item' : 'items'} selected
-            </div>
-            <button
-              type="button"
-              onClick={onContinue}
-              className="ml-auto px-5 py-3 bg-brand-gold text-white border-none rounded-xl text-[14px] font-extrabold tracking-tight shadow-gold-glow flex items-center gap-2 transition-all duration-200 hover:brightness-110 active:scale-[0.99]"
-            >
-              Continue
-              <ChevronRight size={16} strokeWidth={2.4} />
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { motion } from 'motion/react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 
 interface Event {
@@ -22,11 +22,39 @@ export type CalendarTone =
   | 'buyer'
   | 'generic';
 
+/**
+ * Optional override for the stats footer. When supplied with 3+ entries,
+ * the widget renders a 2-of-N carousel that auto-rotates through them.
+ * Used by the buyer dashboard to mirror the headline cards (Active
+ * Inquiries / Pending Quotes / Completed Orders) literally — same
+ * predicates, same numbers, no aggregation drift.
+ */
+export interface CounterCard {
+  /** Stable key for AnimatePresence — survives the rotation. */
+  id: string;
+  label: string;
+  /** Pre-formatted display value. Numbers stringify naturally; pass a
+   *  string when the value needs currency, suffixes, or non-number
+   *  glyphs (e.g. 'ZMW 14,000.00', '12h', '—'). */
+  value: string | number;
+  /** Tailwind background utility, e.g. 'bg-amber-50'. */
+  bg: string;
+  /** Tailwind text colour utility, e.g. 'text-amber-600'. */
+  text: string;
+}
+
 interface DashboardCalendarProps {
   events?: Event[];
   className?: string;
   tone?: CalendarTone;
+  /** When provided, replaces the tone-derived primary/secondary stats.
+   *  3+ entries → animated 2-of-N carousel. <=2 entries → render side
+   *  by side without rotation. */
+  counters?: CounterCard[];
 }
+
+/** How long each pair of cards stays visible before rotating. */
+const CAROUSEL_INTERVAL_MS = 4500;
 
 interface ToneConfig {
   primary: { label: string; bg: string; text: string };
@@ -100,9 +128,33 @@ export default function DashboardCalendar({
   events = [],
   className = '',
   tone = 'generic',
+  counters,
 }: DashboardCalendarProps) {
   const [currentDate, setCurrentDate] = React.useState(new Date());
   const toneCfg = TONE_CONFIG[tone] ?? TONE_CONFIG.generic;
+
+  // Carousel state — only matters when caller supplies 3+ counters.
+  // Rotation pauses on hover so a buyer reading a number doesn't have it
+  // slide away mid-glance.
+  const [cycleIndex, setCycleIndex] = useState(0);
+  const [isCarouselPaused, setIsCarouselPaused] = useState(false);
+  const useCarousel = (counters?.length ?? 0) > 2;
+
+  useEffect(() => {
+    if (!useCarousel || isCarouselPaused) return;
+    const id = setInterval(() => {
+      setCycleIndex((i) => (i + 1) % (counters?.length ?? 1));
+    }, CAROUSEL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [useCarousel, isCarouselPaused, counters?.length]);
+
+  const visibleCounters = useMemo<CounterCard[] | undefined>(() => {
+    if (!counters || counters.length === 0) return undefined;
+    if (counters.length <= 2) return counters;
+    const a = counters[cycleIndex % counters.length];
+    const b = counters[(cycleIndex + 1) % counters.length];
+    return [a, b];
+  }, [counters, cycleIndex]);
 
   const getDaysInMonth = (date: Date) =>
     new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -300,22 +352,88 @@ export default function DashboardCalendar({
         </div>
       )}
 
-      {/* Stats Footer */}
-      <div className="mt-5 pt-5 border-t border-slate-100">
-        <div className="grid grid-cols-2 gap-3">
-          <div className={`${toneCfg.primary.bg} rounded-xl p-4 text-center`}>
-            <p className={`text-3xl font-black ${toneCfg.primary.text}`}>{events.length}</p>
-            <p className={`text-[10px] font-bold ${toneCfg.primary.text} uppercase tracking-wider mt-1`}>
-              {toneCfg.primary.label}
-            </p>
+      {/* Stats Footer — original position. When the caller passes 3+
+          counters, the two visible cards rotate every CAROUSEL_INTERVAL_MS
+          via AnimatePresence (slide-fade). When 2 or fewer, they render
+          side by side without rotation. Falls back to the tone-derived
+          primary/secondary pair when no counters prop is supplied. */}
+      <div
+        className="mt-5 pt-5 border-t border-slate-100"
+        onMouseEnter={() => setIsCarouselPaused(true)}
+        onMouseLeave={() => setIsCarouselPaused(false)}
+      >
+        {visibleCounters ? (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <AnimatePresence mode="popLayout" initial={false}>
+                {visibleCounters.map((c) => {
+                  // Shrink the font for long values so currency strings
+                  // ("K14,000") fit alongside short numeric counts in a
+                  // ~140px-wide card without truncating awkwardly.
+                  const len = String(c.value).length;
+                  const valueClass =
+                    len > 8 ? 'text-base'
+                    : len > 6 ? 'text-lg'
+                    : len > 4 ? 'text-2xl'
+                    : 'text-3xl';
+                  return (
+                    <motion.div
+                      key={c.id}
+                      layout
+                      initial={{ opacity: 0, x: 24 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -24 }}
+                      transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+                      className={`${c.bg} rounded-xl p-4 text-center min-w-0`}
+                    >
+                      <p
+                        className={`${valueClass} font-black ${c.text} truncate tabular-nums`}
+                        title={String(c.value)}
+                      >
+                        {c.value}
+                      </p>
+                      <p className={`text-[10px] font-bold ${c.text} uppercase tracking-wider mt-1`}>
+                        {c.label}
+                      </p>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
+            {useCarousel && (
+              <div className="flex justify-center gap-1.5 mt-3" aria-hidden>
+                {counters!.map((c, i) => {
+                  const isActive =
+                    i === cycleIndex % counters!.length ||
+                    i === (cycleIndex + 1) % counters!.length;
+                  return (
+                    <span
+                      key={c.id}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                        isActive ? 'w-4 bg-slate-400' : 'w-1.5 bg-slate-200'
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <div className={`${toneCfg.primary.bg} rounded-xl p-4 text-center`}>
+              <p className={`text-3xl font-black ${toneCfg.primary.text}`}>{events.length}</p>
+              <p className={`text-[10px] font-bold ${toneCfg.primary.text} uppercase tracking-wider mt-1`}>
+                {toneCfg.primary.label}
+              </p>
+            </div>
+            <div className={`${toneCfg.secondary.bg} rounded-xl p-4 text-center`}>
+              <p className={`text-3xl font-black ${toneCfg.secondary.text}`}>{secondaryCount}</p>
+              <p className={`text-[10px] font-bold ${toneCfg.secondary.text} uppercase tracking-wider mt-1`}>
+                {toneCfg.secondary.label}
+              </p>
+            </div>
           </div>
-          <div className={`${toneCfg.secondary.bg} rounded-xl p-4 text-center`}>
-            <p className={`text-3xl font-black ${toneCfg.secondary.text}`}>{secondaryCount}</p>
-            <p className={`text-[10px] font-bold ${toneCfg.secondary.text} uppercase tracking-wider mt-1`}>
-              {toneCfg.secondary.label}
-            </p>
-          </div>
-        </div>
+        )}
       </div>
     </motion.div>
   );

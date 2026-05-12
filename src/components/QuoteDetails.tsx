@@ -32,6 +32,7 @@ import QuoteInvoice from '../components/QuoteInvoice';
 import { db } from '../services/api/database';
 
 import PaymentSheet from './PaymentSheet';
+import PortfolioShowcase from './PortfolioShowcase';
 
 /**
  * Thin wrapper around the shared {@link PaymentSheet} component. Owns
@@ -324,6 +325,13 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Details */}
         <div className="lg:col-span-2 space-y-8">
+          {/* Provider's portfolio — proof of work for the buyer reviewing
+              this quote. Quietly absent if the provider hasn't published
+              any clips, so retail/labour/repair quotes stay clean. */}
+          <PortfolioShowcase
+            providerId={quote.providerId ? String(quote.providerId) : undefined}
+            hideWhileLoading
+          />
           {(quote as any).quoteType === 'REVISION' && (
             <div className="p-6 bg-blue-50 rounded-4xl border border-blue-100 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
               <div className="flex items-center gap-4">

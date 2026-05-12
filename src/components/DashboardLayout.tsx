@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import Logo from './Logo';
 import ConfirmModal from './ConfirmModal';
-import DashboardCalendar, { CalendarTone } from './DashboardCalendar';
+import DashboardCalendar, { CalendarTone, CounterCard } from './DashboardCalendar';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useDashboard } from '../DashboardContext';
 import { hasPermission, PERMISSIONS } from '../utils/rbac';
@@ -44,6 +44,12 @@ import { useNavigate } from 'react-router-dom';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useUserInquiries, useMatchedLeads } from '../hooks/useInquiries';
 import { useUserQuotes } from '../hooks/useQuotes';
+import { isActiveInquiry, isActiveQuote } from '../services/lifecycleFilters';
+import {
+  fetchBuyerOrders,
+  fetchSellerOrders,
+  type OrderRecord,
+} from '../services/api/orderService';
 import { Inquiry } from '../types';
 
 // Map a derived BusinessType (one source of truth — see services/categories.ts)
@@ -119,8 +125,14 @@ const CalendarPanel = () => {
   const events = useMemo(() => {
     const evts: any[] = [];
 
+    // Apply the same lifecycle filters the dashboard cards use so the
+    // calendar's MY INQUIRIES / THIS MONTH counters match the headline
+    // numbers. For buyers: only OPEN inquiries count as "active". For
+    // sellers, useMatchedLeads already filters to matched-and-open
+    // leads, so passing through is correct.
     if (inquiries) {
-      inquiries.forEach((inq) => {
+      const visible = isBuyer ? inquiries.filter(isActiveInquiry) : inquiries;
+      visible.forEach((inq) => {
         evts.push({
           date: new Date(inq.createdAt),
           // Title falls back to the toned label when the inquiry has no
@@ -135,14 +147,19 @@ const CalendarPanel = () => {
 
     if (quotes) {
       quotes.forEach((quote) => {
-        if (quote.status === 'PAID' || quote.status === 'COMPLETED' || quote.status === 'HANDED_OVER') {
+        const status = String(quote.status || '').toUpperCase();
+        if (status === 'PAID' || status === 'COMPLETED' || status === 'HANDED_OVER') {
+          // Always-show: paid orders are real bookings worth surfacing.
           evts.push({
             date: new Date(quote.updatedAt),
             title: quote.inquiryTitle || 'Order',
             type: 'order',
             color: 'emerald',
           });
-        } else {
+        } else if (isActiveQuote(quote as any)) {
+          // Live quotes the buyer/seller can still act on. Skips
+          // ARCHIVED, REJECTED, SUPERSEDED so the count doesn't drift
+          // from what the My Quotes tab shows.
           evts.push({
             date: new Date(quote.createdAt),
             title: quote.inquiryTitle || 'Quote',
@@ -154,9 +171,62 @@ const CalendarPanel = () => {
     }
 
     return evts;
-  }, [inquiries, quotes]);
+  }, [inquiries, quotes, isBuyer]);
 
-  return <DashboardCalendar events={events} tone={tone} />;
+  // Per-tone carousel counters that literally mirror the headline tiles
+  // shown on the dashboard body. Each tone derives its values from the
+  // same data the body uses (inquiries / quotes), so the right-rail
+  // numbers can never drift from the headline.
+  //
+  //   • buyer       → mirrors BuyerDashboard's 3 stat cards
+  //                   (Active Inquiries / Pending Quotes / Completed Orders)
+  //   • events      → mirrors ProviderHomeView's entertainment/events
+  //                   tiles (Booking Requests / Quotes Sent /
+  //                   Potential Revenue / Pending Completion)
+  //
+  // Other tones keep the existing tone-derived 2-card stats by leaving
+  // `counters` undefined (the calendar widget falls back to its
+  // primary/secondary pair).
+  const counters = useMemo<CounterCard[] | undefined>(() => {
+    if (tone === 'buyer') {
+      const activeInquiries = events.filter((e) => e.type === 'inquiry').length;
+      const pendingQuotes   = events.filter((e) => e.type === 'quote').length;
+      const completedOrders = events.filter((e) => e.type === 'order').length;
+      return [
+        { id: 'active',    label: 'Active Inquiries', value: activeInquiries, bg: 'bg-amber-50',   text: 'text-amber-600' },
+        { id: 'pending',   label: 'Pending Quotes',   value: pendingQuotes,   bg: 'bg-purple-50',  text: 'text-purple-600' },
+        { id: 'completed', label: 'Completed Orders', value: completedOrders, bg: 'bg-emerald-50', text: 'text-emerald-600' },
+      ];
+    }
+    if (tone === 'events') {
+      // Source data: matchedInquiries (already in `inquiries` for
+      // sellers) + the seller's submitted `quotes`. Mirrors the
+      // computation in ProviderHomeView (lines 281-302) so the carousel
+      // matches the headline tiles 1:1.
+      const bookingRequests = (inquiries ?? []).length;
+      const displayQuotes   = (quotes ?? []).filter((q: any) => !q.isArchived);
+      const quotesSent      = displayQuotes.length;
+      const potentialZmw    = displayQuotes.reduce(
+        (sum: number, q: any) => sum + Number(q.price || 0),
+        0,
+      );
+      const pendingCompletion = displayQuotes.filter((q: any) => {
+        const s = String(q.status || '').toUpperCase();
+        return s === 'PAID' || s === 'PENDING_COLLECTION' || s === 'AWAITING_PICKUP';
+      }).length;
+      const fmtZmw = (n: number) =>
+        `K${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+      return [
+        { id: 'booking',    label: 'Booking Requests',  value: bookingRequests,         bg: 'bg-amber-50',   text: 'text-amber-600' },
+        { id: 'sent',       label: 'Quotes Sent',       value: quotesSent,              bg: 'bg-emerald-50', text: 'text-emerald-600' },
+        { id: 'potential',  label: 'Potential Revenue', value: fmtZmw(potentialZmw),    bg: 'bg-[#fdf6e9]',  text: 'text-[#d49b35]' },
+        { id: 'completion', label: 'Pending Completion',value: pendingCompletion,       bg: 'bg-blue-50',    text: 'text-blue-600' },
+      ];
+    }
+    return undefined;
+  }, [tone, events, inquiries, quotes]);
+
+  return <DashboardCalendar events={events} tone={tone} counters={counters} />;
 };
 
 // Map icon names to components
@@ -214,14 +284,78 @@ export default function DashboardLayout({
     activeInquiry: null,
   });
 
-  // TODO: Implement badge counts from backend API
-  // For Buyers: unquoted open inquiries, unread pending quotes
-  // For Sellers: relevant open inquiries not yet quoted by this seller
+  // Placeholder kept ONLY for `activeInquiry` (consumed by the
+  // multi-stage routing logic further down). Inquiry/quote counts now
+  // come from `badgeCounts` below — derived from real data hooks rather
+  // than hardcoded to zero.
   useEffect(() => {
-    // Placeholder: Set counts to 0
-    // Once backend endpoints are ready, fetch actual counts
-    setNotificationCounts({ inquiries: 0, quotes: 0, activeInquiry: null });
+    setNotificationCounts((prev) => ({ ...prev, inquiries: 0, quotes: 0 }));
   }, [user]);
+
+  // Sidebar notification badges. Counts are TOTALS per surface — not
+  // lifecycle-filtered — so when an inquiry advances OPEN → QUOTED → PAID
+  // the badge on its source surface (e.g. "My Inquiries") doesn't shrink.
+  // The data point still exists, the page still lists it, the badge
+  // counts it.
+  const sidebarIsBuyer = user?.role === 'BUYER';
+  const { context: sidebarActiveContext } = useActiveProfileContext();
+  const sidebarVariant: string | undefined =
+    !sidebarIsBuyer && sidebarActiveContext.type === 'business'
+      ? sidebarActiveContext.archetype
+      : undefined;
+  const { inquiries: sidebarOwnInquiries } = useUserInquiries(
+    sidebarIsBuyer ? user?.id : undefined,
+  );
+  const { inquiries: sidebarMatchedInquiries } = useMatchedLeads(
+    sidebarIsBuyer ? undefined : user?.id,
+    undefined,
+    sidebarVariant,
+  );
+  const { quotes: sidebarQuotes } = useUserQuotes(user?.id);
+  const [sidebarOrders, setSidebarOrders] = useState<OrderRecord[]>([]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    const fn = sidebarIsBuyer ? fetchBuyerOrders : fetchSellerOrders;
+    fn(String(user.id))
+      .then((rows) => { if (!cancelled) setSidebarOrders(rows); })
+      .catch(() => { if (!cancelled) setSidebarOrders([]); });
+    return () => { cancelled = true; };
+  }, [user?.id, sidebarIsBuyer]);
+
+  const badgeCounts = useMemo<Record<string, number>>(() => {
+    // Each badge mirrors what's actually on the corresponding page.
+    // Pages slice by lifecycle stage (see services/lifecycleFilters.ts),
+    // so the badge does the same — otherwise badge=3, page=1 confuses
+    // the user (the prior bug). When an inquiry transitions
+    // OPEN → QUOTED → PAID it doesn't vanish; the count shifts from
+    // "My Inquiries" to "Received Quotes" to "Order History" exactly as
+    // its data point moves between the three pages.
+    const counts: Record<string, number> = {};
+
+    if (sidebarIsBuyer) {
+      const activeInquiries = (sidebarOwnInquiries ?? []).filter(isActiveInquiry).length;
+      const activeQuotes    = (sidebarQuotes ?? []).filter(isActiveQuote).length;
+      counts.inquiries = activeInquiries;
+      counts.quotes    = activeQuotes;
+      counts.orders    = sidebarOrders.length; // Order History shows every backend order
+      return counts;
+    }
+
+    // Seller / provider variants. Matched leads from the backend are
+    // already pre-filtered to "matched and currently open"; archived
+    // ones are tagged on the row, so split locally.
+    const archivedLeads = (sidebarMatchedInquiries ?? []).filter((i: any) => i.isArchived).length;
+    const activeLeads   = (sidebarMatchedInquiries ?? []).filter((i: any) => !i.isArchived).length;
+    const activeQuotes  = (sidebarQuotes ?? []).filter(isActiveQuote).length;
+    counts.leads             = activeLeads;
+    counts['my-quotes']      = activeQuotes;
+    counts.my_quotes         = activeQuotes; // labour schema uses underscore form
+    counts['paid-orders']    = sidebarOrders.length;
+    counts['archived-leads'] = archivedLeads;
+    return counts;
+  }, [sidebarIsBuyer, sidebarOwnInquiries, sidebarMatchedInquiries, sidebarQuotes, sidebarOrders]);
 
   // Single source of truth for what kind of seller/buyer/etc this user is —
   // derived from role + subRole + categories (incl. specification variants).
@@ -507,6 +641,7 @@ export default function DashboardLayout({
       case 'products':
         if (effectiveBusinessType === 'WHOLESALE') return 'SUPPLY INVENTORY';
         if (effectiveBusinessType === 'REPAIR' || effectiveBusinessType === 'SERVICE') return 'SERVICE CATALOG';
+        if (effectiveBusinessType === 'ENTERTAINMENT') return 'PERFORMANCE CATALOG';
         return effectiveBusinessType === 'EVENTS' ? 'INVENTORY' : 'MY PRODUCTS';
       case 'venue-spaces':
         return 'VENUE SPACES';
@@ -758,10 +893,10 @@ export default function DashboardLayout({
               }
 
               const Icon = iconMap[item.icon] || Home;
-              let badgeCount;
-              if (item.id === 'inquiries') badgeCount = notificationCounts?.inquiries;
-              else if (item.id === 'my-quotes' || item.id === 'quotes')
-                badgeCount = notificationCounts?.quotes;
+              // Single source of truth for sidebar badges — see
+              // `badgeCounts` useMemo above. Items lacking an entry get
+              // `undefined`, which NavLink renders as no badge.
+              const badgeCount = badgeCounts[item.id];
 
               return (
                 <NavLink

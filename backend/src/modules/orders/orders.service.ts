@@ -104,9 +104,14 @@ export class OrdersService {
     await this.ordersRepository.delete(id);
   }
 
+  // Eager-load quote + inquiry so the gig calendar can read the date
+  // the buyer indicated when raising the inquiry (attributes.eventDate
+  // and friends) without a second roundtrip per row. Buyer name is
+  // included so the calendar can label the gig.
   async findByBuyer(buyerId: string): Promise<Order[]> {
     return this.ordersRepository.find({
       where: { buyerId },
+      relations: ['quote', 'quote.inquiry', 'seller'],
       order: { createdAt: 'DESC' },
     });
   }
@@ -114,6 +119,7 @@ export class OrdersService {
   async findBySeller(sellerId: string): Promise<Order[]> {
     return this.ordersRepository.find({
       where: { sellerId },
+      relations: ['quote', 'quote.inquiry', 'buyer'],
       order: { createdAt: 'DESC' },
     });
   }

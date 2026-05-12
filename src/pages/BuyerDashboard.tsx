@@ -10,7 +10,7 @@ import {
   deleteInquiry,
   type CreateInquiryPayload,
 } from '../services/api/inquiryService';
-import { useUserInquiries } from '../hooks/useInquiries';
+import { useUserInquiries, notifyInquiriesChanged } from '../hooks/useInquiries';
 import { useUserQuotes } from '../hooks/useQuotes';
 import { markQuoteAsRead, archiveQuote, deleteQuote } from '../services/api/quoteService';
 import { createOrder, fetchBuyerOrders, type OrderRecord } from '../services/api/orderService';
@@ -26,7 +26,7 @@ import InquiryPayment, { type InquiryPaymentResult } from '../components/Inquiry
 import InquirySuccess from '../components/InquirySuccess';
 import ConfirmationModal from '../components/ConfirmationModal';
 import DashboardLayout from '../components/DashboardLayout';
-import { CATEGORIES_DB, getCategorySchema } from '../services/categories';
+import { CATEGORIES_DB, getCategorySchema, getCategoryType } from '../services/categories';
 import { Inquiry, InquiryItem, Quote } from '../types';
 import { getLabourInquirySchema } from '../services/labourSchemaRegistry';
 import FinancialPage from './FinancialPage';
@@ -171,17 +171,15 @@ export default function BuyerDashboard() {
     targetedShop?: { id: string; sellerId: string; name: string; categoryIds?: string[]; city?: string; province?: string; location?: string };
   }>({ items: [] });
 
+  // Drives the InquiryPreferences variant (PRODUCTS / SERVICES / VENUES /
+  // LABOR). Resolution happens in services/categories#getCategoryType — an
+  // explicit per-master + sub-override lookup. Replaced the older substring
+  // heuristic here, which fell through to PRODUCTS for entertainment,
+  // telecommunications, and it-services (showing buyers "Wholesale Markets"
+  // when picking DJs / ISPs / web dev).
   const categoryType = useMemo(() => {
     if (pendingInquiry.isLabour) return 'LABOR';
-    const cats = pendingInquiry.categories || [];
-    const lowerCats = cats.map(c => c.toLowerCase());
-    const pathStr = lowerCats.join(' > ');
-    
-    // 'venue' catches both 'event-venues' (id) and any display-name containing 'venue'
-    if (pathStr.includes('venue') || pathStr.includes('clubs')) return 'VENUES';
-    if (pathStr.includes('rental') || pathStr.includes('catering') || pathStr.includes('planning') || pathStr.includes('management') || pathStr.includes('decor') || pathStr.includes('repair') || pathStr.includes('recovery') || pathStr.includes('services')) return 'SERVICES';
-    
-    return 'PRODUCTS';
+    return getCategoryType(pendingInquiry.categories?.[0]);
   }, [pendingInquiry.categories, pendingInquiry.isLabour]);
 
   const dashboardData = useMemo(() => {
@@ -754,6 +752,10 @@ export default function BuyerDashboard() {
                 await deleteInquiry(inquiryToDelete.id);
                 refreshInquiries();
                 refreshQuotes();
+                // Tell every other useUserInquiries instance (notably the
+                // CalendarPanel in DashboardLayout) so its count updates
+                // immediately instead of waiting on the 30s poll tick.
+                notifyInquiriesChanged();
               } catch (error) {
                 alert('Failed to delete inquiry');
               }
