@@ -187,7 +187,20 @@ export default function BuyerDashboard() {
     // surface lists items at one stage only; the helpers are the
     // single source of truth for "what counts as active here".
     const activeInquiries = inquiries.filter(isActiveInquiry);
-    const activeQuotes = quotes.filter(isActiveQuote);
+    // Join inquiry's category + attributes onto each quote so QuoteCard
+    // can render a category-specific context line (e.g. vehicle make /
+    // model / year for an automotive quote) without a second fetch.
+    const enrichedQuotes = quotes.map((q) => {
+      const inq = inquiries.find((i) => String(i.id) === String((q as any).inquiryId));
+      if (!inq) return q;
+      const inquiryCategory =
+        (inq as any).categoryIds?.[0] ||
+        (inq as any).categories?.[0] ||
+        (inq as any).category ||
+        undefined;
+      return { ...q, inquiryCategory, inquiryAttributes: inq.attributes };
+    });
+    const activeQuotes = enrichedQuotes.filter(isActiveQuote);
 
     // Recent activity: one card per inquiry, labelled by its
     // most-advanced known stage (Order Placed > Quote Received >

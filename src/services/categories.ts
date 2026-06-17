@@ -472,6 +472,34 @@ const carPartsBreakersSchema: FieldSchema[] = [
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Describe the part and its condition requirements" }
 ];
 
+// Whole-vehicle inquiry — buyer is shopping for a car/SUV/truck/etc
+// (not parts). Routed to dealers / showrooms / second-hand dealerships
+// who quote on the vehicle itself.
+const vehiclesBuySchema: FieldSchema[] = [
+  { name: "images", label: "Reference Photos / Inspiration", type: "image_upload", required: false, helpText: "Optional: photos of a similar vehicle you have in mind", group: "Vehicle Basics" },
+  { name: "bodyType", label: "Body Type", type: "select", required: true, options: ["Sedan", "Hatchback", "SUV", "Crossover", "Pickup / Bakkie", "Truck", "Van / Minibus", "Bus / Coaster", "Motorcycle", "Tractor / Farm Vehicle", "Other"], group: "Vehicle Basics" },
+  { name: "carMake", label: "Make / Brand", type: "text", required: true, placeholder: "e.g. Toyota, Nissan, Mazda, Mercedes", group: "Vehicle Basics" },
+  { name: "carModel", label: "Model", type: "text", required: true, placeholder: "e.g. Hilux, Navara, CX-5, C-Class", group: "Vehicle Basics" },
+  { name: "yearFrom", label: "Year — From", type: "number", required: true, min: 1990, max: 2027, helpText: "Earliest acceptable year of manufacture", group: "Vehicle Basics" },
+  { name: "yearTo", label: "Year — To", type: "number", required: false, min: 1990, max: 2027, helpText: "Latest acceptable year. Leave blank if you want one specific year only", group: "Vehicle Basics" },
+  { name: "condition", label: "Condition", type: "select", required: true, options: ["Brand New (showroom)", "Pre-owned (used)", "Salvage / Repairable", "Either new or used"], group: "Vehicle Basics" },
+  { name: "transmission", label: "Transmission", type: "select", required: false, keepInExpress: true, options: ["Manual", "Automatic", "CVT", "Either"], group: "Mechanical Preferences" },
+  { name: "fuelType", label: "Fuel Type", type: "select", required: false, options: ["Petrol", "Diesel", "Hybrid", "Electric", "Either"], group: "Mechanical Preferences" },
+  { name: "driveType", label: "Drive Type", type: "select", required: false, options: ["2WD", "4WD / AWD", "Either"], group: "Mechanical Preferences" },
+  { name: "engineSize", label: "Engine Size", type: "text", required: false, placeholder: "e.g. 1.5L, 2.4L, 3.0L V6", group: "Mechanical Preferences" },
+  { name: "maxMileage", label: "Max Mileage (km)", type: "number", required: false, min: 0, helpText: "Cap on the odometer reading for used vehicles", group: "Mechanical Preferences" },
+  { name: "bodyColor", label: "Preferred Colour", type: "text", required: false, placeholder: "e.g. White, Silver, any", group: "Appearance" },
+  { name: "interior", label: "Interior Material", type: "select", required: false, options: ["Cloth", "Leather", "Either"], group: "Appearance" },
+  { name: "preferredFeatures", label: "Must-Have Features", type: "textarea", required: false, placeholder: "e.g. Reverse camera, sunroof, cruise control, leather seats…", group: "Appearance" },
+  { name: "intendedUse", label: "Intended Use", type: "select", required: false, options: ["Personal / Family", "Business / Commercial", "Fleet / Multiple Vehicles", "Resale", "Off-road / Farming"], group: "Buyer Context" },
+  { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, helpText: "Optional — leave blank to receive offers in your range", group: "Buyer Context" },
+  { name: "financing", label: "Financing Needed?", type: "toggle", required: false, helpText: "Toggle on if you'd like the dealer to suggest financing/payment-plan options", group: "Buyer Context" },
+  { name: "tradeIn", label: "Have a Trade-in?", type: "toggle", required: false, helpText: "Toggle on if you have a vehicle to part-exchange", group: "Buyer Context" },
+  { name: "tradeInDetails", label: "Trade-in Details", type: "textarea", required: false, placeholder: "Make, model, year, mileage, condition", group: "Buyer Context", dependsOn: { field: "tradeIn", value: true } },
+  { name: "urgency", label: "Timeline", type: "select", required: true, options: ["Immediately", "Within 1 month", "Within 3 months", "Just exploring"], group: "Buyer Context" },
+  { name: "additionalDetails", label: "Anything else?", type: "textarea", required: false, placeholder: "Any other requirements or questions for the dealer", group: "Buyer Context" }
+];
+
 const carAccessoriesSchema: FieldSchema[] = [
   { name: "images", label: "Reference Photos", type: "image_upload", required: false, helpText: "Upload photos of the accessory you are looking for", group: "Vehicle Details" },
   { name: "vehicleMake", label: "Vehicle Make", type: "text", required: true, placeholder: "e.g. Toyota, BMW, Ford, Mazda", group: "Vehicle Details" },
@@ -1165,8 +1193,9 @@ const BASE_CATEGORIES_DB: Category[] = [
   { id: 'curtains-blinds', name: 'Curtains & Blinds', parentId: 'home-decor', formSchema: curtainsBlindsSchema },
 
   // Subcategories - Automotive
-  { id: 'car-parts-new', name: 'Car Parts & Spares (Buy New)', baseName: 'Car Parts & Spares', type: 'buy', parentId: 'automotive', formSchema: carPartsNewSchema },
-  { id: 'car-parts-breakers', name: 'Car Parts & Spares (Buy from Car Breakers)', baseName: 'Car Parts & Spares', type: 'buy', parentId: 'automotive', formSchema: carPartsBreakersSchema },
+  { id: 'vehicles-buy', name: 'Vehicles (New & Used)', parentId: 'automotive', formSchema: vehiclesBuySchema },
+  { id: 'car-parts-new', name: 'New Car Parts', parentId: 'automotive', formSchema: carPartsNewSchema },
+  { id: 'car-parts-breakers', name: 'Used Car Parts (Breakers)', parentId: 'automotive', formSchema: carPartsBreakersSchema },
   { id: 'car-accessories', name: 'Car Accessories', parentId: 'automotive', formSchema: carAccessoriesSchema },
   { id: 'car-breakdown-recovery', name: 'Car Breakdown & Recovery', parentId: 'automotive', formSchema: carBreakdownRecoverySchema },
   { id: 'motorcycles-parts', name: 'Motorcycles & Parts', parentId: 'automotive', formSchema: motorcyclesPartsSchema },

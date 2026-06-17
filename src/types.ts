@@ -170,6 +170,14 @@ export interface Quote {
   expiryDuration?: string;
   isRead?: boolean;
   isArchived?: boolean;
+  /** Optional snapshot of the underlying inquiry's category id and
+   *  buyer-supplied attributes. Used by QuoteCard to render a category-
+   *  specific context line (e.g. "Toyota Hilux 2018 · Pre-owned" for an
+   *  automotive quote) so the buyer sees what the quote refers to
+   *  without opening the full detail. Populated by joining quotes with
+   *  inquiries on the client; safe to leave undefined. */
+  inquiryCategory?: string;
+  inquiryAttributes?: Record<string, any>;
   itemPrices?: any;
   buyerContact?: {
     name: string;

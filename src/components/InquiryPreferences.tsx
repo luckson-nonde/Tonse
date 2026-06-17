@@ -20,6 +20,13 @@ import {
   Layers,
   Hotel,
   TreePine,
+  Wrench,
+  Recycle,
+  Globe,
+  Truck,
+  ShieldCheck,
+  PackageOpen,
+  Car,
 } from 'lucide-react';
 
 export type CategoryType = 'PRODUCTS' | 'SERVICES' | 'VENUES' | 'LABOR';
@@ -330,6 +337,108 @@ const PREFERENCES_OVERRIDES: Record<
         { id: 'experience',   label: 'Most Experience'      },
         { id: 'coordination', label: 'On-Day Coordination'  },
         { id: 'reviews',      label: 'Best Reviews'         },
+      ],
+    },
+  },
+
+  // ─── AUTOMOTIVE ─────────────────────────────────────────────────────
+  // Each automotive subcategory replaces Section 1 ("target destination")
+  // with the right counterparty type. Sections 2 (priority) and 3
+  // (timeline) inherit the base PRODUCTS / SERVICES template — for
+  // car-breakdown-recovery the base is SERVICES (overridden in
+  // categories.ts:SUB_CATEGORY_TYPE_OVERRIDES), so the priority options
+  // already read as "Fastest Availability / Lowest Price" etc.
+
+  'vehicles-buy': {
+    section1: {
+      title: 'Target Dealers',
+      description: 'Who do you want to receive quotes from?',
+      icon: Car,
+      options: [
+        { id: 'authorized',  label: 'Authorised Dealers',     icon: ShieldCheck },
+        { id: 'independent', label: 'Independent Dealers',    icon: Store       },
+        { id: 'preowned',    label: 'Pre-owned Specialists',  icon: Truck       },
+        { id: 'showroom',    label: 'Showrooms Only',         icon: Building2   },
+        { id: 'any',         label: 'Any Dealer',             icon: Users       },
+      ],
+    },
+  },
+  'car-parts-new': {
+    section1: {
+      title: 'Target Suppliers',
+      description: 'Where should the parts come from?',
+      icon: PackageOpen,
+      options: [
+        { id: 'oem',          label: 'OEM Parts Suppliers',  icon: ShieldCheck },
+        { id: 'aftermarket',  label: 'Aftermarket Suppliers', icon: PackageOpen },
+        { id: 'distributors', label: 'Wholesale Distributors', icon: Truck      },
+        { id: 'workshops',    label: 'Local Workshops',       icon: Wrench      },
+        { id: 'any',          label: 'Any Supplier',          icon: Users       },
+      ],
+    },
+  },
+  'car-parts-breakers': {
+    section1: {
+      title: 'Target Breaker Yards',
+      description: 'Who should source the used part?',
+      icon: Recycle,
+      options: [
+        { id: 'local',      label: 'Local Breakers',          icon: MapPin      },
+        { id: 'national',   label: 'National Network',        icon: Globe       },
+        { id: 'specialist', label: 'Make-specialist Breakers', icon: ShieldCheck },
+        { id: 'any',        label: 'Any Breaker',             icon: Users       },
+      ],
+    },
+  },
+  'car-accessories': {
+    section1: {
+      title: 'Target Stores',
+      description: 'Where should we source the accessory from?',
+      icon: Store,
+      options: [
+        { id: 'specialty', label: 'Specialty Auto Stores', icon: ShieldCheck },
+        { id: 'general',   label: 'General Auto Shops',    icon: Store       },
+        { id: 'online',    label: 'Online Retailers',      icon: Globe       },
+        { id: 'any',       label: 'Any Store',             icon: Users       },
+      ],
+    },
+  },
+  'car-breakdown-recovery': {
+    section1: {
+      title: 'Recovery Service Type',
+      description: 'What kind of recovery operator do you need?',
+      icon: Truck,
+      options: [
+        { id: 'local24',   label: 'Local 24/7 Service',   icon: Clock       },
+        { id: 'insurance', label: 'Insurance-affiliated', icon: ShieldCheck },
+        { id: 'heavy',     label: 'Heavy-duty Recovery',  icon: Truck       },
+        { id: 'any',       label: 'Any Operator',         icon: Users       },
+      ],
+    },
+  },
+  'motorcycles-parts': {
+    section1: {
+      title: 'Target Suppliers',
+      description: 'Where should the bike parts come from?',
+      icon: PackageOpen,
+      options: [
+        { id: 'specialists', label: 'Bike Specialists',      icon: ShieldCheck },
+        { id: 'general',     label: 'General Auto Suppliers', icon: Store      },
+        { id: 'online',      label: 'Online Retailers',      icon: Globe       },
+        { id: 'any',         label: 'Any Supplier',          icon: Users       },
+      ],
+    },
+  },
+  'automotive-tools': {
+    section1: {
+      title: 'Target Suppliers',
+      description: 'Where should the tools come from?',
+      icon: Wrench,
+      options: [
+        { id: 'specialty',  label: 'Tool Specialists',     icon: ShieldCheck },
+        { id: 'hardware',   label: 'Hardware Stores',      icon: Store       },
+        { id: 'industrial', label: 'Industrial Suppliers', icon: Truck       },
+        { id: 'any',        label: 'Any Supplier',         icon: Users       },
       ],
     },
   },

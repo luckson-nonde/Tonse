@@ -326,6 +326,160 @@ const QUOTE_SCHEMA_BY_CATEGORY_ID: Record<
     );
     return fields;
   },
+
+  // ─── AUTOMOTIVE ─────────────────────────────────────────────────────
+  // Each subcategory under `automotive` gets its own quote shape so the
+  // dealer / parts supplier / breaker / recovery operator / tool seller
+  // sees the exact fields buyers in that lane care about — not the
+  // generic "price + delivery + message" GENERIC fallback.
+
+  // Whole-vehicle dealer quote: condition + financing + trade-in +
+  // mileage + inventory location are the levers that close a vehicle
+  // sale; price alone leaves the buyer guessing.
+  'vehicles-buy': () => [
+    { name: 'price', label: 'Vehicle Price (ZMW)', type: 'currency', required: true, group: 'Pricing' },
+    { name: 'condition', label: 'Condition Offered', type: 'select', required: true,
+      options: ['Brand New (showroom)', 'Pre-owned (used)', 'Demo / Ex-fleet', 'Refurbished'], group: 'Pricing' },
+    { name: 'mileageKm', label: 'Mileage (km)', type: 'number', required: false,
+      helpText: 'For pre-owned vehicles only', group: 'Pricing' },
+    { name: 'warrantyMonths', label: 'Warranty (months)', type: 'number', required: false, group: 'Pricing' },
+    { name: 'financingAvailable', label: 'Financing available?', type: 'toggle', required: false,
+      helpText: 'Toggle on if you can offer payment plans', group: 'Pricing' },
+    { name: 'tradeInAccepted', label: 'Trade-in accepted?', type: 'toggle', required: false,
+      helpText: 'Toggle on if you accept the buyer\'s old vehicle as part-payment', group: 'Pricing' },
+    { name: 'inStock', label: 'In stock now?', type: 'toggle', required: false, group: 'Logistics & Timing' },
+    { name: 'inventoryLocation', label: 'Inventory Location', type: 'textarea', required: false,
+      placeholder: 'Lusaka showroom, Kitwe lot, etc.', group: 'Logistics & Timing' },
+    { name: 'deliveryOffer', label: 'Offer delivery to buyer?', type: 'toggle', required: false, group: 'Logistics & Timing' },
+    { name: 'deliveryFee', label: 'Delivery Fee (ZMW)', type: 'currency', required: false,
+      helpText: 'Only fill if you offer delivery', group: 'Logistics & Timing' },
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'Message to Buyer', type: 'textarea', required: false,
+      placeholder: 'Vehicle highlights, service history, viewing arrangements…', group: 'Notes & Photos' },
+  ],
+
+  // Roadside emergency: dispatch ETA + service zone + 24/7 availability
+  // are the deciding factors for a stranded driver. Validity windows are
+  // intentionally short — a tow quote 3 months from now is meaningless.
+  'car-breakdown-recovery': () => [
+    { name: 'price', label: 'Total Service Fee (ZMW)', type: 'currency', required: true, group: 'Pricing' },
+    { name: 'serviceIncluded', label: 'What this fee covers', type: 'select', required: true,
+      options: ['Full recovery + tow', 'Roadside repair only', 'Jump start', 'Tyre change',
+                'Fuel delivery', 'Inspection + assess'], group: 'Pricing' },
+    { name: 'towingDistanceKm', label: 'Free towing distance (km)', type: 'number', required: false,
+      helpText: 'Beyond this, per-km charges apply', group: 'Pricing' },
+    { name: 'extraKmFee', label: 'Extra km fee (ZMW per km)', type: 'currency', required: false, group: 'Pricing' },
+    { name: 'dispatchEtaMinutes', label: 'Dispatch ETA (minutes)', type: 'number', required: true,
+      helpText: 'How long until your team reaches the buyer', group: 'Logistics & Timing' },
+    { name: 'available247', label: 'Available 24/7?', type: 'toggle', required: false, group: 'Logistics & Timing' },
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: ['1 Week', '2 Weeks', '1 Month'], group: 'Logistics & Timing' },
+    { name: 'message', label: 'Message to Buyer', type: 'textarea', required: false,
+      placeholder: 'Equipment carried, crew size, payment terms…', group: 'Notes & Photos' },
+  ],
+
+  // New car parts: condition slot becomes OEM/aftermarket distinction;
+  // origin matters for buyers who need to clear customs estimates.
+  'car-parts-new': () => [
+    { name: 'price', label: 'Unit Price (ZMW)', type: 'currency', required: true, calculation: 'unit', group: 'Pricing' },
+    { name: 'condition', label: 'Condition', type: 'select', required: true,
+      options: ['Genuine OEM', 'Aftermarket — premium', 'Aftermarket — standard', 'Refurbished'], group: 'Pricing' },
+    { name: 'warrantyMonths', label: 'Warranty (months)', type: 'number', required: false, group: 'Pricing' },
+    { name: 'partOrigin', label: 'Origin', type: 'select', required: false,
+      options: ['Local stock', 'Imported — South Africa', 'Imported — Asia', 'Imported — Europe', 'Imported — USA'], group: 'Pricing' },
+    { name: 'inStock', label: 'In stock?', type: 'toggle', required: false, group: 'Logistics & Timing' },
+    { name: 'leadTime', label: 'Lead time if not in stock', type: 'textarea', required: false,
+      placeholder: 'e.g. 3 days, 2 weeks ex-Joburg', group: 'Logistics & Timing' },
+    { name: 'deliveryOffer', label: 'Offer delivery?', type: 'toggle', required: false, group: 'Logistics & Timing' },
+    { name: 'deliveryFee', label: 'Delivery Fee (ZMW)', type: 'currency', required: false, group: 'Logistics & Timing' },
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'Message to Buyer', type: 'textarea', required: false,
+      placeholder: 'Brand, fitment notes, return policy…', group: 'Notes & Photos' },
+  ],
+
+  // Breaker yards: donor vehicle + part mileage + short guarantee are
+  // the buyer's risk-mitigation signals when buying salvage parts.
+  'car-parts-breakers': () => [
+    { name: 'price', label: 'Unit Price (ZMW)', type: 'currency', required: true, calculation: 'unit', group: 'Pricing' },
+    { name: 'condition', label: 'Condition', type: 'select', required: true,
+      options: ['Excellent — low mileage donor', 'Good — average wear', 'Fair — visible wear', 'Functional only'], group: 'Pricing' },
+    { name: 'donorVehicle', label: 'Donor vehicle', type: 'textarea', required: false,
+      placeholder: 'e.g. 2014 Hilux, accident damage rear', group: 'Pricing' },
+    { name: 'mileageOnPart', label: 'Mileage on the part (km)', type: 'number', required: false,
+      helpText: 'Approximate km the part has done', group: 'Pricing' },
+    { name: 'shortGuarantee', label: 'Short guarantee?', type: 'toggle', required: false,
+      helpText: '7-30 day functional guarantee on the part', group: 'Pricing' },
+    { name: 'pickupOnly', label: 'Collection only?', type: 'toggle', required: false,
+      helpText: 'Toggle on if buyer must collect from the yard', group: 'Logistics & Timing' },
+    { name: 'deliveryOffer', label: 'Offer delivery?', type: 'toggle', required: false, group: 'Logistics & Timing' },
+    { name: 'deliveryFee', label: 'Delivery Fee (ZMW)', type: 'currency', required: false, group: 'Logistics & Timing' },
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: ['1 Week', '2 Weeks', '1 Month'], group: 'Logistics & Timing' },
+    { name: 'message', label: 'Message to Buyer', type: 'textarea', required: false,
+      placeholder: 'Part location, viewing options, removal cost if any…', group: 'Notes & Photos' },
+  ],
+
+  // Accessories: installation toggle + fee gives the buyer a one-stop
+  // quote (part + fitment) so they don't have to hunt for a fitter.
+  'car-accessories': () => [
+    { name: 'price', label: 'Price (ZMW)', type: 'currency', required: true, group: 'Pricing' },
+    { name: 'condition', label: 'Condition', type: 'select', required: true,
+      options: ['Brand New', 'Used — Good', 'Aftermarket'], group: 'Pricing' },
+    { name: 'brand', label: 'Brand offered', type: 'textarea', required: false,
+      placeholder: 'e.g. Pioneer, Thule, generic', group: 'Pricing' },
+    { name: 'warrantyMonths', label: 'Warranty (months)', type: 'number', required: false, group: 'Pricing' },
+    { name: 'installationOffered', label: 'Offer installation?', type: 'toggle', required: false, group: 'Logistics & Timing' },
+    { name: 'installationFee', label: 'Installation Fee (ZMW)', type: 'currency', required: false,
+      helpText: 'Only fill if you offer installation', group: 'Logistics & Timing' },
+    { name: 'inStock', label: 'In stock?', type: 'toggle', required: false, group: 'Logistics & Timing' },
+    { name: 'deliveryOffer', label: 'Offer delivery?', type: 'toggle', required: false, group: 'Logistics & Timing' },
+    { name: 'deliveryFee', label: 'Delivery Fee (ZMW)', type: 'currency', required: false, group: 'Logistics & Timing' },
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'Message to Buyer', type: 'textarea', required: false,
+      placeholder: 'Fitment compatibility, install time, anything else…', group: 'Notes & Photos' },
+  ],
+
+  // Bike parts: same shape as car-parts-new but with bike-aware copy
+  // and a `compatibleModels` text field (bikes have looser fitment).
+  'motorcycles-parts': () => [
+    { name: 'price', label: 'Price (ZMW)', type: 'currency', required: true, calculation: 'unit', group: 'Pricing' },
+    { name: 'condition', label: 'Condition', type: 'select', required: true,
+      options: ['Brand New / OEM', 'Aftermarket', 'Used — Good', 'Used — Fair'], group: 'Pricing' },
+    { name: 'compatibleModels', label: 'Compatible bike models', type: 'textarea', required: false,
+      placeholder: 'e.g. Boxer 150, Splendor, Bajaj Pulsar', group: 'Pricing' },
+    { name: 'warrantyMonths', label: 'Warranty (months)', type: 'number', required: false, group: 'Pricing' },
+    { name: 'inStock', label: 'In stock?', type: 'toggle', required: false, group: 'Logistics & Timing' },
+    { name: 'deliveryOffer', label: 'Offer delivery?', type: 'toggle', required: false, group: 'Logistics & Timing' },
+    { name: 'deliveryFee', label: 'Delivery Fee (ZMW)', type: 'currency', required: false, group: 'Logistics & Timing' },
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'Message to Buyer', type: 'textarea', required: false,
+      placeholder: 'Brand, fitment notes, where you got it from…', group: 'Notes & Photos' },
+  ],
+
+  // Tools: brand + spec are the discriminators (a "3-tonne hydraulic
+  // jack" needs a different quote than a "trolley jack"). Buyers care
+  // about brand pedigree and bundled accessories.
+  'automotive-tools': () => [
+    { name: 'price', label: 'Price (ZMW)', type: 'currency', required: true, group: 'Pricing' },
+    { name: 'condition', label: 'Condition', type: 'select', required: true,
+      options: ['Brand New', 'Refurbished', 'Used — Good'], group: 'Pricing' },
+    { name: 'brand', label: 'Brand offered', type: 'textarea', required: false,
+      placeholder: 'e.g. Bosch, Snap-on, Stanley', group: 'Pricing' },
+    { name: 'specifications', label: 'Tool spec offered', type: 'textarea', required: false,
+      placeholder: 'e.g. 3-tonne hydraulic jack, OBD2 + ABS scanner, 100A welder', group: 'Pricing' },
+    { name: 'warrantyMonths', label: 'Warranty (months)', type: 'number', required: false, group: 'Pricing' },
+    { name: 'inStock', label: 'In stock?', type: 'toggle', required: false, group: 'Logistics & Timing' },
+    { name: 'deliveryOffer', label: 'Offer delivery?', type: 'toggle', required: false, group: 'Logistics & Timing' },
+    { name: 'deliveryFee', label: 'Delivery Fee (ZMW)', type: 'currency', required: false, group: 'Logistics & Timing' },
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'Message to Buyer', type: 'textarea', required: false,
+      placeholder: 'Bundled accessories, training/manual included, return policy…', group: 'Notes & Photos' },
+  ],
 };
 
 export const generateQuoteSchema = (

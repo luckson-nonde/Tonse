@@ -30,6 +30,50 @@ interface QuoteCardProps {
 // View Offer screen so the card stays a 3-action surface.
 const NON_PAYABLE_STATUSES = new Set(['PAID', 'COMPLETED', 'EXPIRED', 'REJECTED', 'CANCELLED']);
 
+// Pull a short category-specific summary from the inquiry attributes
+// so the buyer sees what the quote refers to (e.g. "Toyota Hilux 2018 ·
+// Pre-owned") without opening the full detail. Returns null for
+// categories we don't have a tailored summary for — the card then just
+// shows provider name + price as before.
+function resolveCategoryContext(quote: Quote): string | null {
+  const cat = String(quote.inquiryCategory || '').toLowerCase();
+  const a = quote.inquiryAttributes || {};
+  if (!cat || !Object.keys(a).length) return null;
+
+  const join = (...parts: Array<string | number | undefined | null>) =>
+    parts.filter((p) => p !== undefined && p !== null && String(p).trim() !== '').join(' · ');
+
+  switch (cat) {
+    case 'vehicles-buy': {
+      const make = a.carMake;
+      const model = a.carModel;
+      const yearRange = a.yearTo && a.yearTo !== a.yearFrom
+        ? `${a.yearFrom}–${a.yearTo}`
+        : a.yearFrom;
+      return join(`${make ?? ''} ${model ?? ''}`.trim(), yearRange, a.condition);
+    }
+    case 'car-parts-new':
+    case 'car-parts-breakers': {
+      const vehicle = `${a.carMake ?? ''} ${a.carModel ?? ''} ${a.year ?? ''}`.trim();
+      return join(vehicle, a.title);
+    }
+    case 'car-accessories': {
+      const vehicle = `${a.vehicleMake ?? ''} ${a.vehicleModel ?? ''}`.trim();
+      return join(a.accessoryType, vehicle);
+    }
+    case 'car-breakdown-recovery':
+      return join(a.breakdownType, a.location_name);
+    case 'motorcycles-parts': {
+      const bike = `${a.brand ?? ''} ${a.model ?? ''}`.trim();
+      return join(a.motorcycleType, bike);
+    }
+    case 'automotive-tools':
+      return join(a.toolType, a.specifications);
+    default:
+      return null;
+  }
+}
+
 // Derive the most meaningful left-slot detail for the 2-col grid:
 // REPAIR → turnaround; SERVICE → availability date; VENUE → capacity;
 // PRODUCT → condition; anything else → hide the slot entirely.
@@ -55,6 +99,7 @@ function resolveConditionDetail(quote: Quote): { label: string; value: string; i
 
 export default function QuoteCard({ quote, onView, onPay, onDelete }: QuoteCardProps) {
   const conditionDetail = resolveConditionDetail(quote);
+  const categoryContext = resolveCategoryContext(quote);
   const canPay = !!onPay && !NON_PAYABLE_STATUSES.has((quote.status || '').toUpperCase());
   const providerId = quote.providerId ? String(quote.providerId) : '';
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
@@ -75,10 +120,15 @@ export default function QuoteCard({ quote, onView, onPay, onDelete }: QuoteCardP
           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-500 text-lg shadow-inner shrink-0">
             {(quote.providerName || 'P').charAt(0)}
           </div>
-          <div>
+          <div className="min-w-0">
             <h4 className="text-base font-bold text-[#1a1612] leading-tight">
               {quote.providerName || 'Provider'}
             </h4>
+            {categoryContext && (
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5 truncate" title={categoryContext}>
+                {categoryContext}
+              </p>
+            )}
             <div className="flex items-center gap-1.5 mt-1">
               <div className="flex items-center gap-0.5 bg-[#fdf6e9] px-1.5 py-0.5 rounded text-[#C9973A]">
                 <Star className="w-3 h-3" fill="currentColor" />
