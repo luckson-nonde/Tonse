@@ -3,7 +3,11 @@
  * Simple API calls using v1
  */
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:3001';
+// Base for all API calls. `/api` (set via VITE_API_URL) keeps requests
+// same-origin so the Vite dev-server proxy can forward them to the NestJS
+// backend on :3001 — this is what lets the public Cloudflare tunnel reach
+// the backend through the single exposed frontend port, with no CORS.
+export const API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:3001';
 
 interface ApiResponse<T> {
   data?: T;

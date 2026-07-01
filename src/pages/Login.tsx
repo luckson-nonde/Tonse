@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { Mail, Key, Eye, EyeOff } from 'lucide-react';
+import { Mail, Key, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import AuthSplitLayout from '../components/AuthSplitLayout';
 import FloatingInput from '../components/FloatingInput';
 import Logo from '../components/Logo';
@@ -22,6 +22,11 @@ const LOGIN_HERO: HeroContent = {
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Registration redirects here with ?registered=1 after logging the user
+  // out, so we can confirm the account was created (otherwise the silent
+  // logout → login bounce reads as "nothing happened").
+  const justRegistered = searchParams.get('registered') === '1';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -77,9 +82,16 @@ export default function Login() {
       <h2 className="text-[28px] font-serif font-semibold text-slate-900 tracking-tight leading-none">
         Sign in
       </h2>
-      <p className="text-[14px] text-slate-500 mt-2 mb-8">
+      <p className="text-[14px] text-slate-500 mt-2 mb-6">
         Welcome back to your trade portal.
       </p>
+
+      {justRegistered && (
+        <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm rounded-xl font-medium mb-6 flex items-start gap-2.5">
+          <CheckCircle2 className="w-5 h-5 shrink-0" strokeWidth={2} />
+          <span>Your account was created successfully — sign in to continue.</span>
+        </div>
+      )}
 
       <form className="w-full" onSubmit={handleSubmit}>
         {error && (
@@ -143,7 +155,7 @@ export default function Login() {
             bottom-corner footer to the moment of credentialing.
             Mercury / Stripe Atlas use this exact pattern: trust signals
             visually adjacent to the primary CTA. */}
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-5 text-[12px] text-slate-500">
+        <div className="hidden lg:flex flex-wrap items-center gap-x-5 gap-y-2 mb-5 text-[12px] text-slate-500">
           <span className="flex items-center gap-1.5">
             <span className="w-1 h-1 rounded-full bg-[#C9973A]" />
             ZRA-compliant
@@ -164,7 +176,7 @@ export default function Login() {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full h-[52px] mb-7 text-[15px] font-sans font-semibold text-white bg-[#C9973A] hover:bg-[#B08432] transition-colors active:scale-[0.99] rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full h-[52px] mb-6 text-[15px] font-sans font-semibold text-white bg-[#C9973A] hover:bg-[#B08432] transition-colors active:scale-[0.99] rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? 'Signing in…' : 'Sign in'}
         </button>
@@ -175,7 +187,7 @@ export default function Login() {
           `bg-white` to mask the hairline behind it; if the right pane
           ever regresses to cream, this single span becomes the visible
           mismatch. */}
-      <div className="relative my-7">
+      <div className="hidden lg:block relative my-7">
         <div className="absolute inset-0 flex items-center">
           <div className="w-full h-px bg-slate-200" />
         </div>
@@ -186,7 +198,7 @@ export default function Login() {
 
       <button
         type="button"
-        className="w-full h-[48px] flex items-center justify-center gap-3 bg-white border border-slate-200 rounded-xl text-[14px] font-sans font-semibold text-slate-700 hover:bg-slate-50 transition-colors mb-7"
+        className="w-full h-[48px] hidden lg:flex items-center justify-center gap-3 bg-white border border-slate-200 rounded-xl text-[14px] font-sans font-semibold text-slate-700 hover:bg-slate-50 transition-colors mb-7"
       >
         <img
           src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg"

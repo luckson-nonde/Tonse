@@ -33,6 +33,18 @@ interface LocationDetailsProps {
    *  at your shop" advisory in its left context panel. The form
    *  body should skip those inline blocks to avoid duplication. */
   embeddedInShell?: boolean;
+  /** Pre-fill values on (re)mount. Used by the registration wizard so
+   *  navigating back to the Location step restores what the user already
+   *  entered instead of showing an empty form. Absent → starts blank
+   *  (unchanged behaviour for the inquiry flow). */
+  initialValue?: {
+    province?: string;
+    city?: string;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+    radius?: number;
+  };
 }
 
 const ZAMBIA_DATA: Record<string, string[]> = {
@@ -252,19 +264,20 @@ export default function LocationDetails({
   showRadius = true,
   isStandalone = true,
   embeddedInShell = false,
+  initialValue,
 }: LocationDetailsProps) {
   const [country, setCountry] = useState('Zambia');
-  const [province, setProvince] = useState('');
-  const [city, setCity] = useState('');
-  const [address, setAddress] = useState('');
-  const [latitude, setLatitude] = useState<number | undefined>();
-  const [longitude, setLongitude] = useState<number | undefined>();
+  const [province, setProvince] = useState(initialValue?.province ?? '');
+  const [city, setCity] = useState(initialValue?.city ?? '');
+  const [address, setAddress] = useState(initialValue?.address ?? '');
+  const [latitude, setLatitude] = useState<number | undefined>(initialValue?.latitude);
+  const [longitude, setLongitude] = useState<number | undefined>(initialValue?.longitude);
   // Accuracy radius reported by the browser, in metres. Smaller is better;
   // GPS-chip readings on a phone are typically <30m, Wi-Fi triangulation
   // on a desktop is often hundreds-to-thousands of metres. We surface this
   // so the user can decide whether to trust the pin or refine manually.
   const [accuracyMeters, setAccuracyMeters] = useState<number | undefined>();
-  const [radius, setRadius] = useState<number>(5); // Default 5km
+  const [radius, setRadius] = useState<number>(initialValue?.radius ?? 5); // Default 5km
   const [isLocating, setIsLocating] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -527,8 +540,9 @@ export default function LocationDetails({
         </div>
       )}
 
-      {/* Province + City — always visible, both required. */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Province + City — stack on mobile, side-by-side from sm up so
+          the native selects aren't squeezed to "Sele…" on small screens. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="relative w-full">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-20">
@@ -606,10 +620,10 @@ export default function LocationDetails({
           slider only renders when showRadius is true. */}
       <div className="flex items-center gap-3 pt-1">
         <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A] shrink-0">
-          Section 02 · {showRadius ? 'Pin & Reach' : 'Pinpoint Your Location'}
+          Section 02 · {showRadius ? 'Pin & Reach' : 'Pinpoint'}
         </p>
         <div className="h-px flex-1 bg-[#e8e4dc]" />
-        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#1a1612]/50 shrink-0">
+        <span className="hidden sm:block text-[10px] font-bold uppercase tracking-[0.18em] text-[#1a1612]/50 shrink-0">
           {showRadius ? 'Optional · Sharper match' : 'Recommended · Be findable'}
         </span>
       </div>
@@ -625,7 +639,7 @@ export default function LocationDetails({
             : 'border-[#e8e0d0] p-5'
         }`}
       >
-        <div className="flex items-start gap-4">
+        <div className="flex flex-wrap items-start gap-4">
           <div
             className={`relative w-14 h-14 shrink-0 rounded-2xl flex items-center justify-center ${
               hasCoords
@@ -680,11 +694,11 @@ export default function LocationDetails({
               </p>
             ) : showRadius ? (
               <p className="text-[12px] text-[#1a1612]/55 leading-snug">
-                Capture your exact coordinates so providers can price delivery and reach you precisely. Optional — the radius below still works without it.
+                Optional — sharpens delivery pricing. The radius below works without it.
               </p>
             ) : (
               <p className="text-[12px] text-[#1a1612]/65 leading-snug">
-                Capturing your exact coordinates is how buyers find you on the map. Province and city tell us your area; GPS tells us your <span className="font-bold text-[#1a1612]">exact spot</span>.
+                GPS pins your <span className="font-bold text-[#1a1612]">exact spot</span> — sharper than city alone.
               </p>
             )}
 
@@ -716,7 +730,7 @@ export default function LocationDetails({
             type="button"
             onClick={handleUseMyLocation}
             disabled={isLocating}
-            className={`self-center shrink-0 px-5 h-11 rounded-xl text-[10px] font-bold uppercase tracking-[0.16em] disabled:opacity-50 transition-all flex items-center gap-2 ${
+            className={`w-full sm:w-auto sm:self-center shrink-0 px-5 h-11 rounded-xl text-[10px] font-bold uppercase tracking-[0.16em] disabled:opacity-50 transition-all flex items-center justify-center gap-2 ${
               !showRadius && !hasCoords
                 ? 'bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white shadow-[0_4px_12px_-4px_rgba(201,151,58,0.5)] hover:from-[#C9973A] hover:to-[#B08432]'
                 : 'bg-[#faf6ee] border border-[#e8e0d0] text-[#1a1612]/75 hover:bg-[#f1ede5]'

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Camera, Check, X, AlertCircle, RefreshCw } from 'lucide-react';
+import { dataUrlMeta, formatBytes } from '../utils/fileMeta';
 
 interface CompactIdentityCaptureProps {
   value: string;
@@ -8,6 +9,7 @@ interface CompactIdentityCaptureProps {
 
 export default function CompactIdentityCapture({ value, onCapture }: CompactIdentityCaptureProps) {
   const [open, setOpen] = useState(false);
+  const meta = dataUrlMeta(value);
 
   return (
     <>
@@ -16,14 +18,14 @@ export default function CompactIdentityCapture({ value, onCapture }: CompactIden
           <img
             src={value}
             alt=""
-            className="w-12 h-12 rounded-xl object-cover ring-1 ring-[#C9973A]/20"
+            className="w-12 h-12 rounded-xl object-cover ring-1 ring-[#C9973A]/20 shrink-0"
           />
           <div className="flex-1 min-w-0">
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600 mb-0.5 flex items-center gap-1.5">
-              <Check className="w-3 h-3" strokeWidth={3} /> Identity Captured
+              <Check className="w-3 h-3" strokeWidth={3} /> Selfie captured
             </p>
-            <p className="text-[12px] font-medium text-[#1a1612]/60 leading-tight">
-              Looks good — you're verified.
+            <p className="text-[12px] font-medium text-[#1a1612]/60 leading-tight truncate">
+              {meta ? `${meta.label} · ${formatBytes(meta.bytes)}` : "Looks good — you're verified."}
             </p>
           </div>
           <button
@@ -38,21 +40,23 @@ export default function CompactIdentityCapture({ value, onCapture }: CompactIden
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="w-full flex items-center gap-3 p-3.5 rounded-2xl border border-[#e8e4dc] bg-brand-white hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)] transition-all duration-200 text-left"
+          className="w-full flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 rounded-2xl border border-[#e8e4dc] bg-brand-white hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)] active:scale-[0.99] transition-all duration-200 text-left"
         >
-          <div className="w-11 h-11 rounded-xl bg-[#C9973A]/10 text-[#C9973A] flex items-center justify-center shrink-0">
-            <Camera className="w-5 h-5" strokeWidth={2} />
+          <div className="flex items-center gap-3 w-full sm:flex-1 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-[#C9973A]/10 text-[#C9973A] flex items-center justify-center shrink-0">
+              <Camera className="w-5 h-5" strokeWidth={2} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-bold text-[#1a1612] leading-tight">
+                Live identity photo
+              </p>
+              <p className="text-[11px] text-[#1a1612]/55 mt-0.5 leading-snug">
+                Quick selfie to match your NRC · ~10s
+              </p>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-bold text-[#1a1612] leading-tight">
-              Live identity photo
-            </p>
-            <p className="text-[11px] text-[#1a1612]/55 mt-0.5">
-              Quick selfie · matches your NRC · ~10 seconds
-            </p>
-          </div>
-          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#C9973A] shrink-0">
-            Capture →
+          <span className="self-end sm:self-auto shrink-0 inline-flex items-center gap-1 px-3 h-8 rounded-lg bg-[#C9973A]/10 text-[10px] font-bold uppercase tracking-[0.16em] text-[#C9973A]">
+            Capture <span aria-hidden>→</span>
           </span>
         </button>
       )}

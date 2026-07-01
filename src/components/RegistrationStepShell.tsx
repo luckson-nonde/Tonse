@@ -48,25 +48,11 @@ export default function RegistrationStepShell({
 }: RegistrationStepShellProps) {
   return (
     <div className="flex flex-col lg:flex-row gap-6 lg:gap-12 items-start">
-      {/* ────── Mobile / tablet header (≤md) ────── */}
-      <div className="flex lg:hidden flex-col gap-3 w-full">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-[#C9973A]/10 rounded-xl flex items-center justify-center text-[#C9973A] shrink-0">
-            {icon}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#C9973A]">
-              {eyebrow}
-            </p>
-            <h2 className="font-serif text-[24px] font-bold text-[#1a1a2e] leading-tight">
-              {title}
-            </h2>
-          </div>
-        </div>
-        <p className="text-[13px] text-[#1a1a2e]/65 leading-relaxed font-medium">
-          {description}
-        </p>
-      </div>
+      {/* No mobile/tablet header here by design. The parent AuthSplitLayout
+          already renders the step title, subtitle, stepper and back control
+          on small screens — rendering them again duplicated the title and
+          cluttered the mobile view. Mobile now goes straight to the form for
+          a clean, professional layout; the context panel below is desktop-only. */}
 
       {/* ────── Desktop left context panel (lg+) ────── */}
       <aside className="hidden lg:flex flex-col gap-6 w-full lg:w-[340px] xl:w-[380px] shrink-0 sticky top-12">

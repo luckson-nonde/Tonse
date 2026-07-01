@@ -7,6 +7,7 @@ import { generateQuoteSchema, QuoteField } from '../../services/quoteSchemaGener
 import { getEffectiveBusinessTypes } from '../../services/categories';
 import { useActiveProfileContext } from '../../hooks/useActiveProfileContext';
 import { uniqueKey } from '../../utils/keyUtils';
+import { API_BASE_URL } from '../../services/api/client';
 
 // Field-name → section fallback when a QuoteField doesn't carry an
 // explicit `group`. Keeps the existing archetype-based schemas
@@ -156,7 +157,7 @@ export default function QuoteSubmissionForm({
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch(`http://localhost:3001/files/upload?category=quotes`, {
+        const response = await fetch(`${API_BASE_URL}/files/upload?category=quotes`, {
           method: 'POST',
           body: formData,
         });
@@ -166,7 +167,7 @@ export default function QuoteSubmissionForm({
         const result = await response.json();
         const fileUrl = result.data?.url || result.url;
         if (fileUrl) {
-          uploadedUrls.push(`http://localhost:3001${fileUrl}`);
+          uploadedUrls.push(`${API_BASE_URL}${fileUrl}`);
         }
       }
 

@@ -20,10 +20,13 @@ import {
   Store,
   RefreshCw,
   Smartphone,
+  ClipboardCheck,
+  Pencil,
 } from 'lucide-react';
 import AuthSplitLayout from '../components/AuthSplitLayout';
 import Button from '../components/Button';
 import FloatingInput from '../components/FloatingInput';
+import PasswordStrengthField, { analyzePassword, type PasswordAnalysis } from '../components/PasswordStrengthField';
 import { SubRole, EntityType } from '../types';
 import { getRegistrationSchema } from '../services/userSchemas';
 import DynamicProfileForm from '../components/DynamicProfileForm';
@@ -32,6 +35,7 @@ import CompactIdentityCapture from '../components/CompactIdentityCapture';
 import NrcDocumentCapture from '../components/NrcDocumentCapture';
 import LocationDetails from '../components/LocationDetails';
 import RegistrationStepShell from '../components/RegistrationStepShell';
+import { useOnboardingDraft } from '../hooks/useOnboardingDraft';
 
 // Zambian NRC format: XXXXXX/XX/X (6 digits / 2 digits / 1 digit)
 function formatNRC(raw: string): string {
@@ -103,6 +107,43 @@ const REGISTER_HERO: Record<string, HeroContent> = {
   },
 };
 
+// A titled card of label/value rows shown on the Review step, with an
+// Edit shortcut that jumps back to the relevant step.
+function ReviewSection({
+  title,
+  onEdit,
+  rows,
+}: {
+  title: string;
+  onEdit: () => void;
+  rows: string[][];
+}) {
+  return (
+    <section className="rounded-2xl border border-[#e8e0d0]/70 bg-brand-white overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#e8e4dc] bg-[#faf6ee]">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#C9973A]">{title}</p>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#C9973A] hover:text-[#B08432] inline-flex items-center gap-1 transition-colors"
+        >
+          <Pencil className="w-3 h-3" /> Edit
+        </button>
+      </div>
+      <dl className="divide-y divide-[#f1ede5]">
+        {rows.map((row) => (
+          <div key={row[0]} className="flex items-center justify-between gap-4 px-4 py-2.5">
+            <dt className="text-[11px] font-medium text-[#1a1612]/50 shrink-0">{row[0]}</dt>
+            <dd className="text-[13px] font-semibold text-[#1a1612] text-right min-w-0 truncate">
+              {row[1] || '—'}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
 export default function Register() {
   try {
     const { register, user, updateUser } = useAuth();
@@ -117,23 +158,40 @@ export default function Register() {
       searchParams.get('categoryIds') || searchParams.get('categories');
     const initialCategories = categoryIdsParam ? categoryIdsParam.split(',') : [];
 
-    // Multi-step registration state
-    const [currentStep, setCurrentStep] = useState(1);
+    // ── Persistent onboarding draft ──────────────────────────────────
+    // The whole wizard reads/writes ONE localStorage-backed draft, so it
+    // survives forward/back navigation AND a page refresh. Passwords and
+    // base64 images are kept in memory only (never written to disk) — see
+    // useOnboardingDraft.
+    const { draft, patch, reset, resumedFromStorage } = useOnboardingDraft({
+      role,
+      subRole,
+      categoryIds: initialCategories,
+    });
 
-    // Step 1: Personal Information & Identity
-    const [logo, setLogo] = useState('');
-    // NRC document is captured side-by-side: front and back as separate
-    // base64 data URLs, serialised to a JSON string when sent to the
-    // backend so a single nrcDocumentPath text column holds both.
-    const [nrcDocument, setNrcDocument] = useState<{ front?: string; back?: string }>({});
-    const [nrc, setNrc] = useState('');
-    const [name, setName] = useState('');
-    const [phone, setPhone] = useState('');
-    const [dob, setDob] = useState('');
+    // Same-named accessors + setters so the JSX below reads like plain
+    // useState; every setter funnels into patch().
+    const { currentStep, logo, nrcDocument, nrc, name, phone, dob } = draft;
+    const { province, city, address, latitude, longitude, radius } = draft;
+    const { email, agreeToTerms } = draft;
+    const setCurrentStep = (v: number) => patch({ currentStep: v });
+    const setLogo = (v: string) => patch({ logo: v });
+    const setNrcDocument = (v: { front?: string; back?: string }) => patch({ nrcDocument: v });
+    const setNrc = (v: string) => patch({ nrc: v });
+    const setName = (v: string) => patch({ name: v });
+    const setPhone = (v: string) => patch({ phone: v });
+    const setDob = (v: string) => patch({ dob: v });
+    const setProvince = (v: string) => patch({ province: v });
+    const setCity = (v: string) => patch({ city: v });
+    const setAddress = (v: string) => patch({ address: v });
+    const setLatitude = (v: number | undefined) => patch({ latitude: v });
+    const setLongitude = (v: number | undefined) => patch({ longitude: v });
+    const setRadius = (v: number | undefined) => patch({ radius: v });
+    const setEmail = (v: string) => patch({ email: v });
+    const setAgreeToTerms = (v: boolean) => patch({ agreeToTerms: v });
 
-    // Serialised form for the network — empty string when neither side
-    // has been captured (lets the backend skip the column write
-    // entirely instead of storing an empty JSON envelope).
+    // Serialised NRC document for the network — empty string when neither
+    // side has been captured (lets the backend skip the column write).
     const nrcDocumentPayload =
       nrcDocument.front || nrcDocument.back
         ? JSON.stringify({
@@ -142,21 +200,12 @@ export default function Register() {
           })
         : '';
 
-    // Step 2: Location State
-    const [province, setProvince] = useState('');
-    const [city, setCity] = useState('');
-    const [address, setAddress] = useState('');
-    const [latitude, setLatitude] = useState<number | undefined>();
-    const [longitude, setLongitude] = useState<number | undefined>();
-    const [radius, setRadius] = useState<number | undefined>();
-
-    // Step 3: Account Credentials
-    const [email, setEmail] = useState('');
+    // Credentials + transient UI state — NOT persisted (memory only).
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-    const [agreeToTerms, setAgreeToTerms] = useState(false);
+    const [pwAnalysis, setPwAnalysis] = useState<PasswordAnalysis | null>(null);
+    const [showResumeBanner, setShowResumeBanner] = useState(resumedFromStorage);
 
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -174,7 +223,8 @@ export default function Register() {
       { id: 1, label: 'Profile' },
       { id: 2, label: 'Location' },
       { id: 3, label: 'Credentials' },
-      ...(isCompany ? [{ id: 4, label: 'Business' }] : []),
+      { id: 4, label: 'Review' },
+      ...(isCompany ? [{ id: 5, label: 'Business' }] : []),
     ];
 
     const currentHero = useMemo(() => {
@@ -200,6 +250,21 @@ export default function Register() {
     const dobAge = calculateAge(dob);
     const dobError =
       dob && dobAge !== null && dobAge < 18 ? 'You must be 18 or older to register.' : '';
+
+    // Live credential checks for Step 3. `pwAnalysis` is fed by
+    // PasswordStrengthField; the submit button stays disabled until the
+    // password is Strong, the confirmation matches, and terms are agreed.
+    const confirmError =
+      confirmPassword.length > 0 && confirmPassword !== password
+        ? 'Passwords do not match'
+        : '';
+    const passwordsMatch = password.length > 0 && password === confirmPassword;
+    const canSubmitStep3 =
+      !!email.trim() &&
+      (pwAnalysis?.isStrong ?? false) &&
+      passwordsMatch &&
+      agreeToTerms &&
+      !isLoading;
 
     // Validate Step 1: Personal Information
     const validateStep1 = (): boolean => {
@@ -249,8 +314,8 @@ export default function Register() {
         return false;
       }
 
-      if (!password || password.length < 8) {
-        setError('Password must be at least 8 characters long');
+      if (!analyzePassword(password).isStrong) {
+        setError('Please choose a stronger password — meet all the requirements shown.');
         return false;
       }
 
@@ -350,6 +415,10 @@ export default function Register() {
           );
         }
 
+        // Registration submitted — clear the saved draft so the next visit
+        // to /register starts blank instead of resuming completed data.
+        reset();
+
         if (isCompany) {
           // Company sellers / service-providers still have one more
           // onboarding step (CompanyDocuments). Stay logged in so the
@@ -366,7 +435,7 @@ export default function Register() {
             // Local tokens are cleared by authService.logout's
             // catch-all anyway; carry on with the redirect.
           }
-          navigate('/login', { replace: true });
+          navigate('/login?registered=1', { replace: true });
         }
       } catch (err: any) {
         setError(err.message || 'Failed to register');
@@ -384,7 +453,9 @@ export default function Register() {
               : 'Your Profile'
             : currentStep === 2
               ? 'Your Location'
-              : 'Account Credentials'
+              : currentStep === 3
+                ? 'Account Credentials'
+                : 'Review'
         }
         subtitle={
           <span className="text-[#1a1612]/60 font-medium">
@@ -394,7 +465,9 @@ export default function Register() {
                 : 'Complete your identity verification'
               : currentStep === 2
                 ? 'Set your service or delivery area'
-                : 'Secure your account access'}
+                : currentStep === 3
+                  ? 'Secure your account access'
+                  : "Check everything's right before we finish"}
           </span>
         }
         onBack={() =>
@@ -404,6 +477,10 @@ export default function Register() {
           current: currentStep,
           total: steps.length,
           labels: steps.map((s) => s.label),
+          // Free back-navigation: click any already-visited step to jump to it.
+          onStepClick: (step: number) => {
+            if (step < currentStep) setCurrentStep(step);
+          },
         }}
         hero={currentHero}
       >
@@ -411,6 +488,34 @@ export default function Register() {
           {error && (
             <div className="p-4 bg-red-50 border border-red-100 text-red-600 text-[13px] rounded-xl font-medium">
               {error}
+            </div>
+          )}
+
+          {showResumeBanner && currentStep < 4 && (
+            <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-[#C9973A]/30 bg-[#fdf6e9]/60">
+              <p className="text-[12px] text-[#1a1612]/70 font-medium flex items-center gap-2 min-w-0">
+                <RefreshCw className="w-3.5 h-3.5 text-[#C9973A] shrink-0" />
+                <span className="truncate">Resumed your saved progress.</span>
+              </p>
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    reset();
+                    setShowResumeBanner(false);
+                  }}
+                  className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#C9973A] hover:text-[#B08432]"
+                >
+                  Start over
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowResumeBanner(false)}
+                  className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#1a1612]/45 hover:text-[#1a1612]/70"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
           )}
 
@@ -582,7 +687,7 @@ export default function Register() {
             <RegistrationStepShell
               eyebrow="Step 02 / Where"
               title="Your Location"
-              description="Pinpoint exactly where your shop is. The coordinates you capture become the permanent map pin buyers use to find you."
+              description="Set where buyers find your shop."
               icon={<MapPin className="w-8 h-8" />}
               advisory={
                 <div className="flex items-start gap-3 p-4 rounded-2xl border border-[#C9973A]/30 bg-gradient-to-br from-[#fdf6e9]/80 to-[#fdf6e9]/30">
@@ -594,7 +699,7 @@ export default function Register() {
                       Important · Be at your shop
                     </p>
                     <p className="text-[13px] text-[#1a1612] font-medium leading-snug">
-                      The coordinates you capture become the <span className="font-bold">permanent map pin</span> buyers use to find this business. Capture them from inside your shop — not from home, not on the move.
+                      Capture GPS from <span className="font-bold">inside your shop</span> — this pin is permanent, and buyers use it to find you.
                     </p>
                   </div>
                 </div>
@@ -625,6 +730,7 @@ export default function Register() {
                   submitLabel="Continue to Credentials →"
                   showRadius={false}
                   embeddedInShell={true}
+                  initialValue={{ province, city, address, latitude, longitude, radius }}
                 />
               </div>
             </RegistrationStepShell>
@@ -689,29 +795,11 @@ export default function Register() {
                 </div>
 
                 <div className="space-y-4">
-                  <FloatingInput
+                  <PasswordStrengthField
                     label="Password"
-                    type={showPassword ? 'text' : 'password'}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    icon={Lock}
-                    autoComplete="new-password"
-                    className={showPassword ? '' : 'tracking-widest'}
-                    rightElement={
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="text-[#C9973A]/70 hover:text-[#C9973A] transition-colors"
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-[18px] w-[18px]" strokeWidth={1.75} />
-                        ) : (
-                          <Eye className="h-[18px] w-[18px]" strokeWidth={1.75} />
-                        )}
-                      </button>
-                    }
+                    onChange={setPassword}
+                    onAnalysis={setPwAnalysis}
                   />
 
                   <FloatingInput
@@ -722,6 +810,8 @@ export default function Register() {
                     required
                     icon={Lock}
                     autoComplete="new-password"
+                    error={confirmError}
+                    hint={passwordsMatch ? 'Passwords match' : undefined}
                     className={showConfirmPassword ? '' : 'tracking-widest'}
                     rightElement={
                       <button
@@ -741,7 +831,7 @@ export default function Register() {
 
                   <p className="text-[11px] text-[#1a1612]/45 flex items-center gap-2 ml-1">
                     <Key className="w-3.5 h-3.5 text-[#C9973A]/60" strokeWidth={2} />
-                    Minimum 8 characters · use a mix of letters, numbers, and symbols.
+                    Tip: paste straight from your password manager — it's fully supported.
                   </p>
                 </div>
               </section>
@@ -793,27 +883,115 @@ export default function Register() {
               {/* Submit */}
               <Button
                 type="button"
-                onClick={handleRegister}
-                disabled={isLoading}
+                onClick={() => {
+                  if (validateStep3()) setCurrentStep(4);
+                }}
+                disabled={!canSubmitStep3}
                 className="w-full h-[58px] shadow-[0_12px_28px_-8px_rgba(201,151,58,0.4)] disabled:opacity-50 disabled:shadow-none text-[13px] font-sans font-bold text-white bg-gradient-to-b from-[#D5A547] to-[#C9973A] hover:from-[#C9973A] hover:to-[#B08432] transition-all active:scale-[0.98] rounded-2xl uppercase tracking-[0.22em] flex justify-center items-center gap-2"
               >
-                {isLoading
-                  ? 'Creating Account…'
-                  : isCompany
-                    ? (
-                      <>
-                        Next · Business Documents
-                        <span className="text-base leading-none">→</span>
-                      </>
-                    )
-                    : (
-                      <>
-                        Complete Registration
-                        <span className="text-base leading-none">→</span>
-                      </>
-                    )}
+                Review Your Details
+                <span className="text-base leading-none">→</span>
               </Button>
             </div>
+            </RegistrationStepShell>
+          )}
+
+          {/* SCREEN 4: REVIEW & CONFIRM */}
+          {currentStep === 4 && (
+            <RegistrationStepShell
+              eyebrow="Step 04 / Review"
+              title="Review details"
+              description="Check everything's right — edit any section before we create your account."
+              icon={<ClipboardCheck className="w-8 h-8" />}
+              tips={[
+                {
+                  icon: <ShieldCheck className="w-4 h-4" />,
+                  text: <><span className="font-bold text-[#1a1a2e]">One last look</span> — confirm your details before submitting.</>,
+                },
+                {
+                  icon: <Pencil className="w-4 h-4" />,
+                  text: <><span className="font-bold text-[#1a1a2e]">Edit anything</span> — jump back to any step; your entries are saved.</>,
+                },
+              ]}
+            >
+              <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
+                <ReviewSection
+                  title="Profile & Identity"
+                  onEdit={() => setCurrentStep(1)}
+                  rows={[
+                    ['Full name', name],
+                    ['NRC', nrc],
+                    ['Phone', phone],
+                    ...(role !== 'LABOUR' ? [['Date of birth', dob]] : []),
+                    ['Selfie', logo ? 'Captured' : 'Not added'],
+                    ['NRC photos', `${(nrcDocument.front ? 1 : 0) + (nrcDocument.back ? 1 : 0)} of 2`],
+                  ]}
+                />
+                <ReviewSection
+                  title="Location"
+                  onEdit={() => setCurrentStep(2)}
+                  rows={[
+                    ['Province', province],
+                    ['City', city],
+                    ['Address', address],
+                    [
+                      'GPS pin',
+                      latitude !== undefined && longitude !== undefined
+                        ? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
+                        : 'Not pinned',
+                    ],
+                  ]}
+                />
+                <ReviewSection
+                  title="Credentials"
+                  onEdit={() => setCurrentStep(3)}
+                  rows={[
+                    ['Email', email],
+                    ['Password', password ? '••••••••' : 'Re-enter on Credentials'],
+                  ]}
+                />
+
+                {!isLoading && !canSubmitStep3 && (
+                  <p className="text-[12px] text-[#1a1612]/55 flex items-center gap-2 ml-1">
+                    <Lock className="w-3.5 h-3.5 text-[#C9973A]/60" strokeWidth={2} />
+                    Re-enter your password on the Credentials step to complete.
+                  </p>
+                )}
+
+                {/* Inline error right by the button — the top-of-form error
+                    banner is off-screen when the user has scrolled down to
+                    submit, so failures must surface here too. */}
+                {error && (
+                  <div className="p-3.5 bg-red-50 border border-red-100 text-red-600 text-[13px] rounded-xl font-medium flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">!</span>
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <Button
+                  type="button"
+                  onClick={handleRegister}
+                  disabled={isLoading || !canSubmitStep3}
+                  className="w-full h-[58px] shadow-[0_12px_28px_-8px_rgba(201,151,58,0.4)] disabled:opacity-50 disabled:shadow-none text-[13px] font-sans font-bold text-white bg-gradient-to-b from-[#D5A547] to-[#C9973A] hover:from-[#C9973A] hover:to-[#B08432] transition-all active:scale-[0.98] rounded-2xl uppercase tracking-[0.22em] flex justify-center items-center gap-2"
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" strokeWidth={2.5} />
+                      Creating your account…
+                    </>
+                  ) : isCompany ? (
+                    <>
+                      Complete · Continue to Documents
+                      <span className="text-base leading-none">→</span>
+                    </>
+                  ) : (
+                    <>
+                      Complete Registration
+                      <span className="text-base leading-none">→</span>
+                    </>
+                  )}
+                </Button>
+              </div>
             </RegistrationStepShell>
           )}
         </div>

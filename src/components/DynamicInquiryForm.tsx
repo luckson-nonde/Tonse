@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { API_BASE_URL } from '../services/api/client';
 import {
   ChevronLeft,
   ImagePlus,
@@ -126,7 +127,7 @@ export default function DynamicInquiryForm({
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch(`http://localhost:3001/files/upload?category=inquiries`, {
+        const response = await fetch(`${API_BASE_URL}/files/upload?category=inquiries`, {
           method: 'POST',
           body: formData,
         });
@@ -148,7 +149,7 @@ export default function DynamicInquiryForm({
         }
 
         // Convert relative URL to absolute URL
-        const absoluteUrl = `http://localhost:3001${fileUrl}`;
+        const absoluteUrl = `${API_BASE_URL}${fileUrl}`;
         uploadedUrls.push(absoluteUrl);
       }
 

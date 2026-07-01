@@ -11,7 +11,13 @@ interface AuthSplitLayoutProps {
   title?: React.ReactNode;
   subtitle?: React.ReactNode;
   onBack?: () => void;
-  stepper?: { current: number; total: number; labels: string[] };
+  stepper?: {
+    current: number;
+    total: number;
+    labels: string[];
+    /** When provided, completed steps become clickable to jump back to them. */
+    onStepClick?: (step: number) => void;
+  };
   hero?: HeroContent;
   /** Right-pane background tone. `'cream'` (#fffaf5) is the legacy
    *  default used by every multi-step registration surface. `'white'`
@@ -179,12 +185,38 @@ export default function AuthSplitLayout({
                   {stepper.labels[stepper.current - 1]}
                 </p>
               </div>
-              <div className="h-[3px] bg-[#e8e4dc] rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-[#C9973A] to-[#D5A547] rounded-full transition-[width] duration-700 ease-out"
-                  style={{ width: `${(stepper.current / stepper.total) * 100}%` }}
-                />
-              </div>
+              {stepper.onStepClick ? (
+                // Segmented, clickable progress — every completed segment
+                // before the current step jumps back to that step on click.
+                <div className="flex gap-1">
+                  {Array.from({ length: stepper.total }).map((_, i) => {
+                    const step = i + 1;
+                    const done = step <= stepper.current;
+                    const clickable = step < stepper.current;
+                    const cls = `h-[3px] flex-1 rounded-full transition-all ${
+                      done ? 'bg-gradient-to-r from-[#C9973A] to-[#D5A547]' : 'bg-[#e8e4dc]'
+                    }`;
+                    return clickable ? (
+                      <button
+                        key={step}
+                        type="button"
+                        onClick={() => stepper.onStepClick!(step)}
+                        aria-label={`Go back to ${stepper.labels[i]}`}
+                        className={`${cls} cursor-pointer hover:opacity-70`}
+                      />
+                    ) : (
+                      <div key={step} className={cls} />
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="h-[3px] bg-[#e8e4dc] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-[#C9973A] to-[#D5A547] rounded-full transition-[width] duration-700 ease-out"
+                    style={{ width: `${(stepper.current / stepper.total) * 100}%` }}
+                  />
+                </div>
+              )}
             </div>
           )}
 

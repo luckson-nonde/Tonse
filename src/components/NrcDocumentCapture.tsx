@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Check, FileText, Upload, X, AlertCircle } from 'lucide-react';
+import { dataUrlMeta, formatBytes } from '../utils/fileMeta';
 
 export interface NrcDocumentSides {
   front?: string;
@@ -86,19 +87,19 @@ export default function NrcDocumentCapture({ value, onCapture }: NrcDocumentCapt
   const idleCopy =
     completed === 0
       ? {
-          title: 'NRC document — Front side',
-          subtitle: 'Step 1 of 2 · clear photo of the front',
+          title: 'NRC document · Front',
+          subtitle: 'Step 1 of 2 · a clear photo of the front',
           cta: 'Upload front',
         }
       : completed === 1 && hasFront
         ? {
-            title: 'NRC document — Back side',
-            subtitle: 'Step 2 of 2 · now capture the back',
+            title: 'NRC document · Back',
+            subtitle: 'Step 2 of 2 · now the back',
             cta: 'Upload back',
           }
         : {
-            title: 'NRC document — Front side',
-            subtitle: 'Step 1 of 2 · clear photo of the front',
+            title: 'NRC document · Front',
+            subtitle: 'Step 1 of 2 · a clear photo of the front',
             cta: 'Upload front',
           };
 
@@ -106,6 +107,7 @@ export default function NrcDocumentCapture({ value, onCapture }: NrcDocumentCapt
   // each side and per-side action (Replace if captured, Upload if missing).
   const SideThumb = ({ side, src }: { side: Side; src?: string }) => {
     const captured = !!src;
+    const meta = dataUrlMeta(src);
     return (
       <div
         className={`flex items-center gap-3 p-3 rounded-2xl border bg-white ${
@@ -139,7 +141,7 @@ export default function NrcDocumentCapture({ value, onCapture }: NrcDocumentCapt
             {sideLabel(side)} {captured ? 'captured' : 'pending'}
           </p>
           <p className="text-[11px] text-[#1a1612]/55 leading-tight truncate">
-            {captured ? 'Looks good — submitted.' : 'Tap to upload'}
+            {captured ? (meta ? `${meta.label} · ${formatBytes(meta.bytes)}` : 'Uploaded') : 'Tap to upload'}
           </p>
         </div>
         <button
@@ -159,16 +161,18 @@ export default function NrcDocumentCapture({ value, onCapture }: NrcDocumentCapt
         <button
           type="button"
           onClick={() => openPicker('front')}
-          className="w-full flex items-center gap-3 p-3.5 rounded-2xl border border-[#e8e4dc] bg-brand-white hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)] transition-all duration-200 text-left"
+          className="w-full flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 rounded-2xl border border-[#e8e4dc] bg-brand-white hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)] active:scale-[0.99] transition-all duration-200 text-left"
         >
-          <div className="w-11 h-11 rounded-xl bg-[#C9973A]/10 text-[#C9973A] flex items-center justify-center shrink-0">
-            <FileText className="w-5 h-5" strokeWidth={2} />
+          <div className="flex items-center gap-3 w-full sm:flex-1 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-[#C9973A]/10 text-[#C9973A] flex items-center justify-center shrink-0">
+              <FileText className="w-5 h-5" strokeWidth={2} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-bold text-[#1a1612] leading-tight">{idleCopy.title}</p>
+              <p className="text-[11px] text-[#1a1612]/55 mt-0.5 leading-snug">{idleCopy.subtitle}</p>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-bold text-[#1a1612] leading-tight">{idleCopy.title}</p>
-            <p className="text-[11px] text-[#1a1612]/55 mt-0.5">{idleCopy.subtitle}</p>
-          </div>
-          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#C9973A] shrink-0 flex items-center gap-1">
+          <span className="self-end sm:self-auto shrink-0 inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-[#C9973A]/10 text-[10px] font-bold uppercase tracking-[0.16em] text-[#C9973A]">
             <Upload className="w-3 h-3" strokeWidth={2.5} />
             {idleCopy.cta}
           </span>
