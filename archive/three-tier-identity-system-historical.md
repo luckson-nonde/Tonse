@@ -1,5 +1,8 @@
 # Three-Tier User Identity System - Implementation Complete ✅
 
+> ⚠️ **Historical snapshot (April 2026).** This document records the original three-tier identity rollout. The **database schema shown below is outdated** — for the current, authoritative schema (the `users`, `user_emails`, `identity_audits` tables and all others) see **[DATABASE_SCHEMA.md](../DATABASE_SCHEMA.md)**.
+> Known drift: the `users` CREATE TABLE here still lists `name`/`primaryEmail`/`phone` directly on `users` (those moved to the profile tables in the Phase 3 restructure), marks `nrcNumber` as `NOT NULL` (it is nullable), and references `user-new.entity.ts` / a `CreateIdentitySystem` migration that no longer exist (schema is created via TypeORM `synchronize`). The *identity-strategy rationale* (NRC → UUID → displayId) below is still valid; the table shapes are not.
+
 **Implementation Date:** April 20, 2026  
 **Status:** PRODUCTION READY  
 **Compliance:** ISO 27001 | OWASP Top 10 | GDPR | Enterprise-Grade Security

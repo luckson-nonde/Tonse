@@ -30,25 +30,27 @@ backend/
 │   └── modules/
 │       ├── users/
 │       │   ├── entities/
-│       │   │   ├── user-new.entity.ts          ← Three-tier user entity
+│       │   │   ├── user.entity.ts              ← Three-tier user entity (auth/identity only)
 │       │   │   ├── user-email.entity.ts        ← Multiple emails table
 │       │   │   └── identity-audit.entity.ts    ← Audit trail table
 │       │   │
 │       │   ├── users.service.ts        ← 50+ methods for identity management
-│       │   └── users.module.ts         ← Updated to register 3 entities
+│       │   └── users.module.ts         ← Registers the identity entities
 │       │
 │       └── auth/
 │           └── auth.service.ts         ← Updated for NRC verification
 │
-├── server/db/migrations/
-│   └── 1704000000000-CreateIdentitySystem.ts   ← Database schema
+│   (No migrations: the schema is created by TypeORM `synchronize` from the
+│    entities above. backend/src/database/migrations/ is empty. The old
+│    server/db/migrations/1704000000000-CreateIdentitySystem.ts is orphaned/dead.)
 │
 frontend/
 └── src/
-    └── types.ts                         ← Updated with new User interfaces
+    └── types.ts                         ← User interfaces
 
 documentation/
-└── THREE_TIER_IDENTITY_SYSTEM_COMPLETE.md    ← Full documentation
+├── DATABASE_SCHEMA.md                            ← Canonical schema (source of truth)
+└── archive/three-tier-identity-system-historical.md  ← Original rollout write-up (historical)
 ```
 
 ---
@@ -58,23 +60,36 @@ documentation/
 ### Registration (One-Time)
 
 ```typescript
+// Full signature (backend/src/modules/users/users.service.ts):
+//   register(
+//     nrcNumber, name, email, phone, passwordHash,
+//     role = 'BUYER',
+//     profilePicture?, dateOfBirth?, nrcDocumentPath?,
+//     ipAddress?, userAgent?,
+//     profileSeed?: { categoryIds?: string[]; subRole?: string },
+//   ): Promise<User>
+
 // User registers with NRC
 await usersService.register(
-  'NRC123456789', // Immutable anchor
-  'John Doe', // Full name
-  'john@example.com', // Email
-  '+265123456789', // Phone
-  hashedPassword, // bcrypt(password, 10)
-  'BUYER', // Role
-  ipAddress, // For audit
-  userAgent // For audit
+  'NRC123456789',     // nrcNumber — immutable anchor
+  'John Doe',          // name
+  'john@example.com',  // email
+  '+260970000000',     // phone
+  hashedPassword,      // passwordHash — bcrypt(password, 10)
+  'BUYER',             // role (default 'BUYER')
+  undefined,           // profilePicture?
+  undefined,           // dateOfBirth?
+  undefined,           // nrcDocumentPath?
+  ipAddress,           // ipAddress? — for audit
+  userAgent,           // userAgent? — for audit
+  { categoryIds: [], subRole: undefined }, // profileSeed? — seeds active profile + seller/provider categories at register time
 );
 
 // Returns user with:
 // - id: UUID (550e8400-e29b-41d4-a716-446655440000)
 // - displayId: 'USER-A3K9F2'
 // - nrcNumber: 'NRC123456789'
-// - verificationStatus: 'PENDING'
+// - active profile (buyer/seller/provider) created; verificationStatus: 'PENDING'
 ```
 
 ### Login (Multiple Options)
@@ -163,10 +178,13 @@ User (1) ──has many──> UserEmail (*)
   │                       - id
   ├─ id (UUID)            - userId (FK)
   ├─ nrcNumber (unique)   - email (unique)
-  ├─ displayId (unique)   - isPrimary
-  ├─ primaryEmail         - verificationStatus
-  └─ primaryEmailId (FK)  - verificationToken
+  ├─ displayId (unique)   - isPrimary   ← "primary email" lives here,
+  ├─ role                 - verificationStatus   not as a column on users
+  └─ activeProfileId      - verificationToken
                           - verifiedAt
+
+  NOTE: users has NO primaryEmail / primaryEmailId column. The primary
+  email is whichever UserEmail row has isPrimary = true.
 
 User (1) ──has many──> IdentityAudit (*)
   │                       - id
@@ -561,11 +579,12 @@ await usersService.addEmail(userId, email, ipAddress, userAgent);
 
 ## 📚 Related Files
 
-- `THREE_TIER_IDENTITY_SYSTEM_COMPLETE.md` - Full documentation
+- `DATABASE_SCHEMA.md` - Canonical database schema (source of truth)
+- `archive/three-tier-identity-system-historical.md` - Original rollout write-up (historical)
 - `backend/src/utils/user-display-id.util.ts` - Display ID generation
 - `backend/src/modules/users/users.service.ts` - All methods
 - `backend/src/modules/auth/auth.service.ts` - Authentication
-- `server/db/migrations/1704000000000-CreateIdentitySystem.ts` - Database schema
+- Schema creation: TypeORM `synchronize` from entities (no migrations; `backend/src/database/migrations/` is empty)
 
 ---
 

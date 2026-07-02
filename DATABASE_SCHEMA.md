@@ -1,0 +1,760 @@
+# Database Schema (Canonical)
+
+> **Single source of truth.** This document is generated directly from the TypeORM entity definitions in `backend/src/modules/**/entities/*.entity.ts` as of **2026-07-02**. Do not hand-edit table shapes elsewhere — if the schema changes, update the entities first, then regenerate this doc.
+>
+> **Schema creation:** The database schema is created via TypeORM's `synchronize` option, not via migrations. `backend/src/config/database.config.ts`: `synchronize: process.env.DB_SYNCHRONIZE === 'true'`. This is wired into `TypeOrmModule.forRootAsync` in `app.module.ts`. When `DB_SYNCHRONIZE=true`, TypeORM auto-generates/updates tables from entity metadata on boot.
+>
+> **Migrations status:** `backend/src/database/migrations/` exists but is **completely empty**. It is referenced by a glob in `app.module.ts` (`migrations: [__dirname + '/database/migrations/**/*{.ts,.js}']`) but currently resolves to zero files — migrations are configured but unused in this codebase. (An orphaned `server/db/migrations/1704000000000-CreateIdentitySystem.ts` exists on disk but is **not** on the configured migrations path and is dead code.)
+
+---
+
+## 1. Two Data Layers
+
+Tonse Hub has two distinct persistence concepts that must not be confused:
+
+### Backend: PostgreSQL (authoritative)
+- Engine: PostgreSQL (`type: 'postgres'` in `TypeOrmModule.forRootAsync`, `app.module.ts`).
+- All real data — users, inquiries, quotes, orders, payments, products, shops, schedules, categories, audit logs, portfolio items — lives here, defined by the TypeORM entities documented in Section 3.
+- This is the **only** durable store. Everything else in the frontend is a live pass-through.
+
+### Frontend: `AppDatabaseAPI` (Dexie-shaped shim — NOT actually Dexie)
+- File: `src/services/api/database.ts`.
+- **There is no Dexie.js in this codebase.** No `dexie` package dependency, no `new Dexie(...)`, no `.version(N).stores({...})` call anywhere in the repo. The only occurrence of the string "Dexie" in the entire `src` tree is a stale header comment ("Replaces IndexedDB (Dexie.js)").
+- What actually exists is a hand-rolled class, `AppDatabaseAPI`, that mimics the shape of the Dexie Table/Query API (`add`, `put`, `get`, `update`, `delete`, `toArray`, `where().equals()/.anyOf()`, `bulkAdd`, `clear`) purely for interface familiarity during the migration.
+- Every method body makes a live HTTP call via `apiClient` to a REST endpoint on the NestJS backend — **there is no local IndexedDB persistence, no offline cache, no client-side indexing**. The "Dexie" naming is legacy/vestigial.
+- See Section 6 for the full endpoint mapping.
+
+---
+
+## 2. ERD Overview
+
+```mermaid
+erDiagram
+    USERS ||--o{ USER_EMAILS : "has"
+    USERS ||--o{ IDENTITY_AUDITS : "has"
+    USERS ||--o| BUYER_PROFILES : "has"
+    USERS ||--o| SELLER_PROFILES : "has"
+    USERS ||--o| SERVICE_PROVIDER_PROFILES : "has"
+    USERS ||--o{ INQUIRIES : "creates (buyerId)"
+    USERS ||--o{ QUOTES : "submits (providerId)"
+    USERS ||--o{ ORDERS : "buys (buyerId)"
+    USERS ||--o{ ORDERS : "sells (sellerId)"
+    USERS ||--o{ PAYMENTS : "owns"
+    USERS ||--o{ PRODUCTS : "lists (sellerId)"
+    USERS ||--o| SHOPS : "owns (sellerId)"
+    USERS ||--o{ SCHEDULES : "owns"
+    USERS ||--o{ PORTFOLIO_ITEMS : "owns"
+
+    SELLER_PROFILES ||--o{ SELLER_PROFILE_ARCHETYPES : "serves"
+    SELLER_PROFILES ||--o{ SELLER_PROFILE_CATEGORIES : "serves"
+    SERVICE_PROVIDER_PROFILES ||--o{ SERVICE_PROVIDER_PROFILE_ARCHETYPES : "serves"
+    SERVICE_PROVIDER_PROFILES ||--o{ SERVICE_PROVIDER_PROFILE_CATEGORIES : "serves"
+
+    CATEGORIES ||--o{ CATEGORIES : "parentId (self-ref)"
+    CATEGORIES ||--o{ SELLER_PROFILE_CATEGORIES : "categoryId"
+    CATEGORIES ||--o{ SERVICE_PROVIDER_PROFILE_CATEGORIES : "categoryId"
+    CATEGORIES ||--o{ INQUIRY_CATEGORIES : "categoryId"
+
+    INQUIRIES ||--o{ INQUIRY_IMAGES : "has"
+    INQUIRIES ||--o{ INQUIRY_CATEGORIES : "tagged with"
+    INQUIRIES ||--o{ QUOTES : "receives"
+
+    QUOTES ||--o{ ORDERS : "converts to (quoteId)"
+
+    USER_EMAILS }o--|| USERS : "userId"
+    IDENTITY_AUDITS }o--|| USERS : "userId"
+    BUYER_PROFILES }o--|| USERS : "userId"
+    SELLER_PROFILES }o--|| USERS : "userId"
+    SERVICE_PROVIDER_PROFILES }o--|| USERS : "userId"
+```
+
+Notes on the diagram:
+- `audit_logs` is not linked with hard FK relations in the entity (no `@ManyToOne` declared) — it stores loose `userId`/`providerId`/`staffId`/`entityId` uuid columns without relation metadata, so it is intentionally omitted from FK edges above.
+- `shops` is enforced as `OneToOne` to `users`; the buyer/seller/service_provider profiles are logically one-per-user but declared as `ManyToOne` — see per-table notes for the exact decorator kind.
+
+---
+
+## 3. Per-Table Reference
+
+### Module: Users & Identity
+
+#### `users`
+Auth identity only — NRC/UUID/displayId three-tier identity, active-profile pointer, team-member/department-head delegation.
+Entity file: `backend/src/modules/users/entities/user.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| nrcNumber | varchar(50) | YES | — | unique |
+| displayId | varchar(20) | YES | — | unique |
+| password | text | NO | — | `select:false`; `@Exclude({toPlainOnly:true})` |
+| refreshToken | varchar(500) | YES | — | `select:false`; `@Exclude({toPlainOnly:true})` |
+| role | enum | NO | `BUYER` | `BUYER, SELLER, SERVICE_PROVIDER, ADMIN` |
+| isNrcVerified | boolean | NO | `false` | |
+| nrcDocumentPath | text | YES | — | `select:false`; `@Exclude({toPlainOnly:true})` |
+| isActive | boolean | NO | `true` | |
+| lastLoginAt | timestamp | YES | — | |
+| lastNrcVerificationAt | timestamp | YES | — | |
+| activeProfileId | uuid | YES | — | |
+| activeProfileType | enum | YES | — | `BUYER, SELLER, SERVICE_PROVIDER` |
+| parentProviderId | uuid | YES | — | |
+| permissions | simple-array | YES | — | |
+| assignedArchetype | varchar(32) | YES | — | |
+| mustChangePassword | boolean | NO | `false` | |
+| isDepartmentHead | boolean | NO | `false` | |
+| departmentAutonomy | enum | YES | — | `INDEPENDENT, MANAGED` |
+| canMoveFinance | boolean | NO | `false` | |
+| pin | varchar(4) | YES | — | `select:false`; `@Exclude({toPlainOnly:true})` |
+| createdAt | timestamp | NO | — | `@CreateDateColumn()` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn()` |
+
+Indexes: `idx_users_nrc` (nrcNumber, unique) · `idx_users_display_id` (displayId, unique) · `idx_users_role` (role) · `idx_users_created_at` (createdAt) · `idx_users_updated_at` (updatedAt) · `idx_users_parent_provider` (parentProviderId)
+
+Relations: OneToMany → `user_emails` (`emails`, cascade:true, eager:false) · OneToMany → `identity_audits` (`identityAudits`, cascade:true, eager:false)
+
+#### `user_emails`
+Multi-email index for sign-in lookup per user; tracks primary/recovery/verification status.
+Entity file: `backend/src/modules/users/entities/user-email.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| userId | uuid | NO | — | |
+| email | varchar(255) | NO | — | unique |
+| isPrimary | boolean | NO | `false` | |
+| verificationStatus | enum | NO | `NOT_VERIFIED` | `NOT_VERIFIED, VERIFICATION_SENT, VERIFIED` |
+| verificationToken | varchar(255) | YES | — | `select:false` |
+| verificationTokenExpiresAt | timestamp | YES | — | |
+| verifiedAt | timestamp | YES | — | |
+| isRecoveryEmail | boolean | NO | `false` | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn()` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn()` |
+
+Indexes: `idx_user_emails_email` (email, unique) · `idx_user_emails_user_id` (userId) · `idx_user_emails_is_primary` (isPrimary) · `idx_user_emails_verification_status` (verificationStatus) · `idx_user_emails_created_at` (createdAt)
+
+Relations: ManyToOne → `users` (userId → user.emails, `@JoinColumn({name:'userId'})`, `onDelete: CASCADE`, nullable:false)
+
+#### `identity_audits`
+Comprehensive audit trail for identity-related changes (fraud investigation, compliance, account recovery).
+Entity file: `backend/src/modules/users/entities/identity-audit.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| userId | uuid | NO | — | |
+| eventType | enum | NO | — | `USER_REGISTERED, NRC_VERIFIED, NRC_VERIFICATION_FAILED, EMAIL_ADDED, EMAIL_REMOVED, EMAIL_PRIMARY_CHANGED, EMAIL_VERIFIED, PASSWORD_CHANGED, ACCOUNT_SUSPENDED, ACCOUNT_REACTIVATED, ACCOUNT_DELETED, SUSPICIOUS_ACTIVITY, ADMIN_ACTION` |
+| description | text | NO | — | |
+| previousValue | jsonb | YES | — | |
+| newValue | jsonb | YES | — | |
+| changedField | varchar(100) | YES | — | |
+| adminId | uuid | YES | — | |
+| ipAddress | varchar(50) | YES | — | |
+| userAgent | text | YES | — | |
+| isSuspicious | boolean | NO | `false` | |
+| metadata | jsonb | YES | — | |
+| verificationStatus | enum | NO | `UNVERIFIED` | `UNVERIFIED, VERIFIED, FRAUD` |
+| statusNotes | text | YES | — | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn()` |
+
+Indexes: `idx_identity_audits_user_id` (userId) · `idx_identity_audits_event_type` (eventType) · `idx_identity_audits_created_at` (createdAt) · `idx_identity_audits_user_event` (userId, eventType) · `idx_identity_audits_user_date` (userId, createdAt)
+
+Relations: ManyToOne → `users` (userId → user.identityAudits, `@JoinColumn({name:'userId'})`, `onDelete: CASCADE`, nullable:false)
+
+#### `buyer_profiles`
+Buyer-role profile: identity, contact, delivery/preferred-area location, category interests, verification, PIN.
+Entity file: `backend/src/modules/users/entities/buyer-profile.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| userId | uuid | NO | — | |
+| name | varchar(255) | YES | — | |
+| email | varchar(255) | YES | — | |
+| phone | varchar(20) | YES | — | |
+| dateOfBirth | date | YES | — | |
+| profilePicture | text | YES | — | |
+| socialLinks | text | YES | — | |
+| subRole | varchar(50) | YES | — | `INDIVIDUAL_BUYER / COMPANY_BUYER / COMPANY_PROCUREMENT_OFFICER / COMPANY_SECRETARY / COMPANY_RECEPTIONIST / COMPANY_MANAGER` |
+| province | varchar(100) | YES | — | |
+| city | varchar(100) | YES | — | |
+| area | varchar(255) | YES | — | |
+| latitude | numeric(10,7) | YES | — | |
+| longitude | numeric(10,7) | YES | — | |
+| radius | numeric(6,2) | YES | — | |
+| categories | simple-array | NO | `''` | buyer interest categories |
+| verificationStatus | enum | NO | `PENDING` | `PENDING, VERIFIED, REJECTED, SUSPENDED, INCOMPLETE` |
+| verificationRejectionReason | text | YES | — | |
+| verifiedAt | timestamp | YES | — | |
+| rejectedAt | timestamp | YES | — | |
+| pin | varchar(4) | YES | — | `select:false`; `@Exclude({toPlainOnly:true})` |
+| createdAt | timestamp | NO | — | `@CreateDateColumn` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn` |
+
+Indexes: `idx_buyer_profiles_user` (userId) · `idx_buyer_profiles_verification` (verificationStatus)
+
+Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`, `onDelete: CASCADE`)
+
+#### `seller_profiles`
+Seller-role profile: identity, contact, business identity (PACRA/ZRA), business location, verification, PIN.
+Entity file: `backend/src/modules/users/entities/seller-profile.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| userId | uuid | NO | — | |
+| name | varchar(255) | YES | — | |
+| email | varchar(255) | YES | — | |
+| phone | varchar(20) | YES | — | |
+| dateOfBirth | date | YES | — | |
+| profilePicture | text | YES | — | |
+| socialLinks | text | YES | — | |
+| subRole | varchar(50) | YES | — | `PRODUCT_SELLER` |
+| companyName | varchar(255) | YES | — | |
+| tpin | varchar(20) | YES | — | |
+| incorporationCertUrl | text | YES | — | |
+| businessLicenseId | uuid | YES | — | |
+| verificationStatus | enum | NO | `PENDING` | `PENDING, VERIFIED, REJECTED, SUSPENDED, INCOMPLETE` |
+| verificationRejectionReason | text | YES | — | |
+| verifiedAt | timestamp | YES | — | |
+| rejectedAt | timestamp | YES | — | |
+| province | varchar(100) | YES | — | |
+| city | varchar(100) | YES | — | |
+| area | varchar(255) | YES | — | |
+| latitude | numeric(10,7) | YES | — | |
+| longitude | numeric(10,7) | YES | — | |
+| radius | numeric(6,2) | YES | — | |
+| pin | varchar(4) | YES | — | `select:false`; `@Exclude({toPlainOnly:true})` |
+| createdAt | timestamp | NO | — | `@CreateDateColumn` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn` |
+
+Indexes: `idx_seller_profiles_user` (userId) · `idx_seller_profiles_verification` (verificationStatus)
+
+Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`, `onDelete: CASCADE`)
+
+#### `seller_profile_archetypes`
+Junction: each archetype a seller profile serves. Composite PK (sellerProfileId, archetype).
+Entity file: `backend/src/modules/users/entities/seller-profile-archetype.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| sellerProfileId | uuid | NO (PK) | — | |
+| archetype | enum | NO (PK) | — | `RETAIL, RENTAL, BOOKING, LABOUR, REPAIR, SERVICE, EVENTS, ENTERTAINMENT, WHOLESALE` |
+
+Indexes: `idx_seller_profile_archetypes_archetype` (archetype)
+
+Relations: ManyToOne → `seller_profiles` (sellerProfileId, `@JoinColumn({name:'sellerProfileId'})`, `onDelete: CASCADE`)
+
+#### `seller_profile_categories`
+Junction: category a seller profile serves. Composite PK (sellerProfileId, categoryId).
+Entity file: `backend/src/modules/users/entities/seller-profile-category.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| sellerProfileId | uuid | NO (PK) | — | |
+| categoryId | varchar(64) | NO (PK) | — | |
+
+Indexes: `idx_seller_profile_categories_category` (categoryId)
+
+Relations: ManyToOne → `seller_profiles` (sellerProfileId, `@JoinColumn({name:'sellerProfileId'})`, `onDelete: CASCADE`) · ManyToOne → `categories` (categoryId, `@JoinColumn({name:'categoryId'})`, `onDelete: CASCADE`)
+
+#### `service_provider_profiles`
+Service-provider-role profile: identity, contact, labour-specific fields, business identity, verification, service-area location, PIN.
+Entity file: `backend/src/modules/users/entities/service-provider-profile.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| userId | uuid | NO | — | |
+| name | varchar(255) | YES | — | |
+| email | varchar(255) | YES | — | |
+| phone | varchar(20) | YES | — | |
+| dateOfBirth | date | YES | — | |
+| profilePicture | text | YES | — | |
+| socialLinks | text | YES | — | |
+| subRole | varchar(50) | YES | — | `INDIVIDUAL_PROVIDER / AGENCY_PROVIDER / SKILLED_LABOUR` |
+| labourCategory | varchar(50) | YES | — | only populated when subRole = SKILLED_LABOUR |
+| labourSubTypes | simple-array | NO | `''` | |
+| companyName | varchar(255) | YES | — | |
+| tpin | varchar(20) | YES | — | |
+| incorporationCertUrl | text | YES | — | |
+| businessLicenseId | uuid | YES | — | |
+| verificationStatus | enum | NO | `PENDING` | `PENDING, VERIFIED, REJECTED, SUSPENDED, INCOMPLETE` |
+| verificationRejectionReason | text | YES | — | |
+| verifiedAt | timestamp | YES | — | |
+| rejectedAt | timestamp | YES | — | |
+| province | varchar(100) | YES | — | |
+| city | varchar(100) | YES | — | |
+| area | varchar(255) | YES | — | |
+| latitude | numeric(10,7) | YES | — | |
+| longitude | numeric(10,7) | YES | — | |
+| radius | numeric(6,2) | YES | — | |
+| pin | varchar(4) | YES | — | `select:false`; `@Exclude({toPlainOnly:true})` |
+| createdAt | timestamp | NO | — | `@CreateDateColumn` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn` |
+
+Indexes: `idx_service_provider_profiles_user` (userId) · `idx_service_provider_profiles_verification` (verificationStatus)
+
+Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`, `onDelete: CASCADE`)
+
+#### `service_provider_profile_archetypes`
+Junction: each archetype a service-provider profile serves. Composite PK (serviceProviderProfileId, archetype).
+Entity file: `backend/src/modules/users/entities/service-provider-profile-archetype.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| serviceProviderProfileId | uuid | NO (PK) | — | |
+| archetype | enum | NO (PK) | — | `RETAIL, RENTAL, BOOKING, LABOUR, REPAIR, SERVICE, EVENTS, ENTERTAINMENT, WHOLESALE` |
+
+Indexes: `idx_sp_profile_archetypes_archetype` (archetype)
+
+Relations: ManyToOne → `service_provider_profiles` (serviceProviderProfileId, `@JoinColumn({name:'serviceProviderProfileId'})`, `onDelete: CASCADE`)
+
+#### `service_provider_profile_categories`
+Junction: category a service-provider profile serves. Composite PK (serviceProviderProfileId, categoryId).
+Entity file: `backend/src/modules/users/entities/service-provider-profile-category.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| serviceProviderProfileId | uuid | NO (PK) | — | |
+| categoryId | varchar(64) | NO (PK) | — | |
+
+Indexes: `idx_sp_profile_categories_category` (categoryId)
+
+Relations: ManyToOne → `service_provider_profiles` (serviceProviderProfileId, `@JoinColumn({name:'serviceProviderProfileId'})`, `onDelete: CASCADE`) · ManyToOne → `categories` (categoryId, `@JoinColumn({name:'categoryId'})`, `onDelete: CASCADE`)
+
+---
+
+### Module: Inquiries
+
+#### `inquiries`
+Entity file: `backend/src/modules/inquiries/entities/inquiry.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| displayId | varchar(20) | YES | — | unique |
+| title | varchar(255) | NO | — | |
+| description | text | NO | — | |
+| buyerId | uuid | NO | — | |
+| location | varchar(255) | NO | — | human-readable City, Province snapshot |
+| province | varchar(100) | YES | — | |
+| city | varchar(100) | YES | — | |
+| latitude | decimal(10,6) | YES | — | |
+| longitude | decimal(10,6) | YES | — | |
+| radius | integer | YES | — | |
+| items | json | YES | — | |
+| preferences | json | YES | — | |
+| attributes | json | YES | — | |
+| processType | enum | NO | `STANDARD` | `EXPRESS, STANDARD` |
+| status | enum | NO | `OPEN` | `OPEN, QUOTED, CLOSED` |
+| currentStage | enum | NO | `quotation` | `quotation, purchase_order, order_confirmation, delivery_order, completed` |
+| viewCount | integer | NO | `0` | |
+| maxQuotes | integer | NO | `3` | how many quotes buyer wants before slot full |
+| responseDeadlineAt | timestamp | YES | — | hard deadline for provider response |
+| archivedBy | simple-array | NO | `''` | |
+| deletedBy | simple-array | NO | `''` | |
+| isLabour | boolean | NO | `false` | |
+| labourGroup | varchar(50) | YES | — | |
+| labourSubType | varchar(50) | YES | — | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn` |
+
+Indexes: `idx_inquiries_buyer_id` (buyerId) · `idx_inquiries_status` (status) · `idx_inquiries_location` (location) · `idx_inquiries_created_at` (createdAt) · `idx_inquiries_buyer_status` (buyerId, status) · `idx_inquiries_display_id` (displayId, unique)
+
+Relations: ManyToOne → `users` (buyerId, `@JoinColumn({name:'buyerId'})`, target entity User) · OneToMany → `inquiry_images` (`images`, eager:true, cascade:true, `onDelete: CASCADE`)
+
+#### `inquiry_images`
+Entity file: `backend/src/modules/inquiries/entities/inquiry-image.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| inquiryId | uuid | NO | — | |
+| imageUrl | varchar(500) | NO | — | URL for frontend display |
+| imagePath | varchar(500) | NO | — | local server path |
+| fileType | varchar(50) | YES | — | MIME type |
+| fileSize | integer | YES | — | bytes |
+| orderIndex | integer | NO | `0` | display order |
+| uploadedAt | timestamp | NO | — | `@CreateDateColumn` |
+
+Indexes: none
+
+Relations: ManyToOne → `inquiries` (inquiryId, `@JoinColumn({name:'inquiryId'})`, `onDelete: CASCADE`, inverse side `Inquiry.images`)
+
+#### `inquiry_categories`
+Entity file: `backend/src/modules/inquiries/entities/inquiry-category.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| inquiryId | uuid | NO (PK) | — | `@PrimaryColumn`; part of composite PK |
+| categoryId | varchar(64) | NO (PK) | — | `@PrimaryColumn`; part of composite PK |
+
+Indexes: `idx_inquiry_categories_category` (categoryId)
+
+Relations: ManyToOne → `inquiries` (inquiryId, `@JoinColumn({name:'inquiryId'})`, `onDelete: CASCADE`) · ManyToOne → `categories` (categoryId, `@JoinColumn({name:'categoryId'})`, `onDelete: CASCADE`, target entity Category)
+
+---
+
+### Module: Quotes
+
+#### `quotes`
+Entity file: `backend/src/modules/quotes/entities/quote.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| inquiryId | uuid | NO | — | |
+| inquiryTitle | varchar(255) | NO | — | denormalized |
+| providerId | uuid | NO | — | |
+| providerName | varchar(255) | NO | — | denormalized |
+| price | decimal(12,2) | NO | — | |
+| condition | varchar(50) | NO | — | |
+| message | text | NO | — | |
+| status | enum | NO | `PENDING` | `PENDING, ACCEPTED, REJECTED, ARCHIVED, PAID, PENDING_COLLECTION, AWAITING_PICKUP, COMPLETED, HANDED_OVER, SUPERSEDED` |
+| expiryDuration | varchar(50) | YES | — | |
+| isRead | boolean | NO | `false` | |
+| isArchived | boolean | NO | `false` | |
+| itemPrices | json | YES | — | `Record<string, any>[]` |
+| buyerContact | json | YES | — | `Record<string, any>` |
+| collectionCode | varchar(50) | YES | — | |
+| requirements | json | YES | — | `Record<string, any>[]` |
+| venueSpaceId | uuid | YES | — | |
+| venueSpaceName | varchar(255) | YES | — | |
+| damageDeposit | decimal(12,2) | YES | — | |
+| cleaningFee | decimal(12,2) | YES | — | |
+| dynamicFields | json | YES | — | `Record<string, any>` |
+| processType | enum | NO | `STANDARD` | `EXPRESS, STANDARD` |
+| delivery | json | YES | — | `Record<string, any>` |
+| pickupLocation | varchar(255) | YES | — | |
+| quoteType | enum | NO | `ORIGINAL` | `ORIGINAL, REVISION` |
+| parentQuoteId | uuid | YES | — | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn` |
+
+Indexes: `idx_quotes_inquiry_id` (inquiryId) · `idx_quotes_provider_id` (providerId) · `idx_quotes_status` (status) · `idx_quotes_created_at` (createdAt) · `idx_quotes_inquiry_provider` (inquiryId, providerId)
+
+Relations: ManyToOne → `inquiries` (inquiryId, `@JoinColumn({name:'inquiryId'})`, `onDelete: CASCADE`, target entity Inquiry) · ManyToOne → `users` (providerId, `@JoinColumn({name:'providerId'})`, target entity User, no `onDelete` specified)
+
+---
+
+### Module: Orders
+
+#### `orders`
+Entity file: `backend/src/modules/orders/entities/order.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| quoteId | uuid | NO | — | |
+| buyerId | uuid | NO | — | |
+| sellerId | uuid | NO | — | |
+| orderNumber | varchar(50) | NO | — | unique |
+| totalAmount | decimal(12,2) | NO | — | |
+| deliveryFee | decimal(12,2) | YES | — | |
+| status | enum | NO | `PENDING` | `PENDING, CONFIRMED, SHIPPED, DELIVERED, COMPLETED, CANCELLED` |
+| shippingAddress | varchar(255) | YES | — | |
+| notes | text | YES | — | |
+| items | json | YES | — | `Record<string, any>[]` |
+| deliveryDate | timestamp | YES | — | |
+| trackingNumber | varchar(100) | YES | — | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn` |
+
+Indexes: `idx_orders_buyer_id` (buyerId) · `idx_orders_seller_id` (sellerId) · `idx_orders_status` (status) · `idx_orders_created_at` (createdAt) · `idx_orders_buyer_seller` (buyerId, sellerId)
+
+Relations: ManyToOne → `quotes` (quoteId, `@JoinColumn({name:'quoteId'})`, `onDelete: CASCADE`) · ManyToOne → `users` (buyerId, `@JoinColumn({name:'buyerId'})`) · ManyToOne → `users` (sellerId, `@JoinColumn({name:'sellerId'})`)
+
+---
+
+### Module: Payments
+
+#### `payments`
+Entity file: `backend/src/modules/payments/entities/payment.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| transactionId | varchar(50) | NO | — | unique |
+| userId | uuid | NO | — | |
+| type | enum | NO | — | `DEPOSIT, PAYMENT, WITHDRAWAL, REFUND, TRANSFER` |
+| amount | decimal(12,2) | NO | — | |
+| fee | decimal(12,2) | NO | `0` | |
+| netAmount | decimal(12,2) | NO | — | |
+| status | enum | NO | `PENDING` | `PENDING, SUCCESS, FAILED, CANCELLED` |
+| externalReference | varchar(255) | YES | — | |
+| paymentMethod | varchar(50) | YES | — | |
+| description | text | YES | — | |
+| metadata | json | YES | — | |
+| processedAt | timestamp | YES | — | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn()` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn()` |
+
+Indexes: `idx_payments_user_id` (userId) · `idx_payments_status` (status) · `idx_payments_type` (type) · `idx_payments_created_at` (createdAt) · `idx_payments_reference` (externalReference, unique)
+
+Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`)
+
+> Note: `payments` keys off `userId` only — there is **no** `orderId` FK column on the entity (contrary to older docs).
+
+---
+
+### Module: Products
+
+#### `products`
+Entity file: `backend/src/modules/products/entities/product.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| sellerId | uuid | NO | — | |
+| name | varchar(255) | NO | — | |
+| description | text | NO | — | |
+| category | varchar(100) | NO | — | |
+| subCategory | varchar(100) | YES | — | |
+| price | decimal(12,2) | NO | — | |
+| originalPrice | decimal(12,2) | YES | — | |
+| stock | integer | NO | `0` | |
+| images | simple-array | NO | `''` | typed as `string[]` |
+| brand | varchar(100) | YES | — | |
+| condition | varchar(50) | YES | — | |
+| attributes | json | YES | — | typed as `Record<string, any>` |
+| isActive | boolean | NO | `true` | |
+| viewCount | integer | NO | `0` | |
+| rating | decimal(3,2) | NO | `0` | |
+| reviewCount | integer | NO | `0` | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn` |
+
+Indexes: `idx_products_seller_id` (sellerId) · `idx_products_category` (category) · `idx_products_name` (name) · `idx_products_created_at` (createdAt) · `idx_products_seller_category` (sellerId, category)
+
+Relations: ManyToOne → `users` (sellerId, `@JoinColumn({name:'sellerId'})`, no `onDelete` specified)
+
+> Note: there is **no** `shopId` FK column on `products` (contrary to older docs).
+
+---
+
+### Module: Shops
+
+#### `shops`
+Shop entity for sellers.
+Entity file: `backend/src/modules/shops/entities/shop.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| sellerId | uuid | NO | — | unique |
+| name | varchar(255) | NO | — | |
+| description | text | NO | — | |
+| logo | varchar(255) | YES | — | |
+| coverImage | varchar(255) | YES | — | |
+| location | varchar(255) | NO | — | |
+| latitude | decimal(10,6) | YES | — | |
+| longitude | decimal(10,6) | YES | — | |
+| socialLinks | json | YES | — | |
+| contactInfo | json | YES | — | |
+| isActive | boolean | NO | `true` | |
+| rating | integer | NO | `0` | |
+| reviewCount | integer | NO | `0` | |
+| followerCount | integer | NO | `0` | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn` |
+
+Indexes: `idx_shops_seller_id` (sellerId, unique) · `idx_shops_name` (name)
+
+Relations: OneToOne → `users` (sellerId, `@JoinColumn({name:'sellerId'})`)
+
+---
+
+### Module: Schedules
+
+#### `schedules`
+Entity file: `backend/src/modules/schedules/entities/schedule.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| userId | uuid | NO | — | |
+| title | varchar(255) | NO | — | |
+| description | text | YES | — | |
+| date | date | NO | — | |
+| startTime | time | YES | — | |
+| endTime | time | YES | — | |
+| type | enum | NO | `OTHER` | `DELIVERY, MEETING, SERVICE, REMINDER, OTHER` |
+| location | varchar(255) | YES | — | |
+| status | enum | NO | `PENDING` | `PENDING, CONFIRMED, CANCELLED, COMPLETED` |
+| metadata | json | YES | — | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn` |
+
+Indexes: `idx_schedules_user_id` (userId) · `idx_schedules_date` (date) · `idx_schedules_type` (type) · `idx_schedules_created_at` (createdAt)
+
+Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`, target entity User)
+
+> Note: there is **no** `inquiryId` FK column on `schedules` (contrary to older docs).
+
+---
+
+### Module: Categories
+
+#### `categories`
+Category catalog row; UI archetype driver, seeded from the `CATEGORIES_DB` TS catalog via `catalog.json`.
+Entity file: `backend/src/modules/categories/entities/category.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | varchar(64) | NO (PK) | — | `@PrimaryColumn` |
+| name | varchar(255) | NO | — | |
+| parentId | varchar(64) | YES | — | FK column for self-referential parent relation |
+| archetype | enum | NO | `RETAIL` | `RETAIL, RENTAL, BOOKING, LABOUR, REPAIR, SERVICE, EVENTS, ENTERTAINMENT, WHOLESALE` |
+| nature | enum | NO | `PRODUCT` | `PRODUCT, SERVICE, BOTH` |
+| actionVariant | enum | YES | — | `BUY_NEW, REPAIR`; null on parent rows and non-variant subs |
+| createdAt | timestamp | NO | — | `@CreateDateColumn` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn` |
+
+Indexes: `idx_categories_parent` (parentId) · `idx_categories_archetype` (archetype)
+
+Relations: ManyToOne → `categories` (parentId, self-referential parent relation, nullable, `@JoinColumn({name:'parentId'})`, `onDelete: SET NULL`)
+
+---
+
+### Module: Audit
+
+#### `audit_logs`
+Entity file: `backend/src/modules/audit/entities/audit-log.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| userId | uuid | YES | — | |
+| providerId | uuid | YES | — | |
+| staffId | uuid | YES | — | |
+| staffName | varchar(100) | YES | — | |
+| action | varchar(50) | NO | — | |
+| entityType | varchar(100) | NO | — | |
+| entityId | uuid | YES | — | |
+| targetTitle | varchar(255) | YES | — | |
+| buyerName | varchar(100) | YES | — | |
+| amount | decimal(12,2) | YES | — | |
+| details | text | YES | — | |
+| changes | text | YES | — | JSON stringified per code comment |
+| status | varchar(50) | YES | — | |
+| reason | text | YES | — | |
+| ipAddress | varchar(45) | YES | — | |
+| userAgent | text | YES | — | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn()` |
+
+Indexes: `idx_audit_logs_user_id` (userId) · `idx_audit_logs_action` (action) · `idx_audit_logs_entity` (entityType, entityId) · `idx_audit_logs_created_at` (createdAt)
+
+Relations: none (no `@ManyToOne`/relation decorators declared — `userId`, `providerId`, `staffId`, `entityId` are loose uuid columns without FK relation metadata)
+
+---
+
+### Module: Portfolio
+
+#### `portfolio_items`
+Entity file: `backend/src/modules/portfolio/entities/portfolio-item.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| userId | uuid | NO | — | |
+| title | varchar(255) | NO | — | |
+| youtubeUrl | text | NO | — | |
+| eventName | varchar(255) | YES | — | |
+| eventDate | date | YES | — | |
+| description | text | YES | — | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn()` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn()` |
+
+Indexes: `idx_portfolio_user_id` (userId)
+
+Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`, `onDelete: CASCADE`, target entity User)
+
+---
+
+## 4. Enums Reference
+
+| Enum (owning table.column) | Values |
+|---|---|
+| `users.role` | `BUYER`, `SELLER`, `SERVICE_PROVIDER`, `ADMIN` |
+| `users.activeProfileType` | `BUYER`, `SELLER`, `SERVICE_PROVIDER` |
+| `users.departmentAutonomy` | `INDEPENDENT`, `MANAGED` |
+| `user_emails.verificationStatus` | `NOT_VERIFIED`, `VERIFICATION_SENT`, `VERIFIED` |
+| `identity_audits.eventType` | `USER_REGISTERED`, `NRC_VERIFIED`, `NRC_VERIFICATION_FAILED`, `EMAIL_ADDED`, `EMAIL_REMOVED`, `EMAIL_PRIMARY_CHANGED`, `EMAIL_VERIFIED`, `PASSWORD_CHANGED`, `ACCOUNT_SUSPENDED`, `ACCOUNT_REACTIVATED`, `ACCOUNT_DELETED`, `SUSPICIOUS_ACTIVITY`, `ADMIN_ACTION` |
+| `identity_audits.verificationStatus` | `UNVERIFIED`, `VERIFIED`, `FRAUD` |
+| `buyer_profiles.verificationStatus` | `PENDING`, `VERIFIED`, `REJECTED`, `SUSPENDED`, `INCOMPLETE` |
+| `seller_profiles.verificationStatus` | `PENDING`, `VERIFIED`, `REJECTED`, `SUSPENDED`, `INCOMPLETE` |
+| `service_provider_profiles.verificationStatus` | `PENDING`, `VERIFIED`, `REJECTED`, `SUSPENDED`, `INCOMPLETE` |
+| `seller_profile_archetypes.archetype` | `RETAIL`, `RENTAL`, `BOOKING`, `LABOUR`, `REPAIR`, `SERVICE`, `EVENTS`, `ENTERTAINMENT`, `WHOLESALE` |
+| `service_provider_profile_archetypes.archetype` | `RETAIL`, `RENTAL`, `BOOKING`, `LABOUR`, `REPAIR`, `SERVICE`, `EVENTS`, `ENTERTAINMENT`, `WHOLESALE` |
+| `inquiries.processType` | `EXPRESS`, `STANDARD` |
+| `inquiries.status` | `OPEN`, `QUOTED`, `CLOSED` |
+| `inquiries.currentStage` | `quotation`, `purchase_order`, `order_confirmation`, `delivery_order`, `completed` |
+| `quotes.status` | `PENDING`, `ACCEPTED`, `REJECTED`, `ARCHIVED`, `PAID`, `PENDING_COLLECTION`, `AWAITING_PICKUP`, `COMPLETED`, `HANDED_OVER`, `SUPERSEDED` |
+| `quotes.processType` | `EXPRESS`, `STANDARD` |
+| `quotes.quoteType` | `ORIGINAL`, `REVISION` |
+| `orders.status` | `PENDING`, `CONFIRMED`, `SHIPPED`, `DELIVERED`, `COMPLETED`, `CANCELLED` |
+| `payments.type` | `DEPOSIT`, `PAYMENT`, `WITHDRAWAL`, `REFUND`, `TRANSFER` |
+| `payments.status` | `PENDING`, `SUCCESS`, `FAILED`, `CANCELLED` |
+| `schedules.type` | `DELIVERY`, `MEETING`, `SERVICE`, `REMINDER`, `OTHER` |
+| `schedules.status` | `PENDING`, `CONFIRMED`, `CANCELLED`, `COMPLETED` |
+| `categories.archetype` | `RETAIL`, `RENTAL`, `BOOKING`, `LABOUR`, `REPAIR`, `SERVICE`, `EVENTS`, `ENTERTAINMENT`, `WHOLESALE` |
+| `categories.nature` | `PRODUCT`, `SERVICE`, `BOTH` |
+| `categories.actionVariant` | `BUY_NEW`, `REPAIR` |
+
+---
+
+## 5. Encryption & Security
+
+- **Encrypted columns: none.** No database column is actually encrypted at rest in the current schema.
+- `EncryptionService` (`backend/src/common/services/encryption.service.ts`) implements AES-256-CBC via Node's `crypto` module. Algorithm is sourced from config key `encryption.algorithm` (`aes-256-cbc`); key is derived with `crypto.scryptSync(keyString, 'salt', 32)`, IV with `crypto.scryptSync(ivString, 'salt', 16)`. It exposes generic `encrypt(data: string)` / `decrypt(data: string)` methods.
+- However, a repo-wide search found **no other file importing or calling `EncryptionService`**, and no entity uses a TypeORM column transformer referencing it. The service is declared but not wired to any entity/column — the capability exists but is currently **unused (dead code)**.
+- Sensitive fields are instead protected at the application layer via TypeORM `select:false` + `@Exclude({toPlainOnly:true})`, not column-level encryption:
+  - `users.password`, `users.refreshToken`, `users.nrcDocumentPath`, `users.pin`
+  - `buyer_profiles.pin`, `seller_profiles.pin`, `service_provider_profiles.pin`
+  - `user_emails.verificationToken`
+- Passwords are hashed with bcryptjs (10 salt rounds) at the service layer.
+
+### Connection & environment variables
+| Var | Default | Purpose |
+|---|---|---|
+| `DB_HOST` | `localhost` | Postgres host |
+| `DB_PORT` | `5432` | Postgres port |
+| `DB_USERNAME` | `tonse_user` | Postgres user |
+| `DB_PASSWORD` | `password` | Postgres password |
+| `DB_NAME` | `tonse_db` | Database name |
+| `DB_SYNCHRONIZE` | `false` (unless `'true'`) | Auto-sync schema from entities on boot |
+| `DB_LOGGING` | `false` (unless `'true'`) | TypeORM query logging |
+| `NODE_ENV` | — | `production` enables `ssl: { rejectUnauthorized: false }` |
+| `ENCRYPTION_KEY` | `your_32_character_key_here_1234` | Key for (currently unused) `EncryptionService` |
+| `ENCRYPTION_IV` | `your_16_character_iv` | IV for (currently unused) `EncryptionService` |
+
+### Seed data
+`backend/src/database/seeds/seed.ts` (run via `npm run seed`) creates exactly **one row** — a platform root ADMIN user. It is idempotent: it looks up an existing user by `ADMIN_EMAIL`; if found, it upgrades role to `ADMIN` and sets `isActive=true`, `verificationStatus='VERIFIED'` only where different (no password reset on re-run). If not found, it hashes `ADMIN_PASSWORD` with bcryptjs, registers with a placeholder NRC, then patches `verificationStatus` to `VERIFIED` and `isActive=true`. No other tables (categories, products, etc.) are seeded by this script.
+
+> ⚠️ Security note: the seed logs plaintext admin credentials to the console and ships hardcoded default admin credentials — replace `ADMIN_EMAIL`/`ADMIN_PASSWORD` via environment before any non-local deployment.
+
+---
+
+## 6. Frontend Store Reference (`AppDatabaseAPI`, `src/services/api/database.ts`)
+
+As established in Section 1, this is **not Dexie** — there are no client-side indexes or local persistence. Every "table" below is a thin REST wrapper; record shapes are TypeScript types imported from `../../types`, not schemas defined in this file.
+
+| "Table" name | Backend endpoint | Notes / normalization |
+|---|---|---|
+| `users` | `/users` | Type: `User` |
+| `inquiries` | `/inquiries` | Type: `Inquiry`; normalized via `transformInquiry` (parses `preferences`, `attributes`, `items`, `entertainmentData`, `repairData`; sanitizes `description`) |
+| `quotes` | `/quotes` | Type: `Quote`; normalized via `transformQuote` (parses `itemPrices`; nested `inquiry` transformed via `transformInquiry`) |
+| `transactions` | `/payments` | Type: `Transaction` |
+| `shops` | `/shops` | Type: `Shop` |
+| `products` | `/products` | Type: `Product` |
+| `schedules` | `/schedules` | Type: `Schedule` |
+| `calendarEvents` | `/calendar-events` | Type: `CalendarEvent` |
+| `venueSpaces` | `/venue-spaces` | Type: `VenueSpace` |
+| `auditLogs` | `/audit` | Type: `AuditLog`; normalized via `transformAuditLog` (maps `log.action` → `actionType`, derives `timestamp` from `createdAt`) |
+| `purchaseOrders` | `/orders` | Type: `PurchaseOrder`; **shares the `/orders` endpoint** |
+| `orderConfirmations` | `/orders` | Type: `OrderConfirmation`; **shares the `/orders` endpoint** |
+| `deliveryOrders` | `/orders` | Type: `DeliveryOrder`; **shares the `/orders` endpoint** |
+
+The class exposes a Dexie-shaped method surface (`add`, `put`, `get`, `update`, `delete`, `toArray`, `where().equals()`/`.anyOf()`, `bulkAdd`, `clear`) purely for interface familiarity during the ongoing migration off a legacy Dexie-based design — every method body resolves to an HTTP call via `apiClient`, with no IndexedDB fallback or local cache layer.
+
+> Note: `calendarEvents` and `venueSpaces` are frontend store wrappers with no dedicated backend TypeORM entity in this schema (calendar events are derived; venue references are embedded on `quotes` as `venueSpaceId`/`venueSpaceName`).

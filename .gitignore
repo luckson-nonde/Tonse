@@ -9,3 +9,6 @@ coverage/
 backend/public/uploads/
 .claude/
 docs/
+
+# graphify knowledge-graph output (generated)
+graphify-out/
