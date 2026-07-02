@@ -19,6 +19,8 @@ import AuthSplitLayout from '../components/AuthSplitLayout';
 import FloatingInput from '../components/FloatingInput';
 import { HeroContent } from '../types';
 import { getPrimaryBusinessType, BusinessType } from '../services/categories';
+import { useFieldValidation, type Validator } from '../hooks/useFieldValidation';
+import RegistrationLoadingOverlay from '../components/RegistrationLoadingOverlay';
 
 // Zambian TPIN is 10 digits, e.g. 1234567890
 function formatTPIN(raw: string): string {
@@ -184,12 +186,25 @@ export default function CompanyDocuments() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const tpinError =
-    tpin.length > 0 && !TPIN_REGEX.test(tpin) ? 'TPIN must be exactly 10 digits.' : '';
-  const companyNameError =
-    companyName.length > 0 && companyName.trim().length < 3
-      ? `${cfg.brandLabel} should be at least 3 characters.`
-      : '';
+  // Conversational validation (parity with the buyer flow): silent until
+  // blur, live "instant forgiveness" after a failure, green checks on pass,
+  // and a submit guard that scrolls to the first invalid field.
+  const fieldValidators: Record<string, Validator> = {
+    companyName: (v) =>
+      !v.trim()
+        ? `${cfg.brandLabel} is required.`
+        : v.trim().length < 3
+          ? `${cfg.brandLabel} should be at least 3 characters.`
+          : '',
+    tpin: (v) => {
+      if (!v.trim()) return cfg.requiresTPIN ? 'TPIN is required — 10 digits from ZRA.' : '';
+      return TPIN_REGEX.test(v) ? '' : 'TPIN must be exactly 10 digits.';
+    },
+  };
+  const validation = useFieldValidation(fieldValidators);
+  const companyNameV = validation.field('companyName', companyName);
+  const tpinV = validation.field('tpin', tpin);
+  const certRef = useRef<HTMLDivElement | null>(null);
 
   const handleFileSelect = async (file: File) => {
     setError('');
@@ -207,27 +222,6 @@ export default function CompanyDocuments() {
       setCertName(file.name);
     };
     reader.readAsDataURL(file);
-  };
-
-  const validate = (): boolean => {
-    setError('');
-    if (companyName.trim().length < 3) {
-      setError(`${cfg.brandLabel} is required (min. 3 characters).`);
-      return false;
-    }
-    if (cfg.requiresTPIN && !TPIN_REGEX.test(tpin)) {
-      setError('TPIN must be exactly 10 digits.');
-      return false;
-    }
-    if (!cfg.requiresTPIN && tpin.length > 0 && !TPIN_REGEX.test(tpin)) {
-      setError('TPIN must be exactly 10 digits, or leave it blank.');
-      return false;
-    }
-    if (cfg.requiresPACRA && !certUrl) {
-      setError('Upload your PACRA Certificate of Incorporation.');
-      return false;
-    }
-    return true;
   };
 
   const navigateAfter = async () => {
@@ -253,7 +247,18 @@ export default function CompanyDocuments() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) return;
+    setError('');
+    // "No hunting" guard — red the invalid fields and scroll to the first.
+    const ok = validation.validateAll([
+      { name: 'companyName', value: companyName },
+      { name: 'tpin', value: tpin },
+    ]);
+    if (!ok) return;
+    if (cfg.requiresPACRA && !certUrl) {
+      setError('Upload your PACRA Certificate of Incorporation.');
+      certRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     setIsLoading(true);
     try {
       await updateUser({
@@ -286,7 +291,9 @@ export default function CompanyDocuments() {
   const BrandIcon = cfg.brandIcon;
 
   return (
-    <AuthSplitLayout
+    <>
+      <RegistrationLoadingOverlay open={isLoading} />
+      <AuthSplitLayout
       title="Business Documents"
       subtitle={
         <span className="text-[#1a1612]/60">
@@ -323,43 +330,60 @@ export default function CompanyDocuments() {
             </p>
           </div>
 
-          <FloatingInput
-            label={cfg.brandLabel}
-            type="text"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-            required
-            icon={BrandIcon}
-            autoComplete="organization"
-            error={companyNameError}
-            hint={
-              !companyNameError && companyName.length === 0 ? cfg.brandHint : undefined
-            }
-          />
+          <div ref={companyNameV.ref}>
+            <FloatingInput
+              label={cfg.brandLabel}
+              type="text"
+              value={companyName}
+              onChange={(e) => {
+                setCompanyName(e.target.value);
+                companyNameV.onChange(e.target.value);
+              }}
+              onBlur={companyNameV.onBlur}
+              required
+              icon={BrandIcon}
+              autoComplete="organization"
+              error={companyNameV.error}
+              valid={companyNameV.valid}
+              hint={
+                !companyNameV.error && !companyNameV.valid && companyName.length === 0
+                  ? cfg.brandHint
+                  : undefined
+              }
+            />
+          </div>
 
-          <FloatingInput
-            label={cfg.requiresTPIN ? 'TPIN Number' : 'TPIN Number (Optional)'}
-            type="text"
-            value={tpin}
-            onChange={(e) => setTpin(formatTPIN(e.target.value))}
-            required={cfg.requiresTPIN}
-            icon={Hash}
-            inputMode="numeric"
-            maxLength={10}
-            placeholder="1234567890"
-            error={tpinError}
-            hint={
-              !tpinError && tpin.length === 0
-                ? cfg.requiresTPIN
-                  ? '10-digit Tax Payer Identification Number from ZRA.'
-                  : 'Add it later from settings if you register with ZRA.'
-                : undefined
-            }
-          />
+          <div ref={tpinV.ref}>
+            <FloatingInput
+              label={cfg.requiresTPIN ? 'TPIN Number' : 'TPIN Number (Optional)'}
+              type="text"
+              value={tpin}
+              onChange={(e) => {
+                const f = formatTPIN(e.target.value);
+                setTpin(f);
+                tpinV.onChange(f);
+              }}
+              onBlur={tpinV.onBlur}
+              required={cfg.requiresTPIN}
+              icon={Hash}
+              inputMode="numeric"
+              maxLength={10}
+              placeholder="1234567890"
+              error={tpinV.error}
+              valid={tpinV.valid}
+              hint={
+                !tpinV.error && !tpinV.valid && tpin.length === 0
+                  ? cfg.requiresTPIN
+                    ? '10-digit Tax Payer Identification Number from ZRA.'
+                    : 'Add it later from settings if you register with ZRA.'
+                  : undefined
+              }
+            />
+          </div>
         </section>
 
         {/* Section 02 — Documents */}
-        <section className="space-y-3">
+        <section className="space-y-3" ref={certRef}>
           <div className="flex items-center gap-3">
             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A]">
               Section 02
@@ -479,5 +503,6 @@ export default function CompanyDocuments() {
         </div>
       </form>
     </AuthSplitLayout>
+    </>
   );
 }

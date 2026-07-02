@@ -748,6 +748,21 @@ export default function DashboardLayout({
               </span>
             </div>
           </div>
+          {/* Mobile: signed-in identity (desktop shows the logo block above).
+              Fills what was an empty white strip at the top of the drawer. */}
+          <div className="flex md:hidden items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-full bg-[#1B3068] text-white flex items-center justify-center font-bold text-[15px] shrink-0 shadow-sm">
+              {(user?.name || 'U').charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[14px] font-bold text-brand-dark leading-tight truncate">
+                {user?.name || 'Your account'}
+              </p>
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#C9973A] truncate">
+                {user?.role || 'BUYER'} Account
+              </p>
+            </div>
+          </div>
           <div className="flex items-center gap-4">
             <button
               onClick={(e) => {

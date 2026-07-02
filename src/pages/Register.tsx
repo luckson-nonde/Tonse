@@ -35,6 +35,8 @@ import CompactIdentityCapture from '../components/CompactIdentityCapture';
 import NrcDocumentCapture from '../components/NrcDocumentCapture';
 import LocationDetails from '../components/LocationDetails';
 import RegistrationStepShell from '../components/RegistrationStepShell';
+import RegistrationLoadingOverlay from '../components/RegistrationLoadingOverlay';
+import ReviewSection from '../components/ReviewSection';
 import { useOnboardingDraft } from '../hooks/useOnboardingDraft';
 import { useFieldValidation, type Validator } from '../hooks/useFieldValidation';
 
@@ -108,89 +110,6 @@ const REGISTER_HERO: Record<string, HeroContent> = {
   },
 };
 
-// A titled card of label/value rows shown on the Review step, with an
-// Edit shortcut that jumps back to the relevant step.
-function ReviewSection({
-  title,
-  onEdit,
-  rows,
-}: {
-  title: string;
-  onEdit: () => void;
-  rows: string[][];
-}) {
-  // The whole card is clickable — tap anywhere (not just "Edit") to jump back
-  // to that step, so a missing/incomplete detail is one tap away from fixing.
-  return (
-    <button
-      type="button"
-      onClick={onEdit}
-      className="group block w-full text-left rounded-2xl border border-[#e8e0d0]/70 bg-brand-white overflow-hidden hover:border-[#C9973A]/50 hover:shadow-[0_4px_18px_-12px_rgba(201,151,58,0.35)] transition-all"
-    >
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#e8e4dc] bg-[#faf6ee]">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#C9973A]">{title}</p>
-        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#C9973A] group-hover:text-[#B08432] inline-flex items-center gap-1 transition-colors">
-          <Pencil className="w-3 h-3" /> Edit
-        </span>
-      </div>
-      <dl className="divide-y divide-[#f1ede5]">
-        {rows.map((row) => {
-          const missing = !row[1] || ['Not added', 'Not pinned', '—'].includes(row[1]);
-          return (
-            <div key={row[0]} className="flex items-center justify-between gap-4 px-4 py-2.5">
-              <dt className="text-[11px] font-medium text-[#1a1612]/50 shrink-0">{row[0]}</dt>
-              <dd
-                className={`text-[13px] font-semibold text-right min-w-0 truncate ${
-                  missing ? 'text-amber-600' : 'text-[#1a1612]'
-                }`}
-              >
-                {row[1] || 'Not added'}
-              </dd>
-            </div>
-          );
-        })}
-      </dl>
-    </button>
-  );
-}
-
-const LOAD_STAGES = [
-  'Securing your credentials…',
-  'Saving your profile…',
-  'Preparing your workspace…',
-  'Almost there…',
-];
-
-// Full-screen progress overlay for the final account creation — gives the
-// user clear on-screen progress (staged messages + a rough time estimate)
-// instead of just a spinner buried in the button.
-function RegistrationLoadingOverlay({ stage }: { stage: number }) {
-  const pct = Math.round(((stage + 1) / LOAD_STAGES.length) * 100);
-  const remaining = Math.max(0, LOAD_STAGES.length - 1 - stage) * 2; // ~seconds
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-[#1a1612]/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-[360px] bg-brand-white rounded-3xl p-8 shadow-2xl text-center">
-        <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white flex items-center justify-center shadow-lg shadow-[#C9973A]/30 mb-5">
-          <RefreshCw className="w-7 h-7 animate-spin" strokeWidth={2.5} />
-        </div>
-        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#C9973A] mb-1">
-          Creating your account
-        </p>
-        <h3 className="font-serif text-[20px] font-bold text-[#1a1612] mb-4">{LOAD_STAGES[stage]}</h3>
-        <div className="h-2 bg-[#e8e4dc] rounded-full overflow-hidden mb-2">
-          <div
-            className="h-full bg-gradient-to-r from-[#C9973A] to-[#D5A547] rounded-full transition-[width] duration-700 ease-out"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        <p className="text-[12px] text-[#1a1612]/55 tabular-nums">
-          {remaining > 0 ? `About ${remaining}s remaining…` : 'Finishing up…'}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export default function Register() {
   try {
     const { register, user, updateUser } = useAuth();
@@ -256,7 +175,6 @@ export default function Register() {
 
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [loadStage, setLoadStage] = useState(0);
 
     const isCompany =
       subRole?.startsWith('COMPANY_') ||
@@ -376,18 +294,6 @@ export default function Register() {
       validation.revalidate('confirmPassword', confirmPassword);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [password]);
-
-    // Advance the loading-overlay stages while the final submit runs.
-    useEffect(() => {
-      if (!isLoading) {
-        setLoadStage(0);
-        return;
-      }
-      const id = window.setInterval(() => {
-        setLoadStage((s) => Math.min(s + 1, LOAD_STAGES.length - 1));
-      }, 1500);
-      return () => window.clearInterval(id);
-    }, [isLoading]);
 
     // Terms is a checkbox (not a text field) — tracked separately.
     const termsRef = useRef<HTMLDivElement | null>(null);
@@ -612,7 +518,7 @@ export default function Register() {
 
     return (
       <>
-        {isLoading && <RegistrationLoadingOverlay stage={loadStage} />}
+        <RegistrationLoadingOverlay open={isLoading} />
         <AuthSplitLayout
         title={
           currentStep === 1
@@ -1004,9 +910,21 @@ export default function Register() {
                     <PasswordStrengthField
                       label="Password"
                       value={password}
-                      onChange={setPassword}
+                      onChange={(v) => {
+                        setPassword(v);
+                        passwordV.onChange(v);
+                      }}
                       onAnalysis={setPwAnalysis}
                     />
+                    {/* The strength meter only renders once the user types, so
+                        an empty-but-required password needs an explicit error
+                        line for the submit guard to point at. */}
+                    {passwordV.error && (
+                      <p className="text-[11px] mt-1.5 ml-1 leading-snug flex items-center gap-1.5 text-rose-500 font-medium">
+                        <span className="w-3 h-3 rounded-full bg-rose-500 text-white text-[8px] font-black flex items-center justify-center shrink-0">!</span>
+                        {passwordV.error}
+                      </p>
+                    )}
                   </div>
 
                   <div ref={confirmV.ref}>

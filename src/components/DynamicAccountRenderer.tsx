@@ -142,12 +142,12 @@ export default function DynamicAccountRenderer({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             onClick={() => onAction('view_financial')}
-            className="bg-[#1B3068] rounded-4xl p-10 shadow-premium-xl text-white relative overflow-hidden group cursor-pointer transition-all duration-500"
+            className="bg-[#1B3068] rounded-4xl p-6 sm:p-8 shadow-premium-xl text-white relative overflow-hidden group cursor-pointer transition-all duration-500"
           >
             {/* Subtle premium gradient/pattern overlays */}
             <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 100% 0%, rgba(255,255,255,0.15) 0%, transparent 60%)' }}></div>
             
-            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-10">
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-6">
                   <Wallet className="w-5 h-5 text-white" strokeWidth={2} />
@@ -156,7 +156,7 @@ export default function DynamicAccountRenderer({
                   </p>
                 </div>
                 
-                <h2 className="text-[64px] font-serif font-black mb-4 tracking-tight leading-none">
+                <h2 className="text-[clamp(2rem,6vw,3.5rem)] font-serif font-black mb-4 tracking-tight leading-none truncate">
                   ZMW {formatCurrency(data?.balance || 0)}
                 </h2>
 
@@ -185,7 +185,7 @@ export default function DynamicAccountRenderer({
                 
                 <Button
                   variant="outline"
-                  className="border-white/40 text-white hover:bg-white/10 hover:border-white rounded-xl px-8 py-3.5 font-bold text-[14px] transition-all duration-300"
+                  className="border-white/40 text-white hover:bg-white/10 hover:border-white rounded-xl px-6 py-2.5 font-bold text-[13px] transition-all duration-300"
                 >
                   Manage Account
                 </Button>

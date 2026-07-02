@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, X, SlidersHorizontal } from 'lucide-react';
+import { Search, X, SlidersHorizontal, Store } from 'lucide-react';
 import { fetchShops, type ShopResult } from '../services/api/shopService';
 import ShopCard from './ShopCard';
 import owlSearching from '../assets/images/empty-states/owl_searching.png';
@@ -61,32 +61,51 @@ export default function BrowseShopsView({ onSendInquiry, onViewProfile }: Browse
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-serif font-bold text-slate-900">Shops &amp; Retailers</h2>
-        <p className="text-[13px] text-slate-500 mt-1">
-          Browse and discover verified shops and service providers
-        </p>
-      </div>
-
-      {/* Search bar */}
-      <div className="relative">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-        <input
-          type="text"
-          placeholder="Search by name, category, or location…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-10 py-3 rounded-xl border border-slate-200 text-[14px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] bg-white"
+      {/* Marketplace hero — a distinct storefront-directory banner that sets
+          this browse/discovery tab apart from the transactional Inquiries /
+          Quotes list views, with the search integrated into the banner. */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1B3068] to-[#2a407a] p-6 sm:p-7 text-white shadow-lg">
+        <div
+          className="absolute -right-12 -top-12 w-48 h-48 bg-[#d49b35]/20 rounded-full blur-2xl pointer-events-none"
         />
-        {search && (
-          <button
-            onClick={() => setSearch('')}
-            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
+        <div className="relative z-10">
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center backdrop-blur-sm">
+              <Store className="w-4 h-4 text-[#d49b35]" />
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#d49b35]">
+              Marketplace Directory
+            </p>
+          </div>
+          <h2 className="text-2xl sm:text-[28px] font-serif font-bold leading-tight">
+            Discover Shops &amp; Providers
+          </h2>
+          <p className="text-white/55 text-[13px] mt-1">
+            {loading
+              ? 'Loading verified shops…'
+              : `${shops.length} verified ${shops.length === 1 ? 'shop' : 'shops'} · browse, compare & send an inquiry`}
+          </p>
+
+          {/* Integrated search */}
+          <div className="relative mt-5">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search by name, category, or location…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-11 pr-10 py-3.5 rounded-2xl bg-white/10 border border-white/20 text-[14px] text-white placeholder:text-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/40 focus:border-[#d49b35]/60 focus:bg-white/15 transition-all"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Category filter chips — derived from actual registered providers */}
@@ -128,24 +147,20 @@ export default function BrowseShopsView({ onSendInquiry, onViewProfile }: Browse
           {[0, 1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
-              className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm space-y-4 animate-pulse"
+              className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm animate-pulse"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-slate-100 shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-3 bg-slate-100 rounded w-2/3" />
-                  <div className="h-2 bg-slate-100 rounded w-1/3" />
+              <div className="h-20 bg-slate-200/70" />
+              <div className="px-5 -mt-9 relative">
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 ring-4 ring-white" />
+              </div>
+              <div className="px-5 pt-3 pb-5 space-y-3">
+                <div className="h-3.5 bg-slate-100 rounded w-2/3" />
+                <div className="h-2.5 bg-slate-100 rounded w-1/3" />
+                <div className="h-3 bg-slate-100 rounded w-full" />
+                <div className="flex gap-2 pt-1">
+                  <div className="h-9 bg-slate-100 rounded-xl flex-1" />
+                  <div className="h-9 bg-slate-100 rounded-xl flex-[1.4]" />
                 </div>
-              </div>
-              <div className="h-px bg-slate-100" />
-              <div className="flex gap-2">
-                <div className="h-6 bg-slate-100 rounded-full w-20" />
-                <div className="h-6 bg-slate-100 rounded-full w-16" />
-              </div>
-              <div className="h-14 bg-slate-100 rounded-xl" />
-              <div className="flex justify-between items-center">
-                <div className="h-2 bg-slate-100 rounded w-16" />
-                <div className="h-9 bg-slate-100 rounded-xl w-32" />
               </div>
             </div>
           ))}

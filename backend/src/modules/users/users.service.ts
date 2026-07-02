@@ -482,7 +482,28 @@ export class UsersService {
           if (Object.keys(columnPatch).length > 0) {
             const repo = this.profileRepoFor(activeType);
             if (repo) {
-              await (repo as any).update({ id: activeId }, columnPatch);
+              // Only write columns that actually exist on THIS profile's
+              // entity. A company field (companyName/tpin) routed to a
+              // profile type that lacks it would otherwise throw
+              // "Property X was not found in <Entity>" and 500 the whole
+              // update. Skip + log any strays instead of crashing.
+              const validCols = new Set(
+                (repo as any).metadata.columns.map((c: any) => c.propertyName),
+              );
+              const safePatch: Record<string, any> = {};
+              const skipped: string[] = [];
+              for (const [key, val] of Object.entries(columnPatch)) {
+                if (validCols.has(key)) safePatch[key] = val;
+                else skipped.push(key);
+              }
+              if (skipped.length > 0) {
+                this.logger.warn(
+                  `update(${id}): skipped [${skipped.join(',')}] — not columns on ${activeType}`,
+                );
+              }
+              if (Object.keys(safePatch).length > 0) {
+                await (repo as any).update({ id: activeId }, safePatch);
+              }
             }
           }
           if (Array.isArray(categoryIds)) {

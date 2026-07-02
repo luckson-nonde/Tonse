@@ -158,10 +158,27 @@ export const apiCall = async <T = any>(
       return { data: undefined } as any;
     }
 
-    const data = await response.json();
+    // Parse defensively — a 5xx (e.g. an upstream/proxy error when the API
+    // is down) can arrive with an EMPTY or non-JSON body, and
+    // response.json() would throw a cryptic "Unexpected end of JSON input".
+    // Read text first, then parse only if there's something to parse.
+    const raw = await response.text();
+    let data: any = {};
+    if (raw) {
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        data = { message: raw };
+      }
+    }
 
     if (!response.ok) {
-      throw new Error(data.message || `API error: ${response.status}`);
+      throw new Error(
+        data?.message ||
+          (response.status >= 500
+            ? 'The server had a problem. Please try again in a moment.'
+            : `Request failed (${response.status}).`)
+      );
     }
 
     return data;

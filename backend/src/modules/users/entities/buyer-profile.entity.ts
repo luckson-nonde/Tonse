@@ -66,6 +66,22 @@ export class BuyerProfile {
   @Column({ type: 'varchar', length: 50, nullable: true })
   subRole: string;
 
+  // ===== Business identity (COMPANY_* buyers — PACRA / ZRA) =====
+  // Corporate buyers go through the same "Business Documents" step as
+  // sellers and provide a company name, TPIN, and incorporation cert;
+  // individual buyers simply leave these null.
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  companyName: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  tpin: string;
+
+  @Column({ type: 'text', nullable: true })
+  incorporationCertUrl: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  businessLicenseId: string;
+
   // ===== Delivery / preferred-area location =====
 
   @Column({ type: 'varchar', length: 100, nullable: true })
