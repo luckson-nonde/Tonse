@@ -499,6 +499,19 @@ export const ARCHETYPE_CONFIG: Record<string, ArchetypeConfig> = {
       "availabilityDate"
     ]
   },
+  "vehicles-buy": {
+    "categoryName": "Vehicles (New & Used)",
+    "archetype": "PRODUCT",
+    "quoteMapping": {
+      "quantity": "unitPrice",
+      "duration": "rate"
+    },
+    "requiredAdditions": [
+      "warranty",
+      "deliveryFee",
+      "leadTime"
+    ]
+  },
   "car-parts-new": {
     "categoryName": "Car Parts & Spares (Buy New)",
     "archetype": "PRODUCT",
