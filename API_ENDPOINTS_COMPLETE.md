@@ -506,6 +506,8 @@ Response: 204 No Content
 
 ### Products Endpoints
 
+> **Relationship to Shops:** products key off `sellerId` only — there is **no `shopId`** on a product. A shop is the seller's storefront (`shops.sellerId` is unique, one shop per seller), so "a shop's products" = `GET /products/seller/{sellerId}` using the shop's `sellerId`. See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md).
+
 #### Create Product
 ```http
 POST /api/products
@@ -632,6 +634,8 @@ Response: 204 No Content
 ---
 
 ### Shops Endpoints
+
+> **Relationship to Products:** a shop is a seller's storefront — `shops.sellerId` is unique (OneToOne, one shop per seller). Products are **not** linked to shops directly (no `shopId` FK); both key off the seller, so a shop's catalog is `GET /products/seller/{sellerId}`. See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md).
 
 #### Create Shop
 ```http
