@@ -83,8 +83,12 @@ export default function QuoteSubmissionForm({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { fields: quoteSchema, zodSchema } = useMemo(
-    () => generateQuoteSchema(inquiry.category || '', inquiry.attributes || {}, 'EXPRESS'),
-    [inquiry.category, inquiry.attributes]
+    // Prefer the stable category id: the backend hydrates `category` as a
+    // comma-joined display NAME, which can never match the id-keyed
+    // QUOTE_SCHEMA_BY_CATEGORY_ID overrides. Same pattern as
+    // ProviderLeadsView's schema lookups.
+    () => generateQuoteSchema(inquiry.categoryIds?.[0] || inquiry.category || '', inquiry.attributes || {}, 'EXPRESS'),
+    [inquiry.categoryIds, inquiry.category, inquiry.attributes]
   );
 
   const { control, handleSubmit, watch, formState: { errors } } = useForm({

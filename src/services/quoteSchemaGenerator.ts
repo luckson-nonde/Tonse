@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { generateZodSchema } from './quoteValidation';
-import { isRepairVariant } from './categories';
+import { isRepairVariant, CATEGORIES_DB, getCategoryType, type Category } from './categories';
 
 export interface QuoteField {
   name: string;
@@ -42,6 +42,41 @@ const detectArchetype = (
   if (cat.includes('service') || cat.includes('catering') || cat.includes('photography') || cat.includes('decor') || cat.includes('entertainment') || cat.includes('event')) return 'SERVICE';
   if (cat.includes('equipment') || cat.includes('rental') || cat.includes('hire') || cat.includes('product') || cat.includes('supply') || cat.includes('mobile') || cat.includes('electronic')) return 'PRODUCT';
   return 'GENERIC';
+};
+
+// Catalog-first archetype resolution. When the category row is known, derive
+// the archetype from the catalog's own type mapping (getCategoryType) instead
+// of guessing from display-name substrings — the keyword fallback misses names
+// like "Laptops & Computers (Buy New)" and collapses them to GENERIC. Repair
+// variants win first, matching detectArchetype's precedence.
+const archetypeFromRow = (
+  row: Category | undefined
+): 'REPAIR' | 'PRODUCT' | 'SERVICE' | 'VENUE' | 'LABOUR' | null => {
+  if (!row) return null;
+  if (isRepairVariant(row.name)) return 'REPAIR';
+  switch (getCategoryType(row.id)) {
+    case 'PRODUCTS': return 'PRODUCT';
+    case 'SERVICES': return 'SERVICE';
+    case 'VENUES': return 'VENUE';
+    case 'LABOR': return 'LABOUR';
+    default: return null;
+  }
+};
+
+// Resolve a category row whether the caller passed a stable id
+// ('vehicles-buy') or a display name ('Vehicles (New & Used)'). The backend
+// hydrates lead.category as a comma-joined display-name string, so an exact
+// id lookup alone can never match. Mirrors getCategorySchema's id-or-name
+// resolution in categories/catalog.ts.
+const resolveCategoryRow = (input: string): Category | undefined => {
+  const raw = (input || '').trim();
+  if (!raw) return undefined;
+  const lower = raw.toLowerCase();
+  const firstSegment = raw.split(',')[0].trim().toLowerCase();
+  return (
+    CATEGORIES_DB.find((c) => c.id === raw || c.name.toLowerCase() === lower) ||
+    CATEGORIES_DB.find((c) => c.id === firstSegment || c.name.toLowerCase() === firstSegment)
+  );
 };
 
 // Per-category quote-shape overrides keyed by stable category id. When a
@@ -487,13 +522,18 @@ export const generateQuoteSchema = (
   inquiryAttributes: Record<string, any>,
   processType: 'EXPRESS' | 'STANDARD' = 'STANDARD'
 ): { fields: QuoteField[]; zodSchema: z.ZodObject<any> } => {
-  const overrideBuilder = QUOTE_SCHEMA_BY_CATEGORY_ID[(inquiryCategory || '').toLowerCase()];
+  // Resolve id-or-name so the id-keyed override map is reachable no matter
+  // which form the caller passed (see resolveCategoryRow).
+  const categoryRow = resolveCategoryRow(inquiryCategory);
+  const overrideBuilder =
+    QUOTE_SCHEMA_BY_CATEGORY_ID[categoryRow?.id ?? (inquiryCategory || '').toLowerCase()];
   if (overrideBuilder) {
     const fields = overrideBuilder(inquiryAttributes || {});
     return { fields, zodSchema: generateZodSchema(fields) };
   }
 
-  const archetype = detectArchetype(inquiryCategory);
+  // Catalog truth first; keyword sniffing only for unresolvable strings.
+  const archetype = archetypeFromRow(categoryRow) ?? detectArchetype(inquiryCategory);
   const schema: QuoteField[] = [];
 
   if (archetype === 'REPAIR') {
