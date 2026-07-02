@@ -17,13 +17,38 @@ export class InquiriesService {
   ) {}
 
   /**
+   * The frontend sends items/preferences/attributes as JSON *strings*
+   * (the DTO validates them with @IsJSON). TypeORM's `json` column type
+   * re-stringifies whatever value it is given, so persisting the raw
+   * string double-encodes the data (string-wrapped JSON in Postgres —
+   * the defect the frontend's robustParse() papers over). Parse to real
+   * objects before create/save, same as QuotesService.parseJsonFields.
+   */
+  private parseJsonFields<T extends object>(data: T): T {
+    const parsed: any = { ...data };
+    const jsonFields = ['items', 'preferences', 'attributes'];
+
+    jsonFields.forEach((field) => {
+      if (parsed[field] && typeof parsed[field] === 'string') {
+        try {
+          parsed[field] = JSON.parse(parsed[field]);
+        } catch (e) {
+          // If parsing fails, leave as is
+        }
+      }
+    });
+
+    return parsed as T;
+  }
+
+  /**
    * Insert the inquiry plus its `inquiry_categories` rows in a single
    * transaction. categoryIds is the *new* shape (Phase: matching); the
    * legacy `category: string` is gone — write paths must now provide
    * an array of stable category ids (e.g. 'mobile-phones-buy').
    */
   async create(createInquiryDto: CreateInquiryDto): Promise<Inquiry> {
-    const { categoryIds, ...rest } = createInquiryDto;
+    const { categoryIds, ...rest } = this.parseJsonFields(createInquiryDto);
     return this.dataSource.transaction(async (manager) => {
       const inquiryRepo = manager.getRepository(Inquiry);
       const junctionRepo = manager.getRepository(InquiryCategory);
@@ -113,7 +138,9 @@ export class InquiriesService {
    * title, etc.) write through directly.
    */
   async update(id: string, updateInquiryDto: UpdateInquiryDto): Promise<Inquiry> {
-    const { categoryIds, ...rest } = updateInquiryDto as UpdateInquiryDto & {
+    const { categoryIds, ...rest } = this.parseJsonFields(
+      updateInquiryDto,
+    ) as UpdateInquiryDto & {
       categoryIds?: string[];
     };
     if (categoryIds === undefined) {

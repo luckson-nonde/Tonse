@@ -485,9 +485,16 @@ export default function BuyerDashboard() {
         CATEGORIES_DB.find((c) => c.id === lastCategoryId)?.name ||
         (isLabour ? pendingInquiry.category : null) ||
         'Inquiry';
-      const title = pendingInquiry.attributes?.brand
-        ? `${pendingInquiry.attributes.brand} ${pendingInquiry.attributes.model || ''} Request`
-        : `${lastCategoryName} Request`;
+      // Prefer the buyer's own words: most schemas ask "What are you looking
+      // for?" as attributes.title. Only synthesize from brand/model (or the
+      // category name) when the buyer didn't type one — previously the typed
+      // answer was always discarded from the headline.
+      const typedTitle = (pendingInquiry.attributes?.title || '').trim();
+      const title = typedTitle
+        ? typedTitle
+        : pendingInquiry.attributes?.brand
+          ? `${pendingInquiry.attributes.brand} ${pendingInquiry.attributes.model || ''} Request`
+          : `${lastCategoryName} Request`;
 
       // Merge the payment receipt back into preferences so the backend can
       // bill, audit, and enforce the auto-close cap.
