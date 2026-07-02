@@ -87,28 +87,6 @@ function getMaxDOB(): string {
   return max.toISOString().split('T')[0];
 }
 
-const REGISTER_HERO: Record<string, HeroContent> = {
-  individual: {
-    title: 'Verify in Minutes. Trade for Years.',
-    image:
-      'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1920&h=1080',
-    bullets: [
-      'NRC-matched identity check',
-      'Encrypted at rest, in transit',
-      'Trusted by 1,200+ Zambian businesses',
-    ],
-  },
-  business: {
-    title: 'Register Your Business for Trade.',
-    image:
-      'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=1920&h=1080',
-    bullets: [
-      'PACRA-verified business profile',
-      'TPIN-ready invoicing',
-      'Direct access to enterprise buyers',
-    ],
-  },
-};
 
 export default function Register() {
   try {
@@ -193,13 +171,6 @@ export default function Register() {
       ...(isCompany ? [{ id: 5, label: 'Business' }] : []),
     ];
 
-    const currentHero = useMemo(() => {
-      try {
-        return isCompany ? REGISTER_HERO.business : REGISTER_HERO.individual;
-      } catch {
-        return REGISTER_HERO.individual;
-      }
-    }, [isCompany]);
 
     const maxDOB = getMaxDOB();
     const phoneDigits = getPhoneDigits(phone);
@@ -556,7 +527,6 @@ export default function Register() {
             if (step < currentStep) setCurrentStep(step);
           },
         }}
-        hero={currentHero}
       >
         <div className="space-y-5">
           {error && (

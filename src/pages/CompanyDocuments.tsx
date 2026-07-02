@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import AuthSplitLayout from '../components/AuthSplitLayout';
 import FloatingInput from '../components/FloatingInput';
-import { HeroContent } from '../types';
 import { getPrimaryBusinessType, BusinessType } from '../services/categories';
 import { useFieldValidation, type Validator } from '../hooks/useFieldValidation';
 import RegistrationLoadingOverlay from '../components/RegistrationLoadingOverlay';
@@ -29,11 +28,9 @@ function formatTPIN(raw: string): string {
 const TPIN_REGEX = /^\d{10}$/;
 
 // Per-businessType configuration — controls which fields render, which are
-// required, the section labels, and the hero copy. Phase 3 of the
-// architectural rule (role + subRole + category + specification → BusinessType
-// → tailored UX).
+// required, and the section labels. Phase 3 of the architectural rule
+// (role + subRole + category + specification → BusinessType → tailored UX).
 interface DocsConfig {
-  hero: HeroContent;
   brandLabel: string;
   brandHint: string;
   brandIcon: typeof Building2;
@@ -50,39 +47,6 @@ interface DocsConfig {
   activationCopy: string;
 }
 
-const FORMAL_HERO: HeroContent = {
-  title: 'Verified in 48 Hours.',
-  image:
-    'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=1920&h=1080',
-  bullets: [
-    'PACRA-issued certificate match',
-    'ZRA-registered TPIN on every invoice',
-    'Visible to enterprise buyers',
-  ],
-};
-
-const REPAIR_HERO: HeroContent = {
-  title: 'Activate Your Repair Bench.',
-  image:
-    'https://images.unsplash.com/photo-1581092334651-ddf26d9a09d0?auto=format&fit=crop&q=80&w=1920&h=1080',
-  bullets: [
-    'Skill verified by Tonse compliance',
-    'No corporate paperwork required',
-    'Listed in nearby-shops searches',
-  ],
-};
-
-const SERVICES_HERO: HeroContent = {
-  title: 'List Your Services.',
-  image:
-    'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&q=80&w=1920&h=1080',
-  bullets: [
-    'Service rate card displayed to clients',
-    'Tax registration optional for sole providers',
-    'Direct booking from the service catalog',
-  ],
-};
-
 function getDocsConfig(type: BusinessType): DocsConfig {
   // PRODUCTS_AND_REPAIR retired in Phase 1.5 — a phone shop that both
   // sells and repairs has archetypes=['RETAIL','REPAIR'] and the docs
@@ -92,7 +56,6 @@ function getDocsConfig(type: BusinessType): DocsConfig {
   switch (type) {
     case 'REPAIR':
       return {
-        hero: REPAIR_HERO,
         brandLabel: 'Repair Shop Name',
         brandHint: 'The name customers will see on the marketplace.',
         brandIcon: Wrench,
@@ -107,7 +70,6 @@ function getDocsConfig(type: BusinessType): DocsConfig {
 
     case 'SERVICE':
       return {
-        hero: SERVICES_HERO,
         brandLabel: 'Service Brand Name',
         brandHint: 'The name clients will see when booking your service.',
         brandIcon: Award,
@@ -122,7 +84,6 @@ function getDocsConfig(type: BusinessType): DocsConfig {
 
     case 'WHOLESALE':
       return {
-        hero: FORMAL_HERO,
         brandLabel: 'Company Legal Name',
         brandHint: 'Exactly as registered with PACRA.',
         brandIcon: Building2,
@@ -138,7 +99,6 @@ function getDocsConfig(type: BusinessType): DocsConfig {
     case 'EVENTS':
     case 'ENTERTAINMENT':
       return {
-        hero: FORMAL_HERO,
         brandLabel: 'Brand / Stage Name',
         brandHint: 'The name your audience knows you by.',
         brandIcon: Building2,
@@ -154,7 +114,6 @@ function getDocsConfig(type: BusinessType): DocsConfig {
     case 'RETAIL':
     default:
       return {
-        hero: FORMAL_HERO,
         brandLabel: 'Company Legal Name',
         brandHint: 'Exactly as registered with PACRA.',
         brandIcon: Building2,
@@ -308,7 +267,6 @@ export default function CompanyDocuments() {
         total: 4,
         labels: ['Profile', 'Location', 'Credentials', 'Business'],
       }}
-      hero={cfg.hero}
     >
       <form onSubmit={handleSubmit} className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         {error && (

@@ -5,19 +5,6 @@ import { Mail, Key, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import AuthSplitLayout from '../components/AuthSplitLayout';
 import FloatingInput from '../components/FloatingInput';
 import Logo from '../components/Logo';
-import { HeroContent } from '../types';
-
-// Hero data: bullets are the real compliance signals (previously
-// exiled to the bottom-corner footer as 11px gray throwaway). Pulling
-// them up lets the hero do the work of building first-time confidence
-// while collapsing the duplicated trust system that had two places
-// saying the same thing in two different treatments.
-const LOGIN_HERO: HeroContent = {
-  title: 'Welcome back to the gold standard.',
-  image:
-    'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=1920&h=1080',
-  bullets: ['ZRA-compliant invoicing', 'Escrow on every order', 'ISO 27001 certified'],
-};
 
 export default function Login() {
   const { login } = useAuth();
@@ -63,7 +50,7 @@ export default function Login() {
   };
 
   return (
-    <AuthSplitLayout hero={LOGIN_HERO} paneTone="white" hideHeader trustBand>
+    <AuthSplitLayout paneTone="white" hideHeader trustBand>
       {/* Single sensible-width column. AuthSplitLayout's outer
           container scales out to 1040px at xl+ for multi-step
           registration forms that need 2-column inner layouts; Login's

@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowLeft } from 'lucide-react';
 import Logo from './Logo';
-import { HeroContent } from '../types';
+import MarketplaceShowcase from './MarketplaceShowcase';
 
 interface AuthSplitLayoutProps {
   children: React.ReactNode;
@@ -18,7 +18,6 @@ interface AuthSplitLayoutProps {
     /** When provided, completed steps become clickable to jump back to them. */
     onStepClick?: (step: number) => void;
   };
-  hero?: HeroContent;
   /** Right-pane background tone. `'cream'` (#fffaf5) is the legacy
    *  default used by every multi-step registration surface. `'white'`
    *  (#ffffff) is the premium B2B treatment used by Login — neutralises
@@ -37,20 +36,12 @@ interface AuthSplitLayoutProps {
   trustBand?: boolean;
 }
 
-const DEFAULT_HERO: HeroContent = {
-  title: 'The Gold Standard of Trade.',
-  image:
-    'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=1920&h=1080',
-  bullets: ['Efficient Procurement', 'Direct Messaging', 'Verified Suppliers'],
-};
-
 export default function AuthSplitLayout({
   children,
   title,
   subtitle,
   onBack,
   stepper,
-  hero = DEFAULT_HERO,
   paneTone = 'cream',
   hideHeader = false,
   trustBand = false,
@@ -64,57 +55,12 @@ export default function AuthSplitLayout({
 
   return (
     <div className={`min-h-screen flex flex-col lg:flex-row font-sans ${wrapperBg}`}>
-      {/* Left Pane (Hero).
-          Overlay collapsed from 4 layers to 1. Previously a navy radial
-          (`rgba(20,37,80,0.55)`) was painted on top of the slate base
-          (`brand-dark` resolves to `#1e293b` per tailwind.config.ts) —
-          the colour mismatch was the visible "blue rectangle" behind
-          partial words in the hero headline. The single linear gradient
-          provides equivalent text legibility without the patch. */}
-      <div className="hidden lg:flex lg:w-[42%] relative bg-brand-dark overflow-hidden">
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url('${hero.image}')` }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/45 to-black/70" />
-
-        <div className="relative z-10 flex flex-col justify-between p-10 lg:p-14 xl:p-16 w-full">
-          <Logo variant="light" className="text-3xl lg:text-4xl" />
-
-          {/* No `textShadow` — the previous `rgba(20,37,80,0.45)` halo
-              was the same navy as the dropped radial and leaked the
-              same patch effect at higher zoom. The plain linear
-              gradient above already gives the headline enough
-              contrast against the warehouse photo. */}
-          <div className="text-white space-y-7">
-            <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#C9973A]">
-              Tonse Trade Portal
-            </p>
-            <h1 className="text-[40px] xl:text-[52px] font-serif font-bold tracking-tight leading-[1.05] max-w-md">
-              {hero.title}
-            </h1>
-            <ul className="space-y-3 text-[15px] text-white/85 max-w-sm">
-              {hero.bullets.map((bullet, idx) => (
-                <li
-                  key={idx}
-                  className="flex items-center gap-3 animate-in fade-in slide-in-from-left-4 duration-500"
-                  style={{ animationDelay: `${idx * 100}ms` }}
-                >
-                  <div className="h-px w-6 bg-[#C9973A]" />
-                  <span className="font-medium">{bullet}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="flex items-center justify-between text-[11px] font-medium text-white/40">
-            <span>© 2026 TONSE Marketplace</span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              End-to-end encrypted
-            </span>
-          </div>
-        </div>
+      {/* Left Pane — permanent marketplace showcase. Identical across
+          Login and every registration step (that's the point: navigating
+          between auth states reads as "only the right column changed").
+          Sticky so it stays put while a long right column scrolls. */}
+      <div className="hidden lg:block lg:w-[42%] lg:sticky lg:top-0 lg:h-screen overflow-hidden">
+        <MarketplaceShowcase variant="panel" />
       </div>
 
       {/* Right Pane (Form) */}
@@ -161,17 +107,23 @@ export default function AuthSplitLayout({
             it without stretching the simple steps awkwardly. */}
         <div className="w-full max-w-[440px] md:max-w-[560px] lg:max-w-[860px] xl:max-w-[1040px] relative z-10 py-10 lg:py-16">
           {/* Mobile Header (Logo + Back) */}
-          <div className="lg:hidden flex items-center justify-center relative mb-10">
+          <div className="lg:hidden flex items-center justify-center relative mb-6">
             {onBack && (
               <button
                 onClick={onBack}
-                className="absolute left-0 p-1 text-slate-400 hover:text-[#C9973A] transition-colors"
+                className="absolute left-0 p-1 text-slate-400 hover:text-slate-600 transition-colors"
                 aria-label="Go back"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
             )}
             <Logo className="text-3xl" />
+          </div>
+
+          {/* Mobile: collapsed left panel — a slim scrollable category
+              ribbon above the form; the form stays front-and-center. */}
+          <div className="lg:hidden mb-8">
+            <MarketplaceShowcase variant="ribbon" />
           </div>
 
           {/* Progress — one continuous bar filling toward completion. No
@@ -198,7 +150,7 @@ export default function AuthSplitLayout({
               {onBack && (
                 <button
                   onClick={onBack}
-                  className="hidden lg:flex items-center text-slate-400 hover:text-[#C9973A] transition-colors text-[13px] font-sans font-medium w-fit group mb-2"
+                  className="hidden lg:flex items-center text-slate-400 hover:text-slate-600 transition-colors text-[13px] font-sans font-medium w-fit group mb-2"
                 >
                   <ArrowLeft className="w-4 h-4 mr-1.5 group-hover:-translate-x-1 transition-transform" />
                   Back
@@ -217,6 +169,13 @@ export default function AuthSplitLayout({
           )}
 
           {children}
+
+          {/* Mobile: the marketplace showcase stacks BELOW the active
+              form/flow — the form keeps priority, the showcase invites
+              scrolling. Desktop shows it in the left panel instead. */}
+          <div className="lg:hidden">
+            <MarketplaceShowcase variant="inline" />
+          </div>
         </div>
       </div>
     </div>
