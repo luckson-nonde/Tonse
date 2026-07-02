@@ -1,6 +1,6 @@
 /**
  * One-shot extractor: pulls the BASE_CATEGORIES_DB array out of
- * `src/services/categories.ts` and writes a stripped JSON catalog
+ * `src/services/categories/catalog.ts` and writes a stripped JSON catalog
  * (id, name, parentId, baseName, type) the backend seeder consumes.
  *
  * Run from the repo root:
@@ -14,7 +14,7 @@ const path = require('path');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const src = fs.readFileSync(
-  path.join(repoRoot, 'src', 'services', 'categories.ts'),
+  path.join(repoRoot, 'src', 'services', 'categories', 'catalog.ts'),
   'utf8'
 );
 

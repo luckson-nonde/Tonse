@@ -280,18 +280,25 @@
     "type": null
   },
   {
-    "id": "car-parts-new",
-    "name": "Car Parts & Spares (Buy New)",
+    "id": "vehicles-buy",
+    "name": "Vehicles (New & Used)",
     "parentId": "automotive",
-    "baseName": "Car Parts & Spares",
-    "type": "buy"
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "car-parts-new",
+    "name": "New Car Parts",
+    "parentId": "automotive",
+    "baseName": null,
+    "type": null
   },
   {
     "id": "car-parts-breakers",
-    "name": "Car Parts & Spares (Buy from Car Breakers)",
+    "name": "Used Car Parts (Breakers)",
     "parentId": "automotive",
-    "baseName": "Car Parts & Spares",
-    "type": "buy"
+    "baseName": null,
+    "type": null
   },
   {
     "id": "car-accessories",
