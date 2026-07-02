@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { UserEmail } from './user-email.entity';
-import { IdentityAudit } from './identity-audit.entity';
+import { IdentityAudit } from '../../identity-audit/entities/identity-audit.entity';
 
 /**
  * User Entity — auth identity ONLY (Phase 3c contract).
