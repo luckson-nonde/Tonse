@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Request, Get } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Get, Query } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -15,6 +15,21 @@ export class AuthController {
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
+  }
+
+  // Public availability check so the frontend can validate the email against
+  // the database on the credentials step — before the user fills the rest of
+  // the form and only hits a duplicate at the final submit.
+  @Get('check-email')
+  async checkEmail(@Query('email') email: string) {
+    const value = (email || '').trim().toLowerCase();
+    if (!value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      // Malformed — the client's format validator owns that message; report
+      // "available" so we never show a confusing "taken" for bad input.
+      return { available: true };
+    }
+    const existing = await this.usersService.findByEmail(value).catch(() => null);
+    return { available: !existing };
   }
 
   @Post('login')

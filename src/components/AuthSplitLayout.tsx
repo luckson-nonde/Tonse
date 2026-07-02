@@ -174,49 +174,16 @@ export default function AuthSplitLayout({
             <Logo className="text-3xl" />
           </div>
 
-          {/* Stepper — minimal progress bar with step label */}
+          {/* Progress — one continuous bar filling toward completion. No
+              step counter or "X of Y"; just a calm sense of how far along. */}
           {stepper && (
             <div className="mb-10">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#C9973A]">
-                  Step {String(stepper.current).padStart(2, '0')} / {String(stepper.total).padStart(2, '0')}
-                </p>
-                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#1a1612]/55">
-                  {stepper.labels[stepper.current - 1]}
-                </p>
+              <div className="h-1.5 bg-[#e8e4dc] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-[#C9973A] to-[#D5A547] rounded-full transition-[width] duration-500 ease-out"
+                  style={{ width: `${(stepper.current / stepper.total) * 100}%` }}
+                />
               </div>
-              {stepper.onStepClick ? (
-                // Segmented, clickable progress — every completed segment
-                // before the current step jumps back to that step on click.
-                <div className="flex gap-1">
-                  {Array.from({ length: stepper.total }).map((_, i) => {
-                    const step = i + 1;
-                    const done = step <= stepper.current;
-                    const clickable = step < stepper.current;
-                    const cls = `h-[3px] flex-1 rounded-full transition-all ${
-                      done ? 'bg-gradient-to-r from-[#C9973A] to-[#D5A547]' : 'bg-[#e8e4dc]'
-                    }`;
-                    return clickable ? (
-                      <button
-                        key={step}
-                        type="button"
-                        onClick={() => stepper.onStepClick!(step)}
-                        aria-label={`Go back to ${stepper.labels[i]}`}
-                        className={`${cls} cursor-pointer hover:opacity-70`}
-                      />
-                    ) : (
-                      <div key={step} className={cls} />
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="h-[3px] bg-[#e8e4dc] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-[#C9973A] to-[#D5A547] rounded-full transition-[width] duration-700 ease-out"
-                    style={{ width: `${(stepper.current / stepper.total) * 100}%` }}
-                  />
-                </div>
-              )}
             </div>
           )}
 
@@ -237,7 +204,7 @@ export default function AuthSplitLayout({
                   Back
                 </button>
               )}
-              <h2 className="text-[40px] lg:text-[44px] font-serif font-bold text-brand-dark leading-[1.05] tracking-tight">
+              <h2 className="text-[24px] sm:text-[34px] lg:text-[44px] font-serif font-bold text-brand-dark leading-[1.1] lg:leading-[1.05] tracking-tight">
                 {title}
               </h2>
               <div className="flex items-center gap-3">

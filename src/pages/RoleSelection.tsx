@@ -316,7 +316,7 @@ export default function RoleSelection() {
       onBack={isViewingSubcategories ? undefined : (tier > 1 ? handleBack : () => navigate('/login'))}
       hero={currentHero}
     >
-      <div className="relative overflow-hidden min-h-100">
+      <div className="relative overflow-hidden min-h-[240px] lg:min-h-100">
         <AnimatePresence mode="wait">
           {tier === 1 ? (
             <motion.div

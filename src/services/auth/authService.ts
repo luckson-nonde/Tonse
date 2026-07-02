@@ -118,6 +118,19 @@ export const authService = {
   },
 
   /**
+   * Check whether an email is still available (not already registered).
+   * Used by the registration form to validate the email against the DB on
+   * blur, so the user isn't sent back from the final step for a duplicate.
+   */
+  checkEmailAvailable: async (email: string): Promise<boolean> => {
+    const response = await apiClient.get<{ available: boolean }>(
+      `/auth/check-email?email=${encodeURIComponent(email)}`
+    );
+    // Default to available on an unexpected shape so we never falsely block.
+    return response.data?.available ?? true;
+  },
+
+  /**
    * Get current logged-in user
    */
   getCurrentUser: async (): Promise<CurrentUserResponse> => {

@@ -238,6 +238,9 @@ export default function CompanyDocuments() {
     // /login so the next entry into the app is a clean, fully-
     // hydrated authenticated session against the freshly-created
     // profile + categories junction rows.
+    // Capture the email before logout clears the session, so the login page
+    // can pre-fill it and the user only has to type their password.
+    const registeredEmail = user?.email;
     try {
       await authService.logout();
     } catch (e) {
@@ -245,7 +248,7 @@ export default function CompanyDocuments() {
       // the local fallthrough in authService.logout already cleared
       // tokens. Don't block the redirect.
     }
-    navigate('/login', { replace: true });
+    navigate('/login?registered=1', { replace: true, state: { email: registeredEmail } });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

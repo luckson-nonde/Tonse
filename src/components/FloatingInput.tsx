@@ -1,11 +1,14 @@
 import React from 'react';
-import { LucideIcon, AlertCircle } from 'lucide-react';
+import { LucideIcon, AlertCircle, Check } from 'lucide-react';
 
 interface FloatingInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
   icon?: LucideIcon;
   rightElement?: React.ReactNode;
   error?: string;
+  /** When true (and no error), shows a green border + check — positive
+   *  reinforcement once a field has passed validation. */
+  valid?: boolean;
   hint?: string;
   /** Background tone of the input fill and the floating-label chip.
    *  Must match the surrounding pane — when the pane is cream
@@ -23,22 +26,29 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
   rightElement,
   className = '',
   error,
+  valid,
   hint,
   tone = 'cream',
   ...props
 }) => {
   const hasError = !!error;
+  const isValid = !!valid && !hasError;
   const fillBg = tone === 'white' ? 'bg-white' : 'bg-brand-white';
+  // Right padding grows to make room for the green check and/or a
+  // right-element (e.g. the show/hide-password eye).
+  const rightPad = rightElement && isValid ? 'pr-[68px]' : rightElement || isValid ? 'pr-12' : 'pr-4';
 
   return (
     <div className="relative w-full group">
       <div className="relative">
-        {/* Left-edge accent — gold on focus, red on error */}
+        {/* Left-edge accent — gold on focus, red on error, green when valid */}
         <div
           className={`absolute left-0 top-3 bottom-3 w-[2px] rounded-full origin-center transition-all duration-300 z-10 ${
             hasError
               ? 'bg-rose-500 opacity-100 scale-y-100'
-              : 'bg-[#C9973A] opacity-0 scale-y-0 group-focus-within:opacity-100 group-focus-within:scale-y-100'
+              : isValid
+                ? 'bg-emerald-500 opacity-100 scale-y-100'
+                : 'bg-[#C9973A] opacity-0 scale-y-0 group-focus-within:opacity-100 group-focus-within:scale-y-100'
           }`}
         />
 
@@ -48,7 +58,9 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
               className={`h-5 w-5 transition-colors duration-200 ${
                 hasError
                   ? 'text-rose-400'
-                  : 'text-[#C9973A]/55 group-focus-within:text-[#C9973A]'
+                  : isValid
+                    ? 'text-emerald-500'
+                    : 'text-[#C9973A]/55 group-focus-within:text-[#C9973A]'
               }`}
               strokeWidth={2}
             />
@@ -59,7 +71,7 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
           {...props}
           placeholder=" "
           aria-invalid={hasError || undefined}
-          className={`peer block w-full ${Icon ? 'pl-[52px]' : 'pl-4'} ${rightElement ? 'pr-12' : 'pr-4'} h-[58px]
+          className={`peer block w-full ${Icon ? 'pl-[52px]' : 'pl-4'} ${rightPad} h-[58px]
                      ${fillBg} border
                      rounded-2xl text-[15px] text-brand-dark
                      shadow-[inset_0_1px_2px_rgba(26,22,18,0.04)]
@@ -67,7 +79,9 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
                      ${
                        hasError
                          ? 'border-rose-300 focus:border-rose-500 focus:shadow-[0_0_0_4px_rgba(244,63,94,0.1),inset_0_1px_2px_rgba(26,22,18,0.02)]'
-                         : 'border-[#e8e0d0] hover:border-[#d6c8a8] focus:border-[#C9973A] focus:shadow-[0_0_0_4px_rgba(201,151,58,0.1),inset_0_1px_2px_rgba(26,22,18,0.02)]'
+                         : isValid
+                           ? 'border-emerald-300 focus:border-emerald-500 focus:shadow-[0_0_0_4px_rgba(16,185,129,0.1),inset_0_1px_2px_rgba(26,22,18,0.02)]'
+                           : 'border-[#e8e0d0] hover:border-[#d6c8a8] focus:border-[#C9973A] focus:shadow-[0_0_0_4px_rgba(201,151,58,0.1),inset_0_1px_2px_rgba(26,22,18,0.02)]'
                      }
                      ${className}`}
         />
@@ -83,14 +97,19 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
                      ${
                        hasError
                          ? 'text-rose-500 peer-focus:text-rose-500'
-                         : 'text-[#1a1612]/45 peer-focus:text-[#C9973A]'
+                         : isValid
+                           ? 'text-emerald-600 peer-focus:text-emerald-600'
+                           : 'text-[#1a1612]/45 peer-focus:text-[#C9973A]'
                      }`}
         >
           {label}
         </label>
 
-        {rightElement && (
-          <div className="absolute inset-y-0 right-0 pr-4 flex items-center z-20">
+        {(isValid || rightElement) && (
+          <div className="absolute inset-y-0 right-0 pr-4 flex items-center gap-2 z-20">
+            {isValid && (
+              <Check className="w-4 h-4 text-emerald-500 shrink-0" strokeWidth={3} />
+            )}
             {rightElement}
           </div>
         )}
@@ -99,7 +118,7 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
       {(error || hint) && (
         <p
           className={`text-[11px] mt-1.5 ml-1 leading-snug flex items-center gap-1.5 ${
-            hasError ? 'text-rose-500 font-medium' : 'text-[#1a1612]/45'
+            hasError ? 'text-rose-500 font-medium' : isValid ? 'text-emerald-600 font-medium' : 'text-[#1a1612]/45'
           }`}
         >
           {hasError && <AlertCircle className="w-3 h-3 shrink-0" strokeWidth={2.5} />}

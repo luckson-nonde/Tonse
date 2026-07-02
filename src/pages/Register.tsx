@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth, type Role } from '../AuthContext';
 import { authService } from '../services/auth/authService';
@@ -36,6 +36,7 @@ import NrcDocumentCapture from '../components/NrcDocumentCapture';
 import LocationDetails from '../components/LocationDetails';
 import RegistrationStepShell from '../components/RegistrationStepShell';
 import { useOnboardingDraft } from '../hooks/useOnboardingDraft';
+import { useFieldValidation, type Validator } from '../hooks/useFieldValidation';
 
 // Zambian NRC format: XXXXXX/XX/X (6 digits / 2 digits / 1 digit)
 function formatNRC(raw: string): string {
@@ -118,29 +119,75 @@ function ReviewSection({
   onEdit: () => void;
   rows: string[][];
 }) {
+  // The whole card is clickable — tap anywhere (not just "Edit") to jump back
+  // to that step, so a missing/incomplete detail is one tap away from fixing.
   return (
-    <section className="rounded-2xl border border-[#e8e0d0]/70 bg-brand-white overflow-hidden">
+    <button
+      type="button"
+      onClick={onEdit}
+      className="group block w-full text-left rounded-2xl border border-[#e8e0d0]/70 bg-brand-white overflow-hidden hover:border-[#C9973A]/50 hover:shadow-[0_4px_18px_-12px_rgba(201,151,58,0.35)] transition-all"
+    >
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#e8e4dc] bg-[#faf6ee]">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#C9973A]">{title}</p>
-        <button
-          type="button"
-          onClick={onEdit}
-          className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#C9973A] hover:text-[#B08432] inline-flex items-center gap-1 transition-colors"
-        >
+        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#C9973A] group-hover:text-[#B08432] inline-flex items-center gap-1 transition-colors">
           <Pencil className="w-3 h-3" /> Edit
-        </button>
+        </span>
       </div>
       <dl className="divide-y divide-[#f1ede5]">
-        {rows.map((row) => (
-          <div key={row[0]} className="flex items-center justify-between gap-4 px-4 py-2.5">
-            <dt className="text-[11px] font-medium text-[#1a1612]/50 shrink-0">{row[0]}</dt>
-            <dd className="text-[13px] font-semibold text-[#1a1612] text-right min-w-0 truncate">
-              {row[1] || '—'}
-            </dd>
-          </div>
-        ))}
+        {rows.map((row) => {
+          const missing = !row[1] || ['Not added', 'Not pinned', '—'].includes(row[1]);
+          return (
+            <div key={row[0]} className="flex items-center justify-between gap-4 px-4 py-2.5">
+              <dt className="text-[11px] font-medium text-[#1a1612]/50 shrink-0">{row[0]}</dt>
+              <dd
+                className={`text-[13px] font-semibold text-right min-w-0 truncate ${
+                  missing ? 'text-amber-600' : 'text-[#1a1612]'
+                }`}
+              >
+                {row[1] || 'Not added'}
+              </dd>
+            </div>
+          );
+        })}
       </dl>
-    </section>
+    </button>
+  );
+}
+
+const LOAD_STAGES = [
+  'Securing your credentials…',
+  'Saving your profile…',
+  'Preparing your workspace…',
+  'Almost there…',
+];
+
+// Full-screen progress overlay for the final account creation — gives the
+// user clear on-screen progress (staged messages + a rough time estimate)
+// instead of just a spinner buried in the button.
+function RegistrationLoadingOverlay({ stage }: { stage: number }) {
+  const pct = Math.round(((stage + 1) / LOAD_STAGES.length) * 100);
+  const remaining = Math.max(0, LOAD_STAGES.length - 1 - stage) * 2; // ~seconds
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-[#1a1612]/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-[360px] bg-brand-white rounded-3xl p-8 shadow-2xl text-center">
+        <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white flex items-center justify-center shadow-lg shadow-[#C9973A]/30 mb-5">
+          <RefreshCw className="w-7 h-7 animate-spin" strokeWidth={2.5} />
+        </div>
+        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#C9973A] mb-1">
+          Creating your account
+        </p>
+        <h3 className="font-serif text-[20px] font-bold text-[#1a1612] mb-4">{LOAD_STAGES[stage]}</h3>
+        <div className="h-2 bg-[#e8e4dc] rounded-full overflow-hidden mb-2">
+          <div
+            className="h-full bg-gradient-to-r from-[#C9973A] to-[#D5A547] rounded-full transition-[width] duration-700 ease-out"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <p className="text-[12px] text-[#1a1612]/55 tabular-nums">
+          {remaining > 0 ? `About ${remaining}s remaining…` : 'Finishing up…'}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -209,6 +256,7 @@ export default function Register() {
 
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [loadStage, setLoadStage] = useState(0);
 
     const isCompany =
       subRole?.startsWith('COMPANY_') ||
@@ -237,27 +285,115 @@ export default function Register() {
 
     const maxDOB = getMaxDOB();
     const phoneDigits = getPhoneDigits(phone);
-    const nameError =
-      name.length > 0 && name.trim().length < 3 ? 'Enter your full name (min. 3 characters).' : '';
-    const nrcError =
-      nrc.length > 0 && !NRC_REGEX.test(nrc) ? 'Format: 123456/78/9 — six digits, two, one.' : '';
-    const phoneError =
-      phoneDigits.length > 0 && phoneDigits.length !== 9
-        ? 'Zambian mobile must be 9 digits (e.g. +260 977 123 456).'
-        : phoneDigits.length === 9 && !/^[79]/.test(phoneDigits)
-          ? 'Mobile numbers start with 7 or 9 in Zambia.'
-          : '';
-    const dobAge = calculateAge(dob);
-    const dobError =
-      dob && dobAge !== null && dobAge < 18 ? 'You must be 18 or older to register.' : '';
+    // Async email-availability check against the DB (credentials step). The
+    // ref feeds the sync email validator; `emailChecking` drives the UI.
+    const [emailChecking, setEmailChecking] = useState(false);
+    const emailTakenRef = useRef(false);
+    const emailCheckSeq = useRef(0);
 
-    // Live credential checks for Step 3. `pwAnalysis` is fed by
-    // PasswordStrengthField; the submit button stays disabled until the
-    // password is Strong, the confirmation matches, and terms are agreed.
-    const confirmError =
-      confirmPassword.length > 0 && confirmPassword !== password
-        ? 'Passwords do not match'
-        : '';
+    // ── Conversational field validation ──────────────────────────────
+    // Validators return '' when valid. Fields stay silent until blur, then
+    // switch to live "instant forgiveness"; the step buttons turn every
+    // invalid field red and scroll to the first. (see useFieldValidation)
+    const fieldValidators: Record<string, Validator> = {
+      name: (v) =>
+        !v.trim()
+          ? 'Full name is required.'
+          : v.trim().length < 3
+            ? 'Enter your full name (min. 3 characters).'
+            : '',
+      nrc: (v) =>
+        !v.trim()
+          ? 'NRC number is required.'
+          : !NRC_REGEX.test(v)
+            ? 'Format: 123456/78/9 — six digits, two, one.'
+            : '',
+      phone: (v) => {
+        const d = getPhoneDigits(v);
+        return !d
+          ? 'Phone number is required.'
+          : d.length !== 9
+            ? 'Zambian mobile must be 9 digits (e.g. +260 977 123 456).'
+            : !/^[79]/.test(d)
+              ? 'Mobile numbers start with 7 or 9 in Zambia.'
+              : '';
+      },
+      dob: (v) => {
+        if (role === 'LABOUR') return '';
+        if (!v) return 'Date of birth is required.';
+        const age = calculateAge(v);
+        return age === null
+          ? 'Enter a valid date.'
+          : age < 18
+            ? 'You must be 18 or older to register.'
+            : '';
+      },
+      email: (v) => {
+        if (!v.trim()) return 'Email address is required.';
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())) return 'Enter a valid email address.';
+        if (emailTakenRef.current) return 'Email already registered. Please use a different email.';
+        return '';
+      },
+      password: (v) => (analyzePassword(v).isStrong ? '' : 'Password isn’t strong enough yet.'),
+      confirmPassword: (v) =>
+        !v ? 'Please confirm your password.' : v !== password ? 'Passwords do not match.' : '',
+    };
+    const validation = useFieldValidation(fieldValidators);
+    const nameV = validation.field('name', name);
+    const nrcV = validation.field('nrc', nrc);
+    const phoneV = validation.field('phone', phone);
+    const dobV = validation.field('dob', dob);
+    const emailV = validation.field('email', email);
+    const passwordV = validation.field('password', password);
+    const confirmV = validation.field('confirmPassword', confirmPassword);
+
+    // Query the DB for email availability. Sequence-guarded so a later check
+    // always wins — a fast typist never sees a stale "taken" result.
+    const runEmailCheck = async (value: string): Promise<void> => {
+      const v = value.trim();
+      if (!v || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+        emailTakenRef.current = false;
+        return;
+      }
+      const seq = ++emailCheckSeq.current;
+      setEmailChecking(true);
+      try {
+        const available = await authService.checkEmailAvailable(v);
+        if (seq !== emailCheckSeq.current) return; // superseded by a newer check
+        emailTakenRef.current = !available;
+        validation.revalidate('email', v); // surface / clear the "taken" error live
+      } catch {
+        // Network hiccup — don't block; the final submit still guards duplicates.
+        if (seq === emailCheckSeq.current) emailTakenRef.current = false;
+      } finally {
+        if (seq === emailCheckSeq.current) setEmailChecking(false);
+      }
+    };
+
+    // Cross-field: re-check "confirm password" whenever the password changes,
+    // so a matching pair clears (or a divergence flags) without re-blurring.
+    useEffect(() => {
+      validation.revalidate('confirmPassword', confirmPassword);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [password]);
+
+    // Advance the loading-overlay stages while the final submit runs.
+    useEffect(() => {
+      if (!isLoading) {
+        setLoadStage(0);
+        return;
+      }
+      const id = window.setInterval(() => {
+        setLoadStage((s) => Math.min(s + 1, LOAD_STAGES.length - 1));
+      }, 1500);
+      return () => window.clearInterval(id);
+    }, [isLoading]);
+
+    // Terms is a checkbox (not a text field) — tracked separately.
+    const termsRef = useRef<HTMLDivElement | null>(null);
+    const [termsError, setTermsError] = useState('');
+
+    // Gate for the final "Complete Registration" button on the Review step.
     const passwordsMatch = password.length > 0 && password === confirmPassword;
     const canSubmitStep3 =
       !!email.trim() &&
@@ -333,9 +469,39 @@ export default function Register() {
     };
 
     const handleStep1Next = (): void => {
-      if (validateStep1()) {
-        setCurrentStep(2);
+      setError('');
+      // "No hunting" guard — turn any invalid field red and scroll to the first.
+      const ok = validation.validateAll([
+        { name: 'name', value: name },
+        { name: 'nrc', value: nrc },
+        { name: 'phone', value: phone },
+        ...(role !== 'LABOUR' ? [{ name: 'dob', value: dob }] : []),
+      ]);
+      if (ok) setCurrentStep(2);
+    };
+
+    const handleStep3Next = async (): Promise<void> => {
+      setError('');
+      // Ensure the email has been checked against the DB before advancing, so
+      // a duplicate is caught here (credentials step), not at the final submit.
+      if (email.trim() && !emailV.error) {
+        await runEmailCheck(email);
       }
+      // Validate email (now incl. availability), password strength, and
+      // confirm in DOM order — turns each red and scrolls to the first.
+      const ok = validation.validateAll([
+        { name: 'email', value: email },
+        { name: 'password', value: password },
+        { name: 'confirmPassword', value: confirmPassword },
+      ]);
+      if (!ok) return;
+      if (!agreeToTerms) {
+        setTermsError('Please agree to the Terms of Service to continue.');
+        termsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      setTermsError('');
+      setCurrentStep(4);
     };
 
     const handleLocationComplete = (data: any) => {
@@ -435,7 +601,7 @@ export default function Register() {
             // Local tokens are cleared by authService.logout's
             // catch-all anyway; carry on with the redirect.
           }
-          navigate('/login?registered=1', { replace: true });
+          navigate('/login?registered=1', { replace: true, state: { email } });
         }
       } catch (err: any) {
         setError(err.message || 'Failed to register');
@@ -445,7 +611,9 @@ export default function Register() {
     };
 
     return (
-      <AuthSplitLayout
+      <>
+        {isLoading && <RegistrationLoadingOverlay stage={loadStage} />}
+        <AuthSplitLayout
         title={
           currentStep === 1
             ? isCompany
@@ -555,53 +723,76 @@ export default function Register() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FloatingInput
-                    label="Full Name"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    icon={User}
-                    autoComplete="name"
-                    error={nameError}
-                  />
-                  <FloatingInput
-                    label="NRC Number"
-                    type="text"
-                    value={nrc}
-                    onChange={(e) => setNrc(formatNRC(e.target.value))}
-                    required
-                    icon={Hash}
-                    inputMode="numeric"
-                    maxLength={11}
-                    placeholder="123456/78/9"
-                    error={nrcError}
-                    hint={!nrcError && nrc.length === 0 ? 'Format: 123456/78/9' : undefined}
-                  />
-                  <FloatingInput
-                    label="Phone Number"
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(formatPhone(e.target.value))}
-                    required
-                    icon={Phone}
-                    autoComplete="tel"
-                    inputMode="tel"
-                    maxLength={17}
-                    error={phoneError}
-                    hint={
-                      !phoneError && phoneDigits.length === 0
-                        ? '+260 9XX XXX XXX'
-                        : undefined
-                    }
-                  />
+                  <div ref={nameV.ref}>
+                    <FloatingInput
+                      label="Full Name"
+                      type="text"
+                      value={name}
+                      onChange={(e) => {
+                        setName(e.target.value);
+                        nameV.onChange(e.target.value);
+                      }}
+                      onBlur={nameV.onBlur}
+                      required
+                      icon={User}
+                      autoComplete="name"
+                      error={nameV.error}
+                      valid={nameV.valid}
+                    />
+                  </div>
+                  <div ref={nrcV.ref}>
+                    <FloatingInput
+                      label="NRC Number"
+                      type="text"
+                      value={nrc}
+                      onChange={(e) => {
+                        const f = formatNRC(e.target.value);
+                        setNrc(f);
+                        nrcV.onChange(f);
+                      }}
+                      onBlur={nrcV.onBlur}
+                      required
+                      icon={Hash}
+                      inputMode="numeric"
+                      maxLength={11}
+                      placeholder="123456/78/9"
+                      error={nrcV.error}
+                      valid={nrcV.valid}
+                      hint={!nrcV.error && !nrcV.valid && nrc.length === 0 ? 'Format: 123456/78/9' : undefined}
+                    />
+                  </div>
+                  <div ref={phoneV.ref}>
+                    <FloatingInput
+                      label="Phone Number"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => {
+                        const f = formatPhone(e.target.value);
+                        setPhone(f);
+                        phoneV.onChange(f);
+                      }}
+                      onBlur={phoneV.onBlur}
+                      required
+                      icon={Phone}
+                      autoComplete="tel"
+                      inputMode="tel"
+                      maxLength={17}
+                      error={phoneV.error}
+                      valid={phoneV.valid}
+                      hint={
+                        !phoneV.error && !phoneV.valid && phoneDigits.length === 0
+                          ? '+260 9XX XXX XXX'
+                          : undefined
+                      }
+                    />
+                  </div>
                   {role !== 'LABOUR' && (
-                    <div className="relative w-full">
+                    <div className="relative w-full" ref={dobV.ref}>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-20">
                           <Calendar
                             className={`h-5 w-5 ${
-                              dobError ? 'text-rose-400' : 'text-[#C9973A]/55'
+                              dobV.error ? 'text-rose-400' : dobV.valid ? 'text-emerald-500' : 'text-[#C9973A]/55'
                             }`}
                             strokeWidth={2}
                           />
@@ -609,37 +800,37 @@ export default function Register() {
                         <input
                           type="date"
                           value={dob}
-                          onChange={(e) => setDob(e.target.value)}
+                          onChange={(e) => {
+                            setDob(e.target.value);
+                            dobV.onChange(e.target.value);
+                          }}
+                          onBlur={dobV.onBlur}
                           max={maxDOB}
-                          aria-invalid={dobError ? true : undefined}
+                          aria-invalid={dobV.error ? true : undefined}
                           className={`block w-full pl-[52px] pr-4 h-[58px] bg-brand-white border rounded-2xl text-[15px] text-brand-dark shadow-[inset_0_1px_2px_rgba(26,22,18,0.04)] outline-none transition-all duration-200 font-medium ${
-                            dobError
+                            dobV.error
                               ? 'border-rose-300 focus:border-rose-500 focus:shadow-[0_0_0_4px_rgba(244,63,94,0.1),inset_0_1px_2px_rgba(26,22,18,0.02)]'
-                              : 'border-[#e8e0d0] hover:border-[#d6c8a8] focus:border-[#C9973A] focus:shadow-[0_0_0_4px_rgba(201,151,58,0.1),inset_0_1px_2px_rgba(26,22,18,0.02)]'
+                              : dobV.valid
+                                ? 'border-emerald-300 focus:border-emerald-500 focus:shadow-[0_0_0_4px_rgba(16,185,129,0.1),inset_0_1px_2px_rgba(26,22,18,0.02)]'
+                                : 'border-[#e8e0d0] hover:border-[#d6c8a8] focus:border-[#C9973A] focus:shadow-[0_0_0_4px_rgba(201,151,58,0.1),inset_0_1px_2px_rgba(26,22,18,0.02)]'
                           }`}
                         />
                         <label
                           className={`absolute top-0 left-[16px] -translate-y-1/2 px-1.5 bg-brand-white text-[12px] font-bold uppercase tracking-[0.08em] pointer-events-none ${
-                            dobError ? 'text-rose-500' : 'text-[#C9973A]'
+                            dobV.error ? 'text-rose-500' : dobV.valid ? 'text-emerald-600' : 'text-[#C9973A]'
                           }`}
                         >
                           Date of Birth
                         </label>
                       </div>
-                      {(dobError || (!dob && true)) && (
-                        <p
-                          className={`text-[11px] mt-1.5 ml-1 leading-snug flex items-center gap-1.5 ${
-                            dobError ? 'text-rose-500 font-medium' : 'text-[#1a1612]/45'
-                          }`}
-                        >
-                          {dobError ? (
-                            <>
-                              <span className="inline-block w-3 h-3 rounded-full bg-rose-500 text-white text-[8px] font-black flex items-center justify-center">!</span>
-                              {dobError}
-                            </>
-                          ) : (
-                            <>You must be 18 or older to register.</>
-                          )}
+                      {dobV.error ? (
+                        <p className="text-[11px] mt-1.5 ml-1 leading-snug flex items-center gap-1.5 text-rose-500 font-medium">
+                          <span className="w-3 h-3 rounded-full bg-rose-500 text-white text-[8px] font-black flex items-center justify-center shrink-0">!</span>
+                          {dobV.error}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] mt-1.5 ml-1 leading-snug text-[#1a1612]/45">
+                          You must be 18 or older to register.
                         </p>
                       )}
                     </div>
@@ -771,15 +962,29 @@ export default function Register() {
                   </p>
                 </div>
 
-                <FloatingInput
-                  label="Email Address"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  icon={Mail}
-                  autoComplete="email"
-                />
+                <div ref={emailV.ref}>
+                  <FloatingInput
+                    label="Email Address"
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      // Editing clears the prior "taken" flag so it forgives live.
+                      emailTakenRef.current = false;
+                      emailV.onChange(e.target.value);
+                    }}
+                    onBlur={() => {
+                      emailV.onBlur();
+                      runEmailCheck(email);
+                    }}
+                    required
+                    icon={Mail}
+                    autoComplete="email"
+                    error={emailV.error}
+                    valid={emailV.valid && !emailChecking}
+                    hint={emailChecking ? 'Checking availability…' : undefined}
+                  />
+                </div>
               </section>
 
               {/* Section 02 — Password */}
@@ -795,23 +1000,31 @@ export default function Register() {
                 </div>
 
                 <div className="space-y-4">
-                  <PasswordStrengthField
-                    label="Password"
-                    value={password}
-                    onChange={setPassword}
-                    onAnalysis={setPwAnalysis}
-                  />
+                  <div ref={passwordV.ref}>
+                    <PasswordStrengthField
+                      label="Password"
+                      value={password}
+                      onChange={setPassword}
+                      onAnalysis={setPwAnalysis}
+                    />
+                  </div>
 
+                  <div ref={confirmV.ref}>
                   <FloatingInput
                     label="Confirm Password"
                     type={showConfirmPassword ? 'text' : 'password'}
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      confirmV.onChange(e.target.value);
+                    }}
+                    onBlur={confirmV.onBlur}
                     required
                     icon={Lock}
                     autoComplete="new-password"
-                    error={confirmError}
-                    hint={passwordsMatch ? 'Passwords match' : undefined}
+                    error={confirmV.error}
+                    valid={confirmV.valid}
+                    hint={confirmV.valid ? 'Passwords match' : undefined}
                     className={showConfirmPassword ? '' : 'tracking-widest'}
                     rightElement={
                       <button
@@ -828,6 +1041,7 @@ export default function Register() {
                       </button>
                     }
                   />
+                  </div>
 
                   <p className="text-[11px] text-[#1a1612]/45 flex items-center gap-2 ml-1">
                     <Key className="w-3.5 h-3.5 text-[#C9973A]/60" strokeWidth={2} />
@@ -837,12 +1051,20 @@ export default function Register() {
               </section>
 
               {/* Terms */}
-              <div className="flex items-start gap-3 p-4 rounded-2xl border border-[#e8e4dc] bg-brand-white">
+              <div ref={termsRef}>
+              <div
+                className={`flex items-start gap-3 p-4 rounded-2xl border bg-brand-white transition-colors ${
+                  termsError ? 'border-rose-300' : 'border-[#e8e4dc]'
+                }`}
+              >
                 <input
                   type="checkbox"
                   id="terms"
                   checked={agreeToTerms}
-                  onChange={(e) => setAgreeToTerms(e.target.checked)}
+                  onChange={(e) => {
+                    setAgreeToTerms(e.target.checked);
+                    if (e.target.checked) setTermsError('');
+                  }}
                   className="sr-only"
                 />
                 <label
@@ -879,14 +1101,19 @@ export default function Register() {
                   </a>
                 </label>
               </div>
+              {termsError && (
+                <p className="text-[11px] mt-1.5 ml-1 leading-snug flex items-center gap-1.5 text-rose-500 font-medium">
+                  <span className="w-3 h-3 rounded-full bg-rose-500 text-white text-[8px] font-black flex items-center justify-center shrink-0">!</span>
+                  {termsError}
+                </p>
+              )}
+              </div>
 
               {/* Submit */}
               <Button
                 type="button"
-                onClick={() => {
-                  if (validateStep3()) setCurrentStep(4);
-                }}
-                disabled={!canSubmitStep3}
+                onClick={handleStep3Next}
+                disabled={isLoading}
                 className="w-full h-[58px] shadow-[0_12px_28px_-8px_rgba(201,151,58,0.4)] disabled:opacity-50 disabled:shadow-none text-[13px] font-sans font-bold text-white bg-gradient-to-b from-[#D5A547] to-[#C9973A] hover:from-[#C9973A] hover:to-[#B08432] transition-all active:scale-[0.98] rounded-2xl uppercase tracking-[0.22em] flex justify-center items-center gap-2"
               >
                 Review Your Details
@@ -1011,6 +1238,7 @@ export default function Register() {
           </div>
         )}
       </AuthSplitLayout>
+      </>
     );
   } catch (err) {
     console.error('Register component error:', err);

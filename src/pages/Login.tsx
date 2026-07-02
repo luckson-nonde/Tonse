@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { Mail, Key, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import AuthSplitLayout from '../components/AuthSplitLayout';
@@ -23,11 +23,15 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   // Registration redirects here with ?registered=1 after logging the user
   // out, so we can confirm the account was created (otherwise the silent
   // logout → login bounce reads as "nothing happened").
   const justRegistered = searchParams.get('registered') === '1';
-  const [email, setEmail] = useState('');
+  // ...and hands the just-created email via router state (kept out of the URL)
+  // so the user only needs to type their password.
+  const prefillEmail = (location.state as { email?: string } | null)?.email ?? '';
+  const [email, setEmail] = useState(prefillEmail);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -121,6 +125,7 @@ export default function Login() {
             required
             icon={Key}
             tone="white"
+            autoFocus={!!prefillEmail}
             className={showPassword ? '' : 'tracking-widest'}
             rightElement={
               <button
@@ -198,7 +203,7 @@ export default function Login() {
 
       <button
         type="button"
-        className="w-full h-[48px] hidden lg:flex items-center justify-center gap-3 bg-white border border-slate-200 rounded-xl text-[14px] font-sans font-semibold text-slate-700 hover:bg-slate-50 transition-colors mb-7"
+        className="w-full h-[48px] flex items-center justify-center gap-3 bg-white border border-slate-200 rounded-xl text-[14px] font-sans font-semibold text-slate-700 hover:bg-slate-50 transition-colors mt-6 lg:mt-0 mb-7"
       >
         <img
           src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg"
