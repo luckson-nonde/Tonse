@@ -566,24 +566,8 @@ export default function Register() {
           {/* SCREEN 1: PERSONAL INFORMATION & IDENTITY */}
           {currentStep === 1 && (
             <RegistrationStepShell
-              eyebrow="Step 01 / Identity"
-              title="Identity Verification"
-              description="Verify your NRC so buyers know they're trading with a real Zambian business."
-              icon={<ShieldCheck className="w-8 h-8" />}
-              tips={[
-                {
-                  icon: <ShieldCheck className="w-4 h-4" />,
-                  text: <><span className="font-bold text-[#1a1a2e]">Real-world anchor</span> — your NRC is the immutable identity behind your business.</>,
-                },
-                {
-                  icon: <Hash className="w-4 h-4" />,
-                  text: <><span className="font-bold text-[#1a1a2e]">No duplicates</span> — one NRC, one account. Stops impersonation before it starts.</>,
-                },
-                {
-                  icon: <Lock className="w-4 h-4" />,
-                  text: <><span className="font-bold text-[#1a1a2e]">ZRA-compliant</span> — verifies you against the official Zambian registry.</>,
-                },
-              ]}
+              consentKey="identity"
+              onConsentBack={() => navigate('/role-selection')}
             >
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {/* Section 01 — Personal details */}
@@ -752,10 +736,8 @@ export default function Register() {
           {/* SCREEN 2: LOCATION DETAILS */}
           {currentStep === 2 && (
             <RegistrationStepShell
-              eyebrow="Step 02 / Where"
-              title="Your Location"
-              description="Set where buyers find your shop."
-              icon={<MapPin className="w-8 h-8" />}
+              consentKey="location"
+              onConsentBack={() => setCurrentStep(1)}
               advisory={
                 <div className="flex items-start gap-3 p-4 rounded-2xl border border-[#C9973A]/30 bg-gradient-to-br from-[#fdf6e9]/80 to-[#fdf6e9]/30">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white flex items-center justify-center shrink-0 shadow-md shadow-[#C9973A]/30">
@@ -771,24 +753,6 @@ export default function Register() {
                   </div>
                 </div>
               }
-              tips={[
-                {
-                  icon: <Building2 className="w-4 h-4" />,
-                  text: <><span className="font-bold text-[#1a1a2e]">Local discovery</span> — shoppers find you by area first, exact pin second.</>,
-                },
-                {
-                  icon: <Truck className="w-4 h-4" />,
-                  text: <><span className="font-bold text-[#1a1a2e]">Delivery pricing</span> stays accurate when buyers know exactly where you are.</>,
-                },
-                {
-                  icon: <Navigation className="w-4 h-4" />,
-                  text: <><span className="font-bold text-[#1a1a2e]">GPS pin</span> gives the sharpest match — capture it from inside your shop.</>,
-                },
-                {
-                  icon: <Lock className="w-4 h-4" />,
-                  text: <><span className="font-bold text-[#1a1a2e]">Address stays private</span> until a buyer accepts your quote.</>,
-                },
-              ]}
             >
               <div className="animate-in fade-in slide-in-from-right-4 duration-500">
                 <LocationDetails
@@ -806,24 +770,8 @@ export default function Register() {
           {/* SCREEN 3: ACCOUNT CREDENTIALS */}
           {currentStep === 3 && (
             <RegistrationStepShell
-              eyebrow="Step 03 / Access"
-              title="Account Credentials"
-              description="Set the sign-in email and password you'll use to access this account."
-              icon={<Lock className="w-8 h-8" />}
-              tips={[
-                {
-                  icon: <Lock className="w-4 h-4" />,
-                  text: <><span className="font-bold text-[#1a1a2e]">End-to-end encrypted</span> — your password is hashed before it leaves the browser.</>,
-                },
-                {
-                  icon: <RefreshCw className="w-4 h-4" />,
-                  text: <><span className="font-bold text-[#1a1a2e]">NRC-based recovery</span> — if you forget the password, your NRC anchors recovery.</>,
-                },
-                {
-                  icon: <Smartphone className="w-4 h-4" />,
-                  text: <><span className="font-bold text-[#1a1a2e]">Multi-device sign-in</span> — sign in from desktop, mobile, or tablet with the same credentials.</>,
-                },
-              ]}
+              consentKey="credentials"
+              onConsentBack={() => setCurrentStep(2)}
             >
             <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
               {/* Section 01 — Sign-in email */}
@@ -1013,22 +961,7 @@ export default function Register() {
 
           {/* SCREEN 4: REVIEW & CONFIRM */}
           {currentStep === 4 && (
-            <RegistrationStepShell
-              eyebrow="Step 04 / Review"
-              title="Review details"
-              description="Check everything's right — edit any section before we create your account."
-              icon={<ClipboardCheck className="w-8 h-8" />}
-              tips={[
-                {
-                  icon: <ShieldCheck className="w-4 h-4" />,
-                  text: <><span className="font-bold text-[#1a1a2e]">One last look</span> — confirm your details before submitting.</>,
-                },
-                {
-                  icon: <Pencil className="w-4 h-4" />,
-                  text: <><span className="font-bold text-[#1a1a2e]">Edit anything</span> — jump back to any step; your entries are saved.</>,
-                },
-              ]}
-            >
+            <RegistrationStepShell>
               <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
                 <ReviewSection
                   title="Profile & Identity"

@@ -3,10 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Upload, FileText, ArrowRight, CheckCircle2, X, Globe, MessageCircle, Facebook, Video } from 'lucide-react';
 import AuthLayout from '../components/AuthLayout';
 import { useAuth } from '../AuthContext';
+import { useConsentGate } from '../hooks/useConsentGate';
+import ConsentModal from '../components/consent/ConsentModal';
 
 export default function BusinessVerification() {
   const navigate = useNavigate();
   const { user, updateUser } = useAuth();
+  const consent = useConsentGate('businessVerification');
   const [facebookLink, setFacebookLink] = useState('');
   const [tiktokLink, setTiktokLink] = useState('');
   const [whatsappLink, setWhatsappLink] = useState('');
@@ -126,8 +129,16 @@ export default function BusinessVerification() {
   };
 
   return (
-    <AuthLayout 
-      title="Account Verification" 
+    <>
+      <ConsentModal
+        open={consent.needsConsent}
+        configKey="businessVerification"
+        scope="screen"
+        onConsent={consent.grant}
+        onBack={() => { consent.dismiss(); navigate('/seller/categories'); }}
+      />
+      <AuthLayout
+      title="Account Verification"
       titleClassName="text-2xl font-normal"
       subtitle={
         isShopOwner 
@@ -421,6 +432,7 @@ export default function BusinessVerification() {
           Verification usually takes 24-48 hours after submission.
         </p>
       </div>
-    </AuthLayout>
+      </AuthLayout>
+    </>
   );
 }

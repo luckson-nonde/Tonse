@@ -36,8 +36,10 @@ import Button from '../components/Button';
 import { motion, AnimatePresence } from 'motion/react';
 import { SubRole } from '../types';
 import { CATEGORIES_DB, getCategoryNature, Category } from '../services/categories';
+import { useCategoryAvailability } from '../services/categories/availability';
 import CategorySelection from '../components/CategorySelection';
 import RoleCardStack, { type RoleBanner } from '../components/RoleCardStack';
+import BuyerAccountCards from '../components/BuyerAccountCards';
 
 // ─── Tier-1 role-card config ────────────────────────────────────────
 // Each entry renders as one composed 60/40 card in the vertical stack.
@@ -100,6 +102,11 @@ interface RoleOption {
   description: string;
   icon: any;
   subRole: SubRole;
+  /** Photo-forward account cards only: artwork stem + crop + affordance. */
+  artKey?: string;
+  focalPoint?: string;
+  hint?: string;
+  fallbackImage?: string;
 }
 
 const buyerSubRoles: RoleOption[] = [
@@ -107,17 +114,27 @@ const buyerSubRoles: RoleOption[] = [
     id: 'INDIVIDUAL_BUYER',
     eyebrow: 'Individual · Personal',
     title: 'Personal Account',
-    description: 'Shop for yourself and your family.',
+    description: 'Shop for yourself and your family — everyday goods, services & more.',
     icon: User,
     subRole: 'INDIVIDUAL_BUYER',
+    artKey: 'individual account',
+    focalPoint: '58% 38%',
+    hint: 'Select',
+    fallbackImage:
+      'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&q=80&w=800&h=800',
   },
   {
     id: 'COMPANY_BUYER',
     eyebrow: 'Business · Corporate',
     title: 'Company Account',
-    description: 'Procure materials and services for your business.',
+    description: 'Procure materials and services for your business, with team roles.',
     icon: Building2,
     subRole: 'COMPANY_BUYER',
+    artKey: 'company account',
+    focalPoint: '76% 35%',
+    hint: 'View positions',
+    fallbackImage:
+      'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&q=80&w=800&h=800',
   },
 ];
 
@@ -227,11 +244,14 @@ export default function RoleSelection() {
     }
   };
 
+  const { isAvailable, disabledIds } = useCategoryAvailability();
+
   const filteredCategories = React.useMemo(() => {
     if (!selectedSubRole) return [];
 
-    // Only root categories for selection
-    const rootCategories = CATEGORIES_DB.filter((c) => !c.parentId);
+    // Only root categories for selection — and only ones the admin hasn't
+    // switched off (category control).
+    const rootCategories = CATEGORIES_DB.filter((c) => !c.parentId && isAvailable(c.id));
 
     if (selectedSubRole === 'PRODUCT_SELLER') {
       return rootCategories.filter((c) => {
@@ -253,7 +273,8 @@ export default function RoleSelection() {
       });
     }
     return rootCategories;
-  }, [selectedSubRole]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSubRole, disabledIds]);
 
   const toggleCategory = (catId: string) => {
     setSelectedCategories((prev) =>
@@ -398,14 +419,22 @@ export default function RoleSelection() {
                 )}
               </AnimatePresence>
 
-              {(() => {
+              {/* Buyer account-type step gets the photo-forward cards
+                  (Personal / Company) — the icon-row layout below still
+                  drives every other tier-2 surface (company positions,
+                  seller, service provider). */}
+              {masterRole === 'BUYER' && !isCompanyExpanded ? (
+                <BuyerAccountCards
+                  options={buyerSubRoles}
+                  selectedSubRole={selectedSubRole}
+                  onSelect={handleSubRoleSelect}
+                />
+              ) : (() => {
                 const items = isCompanyExpanded
                   ? companySubRoles
-                  : masterRole === 'BUYER'
-                    ? buyerSubRoles
-                    : masterRole === 'SERVICE_PROVIDER'
-                      ? serviceProviderSubRoles
-                      : sellerSubRoles;
+                  : masterRole === 'SERVICE_PROVIDER'
+                    ? serviceProviderSubRoles
+                    : sellerSubRoles;
                 const isStacked = items.length <= 2;
                 return (
                   <div

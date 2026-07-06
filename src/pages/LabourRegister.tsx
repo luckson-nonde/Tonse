@@ -14,6 +14,8 @@ import { LABOUR_CATEGORIES, LABOUR_CATEGORY_GROUPS } from '../services/labourCat
 import { getLabourProfileSchema } from '../services/labourSchemaRegistry';
 import DynamicProfileForm from '../components/DynamicProfileForm';
 import { motion, AnimatePresence } from 'motion/react';
+import { useConsentGate } from '../hooks/useConsentGate';
+import ConsentModal from '../components/consent/ConsentModal';
 
 // localStorage draft so the wizard survives a refresh (parity with the buyer
 // flow's useOnboardingDraft). Password is NEVER persisted.
@@ -49,6 +51,7 @@ function loadLabourDraft(): Partial<LabourDraft> | null {
 export default function LabourRegister() {
   const navigate = useNavigate();
   const { register } = useAuth();
+  const consent = useConsentGate('identity');
 
   // Hydrate once from any saved draft.
   const initial = useRef<Partial<LabourDraft> | null>(null);
@@ -295,6 +298,13 @@ export default function LabourRegister() {
 
   return (
     <>
+      <ConsentModal
+        open={consent.needsConsent}
+        configKey="identity"
+        scope="pane"
+        onConsent={consent.grant}
+        onBack={() => { consent.dismiss(); handleBack(); }}
+      />
       <RegistrationLoadingOverlay open={isLoading} />
       <AuthSplitLayout
         title={getTitle()}

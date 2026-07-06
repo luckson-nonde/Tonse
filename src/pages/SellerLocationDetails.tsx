@@ -3,10 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
 import LocationDetails from '../components/LocationDetails';
 import { useAuth } from '../AuthContext';
+import { useConsentGate } from '../hooks/useConsentGate';
+import ConsentModal from '../components/consent/ConsentModal';
 
 export default function SellerLocationDetails() {
   const navigate = useNavigate();
   const { user, updateUser } = useAuth();
+  const consent = useConsentGate('location');
 
   const handleComplete = async (locationData: { 
     province: string; 
@@ -34,25 +37,34 @@ export default function SellerLocationDetails() {
   };
 
   return (
-    <AuthLayout 
-      title="Business Location" 
-      titleClassName="text-2xl font-normal"
-      subtitle="Provide your physical business address to help buyers find you."
-      headerSubtitle="Seller Onboarding"
-      maxWidth="max-w-[700px]"
-      footerText={
-        <p className="text-[10px] font-normal text-brand-yellow/60">
-          TONSE MARKETPLACE ONBOARDING © 2026
-        </p>
-      }
-      onBack={() => navigate(`/register?role=${user?.role || 'SELLER'}`)}
-    >
-      <LocationDetails 
-        onComplete={handleComplete} 
-        submitLabel="Next: Categories →"
-        showRadius={false}
-        isStandalone={false}
+    <>
+      <ConsentModal
+        open={consent.needsConsent}
+        configKey="location"
+        scope="screen"
+        onConsent={consent.grant}
+        onBack={() => { consent.dismiss(); navigate(`/register?role=${user?.role || 'SELLER'}`); }}
       />
-    </AuthLayout>
+      <AuthLayout
+        title="Business Location"
+        titleClassName="text-2xl font-normal"
+        subtitle="Provide your physical business address to help buyers find you."
+        headerSubtitle="Seller Onboarding"
+        maxWidth="max-w-[700px]"
+        footerText={
+          <p className="text-[10px] font-normal text-brand-yellow/60">
+            TONSE MARKETPLACE ONBOARDING © 2026
+          </p>
+        }
+        onBack={() => navigate(`/register?role=${user?.role || 'SELLER'}`)}
+      >
+        <LocationDetails
+          onComplete={handleComplete}
+          submitLabel="Next: Categories →"
+          showRadius={false}
+          isStandalone={false}
+        />
+      </AuthLayout>
+    </>
   );
 }

@@ -3,10 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Camera, Home, ShieldCheck, ArrowRight, X } from 'lucide-react';
 import AuthLayout from '../components/AuthLayout';
 import { useAuth } from '../AuthContext';
+import { useConsentGate } from '../hooks/useConsentGate';
+import ConsentModal from '../components/consent/ConsentModal';
 
 export default function StoreVerification() {
   const navigate = useNavigate();
   const { updateUser } = useAuth();
+  const consent = useConsentGate('store');
   const [frontPhoto, setFrontPhoto] = useState<string | null>(null);
   const [interiorPhoto, setInteriorPhoto] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -53,18 +56,26 @@ export default function StoreVerification() {
   };
 
   return (
-    <AuthLayout
-      title="Store Verification"
-      subtitle="Upload photos of your physical store to verify your location."
-      headerSubtitle="Store Verification"
-      maxWidth="max-w-[700px]"
-      footerText={
-        <p className="text-[10px] font-bold text-indigo-200/60">
-          TONSE MARKETPLACE ONBOARDING © 2026
-        </p>
-      }
-      onBack={() => navigate('/seller/location')}
-    >
+    <>
+      <ConsentModal
+        open={consent.needsConsent}
+        configKey="store"
+        scope="screen"
+        onConsent={consent.grant}
+        onBack={() => { consent.dismiss(); navigate('/seller/location'); }}
+      />
+      <AuthLayout
+        title="Store Verification"
+        subtitle="Upload photos of your physical store to verify your location."
+        headerSubtitle="Store Verification"
+        maxWidth="max-w-[700px]"
+        footerText={
+          <p className="text-[10px] font-bold text-indigo-200/60">
+            TONSE MARKETPLACE ONBOARDING © 2026
+          </p>
+        }
+        onBack={() => navigate('/seller/location')}
+      >
       <div className="space-y-6">
         {/* Front View Section */}
         <div>
@@ -173,6 +184,7 @@ export default function StoreVerification() {
           </button>
         </div>
       </div>
-    </AuthLayout>
+      </AuthLayout>
+    </>
   );
 }

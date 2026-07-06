@@ -20,6 +20,8 @@ import FloatingInput from '../components/FloatingInput';
 import { getPrimaryBusinessType, BusinessType } from '../services/categories';
 import { useFieldValidation, type Validator } from '../hooks/useFieldValidation';
 import RegistrationLoadingOverlay from '../components/RegistrationLoadingOverlay';
+import { useConsentGate } from '../hooks/useConsentGate';
+import ConsentModal from '../components/consent/ConsentModal';
 
 // Zambian TPIN is 10 digits, e.g. 1234567890
 function formatTPIN(raw: string): string {
@@ -132,6 +134,7 @@ export default function CompanyDocuments() {
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
+  const consent = useConsentGate('business');
 
   // A multi-archetype seller still has ONE company, so the docs page picks
   // the seller's primary archetype and lets that drive the doc set.
@@ -251,6 +254,13 @@ export default function CompanyDocuments() {
 
   return (
     <>
+      <ConsentModal
+        open={consent.needsConsent}
+        configKey="business"
+        scope="pane"
+        onConsent={consent.grant}
+        onBack={() => { consent.dismiss(); navigate(-1); }}
+      />
       <RegistrationLoadingOverlay open={isLoading} />
       <AuthSplitLayout
       title="Business Documents"
