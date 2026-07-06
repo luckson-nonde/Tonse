@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Inquiry } from './entities/inquiry.entity';
 import { InquiryCategory } from './entities/inquiry-category.entity';
 import { CreateInquiryDto, UpdateInquiryDto } from './dto';
 import { DisplayIdUtil } from '../../utils/display-id.util';
+import { CategoriesService } from '../categories/categories.service';
 
 @Injectable()
 export class InquiriesService {
@@ -14,6 +15,7 @@ export class InquiriesService {
     @InjectRepository(InquiryCategory)
     private readonly inquiryCategoriesRepository: Repository<InquiryCategory>,
     private readonly dataSource: DataSource,
+    private readonly categoriesService: CategoriesService,
   ) {}
 
   /**
@@ -49,6 +51,21 @@ export class InquiriesService {
    */
   async create(createInquiryDto: CreateInquiryDto): Promise<Inquiry> {
     const { categoryIds, ...rest } = this.parseJsonFields(createInquiryDto);
+
+    // Admin category control: a buyer can't open an inquiry against a
+    // category (or subcategory) an admin has switched off. "Effectively
+    // disabled" also covers subs whose parent was turned off.
+    const requestedIds = Array.from(new Set(categoryIds ?? []));
+    if (requestedIds.length > 0) {
+      const disabled = await this.categoriesService.getEffectiveDisabledIds();
+      const blocked = requestedIds.filter((id) => disabled.has(id));
+      if (blocked.length > 0) {
+        throw new BadRequestException(
+          `The following categories are not currently available: ${blocked.join(', ')}`
+        );
+      }
+    }
+
     return this.dataSource.transaction(async (manager) => {
       const inquiryRepo = manager.getRepository(Inquiry);
       const junctionRepo = manager.getRepository(InquiryCategory);

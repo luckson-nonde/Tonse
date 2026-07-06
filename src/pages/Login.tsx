@@ -50,7 +50,7 @@ export default function Login() {
   };
 
   return (
-    <AuthSplitLayout paneTone="white" hideHeader trustBand>
+    <AuthSplitLayout hideHeader trustBand>
       {/* Single sensible-width column. AuthSplitLayout's outer
           container scales out to 1040px at xl+ for multi-step
           registration forms that need 2-column inner layouts; Login's
@@ -99,7 +99,6 @@ export default function Login() {
             onChange={(e) => setEmail(e.target.value)}
             required
             icon={Mail}
-            tone="white"
           />
         </div>
 
@@ -111,7 +110,6 @@ export default function Login() {
             onChange={(e) => setPassword(e.target.value)}
             required
             icon={Key}
-            tone="white"
             autoFocus={!!prefillEmail}
             className={showPassword ? '' : 'tracking-widest'}
             rightElement={
@@ -184,7 +182,7 @@ export default function Login() {
           <div className="w-full h-px bg-slate-200" />
         </div>
         <div className="relative flex justify-center">
-          <span className="bg-white px-3 text-[13px] text-slate-400">or</span>
+          <span className="bg-brand-white px-3 text-[13px] text-slate-400">or</span>
         </div>
       </div>
 

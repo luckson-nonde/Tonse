@@ -55,14 +55,37 @@ export default function RoleCardStack({ banners, onSelect }: RoleCardStackProps)
   return (
     <div className="flex flex-col gap-6">
       {banners.map((b) => {
-        const photo = artFor(b.artKey) ?? b.fallbackImage;
+        const art = artFor(b.artKey);
+        const photo = art ?? b.fallbackImage;
         return (
           <div
             key={b.id}
             className="group bg-white rounded-3xl overflow-hidden shadow-[0_18px_40px_-24px_rgba(10,25,49,0.35)] hover:shadow-[0_24px_48px_-22px_rgba(10,25,49,0.45)] hover:-translate-y-0.5 transition-all duration-300 ease-in-out"
           >
-            {/* Mobile: stacked (wide photo on top, text below). sm+: 60/40 split. */}
-            <div className="flex flex-col-reverse sm:grid sm:grid-cols-[3fr_2fr]">
+            {/* Mobile + artwork: the banner IS the card — headline, copy,
+                badges and CTA are baked into the image, so composing them
+                again below would duplicate every detail. */}
+            {art && (
+              <button
+                type="button"
+                onClick={() => onSelect(b.id)}
+                aria-label={`${b.headline} — ${b.cta}`}
+                className="sm:hidden block w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60"
+              >
+                <img
+                  src={art}
+                  alt={b.headline}
+                  className="w-full aspect-video object-cover"
+                />
+              </button>
+            )}
+
+            {/* Composed 60/40 card — always on sm+ (photo side crops to the
+                photographic half, no text duplication). On mobile it renders
+                ONLY when no artwork exists (stacked: photo top, text below). */}
+            <div
+              className={`${art ? 'hidden sm:grid' : 'flex flex-col-reverse sm:grid'} sm:grid-cols-[3fr_2fr]`}
+            >
               {/* Text column — typography + value props + CTA */}
               <div className="p-5 pt-3 sm:p-6 flex flex-col items-start">
                 <span className="px-2.5 py-1 rounded-full bg-[#C9973A]/10 text-[#C9973A] text-[9px] font-black uppercase tracking-[0.18em]">

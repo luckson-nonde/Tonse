@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Inquiry } from '../entities/inquiry.entity';
+import { CategoriesService } from '../../categories/categories.service';
 
 interface LeadsFilters {
   status?: string;
@@ -48,6 +49,7 @@ export class MatchingService {
   constructor(
     @InjectRepository(Inquiry)
     private readonly inquiryRepository: Repository<Inquiry>,
+    private readonly categoriesService: CategoriesService,
   ) {}
 
   async findLeadsForProfile(
@@ -112,11 +114,19 @@ export class MatchingService {
       `,
       [selector.profileId],
     );
-    const matchedCategoryIds = matchedRows.map((r) => r.id);
+    let matchedCategoryIds = matchedRows.map((r) => r.id);
+
+    // Admin category control: never surface leads for a category (or a sub
+    // whose parent) an admin has switched off. The seller keeps their saved
+    // subscription — it just stops producing matches while disabled.
+    const disabled = await this.categoriesService.getEffectiveDisabledIds();
+    if (disabled.size > 0) {
+      matchedCategoryIds = matchedCategoryIds.filter((id) => !disabled.has(id));
+    }
 
     if (matchedCategoryIds.length === 0) {
       this.logger.log(
-        `Leads query: profile=${selector.type}/${selector.profileId} matchedCategories=[] → 0 inquiries (no categories selected)`,
+        `Leads query: profile=${selector.type}/${selector.profileId} matchedCategories=[] → 0 inquiries (none selected or all disabled)`,
       );
       return { data: [], total: 0, matchedCategoryIds: [] };
     }

@@ -34,6 +34,13 @@ import {
   CheckCircle2,
   Image as ImageIcon,
   ExternalLink,
+  SlidersHorizontal,
+  ArrowUpRight,
+  UserPlus,
+  Clock,
+  Layers,
+  AlertTriangle,
+  Store,
 } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
 import {
@@ -44,6 +51,7 @@ import {
   AdminQuote,
   AdminTransaction,
   AdminAuditLog,
+  AdminCategoryNode,
   VERIFIABLE_ROLES,
 } from '../../services/api/adminService';
 
@@ -51,6 +59,7 @@ type AdminTab =
   | 'overview'
   | 'users'
   | 'verifications'
+  | 'categories'
   | 'inquiries'
   | 'quotes'
   | 'financial'
@@ -60,6 +69,7 @@ const TABS: { id: AdminTab; label: string; icon: React.ComponentType<{ className
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'users', label: 'Users', icon: Users },
   { id: 'verifications', label: 'Verifications', icon: ShieldQuestion },
+  { id: 'categories', label: 'Category Control', icon: SlidersHorizontal },
   { id: 'inquiries', label: 'Inquiries', icon: MessageSquare },
   { id: 'quotes', label: 'Quotes', icon: FileText },
   { id: 'financial', label: 'Financial', icon: Wallet },
@@ -159,6 +169,7 @@ export default function AdminDashboard() {
           {activeTab === 'overview' && <OverviewView />}
           {activeTab === 'users' && <UsersView />}
           {activeTab === 'verifications' && <VerificationsView />}
+          {activeTab === 'categories' && <CategoryControlView />}
           {activeTab === 'inquiries' && <InquiriesView />}
           {activeTab === 'quotes' && <QuotesView />}
           {activeTab === 'financial' && <FinancialView />}
@@ -208,26 +219,50 @@ function StatTile({
   hint,
   icon: Icon,
   tone = 'default',
+  onClick,
+  badge,
 }: {
   label: string;
   value: string | number;
   hint?: string;
   icon: React.ComponentType<{ className?: string }>;
-  tone?: 'default' | 'gold' | 'navy';
+  tone?: 'default' | 'gold' | 'navy' | 'amber';
+  /** When set, the tile becomes a button that jumps elsewhere. */
+  onClick?: () => void;
+  /** Optional attention badge (e.g. a pending count) shown top-right. */
+  badge?: string | number;
 }) {
   const toneClasses =
     tone === 'gold'
       ? 'bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]'
       : tone === 'navy'
         ? 'bg-[#0f1023] text-[#C9973A]'
-        : 'bg-slate-50 text-slate-400';
+        : tone === 'amber'
+          ? 'bg-amber-50 text-amber-500'
+          : 'bg-slate-50 text-slate-400';
 
+  const Tag: any = onClick ? 'button' : 'div';
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl p-5 sm:p-6 shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)]">
+    <Tag
+      onClick={onClick}
+      className={`relative text-left w-full bg-white border border-slate-100 rounded-2xl p-5 sm:p-6 shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)] ${
+        onClick
+          ? 'transition-all hover:border-[#C9973A]/40 hover:shadow-[0_10px_26px_-14px_rgba(201,151,58,0.5)] cursor-pointer group'
+          : ''
+      }`}
+    >
       <div className="flex items-start justify-between mb-4">
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${toneClasses}`}>
           <Icon className="w-5 h-5" />
         </div>
+        {badge != null && Number(badge) > 0 && (
+          <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-amber-500 text-white text-[11px] font-black">
+            {badge}
+          </span>
+        )}
+        {onClick && badge == null && (
+          <ArrowUpRight className="w-4 h-4 text-slate-300 group-hover:text-[#C9973A] transition-colors" />
+        )}
       </div>
       <p className="font-serif text-[28px] sm:text-[32px] font-black text-[#1a1a2e] leading-none tracking-tight">
         {value}
@@ -236,7 +271,7 @@ function StatTile({
         {label}
       </p>
       {hint && <p className="mt-1.5 text-[11px] text-slate-400 font-medium">{hint}</p>}
-    </div>
+    </Tag>
   );
 }
 
@@ -345,12 +380,29 @@ const formatDate = (s?: string | number) => {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
+const formatRelative = (s?: string | number) => {
+  if (!s) return '';
+  const d = typeof s === 'number' ? new Date(s) : new Date(s);
+  if (isNaN(d.getTime())) return '';
+  const diff = Date.now() - d.getTime();
+  const mins = Math.round(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
+
 // ──────────────────────────────────────────────────────────────────────────
 // Overview view — stat tiles + role breakdown
 // ──────────────────────────────────────────────────────────────────────────
 
 function OverviewView() {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<AdminStats | null>(null);
+  const [activity, setActivity] = useState<AdminAuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -358,8 +410,12 @@ function OverviewView() {
     setLoading(true);
     setError(null);
     try {
-      const data = await adminService.getStats();
+      const [data, audit] = await Promise.all([
+        adminService.getStats(),
+        adminService.listAudit({ page: 1, limit: 8 }).catch(() => ({ data: [], total: 0 })),
+      ]);
       setStats(data);
+      setActivity(audit.data ?? []);
     } catch (e: any) {
       setError(e?.message || 'Failed to load platform stats');
     } finally {
@@ -371,12 +427,25 @@ function OverviewView() {
     load();
   }, [load]);
 
+  const providers = stats
+    ? (stats.users.byRole?.SELLER ?? 0) +
+      (stats.users.byRole?.SUPPLIER ?? 0) +
+      (stats.users.byRole?.SERVICE_PROVIDER ?? 0) +
+      (stats.users.byRole?.ENTERTAINMENT ?? 0) +
+      (stats.users.byRole?.EVENTS ?? 0)
+    : 0;
+  const openInquiries = stats?.inquiries.byStatus?.OPEN ?? 0;
+  const pending = stats?.pendingVerifications ?? 0;
+  const signups7d = stats?.users.recentSignups7d ?? 0;
+  const catActive = stats?.categories?.active ?? 0;
+  const catTotal = stats?.categories?.total ?? 0;
+
   return (
     <>
       <ViewHeader
-        eyebrow="Section 01 / Pulse"
+        eyebrow="Section 01 / Command"
         title="Platform Overview"
-        subtitle="A live snapshot of every account, inquiry, quote, and ZMW that's flowed through Tonse Hub."
+        subtitle="Everything that needs your attention right now, plus how the marketplace is growing over time."
         rightSlot={
           <button
             onClick={load}
@@ -395,70 +464,278 @@ function OverviewView() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          className="space-y-8"
+          className="space-y-10"
         >
+          {/* Needs-attention banner */}
+          {pending > 0 && (
+            <button
+              onClick={() => navigate('/admin/verifications')}
+              className="w-full text-left flex items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 hover:bg-amber-100/70 transition-colors group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[13px] font-black text-amber-900">
+                  {pending} {pending === 1 ? 'account is' : 'accounts are'} waiting for verification
+                </p>
+                <p className="text-[12px] text-amber-700 font-medium">
+                  Providers can't trade until you approve them — review the queue.
+                </p>
+              </div>
+              <ArrowUpRight className="ml-auto w-5 h-5 text-amber-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </button>
+          )}
+
+          {/* Ops cockpit — clickable tiles */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-4">
-            <StatTile label="Total Users" value={stats.users.total} icon={Users} tone="gold" />
+            <StatTile
+              label="Total Users"
+              value={stats.users.total}
+              icon={Users}
+              tone="gold"
+              hint={`+${signups7d} this week`}
+              onClick={() => navigate('/admin/users')}
+            />
             <StatTile
               label="Buyers"
               value={stats.users.byRole?.BUYER ?? 0}
               icon={Users}
+              onClick={() => navigate('/admin/users')}
             />
             <StatTile
               label="Providers"
-              value={
-                (stats.users.byRole?.SELLER ?? 0) +
-                (stats.users.byRole?.SUPPLIER ?? 0) +
-                (stats.users.byRole?.SERVICE_PROVIDER ?? 0) +
-                (stats.users.byRole?.ENTERTAINMENT ?? 0) +
-                (stats.users.byRole?.EVENTS ?? 0)
-              }
-              icon={Users}
+              value={providers}
+              icon={Store}
+              onClick={() => navigate('/admin/users')}
             />
-            <StatTile label="Inquiries" value={stats.inquiries.total} icon={MessageSquare} />
-            <StatTile label="Quotes" value={stats.quotes.total} icon={FileText} />
+            <StatTile
+              label="Open Inquiries"
+              value={openInquiries}
+              icon={MessageSquare}
+              onClick={() => navigate('/admin/inquiries')}
+            />
+            <StatTile
+              label="Pending Review"
+              value={pending}
+              icon={ShieldQuestion}
+              tone={pending > 0 ? 'amber' : 'default'}
+              badge={pending}
+              onClick={() => navigate('/admin/verifications')}
+            />
             <StatTile
               label="Collected"
               value={formatZmw(stats.payments.totalCollectedZmw)}
               icon={Wallet}
               tone="navy"
               hint={`${stats.payments.total} transactions`}
+              onClick={() => navigate('/admin/financial')}
             />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            <BreakdownCard title="Users by Role" data={stats.users.byRole} icon={Users} />
-            <BreakdownCard
-              title="Inquiries by Status"
-              data={stats.inquiries.byStatus}
-              icon={MessageSquare}
-            />
-            <BreakdownCard title="Quotes by Status" data={stats.quotes.byStatus} icon={FileText} />
-          </div>
-
-          <div className="bg-gradient-to-br from-[#fdf6e9]/70 to-[#fdf6e9]/30 border border-[#C9973A]/15 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
-              <Sparkles className="w-6 h-6" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#C9973A] mb-1">
-                Health snapshot
-              </p>
-              <h3 className="font-serif text-[18px] font-bold text-[#1a1a2e] leading-snug">
-                Quotes paid volume:{' '}
-                <span className="text-[#C9973A]">{formatZmw(stats.quotes.paidVolumeZmw)}</span>
+          {/* Quick actions + recent activity */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="bg-white border border-slate-100 rounded-2xl p-5 sm:p-6 shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)]">
+              <h3 className="text-[12px] font-black uppercase tracking-widest text-[#1a1a2e] mb-4">
+                Quick actions
               </h3>
-              <p className="mt-1 text-[12px] text-[#1a1a2e]/60 font-medium">
-                Generated at {new Date(stats.generatedAt).toLocaleString()}
-              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <QuickAction
+                  icon={ShieldQuestion}
+                  label="Review verifications"
+                  sublabel={pending > 0 ? `${pending} pending` : 'Queue clear'}
+                  onClick={() => navigate('/admin/verifications')}
+                />
+                <QuickAction
+                  icon={SlidersHorizontal}
+                  label="Category control"
+                  sublabel={`${catActive}/${catTotal} active`}
+                  onClick={() => navigate('/admin/categories')}
+                />
+                <QuickAction
+                  icon={MessageSquare}
+                  label="View inquiries"
+                  sublabel={`${openInquiries} open`}
+                  onClick={() => navigate('/admin/inquiries')}
+                />
+                <QuickAction
+                  icon={Wallet}
+                  label="Financial ledger"
+                  sublabel={formatZmw(stats.payments.totalCollectedZmw)}
+                  onClick={() => navigate('/admin/financial')}
+                />
+              </div>
             </div>
-            <div className="ml-auto hidden sm:flex items-center gap-2 text-[#C9973A]">
-              <TrendingUp className="w-5 h-5" />
+            <RecentActivityCard activity={activity} />
+          </div>
+
+          {/* ── Section 02 — Growth & health ────────────────────────────── */}
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.32em] text-[#C9973A] mb-4">
+              Section 02 / Growth &amp; health
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-5">
+              <StatTile label="New Signups (7d)" value={signups7d} icon={UserPlus} tone="gold" />
+              <StatTile
+                label="Quote Volume Paid"
+                value={formatZmw(stats.quotes.paidVolumeZmw)}
+                icon={TrendingUp}
+                tone="navy"
+              />
+              <StatTile label="Total Quotes" value={stats.quotes.total} icon={FileText} />
+              <StatTile
+                label="Active Categories"
+                value={`${catActive}/${catTotal}`}
+                icon={Layers}
+                hint={catTotal - catActive > 0 ? `${catTotal - catActive} switched off` : 'All live'}
+                onClick={() => navigate('/admin/categories')}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+              <FunnelCard funnel={stats.funnel} />
+              <BreakdownCard title="Users by Role" data={stats.users.byRole} icon={Users} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <BreakdownCard
+                title="Inquiries by Status"
+                data={stats.inquiries.byStatus}
+                icon={MessageSquare}
+              />
+              <BreakdownCard
+                title="Quotes by Status"
+                data={stats.quotes.byStatus}
+                icon={FileText}
+              />
             </div>
           </div>
+
+          <p className="text-[11px] text-slate-400 font-medium text-center">
+            Snapshot generated {new Date(stats.generatedAt).toLocaleString()}
+          </p>
         </motion.div>
       )}
     </>
+  );
+}
+
+function QuickAction({
+  icon: Icon,
+  label,
+  sublabel,
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  sublabel: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 text-left hover:border-[#C9973A]/40 hover:bg-white transition-all group"
+    >
+      <div className="w-9 h-9 rounded-lg bg-[#fdf6e9] text-[#C9973A] flex items-center justify-center shrink-0">
+        <Icon className="w-4 h-4" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[12px] font-bold text-[#1a1a2e] truncate">{label}</p>
+        <p className="text-[11px] text-slate-400 font-medium truncate">{sublabel}</p>
+      </div>
+      <ArrowUpRight className="ml-auto w-4 h-4 text-slate-300 group-hover:text-[#C9973A] transition-colors shrink-0" />
+    </button>
+  );
+}
+
+function FunnelCard({ funnel }: { funnel?: { inquiries: number; quotes: number; paidQuotes: number } }) {
+  const inquiries = funnel?.inquiries ?? 0;
+  const quotes = funnel?.quotes ?? 0;
+  const paid = funnel?.paidQuotes ?? 0;
+  const max = Math.max(1, inquiries, quotes, paid);
+  const pct = (n: number) => `${Math.round((n / max) * 100)}%`;
+  const rate = (n: number, d: number) => (d > 0 ? `${Math.round((n / d) * 100)}%` : '—');
+  const stages = [
+    { label: 'Inquiries', value: inquiries, conv: null as string | null },
+    { label: 'Quotes', value: quotes, conv: rate(quotes, inquiries) },
+    { label: 'Paid', value: paid, conv: rate(paid, quotes) },
+  ];
+  return (
+    <div className="bg-white border border-slate-100 rounded-2xl p-5 sm:p-6 shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)]">
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-9 h-9 rounded-xl bg-[#fdf6e9]/60 text-[#C9973A] flex items-center justify-center">
+          <TrendingUp className="w-4 h-4" />
+        </div>
+        <h3 className="text-[12px] font-black uppercase tracking-widest text-[#1a1a2e]">
+          Conversion funnel
+        </h3>
+      </div>
+      <ul className="space-y-4">
+        {stages.map((s) => (
+          <li key={s.label}>
+            <div className="flex items-center justify-between text-[12px] font-bold mb-1.5">
+              <span className="text-[#1a1a2e]/75">{s.label}</span>
+              <span className="flex items-center gap-2">
+                {s.conv && (
+                  <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                    {s.conv}
+                  </span>
+                )}
+                <span className="text-[#C9973A]">{s.value}</span>
+              </span>
+            </div>
+            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-[#C9973A] to-[#e0b45f]"
+                style={{ width: pct(s.value) }}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function RecentActivityCard({ activity }: { activity: AdminAuditLog[] }) {
+  return (
+    <div className="bg-white border border-slate-100 rounded-2xl p-5 sm:p-6 shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)]">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-9 h-9 rounded-xl bg-[#fdf6e9]/60 text-[#C9973A] flex items-center justify-center">
+          <Clock className="w-4 h-4" />
+        </div>
+        <h3 className="text-[12px] font-black uppercase tracking-widest text-[#1a1a2e]">
+          Recent activity
+        </h3>
+      </div>
+      {activity.length === 0 ? (
+        <p className="text-[12px] text-slate-300 font-medium py-6 text-center">
+          No recorded activity yet.
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {activity.map((entry) => (
+            <li key={entry.id} className="flex items-start gap-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#C9973A] mt-1.5 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-bold text-[#1a1a2e] leading-snug">
+                  {(entry.action || 'EVENT').replace(/_/g, ' ')}
+                  {entry.entityType && (
+                    <span className="text-slate-400 font-medium"> · {entry.entityType}</span>
+                  )}
+                </p>
+                {(entry as any).targetTitle && (
+                  <p className="text-[11px] text-slate-500 truncate">{(entry as any).targetTitle}</p>
+                )}
+              </div>
+              <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap shrink-0">
+                {formatRelative(entry.createdAt || (entry.timestamp as any))}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -504,6 +781,272 @@ function BreakdownCard({
         </ul>
       )}
     </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Category control — switch categories / subcategories on & off platform-wide
+// ──────────────────────────────────────────────────────────────────────────
+
+function Switch({
+  checked,
+  disabled,
+  onChange,
+  title,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      title={title}
+      disabled={disabled}
+      onClick={onChange}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+        checked ? 'bg-[#C9973A]' : 'bg-slate-300'
+      }`}
+    >
+      <span
+        className={`inline-block h-[18px] w-[18px] transform rounded-full bg-white shadow transition-transform ${
+          checked ? 'translate-x-[22px]' : 'translate-x-1'
+        }`}
+      />
+    </button>
+  );
+}
+
+function CategoryControlView() {
+  const [nodes, setNodes] = useState<AdminCategoryNode[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await adminService.getCategories();
+      setNodes(data);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load categories');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Optimistic toggle: flip local state immediately, reconcile on error.
+  const toggle = async (id: string, next: boolean) => {
+    setPendingId(id);
+    setNodes((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? { ...p, isActive: next }
+          : { ...p, children: p.children.map((c) => (c.id === id ? { ...c, isActive: next } : c)) }
+      )
+    );
+    try {
+      await adminService.setCategoryActive(id, next);
+    } catch (e: any) {
+      // Revert on failure.
+      setNodes((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, isActive: !next }
+            : {
+                ...p,
+                children: p.children.map((c) => (c.id === id ? { ...c, isActive: !next } : c)),
+              }
+        )
+      );
+      alert(e?.message || 'Failed to update category');
+    } finally {
+      setPendingId(null);
+    }
+  };
+
+  const q = search.trim().toLowerCase();
+  const visible = useMemo(() => {
+    if (!q) return nodes;
+    return nodes
+      .map((p) => {
+        const parentHit = p.name.toLowerCase().includes(q);
+        const kids = p.children.filter((c) => c.name.toLowerCase().includes(q));
+        if (parentHit) return p; // whole branch
+        if (kids.length > 0) return { ...p, children: kids };
+        return null;
+      })
+      .filter(Boolean) as AdminCategoryNode[];
+  }, [nodes, q]);
+
+  const activeParents = nodes.filter((n) => n.isActive).length;
+  const activeSubs = nodes.reduce(
+    (acc, n) => acc + n.children.filter((c) => c.isActive && n.isActive).length,
+    0
+  );
+  const totalSubs = nodes.reduce((acc, n) => acc + n.children.length, 0);
+
+  return (
+    <>
+      <ViewHeader
+        eyebrow="Section / Availability"
+        title="Category Control"
+        subtitle="Switch a category or a single subcategory off and it disappears from every buyer & seller picker, stops matching to leads, and blocks new inquiries. Existing deals are left untouched. Turning a parent off hides its whole branch."
+        rightSlot={
+          <button
+            onClick={load}
+            className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[11px] font-bold uppercase tracking-widest text-slate-500 hover:text-[#1a1a2e] hover:border-[#C9973A]/40 transition-all flex items-center gap-2"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Refresh
+          </button>
+        }
+      />
+
+      {!loading && !error && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4 mb-6">
+          <StatTile label="Active Categories" value={`${activeParents}/${nodes.length}`} icon={Layers} tone="gold" />
+          <StatTile label="Active Subcategories" value={`${activeSubs}/${totalSubs}`} icon={SlidersHorizontal} />
+          <StatTile
+            label="Switched Off"
+            value={nodes.length - activeParents + (totalSubs - activeSubs)}
+            icon={XCircle}
+            tone={nodes.length - activeParents + (totalSubs - activeSubs) > 0 ? 'amber' : 'default'}
+          />
+        </div>
+      )}
+
+      <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)] overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-slate-100">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#C9973A]" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search categories or subcategories…"
+              className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-[13px] font-medium focus:bg-white focus:border-[#C9973A]/40 outline-none"
+            />
+          </div>
+        </div>
+
+        <EmptyOrLoading
+          loading={loading}
+          error={error}
+          empty={visible.length === 0}
+          emptyLabel="No categories match your search."
+        />
+
+        {!loading && !error && visible.length > 0 && (
+          <div className="divide-y divide-slate-100">
+            {visible.map((parent) => {
+              const isOpen = expanded.has(parent.id) || q.length > 0;
+              const parentOff = !parent.isActive;
+              return (
+                <div key={parent.id} className={parentOff ? 'bg-slate-50/40' : ''}>
+                  {/* Parent row */}
+                  <div className="flex items-center gap-3 px-5 py-4">
+                    <button
+                      onClick={() =>
+                        setExpanded((prev) => {
+                          const next = new Set(prev);
+                          next.has(parent.id) ? next.delete(parent.id) : next.add(parent.id);
+                          return next;
+                        })
+                      }
+                      className="flex items-center gap-3 min-w-0 flex-1 text-left"
+                    >
+                      <ChevronRight
+                        className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${
+                          isOpen ? 'rotate-90' : ''
+                        }`}
+                      />
+                      <div className="min-w-0">
+                        <p
+                          className={`font-bold text-[14px] truncate ${
+                            parentOff ? 'text-slate-400 line-through' : 'text-[#1a1a2e]'
+                          }`}
+                        >
+                          {parent.name}
+                        </p>
+                        <p className="text-[11px] text-slate-400 font-medium truncate">
+                          {parent.children.length} subcategories · {parent.providerCount} providers ·{' '}
+                          {parent.inquiryCount} inquiries
+                        </p>
+                      </div>
+                    </button>
+                    {parentOff && (
+                      <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full bg-rose-50 border border-rose-100 text-rose-600 text-[10px] font-black uppercase tracking-wider">
+                        Branch hidden
+                      </span>
+                    )}
+                    <Switch
+                      checked={parent.isActive}
+                      disabled={pendingId === parent.id}
+                      onChange={() => toggle(parent.id, !parent.isActive)}
+                      title={parent.isActive ? 'Switch category off' : 'Switch category on'}
+                    />
+                  </div>
+
+                  {/* Subcategory rows */}
+                  {isOpen && parent.children.length > 0 && (
+                    <div className="pb-2">
+                      {parent.children.map((child) => {
+                        const childEffectiveOff = parentOff || !child.isActive;
+                        return (
+                          <div
+                            key={child.id}
+                            className="flex items-center gap-3 pl-12 pr-5 py-2.5 hover:bg-slate-50/60"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p
+                                className={`text-[13px] font-semibold truncate ${
+                                  childEffectiveOff ? 'text-slate-400' : 'text-[#1a1a2e]'
+                                } ${!child.isActive ? 'line-through' : ''}`}
+                              >
+                                {child.name}
+                              </p>
+                              <p className="text-[10px] text-slate-400 font-medium truncate">
+                                {child.providerCount} providers · {child.inquiryCount} inquiries
+                                {parentOff && child.isActive && (
+                                  <span className="text-rose-400"> · hidden by parent</span>
+                                )}
+                              </p>
+                            </div>
+                            <Switch
+                              checked={child.isActive}
+                              disabled={pendingId === child.id || parentOff}
+                              onChange={() => toggle(child.id, !child.isActive)}
+                              title={
+                                parentOff
+                                  ? 'Turn the parent category on first'
+                                  : child.isActive
+                                    ? 'Switch subcategory off'
+                                    : 'Switch subcategory on'
+                              }
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 

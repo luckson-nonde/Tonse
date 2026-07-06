@@ -63,6 +63,7 @@ import labourIcon from '../assets/images/empty-states/category_select_icon/16_la
 
 import Button from './Button';
 import { fetchCategories, Category } from '../services/categories';
+import { useCategoryAvailability } from '../services/categories/availability';
 import { LABOUR_CATEGORY_GROUPS, LABOUR_CATEGORIES } from '../services/labourCategories';
 
 interface CategorySelectionProps {
@@ -551,6 +552,8 @@ export default function CategorySelection({
 
   const [selectedCategories, setSelectedCategories] = useState<any[]>([]);
 
+  const { isAvailable } = useCategoryAvailability();
+
   // Push the current selection up to the parent (RoleSelection) so its outer
   // Continue button can enable/disable. Was destructured but not wired before —
   // that's why the parent's selectedCategories stayed empty.
@@ -597,12 +600,15 @@ export default function CategorySelection({
     previousSelectionCount.current = curr;
   }, [selectedCategories.length]);
 
-  const filteredCategories = generalCategories.filter((c) =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+  // Admin category control: drop any category/subcategory switched off. Done
+  // at the render-derived level so it re-filters reactively once the
+  // availability status resolves, regardless of when fetchCategories ran.
+  const filteredCategories = generalCategories.filter(
+    (c) => isAvailable(c.id) && c.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredSubcategories = subcategories.filter((sub) =>
-    sub.name.toLowerCase().includes(subSearchQuery.toLowerCase())
+  const filteredSubcategories = subcategories.filter(
+    (sub) => isAvailable(sub.id) && sub.name.toLowerCase().includes(subSearchQuery.toLowerCase())
   );
 
   // Group subcategories by their base name, splitting out the action variant in

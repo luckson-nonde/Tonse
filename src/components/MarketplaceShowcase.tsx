@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { MapPin, Star } from 'lucide-react';
 import Logo from './Logo';
 import { CATEGORIES_DB } from '../services/categories';
+import { useCategoryAvailability } from '../services/categories/availability';
 
 /**
  * MarketplaceShowcase — the permanent "what's inside TONSE" panel shown on
@@ -85,9 +86,11 @@ export default function MarketplaceShowcase({
 }: {
   variant: 'panel' | 'inline' | 'ribbon';
 }) {
+  const { isAvailable, disabledIds } = useCategoryAvailability();
   const popularCategories = useMemo(
-    () => CATEGORIES_DB.filter((c) => !c.parentId).slice(0, 8),
-    [],
+    () => CATEGORIES_DB.filter((c) => !c.parentId && isAvailable(c.id)).slice(0, 8),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [disabledIds],
   );
   const shops = useFeaturedShops();
 

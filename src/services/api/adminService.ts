@@ -9,11 +9,29 @@
 import { apiClient } from './client';
 
 export interface AdminStats {
-  users: { total: number; byRole: Record<string, number> };
+  users: { total: number; byRole: Record<string, number>; recentSignups7d?: number };
   inquiries: { total: number; byStatus: Record<string, number> };
   quotes: { total: number; byStatus: Record<string, number>; paidVolumeZmw: number };
   payments: { total: number; byStatus: Record<string, number>; totalCollectedZmw: number };
+  /** Size of the pending verification queue (across verifiable roles). */
+  pendingVerifications?: number;
+  /** Inquiry → Quote → Paid conversion counts. */
+  funnel?: { inquiries: number; quotes: number; paidQuotes: number };
+  /** Category availability health. */
+  categories?: { total: number; active: number };
   generatedAt: string;
+}
+
+export interface AdminCategoryNode {
+  id: string;
+  name: string;
+  parentId: string | null;
+  isActive: boolean;
+  archetype: string;
+  nature: string;
+  providerCount: number;
+  inquiryCount: number;
+  children: AdminCategoryNode[];
 }
 
 export interface PaginatedResponse<T> {
@@ -178,6 +196,18 @@ export const adminService = {
 
   async rejectUser(id: string, reason?: string): Promise<AdminUser | null> {
     const res = await apiClient.patch<AdminUser>(`/admin/users/${id}/reject`, { reason });
+    return res.data ?? null;
+  },
+
+  // ───── Category control ───────────────────────────────────────────────────
+
+  async getCategories(): Promise<AdminCategoryNode[]> {
+    const res = await apiClient.get<AdminCategoryNode[]>('/admin/categories');
+    return res.data ?? [];
+  },
+
+  async setCategoryActive(id: string, isActive: boolean): Promise<AdminCategoryNode | null> {
+    const res = await apiClient.patch<AdminCategoryNode>(`/admin/categories/${id}`, { isActive });
     return res.data ?? null;
   },
 };

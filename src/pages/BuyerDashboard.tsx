@@ -27,6 +27,7 @@ import InquirySuccess from '../components/InquirySuccess';
 import ConfirmationModal from '../components/ConfirmationModal';
 import DashboardLayout from '../components/DashboardLayout';
 import { CATEGORIES_DB, getCategorySchema, getCategoryType } from '../services/categories';
+import { isCategoryAvailable } from '../services/categories/availability';
 import { Inquiry, InquiryItem, Quote } from '../types';
 import { getLabourInquirySchema } from '../services/labourSchemaRegistry';
 import FinancialPage from './FinancialPage';
@@ -472,6 +473,19 @@ export default function BuyerDashboard() {
       if (categoryIds.length === 0) {
         alert(
           "We couldn't read a category for this inquiry. Go back to the categories step, pick what you're inquiring about, then try again."
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Admin category control: final safety net. The picker already hides
+      // switched-off categories, and the backend rejects them, but a category
+      // could be disabled mid-flow — surface a clear message rather than a
+      // raw 400 from createInquiry below.
+      const unavailable = categoryIds.filter((id) => !isCategoryAvailable(id));
+      if (unavailable.length > 0) {
+        alert(
+          'This category is no longer available on the marketplace. Please go back and choose a different one.'
         );
         setIsSubmitting(false);
         return;

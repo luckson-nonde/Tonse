@@ -5,6 +5,7 @@ import { InquiriesService } from '../inquiries/inquiries.service';
 import { QuotesService } from '../quotes/quotes.service';
 import { PaymentsService } from '../payments/payments.service';
 import { AuditService } from '../audit/audit.service';
+import { CategoriesService } from '../categories/categories.service';
 
 @Injectable()
 export class AdminService {
@@ -16,7 +17,8 @@ export class AdminService {
     private readonly inquiriesService: InquiriesService,
     private readonly quotesService: QuotesService,
     private readonly paymentsService: PaymentsService,
-    private readonly auditService: AuditService
+    private readonly auditService: AuditService,
+    private readonly categoriesService: CategoriesService
   ) {}
 
   // ───── Platform overview ────────────────────────────────────────────────
@@ -63,10 +65,35 @@ export class AdminService {
       }
     }
 
+    // ── Overview enrichments ────────────────────────────────────────────
+    // New signups in the trailing 7 days (from the user slice we already
+    // pulled — no extra query).
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    let recentSignups7d = 0;
+    for (const u of usersPage.data) {
+      const created = (u as any).createdAt ? new Date((u as any).createdAt).getTime() : 0;
+      if (created >= sevenDaysAgo) recentSignups7d++;
+    }
+
+    // Inquiry → Quote → Paid funnel counts.
+    const paidQuotes =
+      (quotesByStatus['PAID'] ?? 0) +
+      (quotesByStatus['COMPLETED'] ?? 0) +
+      (quotesByStatus['HANDED_OVER'] ?? 0);
+
+    // Pending verification queue size + category availability, in parallel.
+    // Each is defended so a single failing sub-metric never 500s the whole
+    // overview.
+    const [pending, categoryCounts] = await Promise.all([
+      this.listVerifications({ status: 'PENDING' }).catch(() => ({ data: [], total: 0 })),
+      this.categoriesService.countsForOverview().catch(() => ({ total: 0, active: 0 })),
+    ]);
+
     return {
       users: {
         total: usersPage.total,
         byRole: usersByRole,
+        recentSignups7d,
       },
       inquiries: {
         total: inquiriesPage.total,
@@ -82,6 +109,13 @@ export class AdminService {
         byStatus: paymentsByStatus,
         totalCollectedZmw: paymentsTotal,
       },
+      pendingVerifications: pending.total,
+      funnel: {
+        inquiries: inquiriesPage.total,
+        quotes: quotesPage.total,
+        paidQuotes,
+      },
+      categories: categoryCounts,
       generatedAt: new Date().toISOString(),
     };
   }
@@ -155,13 +189,26 @@ export class AdminService {
     'LABOUR',
   ];
 
+  /**
+   * The subset of VERIFIABLE_ROLES that are real values in the tightened
+   * `users_role_enum` (BUYER/SELLER/SERVICE_PROVIDER/ADMIN). SUPPLIER,
+   * ENTERTAINMENT, EVENTS, and LABOUR became *categories*, not user roles —
+   * querying `users.role = 'ENTERTAINMENT'` throws "invalid input value for
+   * enum". Only these two are safe to filter the users table by.
+   */
+  static readonly QUERYABLE_VERIFIABLE_ROLES = ['SELLER', 'SERVICE_PROVIDER'];
+
   async listVerifications(filters: Record<string, any> = {}) {
     // Default queue: all PENDING users in the verifiable role groups, newest
     // first. The admin can toggle by status (PENDING/VERIFIED/REJECTED) or
     // narrow to a single role.
     const status = filters.status || 'PENDING';
     const role = filters.role;
-    const requestedRoles = role ? [role] : AdminService.VERIFIABLE_ROLES;
+    // Guard against querying users by a role that isn't in the enum — any
+    // requested role is intersected with the queryable set.
+    const requestedRoles = (role ? [role] : AdminService.VERIFIABLE_ROLES).filter((r) =>
+      AdminService.QUERYABLE_VERIFIABLE_ROLES.includes(r)
+    );
 
     const all = await Promise.all(
       requestedRoles.map((r) =>
@@ -235,6 +282,30 @@ export class AdminService {
     this.logger.log(`User ${id} verification rejected: ${reason ?? '(no reason)'}`);
     const fresh = await this.usersService.findById(id);
     return this.usersService.flattenWithProfile(fresh);
+  }
+
+  // ───── Category control ─────────────────────────────────────────────────
+
+  async listCategories() {
+    return this.categoriesService.listForAdmin();
+  }
+
+  async setCategoryActive(id: string, isActive: boolean) {
+    const category = await this.categoriesService.setActive(id, isActive);
+    // Best-effort audit trail — category ids are slugs (not UUIDs), so the
+    // slug lands in details/targetTitle rather than the UUID-typed entityId.
+    await this.auditService
+      .create({
+        action: isActive ? 'CATEGORY_ENABLED' : 'CATEGORY_DISABLED',
+        entityType: 'CATEGORY',
+        targetTitle: category.name,
+        details: `Category '${id}' ${isActive ? 'enabled' : 'disabled'} platform-wide`,
+        status: isActive ? 'ACTIVE' : 'DISABLED',
+      })
+      .catch((e) =>
+        this.logger.warn(`Audit log for category toggle failed: ${e?.message ?? e}`)
+      );
+    return category;
   }
 
   // ───── Cross-cutting list endpoints ─────────────────────────────────────

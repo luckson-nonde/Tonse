@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CATEGORIES_DB, type Category } from '../../services/categories';
+import { useCategoryAvailability } from '../../services/categories/availability';
 import MasterCategoryScreen from './MasterCategoryScreen';
 import SubcategoryScreen from './SubcategoryScreen';
 import { useLayoutPreference } from './useLayoutPreference';
@@ -21,15 +22,23 @@ interface Props {
 
 export default function BuyerCategoryPicker({ onComplete, onBack, preselectedParentId }: Props) {
   const { layout, setLayout, subLayout, setSubLayout } = useLayoutPreference();
+  const { isAvailable, disabledIds } = useCategoryAvailability();
 
-  const masters = useMemo(() => CATEGORIES_DB.filter((c) => c.parentId === null), []);
+  // Admin category control: hide any master/subcategory switched off (a sub
+  // whose parent is off is also effectively unavailable).
+  const masters = useMemo(
+    () => CATEGORIES_DB.filter((c) => c.parentId === null && isAvailable(c.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [disabledIds],
+  );
   const subsByMaster = useMemo(() => {
     const map: Record<string, Category[]> = {};
     for (const c of CATEGORIES_DB) {
-      if (c.parentId) (map[c.parentId] ||= []).push(c);
+      if (c.parentId && isAvailable(c.id)) (map[c.parentId] ||= []).push(c);
     }
     return map;
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disabledIds]);
   const subCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const m of masters) counts[m.id] = subsByMaster[m.id]?.length ?? 0;

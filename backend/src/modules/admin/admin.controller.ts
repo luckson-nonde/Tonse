@@ -76,6 +76,21 @@ export class AdminController {
     return this.adminService.rejectUser(id, body?.reason);
   }
 
+  // ───── Category control ─────────────────────────────────────────────────
+
+  @Get('categories')
+  async listCategories() {
+    return this.adminService.listCategories();
+  }
+
+  @Patch('categories/:id')
+  async setCategoryActive(
+    @Param('id') id: string,
+    @Body() body: { isActive: boolean }
+  ) {
+    return this.adminService.setCategoryActive(id, !!body?.isActive);
+  }
+
   // ───── Cross-cutting lists ──────────────────────────────────────────────
 
   @Get('inquiries')

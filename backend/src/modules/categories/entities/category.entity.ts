@@ -90,6 +90,22 @@ export class Category {
   })
   actionVariant: ActionVariant;
 
+  /**
+   * Admin availability switch. `true` = available across the platform.
+   * When an admin flips this to `false` the category (or subcategory)
+   * disappears from every buyer/seller picker + marketplace browse, new
+   * inquiries against it are rejected, and it stops matching to sellers'
+   * leads. Existing inquiries/quotes/orders and saved subscriptions are
+   * left intact.
+   *
+   * NOTE: the boot seeder (`CategoriesSeederService`) intentionally never
+   * writes this column, so an admin toggle survives every restart. New
+   * rows added to the catalog default to available.
+   */
+  @Column({ type: 'boolean', default: true })
+  @Index('idx_categories_active')
+  isActive: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

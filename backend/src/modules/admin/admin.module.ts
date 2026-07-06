@@ -7,9 +7,18 @@ import { InquiriesModule } from '../inquiries/inquiries.module';
 import { QuotesModule } from '../quotes/quotes.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { AuditModule } from '../audit/audit.module';
+import { CategoriesModule } from '../categories/categories.module';
 
 @Module({
-  imports: [AuthModule, UsersModule, InquiriesModule, QuotesModule, PaymentsModule, AuditModule],
+  imports: [
+    AuthModule,
+    UsersModule,
+    InquiriesModule,
+    QuotesModule,
+    PaymentsModule,
+    AuditModule,
+    CategoriesModule,
+  ],
   providers: [AdminService],
   controllers: [AdminController],
 })

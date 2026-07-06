@@ -107,7 +107,7 @@ export default function AuthSplitLayout({
             it without stretching the simple steps awkwardly. */}
         <div className="w-full max-w-[440px] md:max-w-[560px] lg:max-w-[860px] xl:max-w-[1040px] relative z-10 py-10 lg:py-16">
           {/* Mobile Header (Logo + Back) */}
-          <div className="lg:hidden flex items-center justify-center relative mb-6">
+          <div className="lg:hidden flex items-center justify-center relative mb-10">
             {onBack && (
               <button
                 onClick={onBack}
@@ -118,12 +118,6 @@ export default function AuthSplitLayout({
               </button>
             )}
             <Logo className="text-3xl" />
-          </div>
-
-          {/* Mobile: collapsed left panel — a slim scrollable category
-              ribbon above the form; the form stays front-and-center. */}
-          <div className="lg:hidden mb-8">
-            <MarketplaceShowcase variant="ribbon" />
           </div>
 
           {/* Progress — one continuous bar filling toward completion. No
@@ -169,13 +163,6 @@ export default function AuthSplitLayout({
           )}
 
           {children}
-
-          {/* Mobile: the marketplace showcase stacks BELOW the active
-              form/flow — the form keeps priority, the showcase invites
-              scrolling. Desktop shows it in the left panel instead. */}
-          <div className="lg:hidden">
-            <MarketplaceShowcase variant="inline" />
-          </div>
         </div>
       </div>
     </div>
