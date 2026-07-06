@@ -82,3 +82,42 @@ for (const [path, url] of Object.entries(CATEGORY_ART)) {
 }
 
 export const getCategoryArt = (id: string): string | undefined => ART_BY_ID[id];
+
+/**
+ * Specialty preview artwork (Choose Specialty step). Files live in
+ * src/assets/images/specialty/ named `<stem>-<state>.<ext>` where state is
+ * `sell` | `repair` | `both` and stem is the catalog sub id minus its
+ * `-buy`/`-repair` suffix (e.g. `mobile-phones-sell.webp`). See that folder's
+ * README. Same stem normalization as the category art above.
+ */
+export type SpecialtyState = 'sell' | 'repair' | 'both';
+
+const SPECIALTY_ART = import.meta.glob('../../assets/images/specialty/*.{png,jpg,jpeg,webp}', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+
+const SPECIALTY_BY_KEY: Record<string, string> = {};
+for (const [path, url] of Object.entries(SPECIALTY_ART)) {
+  const key = path
+    .split('/')
+    .pop()!
+    .replace(/\.(png|jpe?g|webp)$/i, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-');
+  SPECIALTY_BY_KEY[key] = url;
+}
+
+export const getSpecialtyPreview = (
+  stem: string,
+  state: SpecialtyState,
+): string | undefined => SPECIALTY_BY_KEY[`${stem}-${state}`];
+
+/**
+ * Single image for a single-variant specialty item (no Buy/Repair/Both split —
+ * e.g. automotive items, gaming). Prefers a bare `<stem>.webp`, falling back to
+ * `<stem>-sell.webp` so an item shipped with the `-sell` suffix still resolves.
+ */
+export const getSpecialtyImage = (stem: string): string | undefined =>
+  SPECIALTY_BY_KEY[stem] ?? SPECIALTY_BY_KEY[`${stem}-sell`];

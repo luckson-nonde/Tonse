@@ -62,6 +62,7 @@ import agricultureIcon from '../assets/images/empty-states/category_select_icon/
 import labourIcon from '../assets/images/empty-states/category_select_icon/16_labour_skills.png';
 
 import Button from './Button';
+import { getCategoryArt, getSpecialtyPreview, getSpecialtyImage, type SpecialtyState } from './buyer/categoryMeta';
 import { fetchCategories, Category } from '../services/categories';
 import { useCategoryAvailability } from '../services/categories/availability';
 import { LABOUR_CATEGORY_GROUPS, LABOUR_CATEGORIES } from '../services/labourCategories';
@@ -81,6 +82,9 @@ interface CategorySelectionProps {
   /** When set, skips the parent-category grid and opens directly into the
    *  specialty step for this parent ID.  Used by the targeted-shop flow. */
   preselectedParentId?: string;
+  /** When true, mounts directly in the labour trade picker (skips the single
+   *  "Labour & Skills" tile screen). Used by the Skilled Labour sub-role. */
+  autoLabour?: boolean;
 }
 
 const getCategoryStyles = (id: string) => {
@@ -267,8 +271,14 @@ interface CategoryCardProps {
 
 const CategoryCard = ({ category, isSelected, onClick, onHover, compact }: CategoryCardProps) => {
   const [imgError, setImgError] = useState(false);
+  // The finished artwork (src/assets/images/categories/<id>.webp) and the
+  // legacy PNG track load failures separately — if the artwork errors we fall
+  // back to the PNG path, not straight to the bare icon.
+  const [artError, setArtError] = useState(false);
   const styles = getCategoryStyles(category.id);
   const Icon = styles.icon;
+  const art = getCategoryArt(category.id);
+  const showArt = Boolean(art) && !artError;
 
   if (compact) {
     return (
@@ -280,40 +290,59 @@ const CategoryCard = ({ category, isSelected, onClick, onHover, compact }: Categ
         onClick={onClick}
         whileHover={{ y: -2 }}
         whileTap={{ scale: 0.98 }}
-        className={`group relative h-[104px] rounded-2xl border cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-1.5 px-2 py-3 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-white ${
+        className={`group relative rounded-2xl border cursor-pointer transition-all duration-200 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-white ${
+          showArt
+            ? 'flex flex-col p-1.5 pb-2'
+            : 'min-h-[104px] flex flex-col items-center justify-start gap-1.5 px-2 py-3'
+        } ${
           isSelected
             ? 'border-[#C9973A] bg-white shadow-[0_8px_24px_-14px_rgba(201,151,58,0.45)]'
             : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/40 hover:shadow-[0_6px_18px_-14px_rgba(26,22,18,0.12)]'
         }`}
       >
-        {/* Left-edge gold accent — system signature */}
-        <div
-          className={`absolute left-0 top-3 bottom-3 w-[2px] bg-[#C9973A] rounded-full origin-center transition-all duration-300 ${
-            isSelected ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'
-          }`}
-        />
+        {/* Left-edge gold accent — system signature (icon fallback only;
+            image cards let the gold border + badge carry selection) */}
+        {!showArt && (
+          <div
+            className={`absolute left-0 top-3 bottom-3 w-[2px] bg-[#C9973A] rounded-full origin-center transition-all duration-300 ${
+              isSelected ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'
+            }`}
+          />
+        )}
 
-        <div className="w-12 h-12 flex items-center justify-center shrink-0">
-          {styles.asset && !imgError ? (
+        {showArt ? (
+          <div className="rounded-xl overflow-hidden aspect-4/3 bg-[#f5efe4]">
             <img
-              src={styles.asset}
-              alt={category.name}
-              className="w-full h-full object-contain drop-shadow-sm"
-              onError={() => setImgError(true)}
+              src={art}
+              alt=""
+              loading="lazy"
+              className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04]"
+              onError={() => setArtError(true)}
             />
-          ) : (
-            <div
-              className={`w-10 h-10 rounded-lg flex items-center justify-center ${styles.bg} ${styles.color}`}
-            >
-              <Icon className="w-5 h-5" />
-            </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="w-12 h-12 flex items-center justify-center shrink-0">
+            {styles.asset && !imgError ? (
+              <img
+                src={styles.asset}
+                alt={category.name}
+                className="w-full h-full object-contain drop-shadow-sm"
+                onError={() => setImgError(true)}
+              />
+            ) : (
+              <div
+                className={`w-10 h-10 rounded-lg flex items-center justify-center ${styles.bg} ${styles.color}`}
+              >
+                <Icon className="w-5 h-5" />
+              </div>
+            )}
+          </div>
+        )}
 
         <p
           className={`text-[10px] font-bold uppercase tracking-[0.06em] leading-tight text-center px-1 line-clamp-1 transition-colors ${
-            isSelected ? 'text-[#C9973A]' : 'text-[#1a1612]/85'
-          }`}
+            showArt ? 'mt-auto pt-2' : ''
+          } ${isSelected ? 'text-[#C9973A]' : 'text-[#1a1612]/85'}`}
         >
           {category.name}
         </p>
@@ -333,51 +362,79 @@ const CategoryCard = ({ category, isSelected, onClick, onHover, compact }: Categ
   }
 
   return (
-    <motion.div
+    <motion.button
+      type="button"
       layout
       onMouseEnter={() => onHover?.(category)}
       onMouseLeave={() => onHover?.(null)}
       onClick={onClick}
       whileHover={{ y: -8, scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
-      className={`relative h-[140px] sm:h-[160px] md:h-[180px] rounded-2xl sm:rounded-[24px] cursor-pointer group transition-all duration-300 overflow-hidden border-2 ${
+      className={`relative text-left rounded-2xl sm:rounded-[24px] cursor-pointer group transition-all duration-300 overflow-hidden border-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-white ${
+        showArt
+          ? 'flex flex-col p-2 sm:p-2.5'
+          : 'min-h-[140px] sm:min-h-[160px] md:min-h-[180px]'
+      } ${
         isSelected
           ? 'border-[#C9973A] bg-white shadow-[0_15px_30px_rgba(201,151,58,0.12)]'
           : 'border-slate-100 bg-white hover:border-[#C9973A]/20 hover:shadow-[0_15px_30px_rgba(0,0,0,0.04)]'
       }`}
     >
-      <div className="absolute inset-0 p-3 sm:p-4 flex flex-col items-center justify-center text-center gap-2 sm:gap-3">
-        <div
-          className={`w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-2xl flex items-center justify-center transition-all duration-500 ${
-            isSelected ? 'scale-110' : 'group-hover:scale-110'
-          }`}
-        >
-          {styles.asset && !imgError ? (
+      {showArt ? (
+        <>
+          <div className="rounded-xl sm:rounded-[18px] overflow-hidden aspect-4/3 bg-[#f5efe4]">
             <img
-              src={styles.asset}
-              alt={category.name}
-              className="w-full h-full object-contain drop-shadow-lg"
-              onError={() => setImgError(true)}
+              src={art}
+              alt=""
+              loading="lazy"
+              className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+              onError={() => setArtError(true)}
             />
-          ) : (
-            <div
-              className={`w-12 h-12 rounded-xl flex items-center justify-center ${styles.bg} ${styles.color}`}
+          </div>
+          <div className="mt-auto pt-2.5 sm:pt-3 px-1 pb-1">
+            <h3
+              className={`font-sans text-[12px] sm:text-[13px] font-bold uppercase tracking-tight text-center transition-colors duration-300 ${
+                isSelected ? 'text-[#C9973A]' : 'text-[#1a1a2e]'
+              }`}
             >
-              <Icon className="w-6 h-6" />
-            </div>
-          )}
-        </div>
-
-        <div>
-          <h3
-            className={`font-sans text-[13px] md:text-[14px] font-bold uppercase tracking-tight transition-colors duration-300 ${
-              isSelected ? 'text-[#C9973A]' : 'text-[#1a1a2e]'
+              {category.name}
+            </h3>
+          </div>
+        </>
+      ) : (
+        <div className="absolute inset-0 p-3 sm:p-4 flex flex-col items-center justify-start text-center gap-2 sm:gap-3">
+          <div
+            className={`w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-2xl flex items-center justify-center transition-all duration-500 ${
+              isSelected ? 'scale-110' : 'group-hover:scale-110'
             }`}
           >
-            {category.name}
-          </h3>
+            {styles.asset && !imgError ? (
+              <img
+                src={styles.asset}
+                alt={category.name}
+                className="w-full h-full object-contain drop-shadow-lg"
+                onError={() => setImgError(true)}
+              />
+            ) : (
+              <div
+                className={`w-12 h-12 rounded-xl flex items-center justify-center ${styles.bg} ${styles.color}`}
+              >
+                <Icon className="w-6 h-6" />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h3
+              className={`font-sans text-[13px] md:text-[14px] font-bold uppercase tracking-tight transition-colors duration-300 ${
+                isSelected ? 'text-[#C9973A]' : 'text-[#1a1a2e]'
+              }`}
+            >
+              {category.name}
+            </h3>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="absolute top-3 right-3">
         {isSelected ? (
@@ -390,7 +447,214 @@ const CategoryCard = ({ category, isSelected, onClick, onHover, compact }: Categ
           </div>
         )}
       </div>
-    </motion.div>
+    </motion.button>
+  );
+};
+
+// Options in canonical order; only the ones an item supports are rendered.
+const SPECIALTY_OPTIONS: { state: SpecialtyState; label: string; icon: any }[] = [
+  { state: 'sell', label: 'Sell New', icon: ShoppingBag },
+  { state: 'repair', label: 'Repair', icon: Wrench },
+  { state: 'both', label: 'Both', icon: Sparkles },
+];
+
+interface SpecialtyImageCardProps {
+  baseName: string;
+  previews: Partial<Record<SpecialtyState, string>>;
+  hasBuy: boolean;
+  hasRepair: boolean;
+  /** The currently-selected choice, or null when the item isn't selected. */
+  current: SpecialtyState | null;
+  onChoose: (choice: SpecialtyState) => void;
+}
+
+/**
+ * Image-led specialty card (Choose Specialty step). A 1:1 preview crossfades
+ * between the Sell New / Repair / Both artwork as the seller picks a
+ * mutually-exclusive option. Default (unselected) preview is Sell New.
+ */
+const SpecialtyImageCard = ({
+  baseName,
+  previews,
+  hasBuy,
+  hasRepair,
+  current,
+  onChoose,
+}: SpecialtyImageCardProps) => {
+  const isSelected = current !== null;
+  // Idle preview matches whichever option is actually offered — an item can be
+  // repair-only if admin switched its buy variant off.
+  const displayState: SpecialtyState = current ?? (hasBuy ? 'sell' : 'repair');
+  const imgUrl = previews[displayState] ?? previews.sell ?? previews.repair;
+
+  // Preload the alternates so later crossfades are instant — but AFTER first
+  // paint (idle), so the multi-KB visible 'sell' images aren't starved by a
+  // heavier repair render racing for the connection budget on mount.
+  const { sell: sellUrl, repair: repairUrl, both: bothUrl } = previews;
+  useEffect(() => {
+    const preload = () => {
+      [sellUrl, repairUrl, bothUrl].forEach((url) => {
+        if (url) {
+          const img = new Image();
+          img.src = url;
+        }
+      });
+    };
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number })
+      .requestIdleCallback;
+    const cic = (window as unknown as { cancelIdleCallback?: (h: number) => void })
+      .cancelIdleCallback;
+    const id = ric ? ric(preload) : window.setTimeout(preload, 200);
+    return () => {
+      if (ric && cic) cic(id);
+      else window.clearTimeout(id as number);
+    };
+  }, [sellUrl, repairUrl, bothUrl]);
+
+  const options = SPECIALTY_OPTIONS.filter((o) => {
+    if (o.state === 'sell') return hasBuy;
+    if (o.state === 'repair') return hasRepair;
+    return hasBuy && hasRepair; // both
+  });
+
+  return (
+    <div
+      className={`group/card relative rounded-2xl bg-white border p-2 pb-2.5 flex flex-col transition-all duration-300 ${
+        isSelected
+          ? 'border-[#C9973A] shadow-[0_10px_28px_-12px_rgba(201,151,58,0.45)] -translate-y-0.5'
+          : 'border-[#e8e4dc] hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-14px_rgba(26,22,18,0.18)]'
+      }`}
+    >
+      {/* 1:1 preview with true (overlapping) crossfade — both images are
+          absolute inset-0, so the incoming one fades in over the outgoing. */}
+      <div className="relative rounded-xl overflow-hidden aspect-square bg-[#f5efe4]">
+        <AnimatePresence initial={false}>
+          <motion.img
+            key={displayState}
+            src={imgUrl}
+            alt=""
+            loading="lazy"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 ease-out group-hover/card:scale-[1.02]"
+          />
+        </AnimatePresence>
+        {isSelected && (
+          <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#C9973A] text-white flex items-center justify-center shadow-md shadow-[#C9973A]/40">
+            <Check className="w-2.5 h-2.5" strokeWidth={3} />
+          </div>
+        )}
+      </div>
+
+      <h3 className="font-bold text-[#1a1612] text-[12px] leading-tight tracking-tight mt-2 mb-2 px-0.5 line-clamp-2">
+        {baseName}
+      </h3>
+
+      {/* Mutually-exclusive option radios */}
+      <div
+        role="radiogroup"
+        aria-label={`${baseName} — what you offer`}
+        className="flex flex-col gap-1.5 mt-auto"
+      >
+        {options.map((opt) => {
+          const active = current === opt.state;
+          const OptIcon = opt.icon;
+          return (
+            <button
+              key={opt.state}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => onChoose(opt.state)}
+              className={`relative w-full px-2.5 h-8 rounded-lg text-[10px] font-bold uppercase tracking-[0.12em] transition-all duration-200 flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-1 focus-visible:ring-offset-white ${
+                active
+                  ? 'bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white border border-[#a87a1f] shadow-[0_4px_12px_-6px_rgba(201,151,58,0.5)]'
+                  : 'bg-white border border-[#C9973A]/30 text-[#C9973A] hover:border-[#C9973A]/60 hover:bg-[#fdf6e9]/50'
+              }`}
+            >
+              <span
+                className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                  active ? 'border-white' : 'border-[#C9973A]/50'
+                }`}
+              >
+                {active && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+              </span>
+              <OptIcon className="w-3.5 h-3.5 shrink-0" />
+              <span className="flex-1 text-left truncate">{opt.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+interface SpecialtySingleCardProps {
+  baseName: string;
+  image: string;
+  /** The item's own action label (e.g. "New & Used", "Breakers", "Select"). */
+  actionLabel: string;
+  selected: boolean;
+  onToggle: () => void;
+}
+
+/**
+ * Image-led card for a single-variant specialty item (no Buy/Repair/Both) —
+ * one preview + the item's real action label; the whole card toggles the
+ * single underlying subcategory. Used for automotive items, gaming, etc.
+ */
+const SpecialtySingleCard = ({
+  baseName,
+  image,
+  actionLabel,
+  selected,
+  onToggle,
+}: SpecialtySingleCardProps) => {
+  const isRepairLabel = /repair|restoration|upholstery|recovery/i.test(actionLabel);
+  const Icon = isRepairLabel ? Wrench : ShoppingBag;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={selected}
+      className={`group/card relative rounded-2xl bg-white border p-2 pb-2.5 flex flex-col text-left transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-1 focus-visible:ring-offset-white ${
+        selected
+          ? 'border-[#C9973A] shadow-[0_10px_28px_-12px_rgba(201,151,58,0.45)] -translate-y-0.5'
+          : 'border-[#e8e4dc] hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-14px_rgba(26,22,18,0.18)]'
+      }`}
+    >
+      <div className="relative rounded-xl overflow-hidden aspect-square bg-[#f5efe4]">
+        <img
+          src={image}
+          alt=""
+          loading="lazy"
+          className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover/card:scale-[1.02]"
+        />
+        {selected && (
+          <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#C9973A] text-white flex items-center justify-center shadow-md shadow-[#C9973A]/40">
+            <Check className="w-2.5 h-2.5" strokeWidth={3} />
+          </div>
+        )}
+      </div>
+
+      <h3 className="font-bold text-[#1a1612] text-[12px] leading-tight tracking-tight mt-2 mb-2 px-0.5 line-clamp-2">
+        {baseName}
+      </h3>
+
+      <div
+        className={`w-full px-2.5 h-8 rounded-lg text-[10px] font-bold uppercase tracking-[0.12em] flex items-center gap-2 mt-auto transition-all duration-200 ${
+          selected
+            ? 'bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white border border-[#a87a1f]'
+            : 'bg-white border border-[#C9973A]/30 text-[#C9973A] group-hover/card:border-[#C9973A]/60 group-hover/card:bg-[#fdf6e9]/50'
+        }`}
+      >
+        <Icon className="w-3.5 h-3.5 shrink-0" />
+        <span className="flex-1 text-left truncate">{actionLabel}</span>
+        {selected && <Check className="w-3 h-3 shrink-0" strokeWidth={3} />}
+      </div>
+    </button>
   );
 };
 
@@ -477,8 +741,12 @@ const WorkflowIllustration = ({
           </div>
 
           <div className="absolute -right-20 -bottom-20 opacity-[0.03]">
-            {styles.asset ? (
-              <img src={styles.asset} className="w-80 h-80 object-contain rotate-12" alt="" />
+            {(getCategoryArt(category.id) ?? styles.asset) ? (
+              <img
+                src={getCategoryArt(category.id) ?? styles.asset}
+                className="w-80 h-80 object-contain rotate-12"
+                alt=""
+              />
             ) : (
               <styles.icon className="w-80 h-80" />
             )}
@@ -535,6 +803,7 @@ export default function CategorySelection({
   hideSubmitButton = false,
   onSubcategoryViewChange,
   preselectedParentId,
+  autoLabour = false,
 }: CategorySelectionProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredCategory, setHoveredCategory] = useState<Category | null>(null);
@@ -543,7 +812,11 @@ export default function CategorySelection({
   const [loading, setLoading] = useState(true);
 
   const [activeParent, setActiveParent] = useState<Category | null>(null);
-  const [activeLabourGroup, setActiveLabourGroup] = useState<any | null>(null);
+  // Skilled Labour sub-role lands straight in the trade picker (ROOT), skipping
+  // the lone "Labour & Skills" tile.
+  const [activeLabourGroup, setActiveLabourGroup] = useState<any | null>(
+    autoLabour ? 'ROOT' : null,
+  );
   const [subcategories, setSubcategories] = useState<Category[]>([]);
   const [loadingSub, setLoadingSub] = useState(false);
   const [subSearchQuery, setSubSearchQuery] = useState('');
@@ -758,6 +1031,33 @@ export default function CategorySelection({
     });
   };
 
+  // Image-led specialty card: one mutually-exclusive choice per item —
+  // Sell New (buy variant) / Repair (repair variant) / Both (both). Selecting a
+  // choice replaces this item's prior selection; re-picking the active choice
+  // clears it (so a card can be switched off). Selecting an item from a
+  // different master first drops the other master's subs (same rule as
+  // toggleSubcategory), keeping the parentId-grouping contract intact.
+  const setSpecialtyChoice = (
+    buy: Category | undefined,
+    repair: Category | undefined,
+    choice: SpecialtyState,
+    current: SpecialtyState | null,
+  ) => {
+    const parentId = (buy ?? repair)?.parentId;
+    setSelectedCategories((prev) => {
+      const base = prev[0]?.parentId !== parentId ? [] : prev;
+      // Clear any prior variant of THIS item, keep the rest.
+      const withoutThis = base.filter(
+        (c) => c.id !== buy?.id && c.id !== repair?.id,
+      );
+      if (choice === current) return withoutThis; // toggle off
+      const next = [...withoutThis];
+      if ((choice === 'sell' || choice === 'both') && buy) next.push(buy);
+      if ((choice === 'repair' || choice === 'both') && repair) next.push(repair);
+      return next;
+    });
+  };
+
   const handleCompleteFinal = async () => {
     if (!onComplete) return;
 
@@ -872,7 +1172,7 @@ export default function CategorySelection({
               <div
                 className={
                   hideHeader
-                    ? 'grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[440px] overflow-y-auto pr-1.5 tonse-scrollbar'
+                    ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 items-start'
                     : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5'
                 }
               >
@@ -884,10 +1184,69 @@ export default function CategorySelection({
 
                   // Compact specialty card for the embedded registration
                   // shell — header sits in the AuthSplitLayout shell instead
-                  // of inside each card; variant chips stack vertically so
-                  // labels like "Buy New" / "Repair" don't truncate at narrow
-                  // column widths.
+                  // of inside each card.
                   if (hideHeader) {
+                    const isRepairVar = (v: (typeof group.variants)[number]) =>
+                      v.sub.type === 'repair' ||
+                      /repair|restoration|upholstery|recovery/i.test(v.action || '');
+                    const buy = group.variants.find((v) => !isRepairVar(v))?.sub;
+                    const repair = group.variants.find((v) => isRepairVar(v))?.sub;
+                    const stem = group.variants[0].sub.id.replace(/-(buy|repair)$/, '');
+                    const isMultiVariant = !!buy && !!repair;
+
+                    // Multi-variant (Buy + Repair) with a per-state preview set →
+                    // the dynamic Sell New / Repair / Both card.
+                    const sellUrl = isMultiVariant ? getSpecialtyPreview(stem, 'sell') : undefined;
+                    if (isMultiVariant && sellUrl) {
+                      const hasBuySel = !!buy && selectedCategories.some((c) => c.id === buy.id);
+                      const hasRepSel =
+                        !!repair && selectedCategories.some((c) => c.id === repair.id);
+                      const current: SpecialtyState | null =
+                        hasBuySel && hasRepSel
+                          ? 'both'
+                          : hasBuySel
+                            ? 'sell'
+                            : hasRepSel
+                              ? 'repair'
+                              : null;
+                      return (
+                        <SpecialtyImageCard
+                          key={group.baseName}
+                          baseName={group.baseName}
+                          previews={{
+                            sell: sellUrl,
+                            repair: getSpecialtyPreview(stem, 'repair'),
+                            both: getSpecialtyPreview(stem, 'both'),
+                          }}
+                          hasBuy={!!buy}
+                          hasRepair={!!repair}
+                          current={current}
+                          onChoose={(choice) =>
+                            setSpecialtyChoice(buy, repair, choice, current)
+                          }
+                        />
+                      );
+                    }
+
+                    // Single-variant item (automotive, gaming, …) with a single
+                    // preview → image-led card using the item's real action label.
+                    const singleImg = !isMultiVariant ? getSpecialtyImage(stem) : undefined;
+                    if (singleImg) {
+                      const v = group.variants[0];
+                      return (
+                        <SpecialtySingleCard
+                          key={group.baseName}
+                          baseName={group.baseName}
+                          image={singleImg}
+                          actionLabel={v.action || 'Select'}
+                          selected={selectedCategories.some((c) => c.id === v.sub.id)}
+                          onToggle={() => toggleSubcategory(v.sub)}
+                        />
+                      );
+                    }
+
+                    // No artwork → original icon-chip card (until images land, and
+                    // multi-variant non-electronics service specialties).
                     return (
                       <div
                         key={group.baseName}
@@ -1059,25 +1418,47 @@ export default function CategorySelection({
           </div>
         ) : activeLabourGroup ? (
           <div className="flex flex-col animate-in slide-in-from-right duration-500">
-            <div className="mb-8 sm:mb-10">
-              <button
-                onClick={() => setActiveLabourGroup(null)}
-                className="flex items-center gap-2 text-slate-400 font-bold text-sm mb-5 hover:text-[#C9973A] transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4" /> Back to categories
-              </button>
-              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#C9973A] mb-3">
-                Labour and Skills <span className="text-slate-300 mx-1">·</span> Step 02 / Specialty
-              </p>
-              <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-[#1a1a2e] tracking-tight leading-[1.1] mb-3 sm:mb-4">
-                Choose your <span className="text-[#C9973A]">specialty</span>
-              </h1>
-              <p className="text-slate-500 text-sm sm:text-base font-medium max-w-xl leading-relaxed">
-                Pick the type of skilled professional you need. Browse all six tracks or jump straight to the trade you're hiring for.
-              </p>
-            </div>
+            {hideHeader ? (
+              // Registration shell already shows the "Choose Your Trade" header;
+              // keep just a compact back + track chip here (no duplicate title).
+              <div className="mb-5 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => (autoLabour ? onBack?.() : setActiveLabourGroup(null))}
+                  className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[#C9973A] hover:gap-2.5 transition-all"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" /> Back
+                </button>
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#C9973A]/10 text-[#C9973A] font-bold uppercase tracking-[0.14em] text-[10px]">
+                  Labour &amp; Skills
+                </span>
+              </div>
+            ) : (
+              <div className="mb-8 sm:mb-10">
+                <button
+                  onClick={() => (autoLabour ? onBack?.() : setActiveLabourGroup(null))}
+                  className="flex items-center gap-2 text-slate-400 font-bold text-sm mb-5 hover:text-[#C9973A] transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Back
+                </button>
+                <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#C9973A] mb-3">
+                  Labour &amp; Skills <span className="text-slate-300 mx-1">·</span> Step 02 / Trade
+                </p>
+                <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-[#1a1a2e] tracking-tight leading-[1.1] mb-3 sm:mb-4">
+                  Choose your <span className="text-[#C9973A]">trade</span>
+                </h1>
+                <p className="text-slate-500 text-sm sm:text-base font-medium max-w-xl leading-relaxed">
+                  Pick the track that fits your work, then choose your specific trade.
+                </p>
+              </div>
+            )}
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-10">
+            {/* Track picker — labels like "Construction & Building" need room, so
+                wider cards (2–3 cols), not a cramped 6-up row. */}
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#C9973A] mb-3">
+              Choose a track
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 mb-8">
               {LABOUR_CATEGORY_GROUPS.map((g) => {
                 const GroupIcon = LABOUR_GROUP_ICONS[g.id] || Wrench;
                 const isActive =
@@ -1087,22 +1468,16 @@ export default function CategorySelection({
                     type="button"
                     key={g.id}
                     onClick={() => handleLabourGroupClick(g)}
-                    className={`group/card relative p-5 rounded-[20px] bg-white border transition-all duration-500 ease-out flex flex-col items-center gap-3 text-center ${
+                    className={`group/card relative p-4 rounded-2xl bg-white border transition-all duration-300 ease-out flex items-center gap-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-1 focus-visible:ring-offset-white ${
                       isActive
-                        ? 'border-[#C9973A]/60 shadow-[0_18px_40px_-12px_rgba(201,151,58,0.22)]'
-                        : 'border-[#C9973A]/20 hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-12px_rgba(201,151,58,0.18)]'
+                        ? 'border-[#C9973A] shadow-[0_12px_28px_-14px_rgba(201,151,58,0.4)] -translate-y-0.5'
+                        : 'border-[#e8e4dc] hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-14px_rgba(26,22,18,0.18)]'
                     }`}
                   >
-                    {isActive && (
-                      <div
-                        aria-hidden="true"
-                        className="absolute top-3 right-3 w-1.5 h-1.5 rounded-full bg-[#C9973A] shadow-[0_0_0_5px_rgba(201,151,58,0.18)]"
-                      />
-                    )}
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
                       <GroupIcon className="w-5 h-5" />
                     </div>
-                    <h3 className="font-bold text-[#1a1a2e] text-[12px] sm:text-[13px] uppercase tracking-[0.08em] leading-tight">
+                    <h3 className="font-bold text-[#1a1a2e] text-[12px] sm:text-[13px] leading-tight tracking-tight min-w-0">
                       {g.label}
                     </h3>
                   </button>
@@ -1246,15 +1621,7 @@ export default function CategorySelection({
 
             {hideHeader ? (
               <div className="relative">
-                <div
-                  className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 max-h-[440px] overflow-y-auto pr-1.5 scroll-smooth tonse-scrollbar"
-                  style={{
-                    maskImage:
-                      'linear-gradient(to bottom, black 0, black calc(100% - 24px), transparent 100%)',
-                    WebkitMaskImage:
-                      'linear-gradient(to bottom, black 0, black calc(100% - 24px), transparent 100%)',
-                  }}
-                >
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
                   {filteredCategories.map((c) => (
                     <CategoryCard
                       key={c.id}

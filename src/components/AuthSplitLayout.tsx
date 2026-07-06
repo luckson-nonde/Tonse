@@ -34,6 +34,11 @@ interface AuthSplitLayoutProps {
    *  CTA — visual proximity to the decision point reads more premium
    *  than the exiled bottom-corner version. */
   trustBand?: boolean;
+  /** When true, the header block (back + title + subtitle) pins to the top of
+   *  the pane with a translucent backdrop while the content scrolls beneath it.
+   *  Used by long multi-column steps (Business Categories / Choose Specialty)
+   *  so the screen title stays visible. Opt-in; other callers are unaffected. */
+  stickyHeader?: boolean;
 }
 
 export default function AuthSplitLayout({
@@ -45,6 +50,7 @@ export default function AuthSplitLayout({
   paneTone = 'cream',
   hideHeader = false,
   trustBand = false,
+  stickyHeader = false,
 }: AuthSplitLayoutProps) {
   // Pane tone resolution: every existing caller (Register, RoleSelection,
   // CompanyDocuments, CategorySelection, LabourRegister) takes the cream
@@ -52,6 +58,7 @@ export default function AuthSplitLayout({
   // pure white.
   const paneBg = paneTone === 'white' ? 'bg-white' : 'bg-brand-white';
   const wrapperBg = paneTone === 'white' ? 'bg-white' : 'bg-brand-white';
+  const stickyBg = paneTone === 'white' ? 'bg-white/95' : 'bg-brand-white/95';
 
   return (
     <div className={`min-h-screen flex flex-col lg:flex-row font-sans ${wrapperBg}`}>
@@ -140,17 +147,33 @@ export default function AuthSplitLayout({
               competed with the hero's "Welcome back to the gold
               standard." */}
           {!hideHeader && (
-            <div className="flex flex-col mb-10 gap-3">
+            <div
+              className={`flex flex-col ${
+                stickyHeader
+                  ? `gap-2 sticky top-0 z-30 ${stickyBg} backdrop-blur-sm py-3 border-b border-[#e8e4dc] mb-6`
+                  : 'gap-3 mb-10'
+              }`}
+            >
               {onBack && (
                 <button
                   onClick={onBack}
-                  className="hidden lg:flex items-center text-slate-400 hover:text-slate-600 transition-colors text-[13px] font-sans font-medium w-fit group mb-2"
+                  className={`hidden lg:flex items-center text-slate-400 hover:text-slate-600 transition-colors text-[13px] font-sans font-medium w-fit group ${
+                    stickyHeader ? '' : 'mb-2'
+                  }`}
                 >
                   <ArrowLeft className="w-4 h-4 mr-1.5 group-hover:-translate-x-1 transition-transform" />
                   Back
                 </button>
               )}
-              <h2 className="text-[24px] sm:text-[34px] lg:text-[44px] font-serif font-bold text-brand-dark leading-[1.1] lg:leading-[1.05] tracking-tight">
+              {/* Pinned headers use a compact title so the sticky bar doesn't
+                  eat a fifth of the viewport while the grid scrolls under it. */}
+              <h2
+                className={`font-serif font-bold text-brand-dark tracking-tight ${
+                  stickyHeader
+                    ? 'text-[22px] sm:text-[26px] lg:text-[30px] leading-tight'
+                    : 'text-[24px] sm:text-[34px] lg:text-[44px] leading-[1.1] lg:leading-[1.05]'
+                }`}
+              >
                 {title}
               </h2>
               <div className="flex items-center gap-3">

@@ -18,6 +18,7 @@ import {
   Laptop,
   User,
   Building2,
+  Briefcase,
   Package,
   Settings,
   Layers,
@@ -191,30 +192,24 @@ const sellerSubRoles: RoleOption[] = [
   },
 ];
 
-// SERVICE_PROVIDER tier-2: businesses that book/rent/perform/fix.
-// Three shapes by company structure, not by what they offer (categories
-// in tier 3 narrow that down).
+// SERVICE_PROVIDER tier-2: two kinds of provider —
+//   Service  → books/rents/performs/fixes (solo pro OR agency; identical
+//              downstream, so they're one option). Sees service categories.
+//   Skilled Labour → tradespeople. Goes straight to the trade picker.
+// Tier 3 shows each its own category set (see categoryFilter below).
 const serviceProviderSubRoles: RoleOption[] = [
   {
     id: 'INDIVIDUAL_PROVIDER',
-    eyebrow: 'Solo · Practitioner',
-    title: 'Solo',
-    description: 'Independent professional — DJ, photographer, planner, consultant.',
-    icon: User,
+    eyebrow: 'Service · Professional',
+    title: 'Service',
+    description: 'Solo pro or agency — repairs, events, entertainment, IT, consulting.',
+    icon: Briefcase,
     subRole: 'INDIVIDUAL_PROVIDER',
   },
   {
-    id: 'AGENCY_PROVIDER',
-    eyebrow: 'Agency · Multi-team',
-    title: 'Agency',
-    description: 'Multi-person service business — event company, repair shop, catering co.',
-    icon: Building2,
-    subRole: 'AGENCY_PROVIDER',
-  },
-  {
     id: 'SKILLED_LABOUR',
-    eyebrow: 'Trade · Skilled Labour',
-    title: 'Skilled Labour',
+    eyebrow: 'Trade · Hands-on',
+    title: 'Labour',
     description: 'Tradesperson — carpenter, welder, plumber, electrician.',
     icon: Wrench,
     subRole: 'SKILLED_LABOUR',
@@ -267,10 +262,10 @@ export default function RoleSelection() {
       selectedSubRole === 'AGENCY_PROVIDER' ||
       selectedSubRole === 'SKILLED_LABOUR'
     ) {
-      return rootCategories.filter((c) => {
-        const nature = getCategoryNature(c.id);
-        return nature === 'SERVICE' || nature === 'BOTH';
-      });
+      // Services + labour only — pure-SERVICE categories. BOTH-nature
+      // categories (Automotive, Agriculture) are product catalogs that belong
+      // to the seller flow, so they're excluded here to avoid repeats.
+      return rootCategories.filter((c) => getCategoryNature(c.id) === 'SERVICE');
     }
     return rootCategories;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -323,10 +318,13 @@ export default function RoleSelection() {
 
   return (
     <AuthSplitLayout
+      stickyHeader={tier === 3}
       title={
         isViewingSubcategories
           ? tier === 3 && (masterRole === 'SELLER' || masterRole === 'SERVICE_PROVIDER')
-            ? 'Choose Specialty'
+            ? selectedSubRole === 'SKILLED_LABOUR'
+              ? 'Choose Your Trade'
+              : 'Choose Specialty'
             : null
           : tier === 1
             ? 'Select Your Role'
@@ -343,7 +341,11 @@ export default function RoleSelection() {
       subtitle={
         isViewingSubcategories
           ? tier === 3 && (masterRole === 'SELLER' || masterRole === 'SERVICE_PROVIDER')
-            ? <span className="text-[#1a1612]/60">Pick exactly what you sell or repair</span>
+            ? <span className="text-[#1a1612]/60">
+                {selectedSubRole === 'SKILLED_LABOUR'
+                  ? 'Pick the trade you specialise in'
+                  : 'Pick exactly what you sell or repair'}
+              </span>
             : null
           : <span className="text-[#1a1612]/60">
               {tier === 1
@@ -554,20 +556,27 @@ export default function RoleSelection() {
                       : undefined
                   }
                   categoryFilter={(cat) => {
+                    // Each provider type sees only its own group. The synthetic
+                    // "Labour & Skills" tile (cat.id === 'labour') is the trade
+                    // picker's entry point.
                     const nature = getCategoryNature(cat.id);
+                    if (masterRole === 'SERVICE_PROVIDER') {
+                      // Skilled Labour → only the trade picker.
+                      if (selectedSubRole === 'SKILLED_LABOUR') return cat.id === 'labour';
+                      // Service → pure-service categories, no Labour tile, no
+                      // BOTH-nature product categories (Automotive, Agriculture).
+                      return cat.id !== 'labour' && nature === 'SERVICE';
+                    }
+                    // Seller — Labour never applies here.
+                    if (cat.id === 'labour') return false;
                     if (selectedSubRole === 'PRODUCT_SELLER') {
                       return nature === 'PRODUCT' || nature === 'BOTH';
-                    }
-                    if (
-                      selectedSubRole === 'INDIVIDUAL_PROVIDER' ||
-                      selectedSubRole === 'AGENCY_PROVIDER' ||
-                      selectedSubRole === 'SKILLED_LABOUR'
-                    ) {
-                      return nature === 'SERVICE' || nature === 'BOTH';
                     }
                     return true;
                   }}
                   onSubcategoryViewChange={setIsViewingSubcategories}
+                  autoLabour={selectedSubRole === 'SKILLED_LABOUR'}
+                  onBack={() => setTier(2)}
                 />
               </div>
             </motion.div>
@@ -595,8 +604,14 @@ export default function RoleSelection() {
         // one specialty". This rule is suffix-agnostic, so it works for
         // categories whose subs carry a variant ("Mobile Phones (Repair)")
         // and ones whose subs don't ("MCs & Hosts", "Event Catering").
+        // Labour trades carry no master pseudo-entry (CategorySelection emits
+        // just the trade ids), so one picked trade is enough; other specialists
+        // need the master + ≥1 sub (length >= 2).
+        const isLabourSelection = selectedSubRole === 'SKILLED_LABOUR';
         const specialistHasSubPicked =
-          tier === 3 && isSpecialist && selectedCategories.length >= 2;
+          tier === 3 &&
+          isSpecialist &&
+          (isLabourSelection ? selectedCategories.length >= 1 : selectedCategories.length >= 2);
 
         const disabled =
           tier === 1
