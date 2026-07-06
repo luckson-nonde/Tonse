@@ -729,9 +729,7 @@ Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`, `onDel
 | `ENCRYPTION_IV` | `your_16_character_iv` | IV for (currently unused) `EncryptionService` |
 
 ### Seed data
-`backend/src/database/seeds/seed.ts` (run via `npm run seed`) creates exactly **one row** — a platform root ADMIN user. It is idempotent: it looks up an existing user by `ADMIN_EMAIL`; if found, it upgrades role to `ADMIN` and sets `isActive=true`, `verificationStatus='VERIFIED'` only where different (no password reset on re-run). If not found, it hashes `ADMIN_PASSWORD` with bcryptjs, registers with a placeholder NRC, then patches `verificationStatus` to `VERIFIED` and `isActive=true`. No other tables (categories, products, etc.) are seeded by this script.
-
-> ⚠️ Security note: the seed logs plaintext admin credentials to the console and ships hardcoded default admin credentials — replace `ADMIN_EMAIL`/`ADMIN_PASSWORD` via environment before any non-local deployment.
+`backend/src/database/seeds/seed.ts` (run via `npm run seed`) creates exactly **one row** — a platform root ADMIN user. Credentials come from environment variables (`ADMIN_EMAIL`/`ADMIN_PASSWORD` required, `ADMIN_NAME`/`ADMIN_PHONE`/`ADMIN_NRC` optional) loaded from the gitignored `backend/.env`; the script exits with an error if email/password are unset or the password is under 8 characters, and it never logs the plaintext password. It is idempotent: it looks up an existing user by `ADMIN_EMAIL`; if found, it upgrades role to `ADMIN` and sets `isActive=true`, `verificationStatus='VERIFIED'` only where different — the password is only rotated (re-hashed from the current `ADMIN_PASSWORD`) when run as `npm run seed -- --reset-password`. If not found, it hashes `ADMIN_PASSWORD` with bcryptjs, registers with a placeholder NRC, then patches `verificationStatus` to `VERIFIED` and `isActive=true`. No other tables (categories, products, etc.) are seeded by this script.
 
 ---
 

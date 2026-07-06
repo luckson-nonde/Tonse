@@ -3,27 +3,57 @@
  * ------------
  * Creates the platform's root admin user. Idempotent: safe to re-run.
  *
+ * Credentials come from environment variables (backend/.env, gitignored):
+ *   ADMIN_EMAIL      required
+ *   ADMIN_PASSWORD   required, min 8 chars — never committed, never logged
+ *   ADMIN_NAME       optional (default "Tonse Admin")
+ *   ADMIN_PHONE      optional
+ *   ADMIN_NRC        optional placeholder NRC
+ *
  * Run via:
  *   cd backend && npm run seed
  *
- * After this script succeeds the admin can log in at /login on the frontend
- * with the email + password printed at the bottom of the script.
+ * Re-running against an existing admin only repairs role/active/verified
+ * flags — it does NOT touch the password. To rotate the password to the
+ * current ADMIN_PASSWORD value:
+ *   npm run seed -- --reset-password
  */
+import * as dotenv from 'dotenv';
+dotenv.config();
+
 import { NestFactory } from '@nestjs/core';
 import * as bcrypt from 'bcryptjs';
 import { AppModule } from '../../app.module';
 import { UsersService } from '../../modules/users/users.service';
 
-const ADMIN_EMAIL = 'lucksoncnonde@gmail.com';
-const ADMIN_NAME = 'Luckson Nonde';
-const ADMIN_PASSWORD = 'cluckson19947';
-const ADMIN_PHONE = '+260970000000';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? '';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? '';
+const ADMIN_NAME = process.env.ADMIN_NAME ?? 'Tonse Admin';
+const ADMIN_PHONE = process.env.ADMIN_PHONE ?? '+260970000000';
 // Fake-but-unique NRC so the three-tier identity uniqueness checks pass.
 // Real NRCs use the format `123456/78/9`; this placeholder is intentionally
 // non-conflicting with any real Zambian NRC.
-const ADMIN_NRC = '999999/99/9';
+const ADMIN_NRC = process.env.ADMIN_NRC ?? '999999/99/9';
+
+const RESET_PASSWORD = process.argv.includes('--reset-password');
+
+function requireCredentials() {
+  const problems: string[] = [];
+  if (!ADMIN_EMAIL) problems.push('ADMIN_EMAIL is not set');
+  if (!ADMIN_PASSWORD) problems.push('ADMIN_PASSWORD is not set');
+  else if (ADMIN_PASSWORD.length < 8) problems.push('ADMIN_PASSWORD must be at least 8 characters');
+
+  if (problems.length > 0) {
+    console.error('❌ Cannot seed admin user:');
+    for (const p of problems) console.error(`   - ${p}`);
+    console.error('\nAdd the values to backend/.env (see .env.example) and re-run.');
+    process.exit(1);
+  }
+}
 
 async function bootstrap() {
+  requireCredentials();
+
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['log', 'warn', 'error'],
   });
@@ -38,16 +68,21 @@ async function bootstrap() {
       if (existing.role !== 'ADMIN') updates.role = 'ADMIN';
       if (!existing.isActive) updates.isActive = true;
       if (existing.verificationStatus !== 'VERIFIED') updates.verificationStatus = 'VERIFIED';
+      if (RESET_PASSWORD) updates.password = await bcrypt.hash(ADMIN_PASSWORD, 10);
 
       if (Object.keys(updates).length > 0) {
         await usersService.update(existing.id, updates as any);
-        console.log(`✅ Existing user '${ADMIN_EMAIL}' was upgraded to ADMIN.`);
+        console.log(`✅ Existing user '${ADMIN_EMAIL}' updated${RESET_PASSWORD ? ' (password rotated)' : ''}.`);
       } else {
         console.log(`ℹ️  Admin user '${ADMIN_EMAIL}' already exists — nothing to do.`);
       }
       console.log(`\nAdmin login credentials:`);
       console.log(`  Email:    ${ADMIN_EMAIL}`);
-      console.log(`  Password: (unchanged — re-run with a different seed if you forgot it)`);
+      console.log(
+        RESET_PASSWORD
+          ? `  Password: (the current ADMIN_PASSWORD value in backend/.env)`
+          : `  Password: (unchanged — re-run with --reset-password to rotate it)`
+      );
       console.log(`  Role:     ADMIN`);
       return;
     }
@@ -77,7 +112,7 @@ async function bootstrap() {
     console.log('-----------------------');
     console.log(`  Name:     ${ADMIN_NAME}`);
     console.log(`  Email:    ${ADMIN_EMAIL}`);
-    console.log(`  Password: ${ADMIN_PASSWORD}`);
+    console.log(`  Password: (the ADMIN_PASSWORD value in backend/.env)`);
     console.log(`  Display:  ${user.displayId ?? '(not yet generated)'}`);
     console.log(`  Role:     ADMIN`);
     console.log('\nLog in at http://localhost:3000/login — you will be routed to /admin.');
