@@ -56,3 +56,29 @@ export const FALLBACK_META: CategoryMeta = {
 };
 
 export const getMeta = (id: string): CategoryMeta => CATEGORY_META[id] ?? FALLBACK_META;
+
+/**
+ * Finished category artwork, dropped in src/assets/images/categories/ with
+ * the category id as the file stem (see that folder's README). Stems are
+ * normalized (lowercase, spaces/underscores → hyphens) so a drop named
+ * "Home Decor.webp" still resolves to `home-decor` without a rename.
+ * Categories without artwork keep the icon-chip treatment.
+ */
+const CATEGORY_ART = import.meta.glob('../../assets/images/categories/*.{png,jpg,jpeg,webp}', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+
+const ART_BY_ID: Record<string, string> = {};
+for (const [path, url] of Object.entries(CATEGORY_ART)) {
+  const stem = path
+    .split('/')
+    .pop()!
+    .replace(/\.(png|jpe?g|webp)$/i, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-');
+  ART_BY_ID[stem] = url;
+}
+
+export const getCategoryArt = (id: string): string | undefined => ART_BY_ID[id];

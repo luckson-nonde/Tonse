@@ -1,6 +1,6 @@
 import { ChevronRight } from 'lucide-react';
 import type { Category } from '../../../services/categories';
-import { getMeta } from '../categoryMeta';
+import { getMeta, getCategoryArt } from '../categoryMeta';
 
 interface Props {
   items: Category[];
@@ -14,20 +14,30 @@ export default function MasterList({ items, subCounts, onPick }: Props) {
       {items.map((c) => {
         const meta = getMeta(c.id);
         const Icon = meta.icon;
+        const art = getCategoryArt(c.id);
         const total = subCounts[c.id] ?? 0;
         return (
           <button
             key={c.id}
             type="button"
             onClick={() => onPick(c)}
-            className="bg-white border border-slate-200 rounded-2xl px-3.5 sm:px-4 py-3.5 sm:py-4 text-left flex items-center gap-3.5 sm:gap-4 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md hover:border-[#c9973a]/40 active:scale-[0.99]"
+            className="bg-white border border-slate-200 rounded-2xl px-3.5 sm:px-4 py-3.5 sm:py-4 text-left flex items-center gap-3.5 sm:gap-4 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md hover:border-[#c9973a]/40 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-white"
           >
-            <div
-              className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: meta.accent + '1f', color: meta.accent }}
-            >
-              <Icon size={22} strokeWidth={1.8} />
-            </div>
+            {art ? (
+              <img
+                src={art}
+                alt=""
+                loading="lazy"
+                className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl object-cover shrink-0 bg-[#f5efe4]"
+              />
+            ) : (
+              <div
+                className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: meta.accent + '1f', color: meta.accent }}
+              >
+                <Icon size={22} strokeWidth={1.8} />
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <div className="text-[14.5px] sm:text-[15px] font-bold text-brand-dark tracking-tight truncate">
                 {c.name}

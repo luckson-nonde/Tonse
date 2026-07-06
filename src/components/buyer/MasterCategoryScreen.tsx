@@ -5,6 +5,7 @@ import { MasterLayoutToggle } from './LayoutToggle';
 import MasterGrid from './categoryLayouts/MasterGrid';
 import MasterMosaic from './categoryLayouts/MasterMosaic';
 import MasterList from './categoryLayouts/MasterList';
+import CategoryGroupSections from './categoryLayouts/CategoryGroupSections';
 import { getMeta } from './categoryMeta';
 import type { MasterLayout } from './useLayoutPreference';
 
@@ -41,6 +42,7 @@ export default function MasterCategoryScreen({
   onPickMaster,
 }: Props) {
   const [query, setQuery] = useState('');
+  const hasQuery = query.trim().length > 0;
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return masters;
@@ -81,9 +83,28 @@ export default function MasterCategoryScreen({
           </div>
         ) : (
           <>
-            {layout === 'grid'   && <MasterGrid   items={filtered} subCounts={subCounts} onPick={onPickMaster} />}
-            {layout === 'mosaic' && <MasterMosaic items={filtered} subCounts={subCounts} onPick={onPickMaster} />}
-            {layout === 'list'   && <MasterList   items={filtered} subCounts={subCounts} onPick={onPickMaster} />}
+            {/* Browsing shows the marketplace sections (Shopping, Professional
+                Services, …); an active search renders flat — a handful of hits
+                split across four headers is harder to scan than one list. */}
+            {layout === 'grid' && (hasQuery ? (
+              <MasterGrid items={filtered} subCounts={subCounts} onPick={onPickMaster} />
+            ) : (
+              <CategoryGroupSections
+                items={filtered}
+                render={(g) => <MasterGrid items={g} subCounts={subCounts} onPick={onPickMaster} />}
+              />
+            ))}
+            {layout === 'mosaic' && (
+              <MasterMosaic items={filtered} subCounts={subCounts} onPick={onPickMaster} grouped={!hasQuery} />
+            )}
+            {layout === 'list' && (hasQuery ? (
+              <MasterList items={filtered} subCounts={subCounts} onPick={onPickMaster} />
+            ) : (
+              <CategoryGroupSections
+                items={filtered}
+                render={(g) => <MasterList items={g} subCounts={subCounts} onPick={onPickMaster} />}
+              />
+            ))}
           </>
         )}
       </div>

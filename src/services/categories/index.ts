@@ -11,6 +11,8 @@ export {
   getCategorySchema,
 } from './catalog';
 export type { CategoryNature } from './catalog';
+export { CATEGORY_GROUPS, groupCategories } from './groups';
+export type { CategoryGroup, GroupedCategories } from './groups';
 export { RENTAL_CATALOG_ITEMS, equipmentRentalCoreSchema } from './schemas/events';
 export type { BusinessType, CategoryType } from './businessTypes';
 export {
