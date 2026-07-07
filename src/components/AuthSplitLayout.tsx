@@ -35,9 +35,13 @@ interface AuthSplitLayoutProps {
    *  than the exiled bottom-corner version. */
   trustBand?: boolean;
   /** When true, the header block (back + title + subtitle) pins to the top of
-   *  the pane with a translucent backdrop while the content scrolls beneath it.
+   *  the pane with a solid backdrop while the content scrolls beneath it.
    *  Used by long multi-column steps (Business Categories / Choose Specialty)
-   *  so the screen title stays visible. Opt-in; other callers are unaffected. */
+   *  so the screen title stays visible. Opt-in; other callers are unaffected.
+   *  NOTE: the backdrop is deliberately opaque with NO backdrop-blur —
+   *  `backdrop-filter` on a sticky strip triggers GPU compositor ghosting
+   *  (smeared stale frames) on budget Android Chrome devices. Don't
+   *  reintroduce translucency/blur here. */
   stickyHeader?: boolean;
 }
 
@@ -58,7 +62,8 @@ export default function AuthSplitLayout({
   // pure white.
   const paneBg = paneTone === 'white' ? 'bg-white' : 'bg-brand-white';
   const wrapperBg = paneTone === 'white' ? 'bg-white' : 'bg-brand-white';
-  const stickyBg = paneTone === 'white' ? 'bg-white/95' : 'bg-brand-white/95';
+  // Fully opaque on purpose — see the stickyHeader prop note (Android GPU).
+  const stickyBg = paneTone === 'white' ? 'bg-white' : 'bg-brand-white';
 
   return (
     <div className={`min-h-screen flex flex-col lg:flex-row font-sans ${wrapperBg}`}>
@@ -150,7 +155,7 @@ export default function AuthSplitLayout({
             <div
               className={`flex flex-col ${
                 stickyHeader
-                  ? `gap-2 sticky top-0 z-30 ${stickyBg} backdrop-blur-sm py-3 border-b border-[#e8e4dc] mb-6`
+                  ? `gap-2 sticky top-0 z-30 ${stickyBg} py-3 border-b border-[#e8e4dc] mb-6`
                   : 'gap-3 mb-10'
               }`}
             >

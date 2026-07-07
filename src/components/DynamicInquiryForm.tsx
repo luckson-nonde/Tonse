@@ -499,7 +499,8 @@ export default function DynamicInquiryForm({
     return (
       <div className="w-full min-h-screen bg-[#f5f2ed]">
         {/* Catalog Header */}
-        <div className="sticky top-0 z-30 bg-[#f5f2ed]/95 backdrop-blur-md border-b border-[#1B3068]/5">
+        {/* Opaque, no backdrop-blur: blur on sticky strips ghosts on budget Android GPUs. */}
+        <div className="sticky top-0 z-30 bg-[#f5f2ed] border-b border-[#1B3068]/5">
           <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-8 py-5 sm:py-7 flex items-center gap-4">
             <motion.button
               type="button"
@@ -592,7 +593,7 @@ export default function DynamicInquiryForm({
               initial={{ y: 100 }}
               animate={{ y: 0 }}
               exit={{ y: 100 }}
-              className="fixed bottom-0 left-0 right-0 bg-white/85 backdrop-blur-md border-t border-[#1B3068]/8 z-[120] shadow-[0_-4px_24px_rgba(27,48,104,0.08)]"
+              className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#1B3068]/8 z-[120] shadow-[0_-4px_24px_rgba(27,48,104,0.08)]"
             >
               <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-8 py-4 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">

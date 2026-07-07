@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { MotionConfig } from 'motion/react';
 import { AuthProvider, useAuth } from './AuthContext';
+import { useLiteMotion } from './hooks/useLiteMotion';
 import { DashboardProvider } from './DashboardContext';
 import { CategoryAvailabilityProvider } from './services/categories/availability';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -104,12 +106,18 @@ function RootRedirect() {
 }
 
 export default function App() {
+  // Touch devices get instant (non-transform) animations app-wide: budget
+  // Android GPUs ghost stale raster tiles under framer-motion's composited
+  // transforms. 'never' (the previous implicit default) keeps desktop
+  // byte-identical. See src/hooks/useLiteMotion.ts for the full rationale.
+  const lite = useLiteMotion();
   return (
     <ErrorBoundary>
       <AuthProvider>
         <ErrorBoundary>
         <DashboardProvider>
           <CategoryAvailabilityProvider>
+          <MotionConfig reducedMotion={lite ? 'always' : 'never'}>
           <Router>
             <Routes>
               <Route path="/onboarding" element={<Onboarding />} />
@@ -368,6 +376,7 @@ export default function App() {
               />
             </Routes>
           </Router>
+          </MotionConfig>
           </CategoryAvailabilityProvider>
         </DashboardProvider>
         </ErrorBoundary>
