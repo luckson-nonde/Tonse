@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShoppingBag,
@@ -41,6 +41,8 @@ import { useCategoryAvailability } from '../services/categories/availability';
 import CategorySelection from '../components/CategorySelection';
 import RoleCardStack, { type RoleBanner } from '../components/RoleCardStack';
 import BuyerAccountCards from '../components/BuyerAccountCards';
+import { useLiteMotion } from '../hooks/useLiteMotion';
+import { nudgeRepaint } from '../utils/forceRepaint';
 
 // ─── Tier-1 role-card config ────────────────────────────────────────
 // Each entry renders as one composed 60/40 card in the vertical stack.
@@ -229,6 +231,29 @@ export default function RoleSelection() {
   const [isViewingSubcategories, setIsViewingSubcategories] = useState(false);
   const navigate = useNavigate();
 
+  // Android-GPU ghosting guard (see useLiteMotion.ts). On touch devices the
+  // tier slides are stripped entirely — prop ABSENCE (not duration:0) is what
+  // makes AnimatePresence mode="wait" unmount the outgoing tier synchronously,
+  // guaranteeing exactly one tier subtree in the DOM at any moment. NB: this
+  // relies on every nested motion element keeping its own AnimatePresence
+  // wrapper (true today); a bare motion.* with an `exit` prop directly inside
+  // a tier div would re-introduce an exit wait.
+  const lite = useLiteMotion();
+  const slide = (dir: number) =>
+    lite
+      ? {}
+      : {
+          initial: { x: dir * 20, opacity: 0 },
+          animate: { x: 0, opacity: 1 },
+          exit: { x: dir * 20, opacity: 0 },
+        };
+
+  // Belt-and-braces: after each step swap, force the compositor to re-raster
+  // the wizard region so stale tiles from the previous step can't survive.
+  const tierWrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    nudgeRepaint(tierWrapRef.current);
+  }, [tier]);
 
   const handleSubRoleSelect = (subRole: SubRole) => {
     if (subRole === 'COMPANY_BUYER') {
@@ -311,16 +336,26 @@ export default function RoleSelection() {
         setSelectedSubRole(null);
       }
     } else if (tier === 3) {
+      // Returning to the specialist step: also clear the subcategory-view flag
+      // the tier-3 child pushed up, so it can't strand `true` and blank the
+      // tier-2 header/Continue button.
       setTier(2);
+      setIsViewingSubcategories(false);
     }
   };
 
+  // `isViewingSubcategories` is a tier-3-only concept, pushed up from the
+  // CategorySelection child. Because the child unmounts on some back paths
+  // without ever pushing `false`, a stale `true` could leak into tier 2 and
+  // blank the header + hide the Continue button. Gate every read behind
+  // `tier === 3` so a stale value is inert everywhere else.
+  const inSubcategoryView = tier === 3 && isViewingSubcategories;
 
   return (
     <AuthSplitLayout
       stickyHeader={tier === 3}
       title={
-        isViewingSubcategories
+        inSubcategoryView
           ? tier === 3 && (masterRole === 'SELLER' || masterRole === 'SERVICE_PROVIDER')
             ? selectedSubRole === 'SKILLED_LABOUR'
               ? 'Choose Your Trade'
@@ -339,7 +374,7 @@ export default function RoleSelection() {
               : 'Business Categories'
       }
       subtitle={
-        isViewingSubcategories
+        inSubcategoryView
           ? tier === 3 && (masterRole === 'SELLER' || masterRole === 'SERVICE_PROVIDER')
             ? <span className="text-[#1a1612]/60">
                 {selectedSubRole === 'SKILLED_LABOUR'
@@ -361,16 +396,15 @@ export default function RoleSelection() {
                   : 'Select the categories that best describe your business.'}
             </span>
       }
-      onBack={isViewingSubcategories ? undefined : (tier > 1 ? handleBack : () => navigate('/login'))}
+      onBack={inSubcategoryView ? undefined : (tier > 1 ? handleBack : () => navigate('/login'))}
     >
-      <div className="relative overflow-hidden min-h-[240px] lg:min-h-100">
+      <div ref={tierWrapRef} className="relative overflow-hidden min-h-[240px] lg:min-h-100">
         <AnimatePresence mode="wait">
           {tier === 1 ? (
             <motion.div
               key="tier1"
-              initial={{ x: -20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -20, opacity: 0 }}
+              data-tier-panel="1"
+              {...slide(-1)}
               // Constrained column: the 16:9 artwork stays elegant on wide
               // panes (aspect-ratio sizing — never height-cropped).
               className="flex flex-col w-full max-w-[520px] mx-auto"
@@ -390,9 +424,8 @@ export default function RoleSelection() {
           ) : tier === 2 ? (
             <motion.div
               key="tier2"
-              initial={{ x: 20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 20, opacity: 0 }}
+              data-tier-panel="2"
+              {...slide(1)}
               className="space-y-4"
             >
               <AnimatePresence mode="popLayout">
@@ -536,9 +569,8 @@ export default function RoleSelection() {
           ) : (
             <motion.div
               key="tier3"
-              initial={{ x: 20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 20, opacity: 0 }}
+              data-tier-panel="3"
+              {...slide(1)}
               className="space-y-4"
             >
               <div className="h-full min-h-100">
@@ -576,7 +608,12 @@ export default function RoleSelection() {
                   }}
                   onSubcategoryViewChange={setIsViewingSubcategories}
                   autoLabour={selectedSubRole === 'SKILLED_LABOUR'}
-                  onBack={() => setTier(2)}
+                  onBack={() => {
+                    // Labour trade-picker's Back unmounts this child; clear the
+                    // subcategory-view flag it pushed so tier 2 renders cleanly.
+                    setTier(2);
+                    setIsViewingSubcategories(false);
+                  }}
                 />
               </div>
             </motion.div>
@@ -594,7 +631,7 @@ export default function RoleSelection() {
         // Tier-1 renders its own Continue inline (right under the carousel
         // dots) so the teaser sections can sit below it — skip the shared one.
         const showButton =
-          tier !== 1 && (!isViewingSubcategories || (tier === 3 && isSpecialist));
+          tier !== 1 && (!inSubcategoryView || (tier === 3 && isSpecialist));
         if (!showButton) return null;
 
         // For specialists in tier-3, require at least one sub-category to be
@@ -633,7 +670,7 @@ export default function RoleSelection() {
                 ? 'Next Step'
                 : tier === 2
                   ? 'Continue'
-                  : isViewingSubcategories && isSpecialist
+                  : inSubcategoryView && isSpecialist
                     ? 'Initialize Membership'
                     : 'Continue'}
               <span className="text-base leading-none">→</span>

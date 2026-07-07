@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Search,
   Check,
@@ -63,6 +63,8 @@ import labourIcon from '../assets/images/empty-states/category_select_icon/16_la
 
 import Button from './Button';
 import { getCategoryArt, getSpecialtyPreview, getSpecialtyImage, type SpecialtyState } from './buyer/categoryMeta';
+import { useLiteMotion } from '../hooks/useLiteMotion';
+import { nudgeRepaint } from '../utils/forceRepaint';
 import { fetchCategories, Category } from '../services/categories';
 import { useCategoryAvailability } from '../services/categories/availability';
 import { LABOUR_CATEGORY_GROUPS, LABOUR_CATEGORIES } from '../services/labourCategories';
@@ -316,7 +318,7 @@ const CategoryCard = ({ category, isSelected, onClick, onHover, compact }: Categ
               src={art}
               alt=""
               loading="lazy"
-              className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04]"
+              className="w-full h-full object-cover transition-transform duration-300 ease-out lg:group-hover:scale-[1.04]"
               onError={() => setArtError(true)}
             />
           </div>
@@ -387,7 +389,7 @@ const CategoryCard = ({ category, isSelected, onClick, onHover, compact }: Categ
               src={art}
               alt=""
               loading="lazy"
-              className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+              className="w-full h-full object-cover transition-transform duration-500 ease-out lg:group-hover:scale-[1.04]"
               onError={() => setArtError(true)}
             />
           </div>
@@ -482,6 +484,10 @@ const SpecialtyImageCard = ({
   onChoose,
 }: SpecialtyImageCardProps) => {
   const isSelected = current !== null;
+  // Touch devices skip the crossfade entirely (plain keyed <img> swap): its
+  // explicit 0.28s opacity transition survives MotionConfig reducedMotion, and
+  // the two stacked composited layers it creates ghost on budget Android GPUs.
+  const lite = useLiteMotion();
   // Idle preview matches whichever option is actually offered — an item can be
   // repair-only if admin switched its buy variant off.
   const displayState: SpecialtyState = current ?? (hasBuy ? 'sell' : 'repair');
@@ -526,21 +532,32 @@ const SpecialtyImageCard = ({
       }`}
     >
       {/* 1:1 preview with true (overlapping) crossfade — both images are
-          absolute inset-0, so the incoming one fades in over the outgoing. */}
+          absolute inset-0, so the incoming one fades in over the outgoing.
+          Touch devices get a plain keyed swap instead (see `lite` above). */}
       <div className="relative rounded-xl overflow-hidden aspect-square bg-[#f5efe4]">
-        <AnimatePresence initial={false}>
-          <motion.img
+        {lite ? (
+          <img
             key={displayState}
             src={imgUrl}
             alt=""
             loading="lazy"
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 ease-out group-hover/card:scale-[1.02]"
+            className="absolute inset-0 w-full h-full object-cover"
           />
-        </AnimatePresence>
+        ) : (
+          <AnimatePresence initial={false}>
+            <motion.img
+              key={displayState}
+              src={imgUrl}
+              alt=""
+              loading="lazy"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 ease-out lg:group-hover/card:scale-[1.02]"
+            />
+          </AnimatePresence>
+        )}
         {isSelected && (
           <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#C9973A] text-white flex items-center justify-center shadow-md shadow-[#C9973A]/40">
             <Check className="w-2.5 h-2.5" strokeWidth={3} />
@@ -630,7 +647,7 @@ const SpecialtySingleCard = ({
           src={image}
           alt=""
           loading="lazy"
-          className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover/card:scale-[1.02]"
+          className="w-full h-full object-cover transition-transform duration-300 ease-out lg:group-hover/card:scale-[1.02]"
         />
         {selected && (
           <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[#C9973A] text-white flex items-center justify-center shadow-md shadow-[#C9973A]/40">
@@ -817,6 +834,14 @@ export default function CategorySelection({
   const [activeLabourGroup, setActiveLabourGroup] = useState<any | null>(
     autoLabour ? 'ROOT' : null,
   );
+
+  // Android-GPU ghosting guard: after each internal view swap (master grid ⇄
+  // specialty ⇄ labour screens) force the compositor to re-raster this region
+  // so stale tiles from the previous view can't survive. No-op on desktop.
+  const viewWrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    nudgeRepaint(viewWrapRef.current);
+  }, [activeParent, activeLabourGroup]);
   const [subcategories, setSubcategories] = useState<Category[]>([]);
   const [loadingSub, setLoadingSub] = useState(false);
   const [subSearchQuery, setSubSearchQuery] = useState('');
@@ -1000,6 +1025,21 @@ export default function CategorySelection({
 
   const handleLabourGroupClick = (group: any) => setActiveLabourGroup(group);
 
+  // Context-aware Back for the labour picker's two dedicated screens (mirrors
+  // the specialty view's screen-by-screen flow — no inline accordion):
+  //   • Trades screen (a specific track chosen) → back to the track picker.
+  //   • Track picker (ROOT) → exit the picker entirely: to the caller's onBack
+  //     for the auto-labour sub-role, else back to the master category grid.
+  const labourBack = () => {
+    if (activeLabourGroup && activeLabourGroup !== 'ROOT') {
+      setActiveLabourGroup('ROOT');
+    } else if (autoLabour) {
+      onBack?.();
+    } else {
+      setActiveLabourGroup(null);
+    }
+  };
+
   const handleLabourSubTypeSelect = (subType: any) => {
     if (role) {
       setSelectedCategories((prev) => {
@@ -1121,10 +1161,11 @@ export default function CategorySelection({
       }
     >
       <div
+        ref={viewWrapRef}
         className={`${isStandalone ? 'max-w-[1400px] mx-auto px-6 md:px-12 py-10 md:py-20' : 'w-full py-4'}`}
       >
         {activeParent ? (
-          <div className="flex flex-col animate-in slide-in-from-right duration-500">
+          <div className="flex flex-col">
             {hideHeader ? (
               <div className="mb-5 flex items-center justify-between">
                 <button
@@ -1417,126 +1458,170 @@ export default function CategorySelection({
             )}
           </div>
         ) : activeLabourGroup ? (
-          <div className="flex flex-col animate-in slide-in-from-right duration-500">
-            {hideHeader ? (
-              // Registration shell already shows the "Choose Your Trade" header;
-              // keep just a compact back + track chip here (no duplicate title).
-              <div className="mb-5 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => (autoLabour ? onBack?.() : setActiveLabourGroup(null))}
-                  className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[#C9973A] hover:gap-2.5 transition-all"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" /> Back
-                </button>
-                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#C9973A]/10 text-[#C9973A] font-bold uppercase tracking-[0.14em] text-[10px]">
-                  Labour &amp; Skills
-                </span>
-              </div>
-            ) : (
-              <div className="mb-8 sm:mb-10">
-                <button
-                  onClick={() => (autoLabour ? onBack?.() : setActiveLabourGroup(null))}
-                  className="flex items-center gap-2 text-slate-400 font-bold text-sm mb-5 hover:text-[#C9973A] transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4" /> Back
-                </button>
-                <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#C9973A] mb-3">
-                  Labour &amp; Skills <span className="text-slate-300 mx-1">·</span> Step 02 / Trade
-                </p>
-                <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-[#1a1a2e] tracking-tight leading-[1.1] mb-3 sm:mb-4">
-                  Choose your <span className="text-[#C9973A]">trade</span>
-                </h1>
-                <p className="text-slate-500 text-sm sm:text-base font-medium max-w-xl leading-relaxed">
-                  Pick the track that fits your work, then choose your specific trade.
-                </p>
-              </div>
-            )}
-
-            {/* Track picker — labels like "Construction & Building" need room, so
-                wider cards (2–3 cols), not a cramped 6-up row. */}
-            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#C9973A] mb-3">
-              Choose a track
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 mb-8">
-              {LABOUR_CATEGORY_GROUPS.map((g) => {
-                const GroupIcon = LABOUR_GROUP_ICONS[g.id] || Wrench;
-                const isActive =
-                  activeLabourGroup !== 'ROOT' && activeLabourGroup.id === g.id;
-                return (
+          activeLabourGroup === 'ROOT' ? (
+            /* ── Screen A: track picker ───────────────────────────────────
+               Pick a track first. Selecting one transitions to its own
+               dedicated trades screen (Screen B) — a clean screen swap that
+               mirrors the Service specialty flow, never an inline accordion. */
+            <div className="flex flex-col">
+              {hideHeader ? (
+                // Registration shell already shows the "Choose Your Trade"
+                // header; keep just a compact back + track chip (no duplicate).
+                <div className="mb-5 flex items-center justify-between">
                   <button
                     type="button"
-                    key={g.id}
-                    onClick={() => handleLabourGroupClick(g)}
-                    className={`group/card relative p-4 rounded-2xl bg-white border transition-all duration-300 ease-out flex items-center gap-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-1 focus-visible:ring-offset-white ${
-                      isActive
-                        ? 'border-[#C9973A] shadow-[0_12px_28px_-14px_rgba(201,151,58,0.4)] -translate-y-0.5'
-                        : 'border-[#e8e4dc] hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-14px_rgba(26,22,18,0.18)]'
-                    }`}
+                    onClick={labourBack}
+                    className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[#C9973A] hover:gap-2.5 transition-all"
                   >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
-                      <GroupIcon className="w-5 h-5" />
-                    </div>
-                    <h3 className="font-bold text-[#1a1a2e] text-[12px] sm:text-[13px] leading-tight tracking-tight min-w-0">
-                      {g.label}
-                    </h3>
+                    <ArrowLeft className="w-3.5 h-3.5" /> Back
                   </button>
-                );
-              })}
-            </div>
-
-            {activeLabourGroup !== 'ROOT' && (
-              <>
-                <div className="mb-6 flex items-center gap-3">
-                  <div className="h-px flex-1 bg-[#C9973A]/15" />
-                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#C9973A] whitespace-nowrap">
-                    {activeLabourGroup.label} · Pick a trade
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#C9973A]/10 text-[#C9973A] font-bold uppercase tracking-[0.14em] text-[10px]">
+                    Labour &amp; Skills
+                  </span>
+                </div>
+              ) : (
+                <div className="mb-8 sm:mb-10">
+                  <button
+                    onClick={labourBack}
+                    className="flex items-center gap-2 text-slate-400 font-bold text-sm mb-5 hover:text-[#C9973A] transition-colors"
+                  >
+                    <ArrowLeft className="w-4 h-4" /> Back
+                  </button>
+                  <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#C9973A] mb-3">
+                    Labour &amp; Skills <span className="text-slate-300 mx-1">·</span> Step 02 / Track
                   </p>
-                  <div className="h-px flex-1 bg-[#C9973A]/15" />
+                  <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-[#1a1a2e] tracking-tight leading-[1.1] mb-3 sm:mb-4">
+                    Choose your <span className="text-[#C9973A]">track</span>
+                  </h1>
+                  <p className="text-slate-500 text-sm sm:text-base font-medium max-w-xl leading-relaxed">
+                    Pick the track that best fits your work.
+                  </p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
-                  {LABOUR_CATEGORIES.filter((c) => c.category === activeLabourGroup.id).map(
-                    (s) => {
-                      const TradeIcon =
-                        LABOUR_SUB_ICONS[s.icon] ||
-                        LABOUR_GROUP_ICONS[activeLabourGroup.id] ||
-                        Wrench;
-                      const selected = selectedCategories.some((c) => c.id === s.id);
-                      return (
-                        <button
-                          type="button"
-                          key={s.id}
-                          onClick={() => handleLabourSubTypeSelect(s)}
-                          className={`group/card relative p-5 rounded-[20px] bg-white border text-left transition-all duration-500 ease-out flex items-start gap-4 ${
-                            selected
-                              ? 'border-[#C9973A]/60 shadow-[0_18px_40px_-12px_rgba(201,151,58,0.22)]'
-                              : 'border-[#C9973A]/20 hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-12px_rgba(201,151,58,0.18)]'
-                          }`}
-                        >
-                          <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
-                            <TradeIcon className="w-5 h-5" />
-                          </div>
-                          <div className="min-w-0 flex-1 pt-0.5">
-                            <h4 className="font-bold text-[#1a1a2e] text-[15px] leading-snug tracking-tight">
-                              {s.label}
-                            </h4>
-                            <p className="text-[12px] text-slate-500 mt-1 leading-relaxed line-clamp-2">
-                              {s.description}
-                            </p>
-                          </div>
-                          {selected && (
-                            <div className="w-6 h-6 rounded-full bg-[#C9973A] flex items-center justify-center shrink-0 shadow-sm">
-                              <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
-                            </div>
-                          )}
-                        </button>
-                      );
-                    },
-                  )}
+              )}
+
+              {/* Track picker — labels like "Construction & Building" need room,
+                  so wider cards (2–3 cols), not a cramped 6-up row. */}
+              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#C9973A] mb-3">
+                Choose a track
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
+                {LABOUR_CATEGORY_GROUPS.map((g) => {
+                  const GroupIcon = LABOUR_GROUP_ICONS[g.id] || Wrench;
+                  return (
+                    <button
+                      type="button"
+                      key={g.id}
+                      onClick={() => handleLabourGroupClick(g)}
+                      className="group/card relative p-4 rounded-2xl bg-white border border-[#e8e4dc] hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-14px_rgba(26,22,18,0.18)] transition-all duration-300 ease-out flex items-center gap-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-1 focus-visible:ring-offset-white"
+                    >
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+                        <GroupIcon className="w-5 h-5" />
+                      </div>
+                      <h3 className="font-bold text-[#1a1a2e] text-[12px] sm:text-[13px] leading-tight tracking-tight min-w-0 flex-1">
+                        {g.label}
+                      </h3>
+                      <ArrowRight className="w-4 h-4 text-[#C9973A]/40 shrink-0 transition-transform duration-200 group-hover/card:translate-x-0.5 group-hover/card:text-[#C9973A]" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* ── Screen B: trades for the chosen track ─────────────────────
+               A dedicated screen (mirrors the specialty view); Back returns to
+               the track picker. The track grid is intentionally absent here. */
+            <div className="flex flex-col">
+              {hideHeader ? (
+                <div className="mb-5 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={labourBack}
+                    className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[#C9973A] hover:gap-2.5 transition-all"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" /> Back
+                  </button>
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#C9973A]/10 text-[#C9973A] font-bold uppercase tracking-[0.14em] text-[10px]">
+                    {activeLabourGroup.label}
+                  </span>
                 </div>
-              </>
-            )}
-          </div>
+              ) : (
+                <div className="mb-8 sm:mb-10">
+                  <button
+                    onClick={labourBack}
+                    className="flex items-center gap-2 text-slate-400 font-bold text-sm mb-5 hover:text-[#C9973A] transition-colors"
+                  >
+                    <ArrowLeft className="w-4 h-4" /> Back to tracks
+                  </button>
+                  <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#C9973A] mb-3">
+                    {activeLabourGroup.label} <span className="text-slate-300 mx-1">·</span> Step 03 / Trade
+                  </p>
+                  <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-[#1a1a2e] tracking-tight leading-[1.1] mb-3 sm:mb-4">
+                    Choose your <span className="text-[#C9973A]">trade</span>
+                  </h1>
+                  <p className="text-slate-500 text-sm sm:text-base font-medium max-w-xl leading-relaxed">
+                    Pick the specific trade you specialise in.
+                  </p>
+                </div>
+              )}
+
+              <div className="mb-6 flex items-center gap-3">
+                <div className="h-px flex-1 bg-[#C9973A]/15" />
+                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#C9973A] whitespace-nowrap">
+                  {activeLabourGroup.label} · Pick a trade
+                </p>
+                <div className="h-px flex-1 bg-[#C9973A]/15" />
+              </div>
+              {/* Embedded (registration pane): cap at 2 cols so the rich
+                  icon+label+description cards never clip inside the ~58% pane —
+                  `xl:grid-cols-4` fires off the viewport, not this container. */}
+              <div
+                className={
+                  hideHeader
+                    ? 'grid grid-cols-1 sm:grid-cols-2 gap-3'
+                    : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5'
+                }
+              >
+                {LABOUR_CATEGORIES.filter((c) => c.category === activeLabourGroup.id).map(
+                  (s) => {
+                    const TradeIcon =
+                      LABOUR_SUB_ICONS[s.icon] ||
+                      LABOUR_GROUP_ICONS[activeLabourGroup.id] ||
+                      Wrench;
+                    const selected = selectedCategories.some((c) => c.id === s.id);
+                    return (
+                      <button
+                        type="button"
+                        key={s.id}
+                        onClick={() => handleLabourSubTypeSelect(s)}
+                        className={`group/card relative p-5 rounded-[20px] bg-white border text-left transition-all duration-500 ease-out flex items-start gap-4 ${
+                          selected
+                            ? 'border-[#C9973A]/60 shadow-[0_18px_40px_-12px_rgba(201,151,58,0.22)]'
+                            : 'border-[#C9973A]/20 hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-12px_rgba(201,151,58,0.18)]'
+                        }`}
+                      >
+                        <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+                          <TradeIcon className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0 flex-1 pt-0.5">
+                          <h4 className="font-bold text-[#1a1a2e] text-[15px] leading-snug tracking-tight">
+                            {s.label}
+                          </h4>
+                          <p className="text-[12px] text-slate-500 mt-1 leading-relaxed line-clamp-2">
+                            {s.description}
+                          </p>
+                        </div>
+                        {selected && (
+                          <div className="w-6 h-6 rounded-full bg-[#C9973A] flex items-center justify-center shrink-0 shadow-sm">
+                            <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  },
+                )}
+              </div>
+            </div>
+          )
         ) : preselectedParentId ? (
           // Targeted-shop flow: skip the parent grid entirely while waiting for
           // handleExplore to fire. Shows the same spinner the specialty view uses
