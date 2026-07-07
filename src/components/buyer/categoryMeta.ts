@@ -97,15 +97,38 @@ const SPECIALTY_ART = import.meta.glob('../../assets/images/specialty/*.{png,jpg
   import: 'default',
 }) as Record<string, string>;
 
-const SPECIALTY_BY_KEY: Record<string, string> = {};
-for (const [path, url] of Object.entries(SPECIALTY_ART)) {
-  const key = path
-    .split('/')
-    .pop()!
+/**
+ * Normalize a specialty filename to its lookup key. Lower-cases, drops a
+ * trailing `" (n)"` copy suffix (browser re-downloads), and collapses every run
+ * of non-alphanumeric characters — spaces, underscores, `&`, `()`, `/` — into a
+ * single hyphen. So a file named for the item's *display name*
+ * ("Software & Web Development.webp", "IT Support & Maintenance.webp") keys to
+ * the same stem as its catalog **id** (`software-web-development`,
+ * `it-support-maintenance`) with no manual rename. State-suffixed electronics
+ * stems (`mobile-phones-sell`) are unaffected — their hyphens re-collapse to
+ * themselves.
+ */
+export const normalizeSpecialtyKey = (fileName: string): string =>
+  fileName
     .replace(/\.(png|jpe?g|webp)$/i, '')
-    .trim()
     .toLowerCase()
-    .replace(/[\s_]+/g, '-');
+    .replace(/\s*\(\d+\)\s*$/, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+// True for a browser copy download ("… (1).webp"). When several files collapse
+// to one key, a canonical (non-copy) file wins deterministically — regardless
+// of glob iteration order — so a stray duplicate never shadows the real asset.
+const isCopySuffixed = (fileName: string): boolean => /\s\(\d+\)\.\w+$/i.test(fileName);
+
+const SPECIALTY_BY_KEY: Record<string, string> = {};
+const SPECIALTY_SRC: Record<string, string> = {};
+for (const [path, url] of Object.entries(SPECIALTY_ART)) {
+  const file = path.split('/').pop()!;
+  const key = normalizeSpecialtyKey(file);
+  const prior = SPECIALTY_SRC[key];
+  if (prior && isCopySuffixed(file) && !isCopySuffixed(prior)) continue;
+  SPECIALTY_SRC[key] = file;
   SPECIALTY_BY_KEY[key] = url;
 }
 
