@@ -61,8 +61,29 @@ drilling-services (borehole-drilling, mining-exploration, geotechnical-drilling)
 **Still missing an image** (falls back to the icon + chip card):
 - `event-venues` (Events) — needs `event-venues.webp`
 
+## Naming convention — LABOUR trades (Skilled Labour flow)
+
+The *Choose Trade* screen (Skilled Labour sub-role) reuses this folder and
+resolver via `getLabourImage(id)`. Trades live in
+`src/services/labourCategories.ts` with **underscore ids** (`general_labourer`,
+`steel_fixer`). `normalizeSpecialtyKey` collapses `_` in the id and spaces/`&`/`/`
+in the filename to the same `-`, so a display-name file usually resolves with no
+rename — `General Labourer.webp` → `general-labourer` matches id
+`general_labourer`. Rename to the **id stem** only when the label carries words
+the id omits: `Bricklayer / Mason` → `bricklayer.webp`, `Painter & Decorator` →
+`painter.webp`, `Steel Fixer / Reinforcement` → `steel-fixer.webp`.
+
+A track becomes image-led (photo cards) only once its trades ship artwork;
+otherwise trades keep the icon-chip card. **Currently shipped (Construction &
+Building):** general-labourer, bricklayer, carpenter, electrician, plumber,
+welder, steel-fixer, painter, tiler, roofer (all 10). Other labour tracks
+(Domestic, Industrial, Skilled Trades, Agricultural, Transport) have no images
+yet — icon fallback. Image-led trade cards use a **4:3** crop with the label +
+description beneath.
+
 ## Specs
-- **1:1 square** (≥ 800×800). The card crops with `object-cover`.
+- **1:1 square** (≥ 800×800) for specialty items; **4:3** for labour trades. The
+  card crops with `object-cover`.
 - `.webp` strongly preferred (`.png` / `.jpg` also load).
 - Consistent lighting + warm premium grading across a stem's three states so
   the crossfade reads as one environment.

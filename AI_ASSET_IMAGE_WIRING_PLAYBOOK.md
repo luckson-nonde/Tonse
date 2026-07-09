@@ -89,17 +89,28 @@ For each entity, compute its expected key and check the file set. Bucket each:
 ## Step 5 — Verify in three layers
 
 **Layer 1 — static resolver simulation (deterministic ground truth).** Mirror the
-exact normalization in a tiny script, build the key map from the real files, and
-assert every entity id resolves. Report missing + collisions + orphans. This
-proves resolution without a running app.
+exact normalization **and the collision tiebreak** in a tiny script, build the
+key map from the real files, and assert every entity id resolves. Report missing
++ collisions + orphans. This proves resolution without a running app. Mirroring
+only the normalization is not enough: if the real build loop has a tiebreak and
+your simulation is plain last-wins, the two can disagree about which file wins a
+contested key and your verdict is worthless for exactly the duplicate cases you
+care about.
 
 ```js
-// resolve-check.mjs — mirror normalizeSpecialtyKey EXACTLY
+// resolve-check.mjs — mirror normalizeSpecialtyKey AND the build-loop tiebreak EXACTLY
 import { readdirSync } from 'fs';
 const norm = (f) => f.replace(/\.(png|jpe?g|webp)$/i,'').toLowerCase()
   .replace(/\s*\(\d+\)\s*$/,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+// canonical (non-copy-suffixed) wins ties — mirrors isCopySuffixed() in the real loop
+const isCopy = (f) => /\s\(\d+\)\.\w+$/i.test(f);
 const files = readdirSync(DIR).filter(f=>/\.(png|jpe?g|webp)$/i.test(f)).sort();
-const byKey = {}; for (const f of files) byKey[norm(f)] = f;   // last-wins == build loop
+const byKey = {};
+for (const f of files) {
+  const k = norm(f), prior = byKey[k];
+  if (prior && isCopy(f) && !isCopy(prior)) continue;
+  byKey[k] = f;
+}
 for (const id of ALL_ENTITY_IDS) console.log(byKey[id] ? `OK ${id}` : `MISS ${id}`);
 ```
 
@@ -138,9 +149,16 @@ const VERDICT = { type:'object', properties:{
     verdict:{type:'string', enum:['match','weak','mismatch','unreadable']},
     note:{type:'string'} }, required:['id','file','verdict','note'] } } },
   required:['findings'] }
+// NB: deliberately has NO `findings` key, so the shape-based flatMap below can
+// never mix regression output into the audit findings.
+const REG_SCHEMA = { type:'object', properties:{
+  brokenStems:{ type:'array', items:{type:'string'} },
+  regressionRisk:{ type:'string', enum:['none','low','high'] },
+  consumers:{ type:'array', items:{type:'string'} } },
+  required:['brokenStems','regressionRisk'] }
 
 phase('Audit')
-const audits = await parallel([
+const results = await parallel([
   ...GROUPS.map((g) => () => agent(
     `Adversarially audit whether each preview image depicts its entity for "${g.name}". ` +
     `Use the Read tool to VIEW each absolute file path, then judge match/weak/mismatch/unreadable. ` +
@@ -154,13 +172,19 @@ const audits = await parallel([
 ])
 
 phase('Synthesize')
-const all = audits.filter(Boolean).flatMap(a => a.findings || [])
+// parallel() preserves input order → the regression result is last. Split it
+// off positionally rather than relying on result shape.
+const regression = results.at(-1)
+const audits = results.slice(0, -1).filter(Boolean)
+if (!regression) log('regression agent returned null — BLOCKER, re-run it before trusting this audit')
+const all = audits.flatMap(a => a.findings || [])
 return { mismatches: all.filter(f=>f.verdict==='mismatch'),
-         weak: all.filter(f=>f.verdict==='weak'), regression: audits.at(-1) }
+         weak: all.filter(f=>f.verdict==='weak'), regression }
 ```
 
 Act on the result: fix every `mismatch` (reassign or replace), note every `weak`
-for optional improvement, and treat a non-`none` `regressionRisk` as a blocker.
+for optional improvement, and treat a non-`none` `regressionRisk` — or a null
+regression result — as a blocker.
 
 ---
 
@@ -201,7 +225,9 @@ didn't show.
   on `&` (`software-web-development`, `it-support-maintenance`,
   `satellite-vsat-installation`); 3 semantic (`mc-hosts`←"MCs & Hosts",
   `spoken-word`←"Spoken Word Artists", `event-equipment-rental`←"Event Equipment
-  Hire"); 2 missing (`event-venues`, `networking-security`); 7 copy/alt dupes.
+  Hire"); 2 missing (`event-venues`, `networking-security`); plus copy/alt
+  duplicates (after the fixes, 6 remain inert on disk: 5 browser `" (n)"` copies
+  + 1 `…Development1.webp` alternate — surfaced, not deleted).
 - **Fixes:** hardened `normalizeSpecialtyKey` (strip `&`/punctuation/`" (n)"`;
   collapse to single `-`; canonical wins collisions) → fixed all `&` cases with no
   rename; renamed the 3 semantic files to their id stems; left dupes in place

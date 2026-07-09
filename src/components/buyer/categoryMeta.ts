@@ -144,3 +144,37 @@ export const getSpecialtyPreview = (
  */
 export const getSpecialtyImage = (stem: string): string | undefined =>
   SPECIALTY_BY_KEY[stem] ?? SPECIALTY_BY_KEY[`${stem}-sell`];
+
+/**
+ * Labour trade preview image (Choose Trade step, Skilled Labour flow). Trades
+ * live in src/services/labourCategories.ts with underscore ids
+ * (`general_labourer`, `steel_fixer`); their images share the specialty/ folder
+ * and resolver. The id is run through the SAME `normalizeSpecialtyKey`, so its
+ * `_` collapses to `-` exactly like a filename's spaces/`&` do — e.g. id
+ * `general_labourer` and file `General Labourer.webp` both key to
+ * `general-labourer`. Trades whose display name adds words the id omits
+ * (`Bricklayer / Mason` → id `bricklayer`) are named for the id stem. Missing
+ * ⇒ the trade card keeps its icon-chip. No labour id collides with a specialty
+ * stem, so sharing the key map is safe.
+ */
+export const getLabourImage = (id: string): string | undefined =>
+  SPECIALTY_BY_KEY[normalizeSpecialtyKey(id)];
+
+/**
+ * Labour TRACK image (Choose-a-track screen, Skilled Labour flow). The six
+ * tracks live in src/services/labourCategories.ts (LABOUR_CATEGORY_GROUPS) with
+ * short uppercase ids (`CONSTRUCTION`, `DOMESTIC`), but their images are dropped
+ * in the categories/ folder named for the track LABEL
+ * (`Construction & Building.webp`). Keyed here off the label through the robust
+ * `normalizeSpecialtyKey`, so `Construction & Building` → `construction-building`
+ * matches the file with no rename. No track key collides with a master-category
+ * filename (e.g. `agricultural` ≠ master `agriculture`). Missing ⇒ the track
+ * keeps its icon chip.
+ */
+const LABOUR_GROUP_BY_KEY: Record<string, string> = {};
+for (const [path, url] of Object.entries(CATEGORY_ART)) {
+  LABOUR_GROUP_BY_KEY[normalizeSpecialtyKey(path.split('/').pop()!)] = url;
+}
+
+export const getLabourGroupImage = (label: string): string | undefined =>
+  LABOUR_GROUP_BY_KEY[normalizeSpecialtyKey(label)];

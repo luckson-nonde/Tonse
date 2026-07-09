@@ -41,6 +41,7 @@ import { useCategoryAvailability } from '../services/categories/availability';
 import CategorySelection from '../components/CategorySelection';
 import RoleCardStack, { type RoleBanner } from '../components/RoleCardStack';
 import BuyerAccountCards from '../components/BuyerAccountCards';
+import { normalizeSpecialtyKey } from '../components/buyer/categoryMeta';
 import { useLiteMotion } from '../hooks/useLiteMotion';
 import { nudgeRepaint } from '../utils/forceRepaint';
 
@@ -97,6 +98,25 @@ const ROLE_BANNERS: RoleBanner[] = [
 ];
 
 
+
+// ─── Company position artwork ("Your Position" step) ────────────────
+// Photos live in src/assets/images/onboarding/company onboarding/, named for
+// the position LABEL ("Procurement Officer.webp", "Manager  Owner.webp"). Keyed
+// via the shared `normalizeSpecialtyKey`, so "/"→space and "&" collapse to the
+// card title with no rename ("Manager / Owner" → `manager-owner`). Missing ⇒
+// the position card keeps its icon chip.
+const POSITION_ART = import.meta.glob(
+  '../assets/images/onboarding/company onboarding/*.{png,jpg,jpeg,webp}',
+  { eager: true, import: 'default' },
+) as Record<string, string>;
+
+const POSITION_BY_KEY: Record<string, string> = {};
+for (const [path, url] of Object.entries(POSITION_ART)) {
+  POSITION_BY_KEY[normalizeSpecialtyKey(path.split('/').pop()!)] = url;
+}
+
+const getPositionImage = (title: string): string | undefined =>
+  POSITION_BY_KEY[normalizeSpecialtyKey(title)];
 
 interface RoleOption {
   id: string;
@@ -483,6 +503,61 @@ export default function RoleSelection() {
                       {items.map((option) => {
                         const isSelected = selectedSubRole === option.subRole;
                         const Icon = option.icon;
+                        const positionImg = getPositionImage(option.title);
+
+                        // Photo-led card — company positions ship a 16:9 scene
+                        // photo (Procurement / Secretary / Receptionist /
+                        // Manager). Same image-top DNA as the labour trade
+                        // cards. Roles without art (seller/provider) fall
+                        // through to the icon-chip row below.
+                        if (positionImg) {
+                          return (
+                            <motion.button
+                              type="button"
+                              layoutId={option.id}
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.95 }}
+                              key={option.id}
+                              onClick={() => handleSubRoleSelect(option.subRole)}
+                              aria-pressed={isSelected}
+                              className={`group relative flex flex-col overflow-hidden rounded-2xl border text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-white ${
+                                isSelected
+                                  ? 'border-[#C9973A] bg-white shadow-[0_8px_28px_-14px_rgba(201,151,58,0.45)]'
+                                  : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/40 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)]'
+                              }`}
+                            >
+                              <div className="relative aspect-video overflow-hidden bg-[#f5f2ee]">
+                                <img
+                                  src={positionImg}
+                                  alt={option.title}
+                                  loading="lazy"
+                                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out lg:group-hover:scale-[1.04]"
+                                />
+                                {isSelected && (
+                                  <div className="absolute top-2.5 right-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-[#C9973A] text-white shadow-md shadow-[#C9973A]/30">
+                                    <Check className="h-3 w-3" strokeWidth={3} />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="p-4">
+                                <p className="mb-1 text-[9px] font-black uppercase tracking-[0.18em] text-[#C9973A]">
+                                  {option.eyebrow}
+                                </p>
+                                <h3
+                                  className={`text-[15px] font-bold leading-tight transition-colors ${
+                                    isSelected ? 'text-[#1a1612]' : 'text-[#1a1612]/85'
+                                  }`}
+                                >
+                                  {option.title}
+                                </h3>
+                                <p className="mt-0.5 text-[12px] leading-snug text-[#1a1612]/55">
+                                  {option.description}
+                                </p>
+                              </div>
+                            </motion.button>
+                          );
+                        }
 
                         return (
                           <motion.button

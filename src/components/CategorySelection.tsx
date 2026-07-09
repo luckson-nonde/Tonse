@@ -62,7 +62,7 @@ import agricultureIcon from '../assets/images/empty-states/category_select_icon/
 import labourIcon from '../assets/images/empty-states/category_select_icon/16_labour_skills.png';
 
 import Button from './Button';
-import { getCategoryArt, getSpecialtyPreview, getSpecialtyImage, type SpecialtyState } from './buyer/categoryMeta';
+import { getCategoryArt, getSpecialtyPreview, getSpecialtyImage, getLabourImage, getLabourGroupImage, type SpecialtyState } from './buyer/categoryMeta';
 import { useLiteMotion } from '../hooks/useLiteMotion';
 import { nudgeRepaint } from '../utils/forceRepaint';
 import { fetchCategories, Category } from '../services/categories';
@@ -294,7 +294,7 @@ const CategoryCard = ({ category, isSelected, onClick, onHover, compact }: Categ
         whileTap={{ scale: 0.98 }}
         className={`group relative rounded-2xl border cursor-pointer transition-all duration-200 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-white ${
           showArt
-            ? 'flex flex-col p-1.5 pb-2'
+            ? 'flex flex-col'
             : 'min-h-[104px] flex flex-col items-center justify-start gap-1.5 px-2 py-3'
         } ${
           isSelected
@@ -313,12 +313,12 @@ const CategoryCard = ({ category, isSelected, onClick, onHover, compact }: Categ
         )}
 
         {showArt ? (
-          <div className="rounded-xl overflow-hidden aspect-4/3 bg-[#f5efe4]">
+          <div className="relative aspect-4/3 bg-[#f5efe4]">
             <img
               src={art}
               alt=""
               loading="lazy"
-              className="w-full h-full object-cover transition-transform duration-300 ease-out lg:group-hover:scale-[1.04]"
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 ease-out lg:group-hover:scale-[1.04]"
               onError={() => setArtError(true)}
             />
           </div>
@@ -342,8 +342,10 @@ const CategoryCard = ({ category, isSelected, onClick, onHover, compact }: Categ
         )}
 
         <p
-          className={`text-[10px] font-bold uppercase tracking-[0.06em] leading-tight text-center px-1 line-clamp-1 transition-colors ${
-            showArt ? 'mt-auto pt-2' : ''
+          className={`font-bold uppercase tracking-[0.06em] leading-tight line-clamp-1 transition-colors ${
+            showArt
+              ? 'mt-auto text-[11px] sm:text-[12px] text-left px-3 py-2.5'
+              : 'text-[10px] text-center px-1'
           } ${isSelected ? 'text-[#C9973A]' : 'text-[#1a1612]/85'}`}
         >
           {category.name}
@@ -1507,12 +1509,44 @@ export default function CategorySelection({
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
                 {LABOUR_CATEGORY_GROUPS.map((g) => {
                   const GroupIcon = LABOUR_GROUP_ICONS[g.id] || Wrench;
+                  const img = getLabourGroupImage(g.label);
+                  const frameCls =
+                    'group/card relative rounded-2xl bg-white border border-[#e8e4dc] hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-14px_rgba(26,22,18,0.18)] transition-all duration-300 ease-out text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-1 focus-visible:ring-offset-white';
+
+                  // Image-led track card (track has artwork): photo on top, label +
+                  // arrow beneath. Falls back to the icon chip when no image.
+                  if (img) {
+                    return (
+                      <button
+                        type="button"
+                        key={g.id}
+                        onClick={() => handleLabourGroupClick(g)}
+                        className={`${frameCls} overflow-hidden flex flex-col`}
+                      >
+                        <div className="relative aspect-[4/3] bg-[#f5efe4]">
+                          <img
+                            src={img}
+                            alt=""
+                            loading="lazy"
+                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out lg:group-hover/card:scale-[1.03]"
+                          />
+                        </div>
+                        <div className="p-3 flex items-center gap-2">
+                          <h3 className="font-bold text-[#1a1a2e] text-[12px] sm:text-[13px] leading-tight tracking-tight min-w-0 flex-1">
+                            {g.label}
+                          </h3>
+                          <ArrowRight className="w-4 h-4 text-[#C9973A]/40 shrink-0 transition-transform duration-200 group-hover/card:translate-x-0.5 group-hover/card:text-[#C9973A]" />
+                        </div>
+                      </button>
+                    );
+                  }
+
                   return (
                     <button
                       type="button"
                       key={g.id}
                       onClick={() => handleLabourGroupClick(g)}
-                      className="group/card relative p-4 rounded-2xl bg-white border border-[#e8e4dc] hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-14px_rgba(26,22,18,0.18)] transition-all duration-300 ease-out flex items-center gap-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-1 focus-visible:ring-offset-white"
+                      className={`${frameCls} p-4 flex items-center gap-3`}
                     >
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
                         <GroupIcon className="w-5 h-5" />
@@ -1574,52 +1608,105 @@ export default function CategorySelection({
               {/* Embedded (registration pane): cap at 2 cols so the rich
                   icon+label+description cards never clip inside the ~58% pane —
                   `xl:grid-cols-4` fires off the viewport, not this container. */}
-              <div
-                className={
-                  hideHeader
-                    ? 'grid grid-cols-1 sm:grid-cols-2 gap-3'
-                    : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5'
-                }
-              >
-                {LABOUR_CATEGORIES.filter((c) => c.category === activeLabourGroup.id).map(
-                  (s) => {
-                    const TradeIcon =
-                      LABOUR_SUB_ICONS[s.icon] ||
-                      LABOUR_GROUP_ICONS[activeLabourGroup.id] ||
-                      Wrench;
-                    const selected = selectedCategories.some((c) => c.id === s.id);
-                    return (
-                      <button
-                        type="button"
-                        key={s.id}
-                        onClick={() => handleLabourSubTypeSelect(s)}
-                        className={`group/card relative p-5 rounded-[20px] bg-white border text-left transition-all duration-500 ease-out flex items-start gap-4 ${
-                          selected
-                            ? 'border-[#C9973A]/60 shadow-[0_18px_40px_-12px_rgba(201,151,58,0.22)]'
-                            : 'border-[#C9973A]/20 hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-12px_rgba(201,151,58,0.18)]'
-                        }`}
-                      >
-                        <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
-                          <TradeIcon className="w-5 h-5" />
-                        </div>
-                        <div className="min-w-0 flex-1 pt-0.5">
-                          <h4 className="font-bold text-[#1a1a2e] text-[15px] leading-snug tracking-tight">
-                            {s.label}
-                          </h4>
-                          <p className="text-[12px] text-slate-500 mt-1 leading-relaxed line-clamp-2">
-                            {s.description}
-                          </p>
-                        </div>
-                        {selected && (
-                          <div className="w-6 h-6 rounded-full bg-[#C9973A] flex items-center justify-center shrink-0 shadow-sm">
-                            <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+              {(() => {
+                const trades = LABOUR_CATEGORIES.filter(
+                  (c) => c.category === activeLabourGroup.id,
+                );
+                // A track is image-led only when its trades ship artwork (today:
+                // Construction). Image tracks use the compact 2-up grid the
+                // specialty screen uses; icon-only tracks keep the roomier
+                // horizontal cards. Within a track the layout is uniform.
+                const trackHasImages = trades.some((s) => getLabourImage(s.id));
+                return (
+                  <div
+                    className={
+                      trackHasImages
+                        ? hideHeader
+                          ? 'grid grid-cols-2 lg:grid-cols-3 gap-3 items-start'
+                          : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5 items-start'
+                        : hideHeader
+                          ? 'grid grid-cols-1 sm:grid-cols-2 gap-3'
+                          : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5'
+                    }
+                  >
+                    {trades.map((s) => {
+                      const TradeIcon =
+                        LABOUR_SUB_ICONS[s.icon] ||
+                        LABOUR_GROUP_ICONS[activeLabourGroup.id] ||
+                        Wrench;
+                      const selected = selectedCategories.some((c) => c.id === s.id);
+                      const img = getLabourImage(s.id);
+                      const frameCls = `group/card relative rounded-[20px] bg-white border text-left transition-all duration-500 ease-out ${
+                        selected
+                          ? 'border-[#C9973A]/60 shadow-[0_18px_40px_-12px_rgba(201,151,58,0.22)]'
+                          : 'border-[#C9973A]/20 hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-12px_rgba(201,151,58,0.18)]'
+                      }`;
+
+                      // Image-led card (trade has artwork): photo on top, label +
+                      // description below — mirrors the specialty image cards.
+                      if (img) {
+                        return (
+                          <button
+                            type="button"
+                            key={s.id}
+                            onClick={() => handleLabourSubTypeSelect(s)}
+                            className={`${frameCls} overflow-hidden flex flex-col`}
+                          >
+                            <div className="relative aspect-[4/3] bg-[#f5efe4]">
+                              <img
+                                src={img}
+                                alt=""
+                                loading="lazy"
+                                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out lg:group-hover/card:scale-[1.03]"
+                              />
+                              {selected && (
+                                <div className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-[#C9973A] flex items-center justify-center shadow-md shadow-[#C9973A]/40">
+                                  <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-3">
+                              <h4 className="font-bold text-[#1a1a2e] text-[13px] leading-snug tracking-tight">
+                                {s.label}
+                              </h4>
+                              <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2">
+                                {s.description}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      }
+
+                      // No artwork → original icon-chip horizontal card.
+                      return (
+                        <button
+                          type="button"
+                          key={s.id}
+                          onClick={() => handleLabourSubTypeSelect(s)}
+                          className={`${frameCls} p-5 flex items-start gap-4`}
+                        >
+                          <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+                            <TradeIcon className="w-5 h-5" />
                           </div>
-                        )}
-                      </button>
-                    );
-                  },
-                )}
-              </div>
+                          <div className="min-w-0 flex-1 pt-0.5">
+                            <h4 className="font-bold text-[#1a1a2e] text-[15px] leading-snug tracking-tight">
+                              {s.label}
+                            </h4>
+                            <p className="text-[12px] text-slate-500 mt-1 leading-relaxed line-clamp-2">
+                              {s.description}
+                            </p>
+                          </div>
+                          {selected && (
+                            <div className="w-6 h-6 rounded-full bg-[#C9973A] flex items-center justify-center shrink-0 shadow-sm">
+                              <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           )
         ) : preselectedParentId ? (
@@ -1706,7 +1793,7 @@ export default function CategorySelection({
 
             {hideHeader ? (
               <div className="relative">
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
                   {filteredCategories.map((c) => (
                     <CategoryCard
                       key={c.id}

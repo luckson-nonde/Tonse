@@ -26,8 +26,12 @@ claiming images are wired.
   the subcategory **id**, not its name.
 - Catalog (authoritative ids + display names): `src/services/categories/catalog.ts`.
 - Asset folder + naming convention: `src/assets/images/specialty/README.md`.
-- Electronics/automotive use `<stem>-<sell|repair|both>.webp`; service items use a
-  single `<stem>.webp`. Missing image ⇒ graceful icon-chip fallback (not a bug).
+- Electronics buy/repair items use `<stem>-<sell|repair|both>.webp`. Automotive
+  and service items — no Buy/Repair split — use a single bare `<stem>.webp`
+  (`vehicles.webp`, `car-parts-new.webp`, `Event Catering.webp` → `event-catering`).
+  `getSpecialtyImage` falls back `<stem>` → `<stem>-sell`, which is how the
+  buy-only `gaming-sell.webp` serves its single-variant card.
+  Missing image ⇒ graceful icon-chip fallback (not a bug).
 
 ## Procedure
 
@@ -50,8 +54,10 @@ claiming images are wired.
      depicts a *different* missing entity — **reassign, don't discard**.
 5. **Verify in three layers** (all three — a file that *resolves* may still be the
    *wrong picture*):
-   - **Static**: mirror the normalization in a node script, build keys from the real
-     files, assert every id resolves; report missing/collisions/orphans.
+   - **Static**: mirror the normalization AND the collision tiebreak in a node
+     script, build keys from the real files, assert every id resolves; report
+     missing/collisions/orphans. (Mirroring only the normalization is not
+     enough — a different collision winner is a false verdict.)
    - **Live**: drive the UI headless, count `img[src*="specialty"]` per group vs
      expected, check console errors.
    - **Adversarial**: fan out agents that **Read (view) each image file** and judge
