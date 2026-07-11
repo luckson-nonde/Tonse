@@ -9,6 +9,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'motion/react';
+import PageTransition from '../../components/PageTransition';
 import {
   LayoutDashboard,
   Users,
@@ -166,14 +167,16 @@ export default function AdminDashboard() {
       {/* Content */}
       <main className="flex-1 min-w-0 px-5 sm:px-8 lg:px-10 xl:px-14 pt-20 md:pt-10 pb-12 overflow-x-hidden">
         <div className="max-w-[1400px] mx-auto w-full">
-          {activeTab === 'overview' && <OverviewView />}
-          {activeTab === 'users' && <UsersView />}
-          {activeTab === 'verifications' && <VerificationsView />}
-          {activeTab === 'categories' && <CategoryControlView />}
-          {activeTab === 'inquiries' && <InquiriesView />}
-          {activeTab === 'quotes' && <QuotesView />}
-          {activeTab === 'financial' && <FinancialView />}
-          {activeTab === 'audit' && <AuditView />}
+          <PageTransition transitionKey={activeTab}>
+            {activeTab === 'overview' && <OverviewView />}
+            {activeTab === 'users' && <UsersView />}
+            {activeTab === 'verifications' && <VerificationsView />}
+            {activeTab === 'categories' && <CategoryControlView />}
+            {activeTab === 'inquiries' && <InquiriesView />}
+            {activeTab === 'quotes' && <QuotesView />}
+            {activeTab === 'financial' && <FinancialView />}
+            {activeTab === 'audit' && <AuditView />}
+          </PageTransition>
         </div>
       </main>
     </div>

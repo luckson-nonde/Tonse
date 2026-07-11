@@ -118,6 +118,14 @@ export class Inquiry {
   @Column({ type: 'timestamp', nullable: true })
   responseDeadlineAt: Date;
 
+  /**
+   * When set, RESERVE-tier quotes are visible to the buyer. Set by the
+   * buyer's explicit "show reserved quotes" action, or automatically when
+   * the last PRIMARY quote is rejected/archived while reserves exist.
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  reserveReleasedAt: Date;
+
   @Column({ type: 'simple-array', default: '' })
   archivedBy: string[];
 

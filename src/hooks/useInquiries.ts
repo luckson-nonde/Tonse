@@ -124,6 +124,10 @@ export function useMatchedLeads(
   refetch?: boolean,
   variant?: string,
   onNewLeads?: (newLeads: InquiryResponse[]) => void,
+  /** Poll cadence. The default 8s is the no-push fallback; callers with a
+   *  healthy SSE dispatch stream widen this (instant delivery comes over
+   *  the stream, the poll is just reconciliation). */
+  pollIntervalMs: number = 8000,
 ) {
   const [inquiries, setInquiries] = useState<InquiryResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -174,13 +178,12 @@ export function useMatchedLeads(
       }
     };
     loadLeads();
-    // Poll every 8 seconds — fast enough that a provider hears the
-    // alert "live" while the buyer is still on the new-inquiry success
-    // screen, slow enough not to hammer the API for leads that almost
-    // never change minute-to-minute.
-    const interval = setInterval(loadLeads, 8000);
+    // Poll cadence: 8s when this poll is the only delivery channel (fast
+    // enough to feel live), widened by callers when the SSE dispatch
+    // stream is connected and instant delivery is push-based.
+    const interval = setInterval(loadLeads, pollIntervalMs);
     return () => clearInterval(interval);
-  }, [userId, refetch, refetchTrigger, variant]);
+  }, [userId, refetch, refetchTrigger, variant, pollIntervalMs]);
 
   return { inquiries, loading, error, refresh };
 }

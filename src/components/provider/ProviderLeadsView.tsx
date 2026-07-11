@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package, Users, Clock } from 'lucide-react';
 import emptyLeadsImage from '../../assets/images/empty-states/owl_reading.png';
 import { uniqueKey } from '../../utils/keyUtils';
 import { PreferenceTags, Lightbox } from './LeadsHelpers';
@@ -625,6 +625,18 @@ export default function ProviderLeadsView({
                   {/* Title */}
                   <p className="text-[15px] font-bold text-slate-800 leading-snug -mt-1">{lead.title}</p>
 
+                  {/* Live dispatch counter — quotes taken / slots, reserve
+                      state, and the response countdown. Ticks in real time
+                      via the SSE QUOTE_COUNT_UPDATE overlay upstream. */}
+                  {(lead.maxQuotes || lead.responseDeadlineAt) && (
+                    <LeadSlotStrip
+                      quoteCount={(lead as any).quoteCount}
+                      reserveCount={(lead as any).reserveCount}
+                      maxQuotes={lead.maxQuotes}
+                      responseDeadlineAt={lead.responseDeadlineAt}
+                    />
+                  )}
+
                   {/* Divider */}
                   <div className="h-px w-full bg-gradient-to-r from-slate-100 via-slate-100 to-transparent" />
 
@@ -778,6 +790,95 @@ export default function ProviderLeadsView({
           })
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Live dispatch counter on a lead card: quotes taken vs slots, reserve
+ * state once the primary batch fills, and a 1s-tick response countdown.
+ * Values arrive hydrated from /inquiries/leads/me and are overlaid in
+ * real time by the SSE QUOTE_COUNT_UPDATE events upstream (ProviderDashboard
+ * merges `liveCounts` into each lead object before it reaches this card).
+ */
+function LeadSlotStrip({
+  quoteCount,
+  reserveCount,
+  maxQuotes,
+  responseDeadlineAt,
+}: {
+  quoteCount?: number;
+  reserveCount?: number;
+  maxQuotes?: number;
+  responseDeadlineAt?: string;
+}) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!responseDeadlineAt) return;
+    const id = window.setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [responseDeadlineAt]);
+
+  const taken = quoteCount ?? 0;
+  const total = maxQuotes ?? 0;
+  const reserveTaken = reserveCount ?? 0;
+  const primaryFull = total > 0 && taken >= total;
+  const reserveOpen = primaryFull && reserveTaken < total;
+  const allFull = primaryFull && reserveTaken >= total;
+
+  let deadlineLabel = '';
+  let deadlineUrgent = false;
+  let deadlineExpired = false;
+  if (responseDeadlineAt) {
+    const ms = new Date(responseDeadlineAt).getTime() - Date.now();
+    if (ms <= 0) {
+      deadlineExpired = true;
+    } else {
+      const totalSec = Math.floor(ms / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      deadlineLabel =
+        h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`;
+      deadlineUrgent = ms < 30 * 60 * 1000;
+    }
+  }
+
+  const slotClass = allFull
+    ? 'bg-rose-50 text-rose-600 border-rose-200'
+    : reserveOpen
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      : total > 0 && total - taken <= 2
+        ? 'bg-amber-50 text-amber-700 border-amber-200'
+        : 'bg-slate-50 text-slate-600 border-slate-200';
+  const deadlineClass = deadlineExpired
+    ? 'bg-rose-50 text-rose-600 border-rose-200'
+    : deadlineUrgent
+      ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
+      : 'bg-slate-50 text-slate-600 border-slate-200';
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 -mt-1">
+      {total > 0 && (
+        <span
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${slotClass}`}
+        >
+          <Users className="w-3 h-3" />
+          {allFull
+            ? 'All slots full'
+            : reserveOpen
+              ? `Primary full · reserve ${reserveTaken}/${total}`
+              : `${taken}/${total} quotes in`}
+        </span>
+      )}
+      {(deadlineLabel || deadlineExpired) && (
+        <span
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${deadlineClass}`}
+        >
+          <Clock className="w-3 h-3" />
+          {deadlineExpired ? 'Response window closed' : `Respond in ${deadlineLabel}`}
+        </span>
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { useLiteMotion } from './hooks/useLiteMotion';
 import { DashboardProvider } from './DashboardContext';
 import { CategoryAvailabilityProvider } from './services/categories/availability';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import PageTransition from './components/PageTransition';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
 import RoleSelection from './pages/RoleSelection';
@@ -108,8 +109,10 @@ function RootRedirect() {
 export default function App() {
   // Touch devices get instant (non-transform) animations app-wide: budget
   // Android GPUs ghost stale raster tiles under framer-motion's composited
-  // transforms. 'never' (the previous implicit default) keeps desktop
-  // byte-identical. See src/hooks/useLiteMotion.ts for the full rationale.
+  // transforms. See src/hooks/useLiteMotion.ts for the full rationale.
+  // Elsewhere 'user' defers to the OS prefers-reduced-motion setting. Note
+  // this only strips positional/transform keys, never opacity — full
+  // disabling of the page transitions is handled inside PageTransition.
   const lite = useLiteMotion();
   return (
     <ErrorBoundary>
@@ -117,25 +120,27 @@ export default function App() {
         <ErrorBoundary>
         <DashboardProvider>
           <CategoryAvailabilityProvider>
-          <MotionConfig reducedMotion={lite ? 'always' : 'never'}>
+          <MotionConfig reducedMotion={lite ? 'always' : 'user'}>
           <Router>
             <Routes>
-              <Route path="/onboarding" element={<Onboarding />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/role-selection" element={<RoleSelection />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/register/labour" element={<LabourRegister />} />
-              <Route path="/register/company-documents" element={<CompanyDocuments />} />
-              <Route path="/business-verification" element={<BusinessVerification />} />
-              <Route path="/seller/categories" element={<SellerCategorySelection />} />
-              <Route path="/seller/location" element={<SellerLocationDetails />} />
-              <Route path="/store-verification" element={<StoreVerification />} />
-              <Route path="/verification-pending" element={<VerificationPending />} />
+              <Route path="/onboarding" element={<PageTransition><Onboarding /></PageTransition>} />
+              <Route path="/login" element={<PageTransition><Login /></PageTransition>} />
+              <Route path="/role-selection" element={<PageTransition><RoleSelection /></PageTransition>} />
+              <Route path="/register" element={<PageTransition><Register /></PageTransition>} />
+              <Route path="/register/labour" element={<PageTransition><LabourRegister /></PageTransition>} />
+              <Route path="/register/company-documents" element={<PageTransition><CompanyDocuments /></PageTransition>} />
+              <Route path="/business-verification" element={<PageTransition><BusinessVerification /></PageTransition>} />
+              <Route path="/seller/categories" element={<PageTransition><SellerCategorySelection /></PageTransition>} />
+              <Route path="/seller/location" element={<PageTransition><SellerLocationDetails /></PageTransition>} />
+              <Route path="/store-verification" element={<PageTransition><StoreVerification /></PageTransition>} />
+              <Route path="/verification-pending" element={<PageTransition><VerificationPending /></PageTransition>} />
               <Route
                 path="/force-password-change"
                 element={
                   <ProtectedRoute>
-                    <ForcePasswordChange />
+                    <PageTransition>
+                      <ForcePasswordChange />
+                    </PageTransition>
                   </ProtectedRoute>
                 }
               />
@@ -161,7 +166,9 @@ export default function App() {
                 path="/buyer/quote-details"
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
-                    <QuoteDetailsPage />
+                    <PageTransition>
+                      <QuoteDetailsPage />
+                    </PageTransition>
                   </ProtectedRoute>
                 }
               />
@@ -169,7 +176,9 @@ export default function App() {
                 path="/buyer/collection-code/:id"
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
-                    <CollectionCodePage />
+                    <PageTransition>
+                      <CollectionCodePage />
+                    </PageTransition>
                   </ProtectedRoute>
                 }
               />
@@ -177,7 +186,9 @@ export default function App() {
                 path="/buyer/payment"
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
-                    <PaymentPage />
+                    <PageTransition>
+                      <PaymentPage />
+                    </PageTransition>
                   </ProtectedRoute>
                 }
               />
@@ -185,7 +196,9 @@ export default function App() {
                 path="/buyer/payment-success"
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
-                    <PaymentSuccessPage />
+                    <PageTransition>
+                      <PaymentSuccessPage />
+                    </PageTransition>
                   </ProtectedRoute>
                 }
               />
@@ -370,7 +383,9 @@ export default function App() {
                 path="/admin/:tab"
                 element={
                   <ProtectedRoute allowedRoles={['ADMIN']}>
-                    <AdminDashboard />
+                    <PageTransition>
+                      <AdminDashboard />
+                    </PageTransition>
                   </ProtectedRoute>
                 }
               />

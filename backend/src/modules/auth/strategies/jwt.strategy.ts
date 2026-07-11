@@ -11,7 +11,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private usersService: UsersService
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      // Header first (every normal API call). The query-param fallback exists
+      // for ONE consumer: the SSE stream (GET /notifications/stream?token=…) —
+      // native EventSource cannot set an Authorization header. Tokens in URLs
+      // land in server logs, so nothing else should ever use the fallback.
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        (req) => (req?.query?.token as string) ?? null,
+      ]),
       ignoreExpiration: false,
       secretOrKey: configService.get('jwt.secret'),
     });

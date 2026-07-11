@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'motion/react';
 import { Store, X } from 'lucide-react';
+import PageTransition from '../components/PageTransition';
 import { useAuth } from '../AuthContext';
 import { useDashboard } from '../DashboardContext';
 import {
@@ -11,7 +11,9 @@ import {
   type CreateInquiryPayload,
 } from '../services/api/inquiryService';
 import { useUserInquiries, notifyInquiriesChanged } from '../hooks/useInquiries';
-import { useUserQuotes } from '../hooks/useQuotes';
+import { useUserQuotes, notifyQuotesChanged } from '../hooks/useQuotes';
+import { useNotificationStream } from '../hooks/useNotificationStream';
+import { releaseReserveQuotes } from '../services/api/notificationService';
 import { markQuoteAsRead, archiveQuote, deleteQuote } from '../services/api/quoteService';
 import { createOrder, fetchBuyerOrders, type OrderRecord } from '../services/api/orderService';
 import { isActiveInquiry, isActiveQuote } from '../services/lifecycleFilters';
@@ -83,6 +85,23 @@ export default function BuyerDashboard() {
 
   // Fetch quotes from PostgreSQL backend (NO IndexedDB)
   const { quotes, loading: quotesLoading, refresh: refreshQuotes } = useUserQuotes(user?.id);
+
+  // ── Live dispatch stream (buyer side) ────────────────────────────────
+  // quote_received / reserve-release → instant refetch via the event buses
+  // (which also resync DashboardLayout's badge counters); provider_accepted
+  // ticks the "X providers accepted" chip by refetching the hydrated
+  // inquiry rows. The 30s polls remain the degraded fallback.
+  useNotificationStream(user?.id, {
+    onQuoteReceived: () => {
+      notifyQuotesChanged();
+      notifyInquiriesChanged();
+    },
+    onProviderAccepted: () => notifyInquiriesChanged(),
+    onReconnect: () => {
+      notifyQuotesChanged();
+      notifyInquiriesChanged();
+    },
+  });
 
   const [backendOrders, setBackendOrders] = useState<OrderRecord[]>([]);
   const [ordersRefreshKey, setOrdersRefreshKey] = useState(0);
@@ -338,6 +357,22 @@ export default function BuyerDashboard() {
             refreshQuotes();
           } catch (error) {
             console.error('Failed to archive quote:', error);
+          }
+        }
+        break;
+      case 'release_reserve':
+        // "Didn't find what I needed in the first batch" — surface the
+        // reserved (overflow) quotes. Reserve providers get notified their
+        // quote is now in play; the quotes list refreshes with the batch.
+        if (payload?.id) {
+          try {
+            await releaseReserveQuotes(String(payload.id));
+            notifyQuotesChanged();
+            notifyInquiriesChanged();
+            refreshQuotes();
+            refreshInquiries();
+          } catch (error: any) {
+            alert(error?.message || 'Failed to release reserved quotes.');
           }
         }
         break;
@@ -838,34 +873,25 @@ export default function BuyerDashboard() {
           }}
           onCancel={() => setQuoteToDelete(null)}
         />
-        <AnimatePresence mode="wait">
-          {isFlowTab ? (
-            <motion.div
-              key="flow"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-            >
-              {renderInquiryFlow()}
-            </motion.div>
-          ) : (
-            <DynamicAccountRenderer
-              key={activeTab}
-              schema={MASTER_BUYER_ACCOUNT_SCHEMA}
-              view={
-                activeTab === 'home'
-                  ? 'dashboard'
-                  : activeTab === 'inquiries' && selectedInquiryId
-                    ? 'inquiry_details'
-                    : activeTab
-              }
-              data={dashboardData}
-              onAction={handleAction}
-              onNavigate={handleTabChange}
-              user={user}
-            />
-          )}
-        </AnimatePresence>
+        {isFlowTab ? (
+          <PageTransition transitionKey="flow">{renderInquiryFlow()}</PageTransition>
+        ) : (
+          <DynamicAccountRenderer
+            key={activeTab}
+            schema={MASTER_BUYER_ACCOUNT_SCHEMA}
+            view={
+              activeTab === 'home'
+                ? 'dashboard'
+                : activeTab === 'inquiries' && selectedInquiryId
+                  ? 'inquiry_details'
+                  : activeTab
+            }
+            data={dashboardData}
+            onAction={handleAction}
+            onNavigate={handleTabChange}
+            user={user}
+          />
+        )}
       </div>
     </DashboardLayout>
   );

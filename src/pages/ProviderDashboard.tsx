@@ -65,6 +65,8 @@ import ProviderHomeView from '../components/provider/ProviderHomeView';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
 import IncomingLeadAlert from '../components/IncomingLeadAlert';
 import { recordInquiryView, type InquiryResponse } from '../services/api/inquiryService';
+import { useNotificationStream, type QuoteCountUpdate } from '../hooks/useNotificationStream';
+import { updateNotificationStatus } from '../services/api/notificationService';
 import { robustParse } from '../utils/jsonUtils';
 import { resolveSchemaForUser } from '../services/mergeAccountSchemas';
 
@@ -362,18 +364,83 @@ export default function ProviderDashboard() {
       return adds.length > 0 ? [...prev, ...adds] : prev;
     });
   }, []);
-  const { inquiries: matchedLeads } = useMatchedLeads(
+
+  // ── Uber-dispatch stream ─────────────────────────────────────────────
+  // Live SSE channel: NEW_LEAD fires the incoming-request alert instantly
+  // (the poll below becomes reconciliation), QUOTE_COUNT_UPDATE ticks the
+  // "X/Y slots" counters on cards + the open alert in real time, LEAD_FULL
+  // retracts alerts for leads that filled up. `liveCounts` overlays the
+  // freshest counter values onto poll-fetched lead objects.
+  const [liveCounts, setLiveCounts] = useState<Record<string, Partial<QuoteCountUpdate>>>({});
+  const leadsRefreshRef = React.useRef<() => void>(() => {});
+  const { status: streamStatus } = useNotificationStream(user?.id, {
+    onNewLead: (payload) => {
+      // Catch-up replays carry the persisted Accept/Decline status —
+      // anything already handled must not re-alert.
+      if (payload.status && payload.status !== 'PENDING') {
+        if (payload.inquiryId) dismissedAlertIdsRef.current.add(String(payload.inquiryId));
+        return;
+      }
+      if (!payload.inquiryId) return;
+      handleNewLeads([
+        { ...(payload as any), id: payload.inquiryId } as InquiryResponse,
+      ]);
+      // Reconcile the list view so the lead card exists behind the alert.
+      leadsRefreshRef.current();
+    },
+    onQuoteCountUpdate: (p) => {
+      setLiveCounts((prev) => ({ ...prev, [String(p.inquiryId)]: p }));
+    },
+    onLeadFull: ({ inquiryId }) => {
+      const id = String(inquiryId);
+      dismissedAlertIdsRef.current.add(id);
+      setAlertQueue((prev) => prev.filter((l) => String(l.id) !== id));
+    },
+    onReserveReleased: () => {
+      // Their reserve quote just went live for the buyer — refresh quotes.
+      setQuotesRefreshKey((k) => k + 1);
+    },
+    onReconnect: () => leadsRefreshRef.current(),
+  });
+
+  const { inquiries: matchedLeads, refresh: refreshMatchedLeads } = useMatchedLeads(
     user?.id,
     undefined,
     selectedVariant,
     handleNewLeads,
+    // Stream healthy → poll is just reconciliation; stream down → the
+    // original 8s cadence is the degraded-but-live fallback.
+    streamStatus === 'open' ? 45000 : 8000,
   );
-  const currentAlertLead = alertQueue[0] ?? null;
+  leadsRefreshRef.current = refreshMatchedLeads;
+
+  // Declined/accepted leads must never re-alert, even across refreshes —
+  // the leads hydration ships the caller's persisted notification status.
+  useEffect(() => {
+    for (const lead of matchedLeads as any[]) {
+      if (lead.notificationStatus && lead.notificationStatus !== 'PENDING' && lead.id) {
+        dismissedAlertIdsRef.current.add(String(lead.id));
+      }
+    }
+  }, [matchedLeads]);
+
+  const currentAlertLead = React.useMemo(() => {
+    const head = alertQueue[0] ?? null;
+    if (!head?.id) return head;
+    const live = liveCounts[String(head.id)];
+    return live ? ({ ...head, ...live } as InquiryResponse) : head;
+  }, [alertQueue, liveCounts]);
   const dismissAlert = useCallback(() => {
     setAlertQueue((prev) => {
       if (prev.length === 0) return prev;
       const [head, ...rest] = prev;
-      if (head?.id) dismissedAlertIdsRef.current.add(String(head.id));
+      if (head?.id) {
+        dismissedAlertIdsRef.current.add(String(head.id));
+        // Persist the Decline — behaviour telemetry for the buyer, and the
+        // reason this lead won't re-alert after a refresh.
+        const notifId = (head as any).notificationId;
+        if (notifId) updateNotificationStatus(notifId, 'DECLINED');
+      }
       return rest;
     });
   }, []);
@@ -385,18 +452,26 @@ export default function ProviderDashboard() {
       // opening their own dashboard alert do. Best-effort, fire-and-
       // forget — failure must not block the navigation.
       recordInquiryView(lead.id).catch(() => {});
+      // Persist the Accept — ticks the buyer's "X providers accepted".
+      const notifId = (lead as any).notificationId;
+      if (notifId) updateNotificationStatus(notifId, 'ACKNOWLEDGED');
     }
     setAlertQueue((prev) => prev.slice(1));
     handleTabClick('leads');
   }, []);
   const allLeads = React.useMemo(
     () =>
-      [...matchedLeads].sort(
-        (a: any, b: any) =>
-          new Date(b.createdAt || 0).getTime() -
-          new Date(a.createdAt || 0).getTime(),
-      ),
-    [matchedLeads],
+      [...matchedLeads]
+        .map((lead: any) => {
+          const live = lead.id ? liveCounts[String(lead.id)] : undefined;
+          return live ? { ...lead, ...live } : lead;
+        })
+        .sort(
+          (a: any, b: any) =>
+            new Date(b.createdAt || 0).getTime() -
+            new Date(a.createdAt || 0).getTime(),
+        ),
+    [matchedLeads, liveCounts],
   );
 
   // Coerce price to Number — backend returns DECIMAL columns as strings
