@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { generateZodSchema } from './quoteValidation';
 import { isRepairVariant, CATEGORIES_DB, getCategoryType, type Category } from './categories';
+import { LABOUR_CATEGORIES } from './labourCategories';
 
 export interface QuoteField {
   name: string;
@@ -32,9 +33,26 @@ const VENUE_AMENITIES = [
 // suffix in the category name (the same suffix isRepairVariant checks for in
 // services/categories.ts), so the buyer-side specification flows directly into
 // the seller-side quote shape.
+// Heavy-machinery-hire items live in labourCategories.ts (category
+// MACHINERY_HIRE), not CATEGORIES_DB, so archetypeFromRow can never resolve
+// them — detection matches the lead's category string against the equipment
+// ids AND labels. Checked FIRST in detectArchetype: labels like "Mobile
+// Crane" would otherwise trip the `mobile` PRODUCT keyword below.
+const MACHINERY_HIRE_KEYS = new Set(
+  LABOUR_CATEGORIES.filter((c) => c.category === 'MACHINERY_HIRE').flatMap((c) => [
+    c.id,
+    c.label.toLowerCase(),
+  ]),
+);
+const isMachineryHireCategory = (category: string): boolean => {
+  const first = (category || '').split(',')[0].trim().toLowerCase();
+  return MACHINERY_HIRE_KEYS.has(first) || MACHINERY_HIRE_KEYS.has(first.replace(/[\s-]+/g, '_'));
+};
+
 const detectArchetype = (
   category: string
-): 'REPAIR' | 'PRODUCT' | 'SERVICE' | 'VENUE' | 'LABOUR' | 'GENERIC' => {
+): 'REPAIR' | 'PRODUCT' | 'SERVICE' | 'VENUE' | 'LABOUR' | 'HIRE' | 'GENERIC' => {
+  if (isMachineryHireCategory(category)) return 'HIRE';
   if (isRepairVariant(category || '')) return 'REPAIR';
   const cat = (category || '').toLowerCase();
   if (cat.includes('venue') || cat.includes('hall') || cat.includes('garden') || cat.includes('space')) return 'VENUE';
@@ -536,7 +554,96 @@ export const generateQuoteSchema = (
   const archetype = archetypeFromRow(categoryRow) ?? detectArchetype(inquiryCategory);
   const schema: QuoteField[] = [];
 
-  if (archetype === 'REPAIR') {
+  if (archetype === 'HIRE') {
+    // Equipment hire — the quote is a rate structure, not a sale price:
+    // hire rate × duration, plus mobilisation/operator/deposit line items.
+    // `price` stays the all-in total so payment + quote-card rendering
+    // downstream need no special case (same pattern as REPAIR).
+    schema.push({
+      name: 'price',
+      label: 'Total Hire Quote (ZMW)',
+      type: 'currency',
+      required: true,
+      helpText: 'All-in for the requested period: hire + delivery + operator. Editable after entering the breakdown below.',
+      calculation: 'total',
+      group: 'Pricing',
+    });
+    // Rate + unit as two fields — QuoteSubmissionForm renders
+    // currency/select but not the composite `rate_with_unit` type.
+    schema.push({
+      name: 'hireRate',
+      label: 'Hire Rate (ZMW)',
+      type: 'currency',
+      required: true,
+      helpText: 'Base rate for the machine itself.',
+      group: 'Pricing',
+    });
+    schema.push({
+      name: 'hireRateUnit',
+      label: 'Rate Unit',
+      type: 'select',
+      required: true,
+      options: ['Per Hour', 'Per Day', 'Per Week', 'Per Month'],
+      group: 'Pricing',
+    });
+    schema.push({
+      name: 'mobilisationFee',
+      label: 'Delivery / Mobilisation Fee (ZMW)',
+      type: 'currency',
+      required: false,
+      helpText: 'Transporting the machine to and from the site (low-bed, permits, escort).',
+      group: 'Pricing',
+    });
+    schema.push({
+      name: 'operatorFee',
+      label: 'Operator Fee (ZMW)',
+      type: 'currency',
+      required: false,
+      helpText: 'Leave empty for dry hire (buyer supplies the operator).',
+      group: 'Pricing',
+    });
+    schema.push({
+      name: 'damageDeposit',
+      label: 'Refundable Deposit (ZMW)',
+      type: 'currency',
+      required: false,
+      helpText: 'Held against damage; refunded on clean return.',
+      group: 'Pricing',
+    });
+    schema.push({
+      name: 'fuelPolicy',
+      label: 'Fuel Policy',
+      type: 'select',
+      required: true,
+      options: ['Included — wet hire', 'Buyer fuels — dry hire', 'Negotiable'],
+      group: 'Logistics & Timing',
+    });
+    schema.push({
+      name: 'availabilityDate',
+      label: 'Earliest Availability',
+      type: 'date',
+      required: true,
+      helpText: 'First date the machine can be on site.',
+      group: 'Logistics & Timing',
+    });
+    schema.push({
+      name: 'expiryDuration',
+      label: 'Quote Valid For',
+      type: 'select',
+      required: true,
+      options: VALIDITY_OPTIONS,
+      group: 'Logistics & Timing',
+    });
+    schema.push({
+      name: 'message',
+      label: 'Inclusions & Notes',
+      type: 'textarea',
+      required: false,
+      placeholder: 'Machine model/year, attachments included, insurance, min hire period, standby charges…',
+      group: 'Notes & Photos',
+    });
+
+  } else if (archetype === 'REPAIR') {
     // Total quoted price — kept as `price` so downstream payment / quote-card
     // rendering doesn't need a special case. The breakdown fields below give
     // buyers and finance the visibility into what's parts vs labour.

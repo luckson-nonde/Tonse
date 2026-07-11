@@ -622,7 +622,9 @@ export default function DashboardLayout({
       case 'inquiries':
         return 'MY INQUIRIES';
       case 'create-inquiry':
-        return 'EVENT BOOKING REQUEST';
+        // Category-neutral: this tab hosts every request type (goods,
+        // services, labour trades, machinery hire) — not just events.
+        return 'NEW REQUEST';
       case 'inquiry-items':
         return 'ITEM LIST';
       case 'category-selection':

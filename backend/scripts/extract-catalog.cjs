@@ -1,13 +1,22 @@
 /**
  * One-shot extractor: pulls the BASE_CATEGORIES_DB array out of
- * `src/services/categories/catalog.ts` and writes a stripped JSON catalog
- * (id, name, parentId, baseName, type) the backend seeder consumes.
+ * `src/services/categories/catalog.ts` — plus the labour trades and
+ * machinery-hire equipment out of `src/services/labourCategories.ts` —
+ * and writes a stripped JSON catalog (id, name, parentId, baseName, type)
+ * the backend seeder consumes.
+ *
+ * Labour/machinery ids MUST be in this catalog: the profile↔category and
+ * inquiry↔category junction tables FK into `categories`, so a provider
+ * registering with trade/equipment ids (or a buyer inquiry tagged with
+ * them) would otherwise FK-fail and roll back. They're emitted under two
+ * synthetic roots — `labour` and `machinery-hire` — which the seeder maps
+ * to the LABOUR and RENTAL archetypes respectively.
  *
  * Run from the repo root:
  *   node backend/scripts/extract-catalog.cjs
  *
- * Re-run any time CATEGORIES_DB changes in the frontend. The output
- * lands at backend/src/modules/categories/catalog.json.
+ * Re-run any time CATEGORIES_DB or LABOUR_CATEGORIES changes in the
+ * frontend. The output lands at backend/src/modules/categories/catalog.json.
  */
 const fs = require('fs');
 const path = require('path');
@@ -76,8 +85,54 @@ while (i < block.length) {
   });
 }
 
+// ── Labour trades + machinery-hire equipment ───────────────────────────
+// LABOUR_CATEGORIES entries are one-per-line objects:
+//   { id: 'general_labourer', label: 'General Labourer', category: 'CONSTRUCTION', … }
+// Items with category MACHINERY_HIRE belong to the equipment-hire provider
+// type; everything else is a labour trade. Roots are emitted FIRST so the
+// seeder's parentId FK resolves at insert time.
+const labourSrc = fs.readFileSync(
+  path.join(repoRoot, 'src', 'services', 'labourCategories.ts'),
+  'utf8'
+);
+const labourBlockStart = labourSrc.indexOf('export const LABOUR_CATEGORIES');
+const labourBlockEnd = labourSrc.indexOf('\n];', labourBlockStart);
+if (labourBlockStart === -1 || labourBlockEnd === -1)
+  throw new Error('LABOUR_CATEGORIES block not found');
+const labourBlock = labourSrc.slice(labourBlockStart, labourBlockEnd);
+
+entries.push(
+  { id: 'labour', name: 'Labour & Skills', parentId: null, baseName: null, type: null },
+  { id: 'machinery-hire', name: 'Heavy Machinery for Hire', parentId: null, baseName: null, type: null },
+);
+
+const labourEntryRe =
+  /\{\s*id:\s*'([^']+)',\s*label:\s*'([^']+)',\s*category:\s*'([^']+)'/g;
+let m;
+let labourCount = 0;
+let machineryCount = 0;
+while ((m = labourEntryRe.exec(labourBlock)) !== null) {
+  const [, id, label, group] = m;
+  const isMachinery = group === 'MACHINERY_HIRE';
+  entries.push({
+    id,
+    name: label,
+    parentId: isMachinery ? 'machinery-hire' : 'labour',
+    baseName: null,
+    type: null,
+  });
+  if (isMachinery) machineryCount++;
+  else labourCount++;
+}
+if (labourCount === 0 || machineryCount === 0)
+  throw new Error(
+    `labourCategories extraction looks wrong: ${labourCount} trades, ${machineryCount} machinery items`
+  );
+
 const outDir = path.join(repoRoot, 'backend', 'src', 'modules', 'categories');
 fs.mkdirSync(outDir, { recursive: true });
 const outFile = path.join(outDir, 'catalog.json');
 fs.writeFileSync(outFile, JSON.stringify(entries, null, 2) + '\n');
-console.log(`Extracted ${entries.length} entries → ${path.relative(repoRoot, outFile)}`);
+console.log(
+  `Extracted ${entries.length} entries (${labourCount} labour trades, ${machineryCount} machinery items) → ${path.relative(repoRoot, outFile)}`
+);

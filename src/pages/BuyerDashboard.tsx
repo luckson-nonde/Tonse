@@ -572,6 +572,14 @@ export default function BuyerDashboard() {
         ...(pendingInquiry.targetedShop && {
           targetedProviderId: pendingInquiry.targetedShop.sellerId,
         }),
+        // Labour / machinery-hire context — matching rides categoryIds,
+        // but the lead's identity (labour vs equipment hire) drives the
+        // provider-side card copy and the quote-form template (HIRE).
+        ...(isLabour && {
+          isLabour: true,
+          labourGroup: pendingInquiry.labourGroup,
+          labourSubType: pendingInquiry.categoryId,
+        }),
       };
 
       await createInquiry(inquiryData);
@@ -631,7 +639,17 @@ export default function BuyerDashboard() {
         let schema: any[] = [];
         if (isLabour) {
           const labourSchema = getLabourInquirySchema(pendingInquiry.inquirySchemaKey || 'generic');
-          schema = labourSchema?.fields || [];
+          // LabourInquiryField keys its fields `id`; DynamicInquiryForm
+          // renders by `name` and SKIPS nameless fields — without this
+          // adapter every labour/machinery form rendered empty.
+          schema = (labourSchema?.fields || []).map((f) => ({
+            name: f.id,
+            label: f.label,
+            type: f.type,
+            required: f.required,
+            placeholder: f.placeholder,
+            options: f.options,
+          }));
         } else {
           // pendingInquiry.categories[0] is the stable category ID
           // (e.g. 'mobile-phones-repair'), not the display name. The

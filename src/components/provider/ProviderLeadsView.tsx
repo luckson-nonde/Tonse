@@ -5,6 +5,7 @@ import { uniqueKey } from '../../utils/keyUtils';
 import { PreferenceTags, Lightbox } from './LeadsHelpers';
 import QuoteSubmissionForm from './QuoteSubmissionForm';
 import { recordInquiryView } from '../../services/api/inquiryService';
+import { LABOUR_CATEGORIES } from '../../services/labourCategories';
 import {
   getEffectiveBusinessType,
   getEffectiveBusinessTypes,
@@ -398,6 +399,8 @@ export default function ProviderLeadsView({
       case 'EVENTS':        return 'Event Bookings';
       case 'ENTERTAINMENT': return 'Performance Bookings';
       case 'RETAIL':        return 'Buyer Inquiries';
+      case 'RENTAL':        return 'Rental Requests';
+      case 'LABOUR':        return 'Job Requests';
       default:              return 'Booking Requests';
     }
   })();
@@ -421,7 +424,18 @@ export default function ProviderLeadsView({
       // think the system is broadcasting too widely.
       const idSet = new Set(rawIds);
       const cats = Array.from(idSet)
-        .map((id) => CATEGORIES_DB.find((c) => c.id === id))
+        .map((id) => {
+          const row = CATEGORIES_DB.find((c) => c.id === id);
+          if (row) return row;
+          // Labour trades / machinery equipment aren't CATEGORIES_DB rows —
+          // resolve their display names from the labour taxonomy so a
+          // machinery provider's subtitle reads "Excavator, Tipper Truck"
+          // instead of "No categories matched".
+          const labour = LABOUR_CATEGORIES.find((c) => c.id === id);
+          return labour
+            ? ({ id: labour.id, name: labour.label, parentId: null } as (typeof CATEGORIES_DB)[number])
+            : undefined;
+        })
         .filter((c): c is NonNullable<typeof c> => !!c);
       const childIds = new Set(cats.map((c) => c.parentId).filter(Boolean) as string[]);
       const effectiveCats = cats.filter((c) => !childIds.has(c.id));

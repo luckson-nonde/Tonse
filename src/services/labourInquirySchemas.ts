@@ -21,8 +21,29 @@ const baseFields: LabourInquiryField[] = [
   { id: 'additional_notes', label: 'Additional Notes', type: 'textarea', required: false },
 ];
 
+// Equipment-hire request — deliberately NOT built on `baseFields`: hiring an
+// excavator asks about the machine and the site, not "Number of Workers".
+// Every MACHINERY_HIRE item in labourCategories.ts points at this one schema
+// (equipment-specific nuance goes in the description/notes; the quote side
+// carries the rate/deposit structure).
+const machineryHireFields: LabourInquiryField[] = [
+  { id: 'quantity', label: 'Number of Units', type: 'number', required: true, placeholder: 'e.g. 1' },
+  { id: 'start_date', label: 'Hire Start Date', type: 'date', required: true },
+  { id: 'hire_duration', label: 'Hire Duration', type: 'number', required: true, placeholder: 'e.g. 5' },
+  { id: 'hire_duration_unit', label: 'Duration Unit', type: 'select', options: ['Hours', 'Days', 'Weeks', 'Months'], required: true },
+  { id: 'site_location', label: 'Site / Delivery Location', type: 'text', required: true, placeholder: 'e.g. Plot 254, Makeni, Lusaka' },
+  { id: 'with_operator', label: 'Operator Required', type: 'toggle', required: true },
+  { id: 'delivery_required', label: 'Delivery to Site Required', type: 'toggle', required: true },
+  { id: 'fuel_responsibility', label: 'Fuel Provided By', type: 'select', options: ['Owner (wet hire)', 'Myself (dry hire)', 'Not sure'], required: true },
+  { id: 'job_description', label: 'Job Description', type: 'textarea', required: true, placeholder: 'What will the equipment be used for? Site conditions, depth/loads, access…' },
+  { id: 'additional_notes', label: 'Additional Notes', type: 'textarea', required: false },
+];
+
 export const labourInquirySchemas: Record<string, LabourInquirySchema> = {
   genericLabourInquirySchema: { id: 'genericLabourInquirySchema', fields: [...baseFields] },
+
+  // HEAVY MACHINERY FOR HIRE (equipment rental — shared by all 13 items)
+  machineryHireInquirySchema: { id: 'machineryHireInquirySchema', fields: machineryHireFields },
 
   // CONSTRUCTION
   generalLabourerInquirySchema: { id: 'generalLabourerInquirySchema', fields: [...baseFields, { id: 'site_type', label: 'Site Type', type: 'select', options: ['Residential', 'Commercial', 'Industrial', 'Road'], required: true }, { id: 'tools_provided', label: 'Tools Provided', type: 'toggle', required: true }, { id: 'physical_requirements', label: 'Physical Requirements', type: 'select', options: ['Light', 'Medium', 'Heavy'], required: true }] },

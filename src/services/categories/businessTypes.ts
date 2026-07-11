@@ -323,6 +323,11 @@ export function getBusinessTypes(
 
   if (role === 'SERVICE_PROVIDER') {
     if (subRole === 'SKILLED_LABOUR') return ['LABOUR'];
+    // Equipment hire is a rental business (fleet out → comes back), not a
+    // generic service practice. The authoritative path is the backend
+    // archetype set (machinery-hire categories seed as RENTAL); this
+    // branch covers mid-onboarding rows whose set hasn't been written yet.
+    if (subRole === 'MACHINERY_HIRE') return ['RENTAL'];
     if (categories.some(isRepairVariant)) return ['REPAIR'];
     if (categoriesMatch(categories, /\bskilled\s?labour\b|\blabour\b|\bworker\b|\bgig\b/i))
       return ['LABOUR'];

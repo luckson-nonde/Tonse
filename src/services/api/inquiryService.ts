@@ -39,6 +39,15 @@ export interface CreateInquiryPayload {
    *  (targeted flow). Backend strips unknown fields via whitelist
    *  validator; storage + matching enforcement is a future phase. */
   targetedProviderId?: string;
+  /** Labour / machinery-hire context (create-inquiry.dto accepts all
+   *  three). Matching itself rides categoryIds — these give the lead
+   *  its labour/machinery identity so provider cards and the quote-form
+   *  generator (HIRE vs LABOUR template) see what kind of request it is. */
+  isLabour?: boolean;
+  /** Track (e.g. 'CONSTRUCTION') or 'MACHINERY_HIRE' for equipment. */
+  labourGroup?: string;
+  /** The specific trade / equipment id (e.g. 'carpenter', 'excavator'). */
+  labourSubType?: string;
 }
 
 export interface InquiryResponse {
