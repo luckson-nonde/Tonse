@@ -34,7 +34,6 @@ import {
 } from 'lucide-react';
 import Logo from './Logo';
 import ConfirmModal from './ConfirmModal';
-import PageTransition from './PageTransition';
 import DashboardCalendar, { CalendarTone, CounterCard } from './DashboardCalendar';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useDashboard } from '../DashboardContext';
@@ -47,7 +46,7 @@ import {
   BusinessType,
 } from '../services/categories';
 import { useAuth } from '../AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useUserInquiries, useMatchedLeads } from '../hooks/useInquiries';
 import { useUserQuotes } from '../hooks/useQuotes';
@@ -275,6 +274,17 @@ export default function DashboardLayout({
   const navigate = useNavigate();
   const { activeTab: internalActiveTab, setActiveTab } = useDashboard();
   const activeTab = externalActiveTab ?? internalActiveTab;
+
+  // <main> is the scroll container and this layout is REUSED across sibling
+  // routes (React Router keeps same-typed elements mounted), so scrollTop
+  // survives view changes — a new view entering mid-scroll clamps/jumps.
+  // Every view change starts at the top, like a real page navigation.
+  const mainRef = React.useRef<HTMLElement>(null);
+  const { pathname } = useLocation();
+  React.useEffect(() => {
+    mainRef.current?.scrollTo(0, 0);
+  }, [pathname, activeTab]);
+
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -1108,12 +1118,11 @@ export default function DashboardLayout({
         )}
 
         <div className="flex flex-1 overflow-hidden">
-          <main className="flex-1 px-4 sm:px-5 pt-4 sm:pt-6 pb-24 md:pb-8 relative overflow-x-hidden overflow-y-auto">
-            {/* Mount-only: fires on route changes (each navigation remounts
-                the route element). Param-only changes on /provider/:tab and
-                /buyer/:tab keep this layout mounted — those tab swaps are
-                animated downstream by DynamicAccountRenderer instead. */}
-            <PageTransition>{children}</PageTransition>
+          <main
+            ref={mainRef}
+            className="flex-1 px-4 sm:px-5 pt-4 sm:pt-6 pb-24 md:pb-8 relative overflow-x-hidden overflow-y-auto"
+          >
+            {children}
           </main>
 
           {/* Right Calendar Panel - desktop only, shown on home/dashboard views */}

@@ -16,10 +16,11 @@ import { useEffect, useState } from 'react';
  * fragility. Desktop (fine pointer) keeps every animation byte-identical.
  *
  * Consumers:
- *  - App.tsx wraps the router in `<MotionConfig reducedMotion={lite ? 'always' : 'never'}>`
+ *  - App.tsx wraps the router in `<MotionConfig reducedMotion={lite ? 'always' : 'user'}>`
  *    (makes transform/layout animations instant app-wide — but NOT opacity
  *    exits, which is why the tier wrappers also strip their props, see
- *    RoleSelection.tsx).
+ *    RoleSelection.tsx; PageTransition strips ALL its props under the OS
+ *    prefers-reduced-motion setting for the same reason).
  *  - RoleSelection / CategorySelection strip transition props and bypass
  *    AnimatePresence crossfades entirely when lite.
  */

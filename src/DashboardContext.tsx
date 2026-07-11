@@ -11,7 +11,14 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [activeTab, setActiveTabState] = useState('home');
 
   const setActiveTab = React.useCallback((tab: string) => {
-    setActiveTabState(tab);
+    // Transition (non-urgent) update: React keeps the CURRENT view painted
+    // while the incoming tab's tree renders, then commits and the enter
+    // animation plays immediately. Without this, the old view unmounts on
+    // click and the new one sits at opacity 0 for its whole (expensive)
+    // first render — perceived as a blank flash between tabs.
+    React.startTransition(() => {
+      setActiveTabState(tab);
+    });
   }, []);
 
   const value = React.useMemo(() => ({ activeTab, setActiveTab }), [activeTab, setActiveTab]);

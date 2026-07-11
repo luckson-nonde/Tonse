@@ -123,22 +123,26 @@ export default function App() {
           <MotionConfig reducedMotion={lite ? 'always' : 'user'}>
           <Router>
             <Routes>
-              <Route path="/onboarding" element={<PageTransition><Onboarding /></PageTransition>} />
-              <Route path="/login" element={<PageTransition><Login /></PageTransition>} />
-              <Route path="/role-selection" element={<PageTransition><RoleSelection /></PageTransition>} />
-              <Route path="/register" element={<PageTransition><Register /></PageTransition>} />
-              <Route path="/register/labour" element={<PageTransition><LabourRegister /></PageTransition>} />
-              <Route path="/register/company-documents" element={<PageTransition><CompanyDocuments /></PageTransition>} />
-              <Route path="/business-verification" element={<PageTransition><BusinessVerification /></PageTransition>} />
-              <Route path="/seller/categories" element={<PageTransition><SellerCategorySelection /></PageTransition>} />
-              <Route path="/seller/location" element={<PageTransition><SellerLocationDetails /></PageTransition>} />
-              <Route path="/store-verification" element={<PageTransition><StoreVerification /></PageTransition>} />
-              <Route path="/verification-pending" element={<PageTransition><VerificationPending /></PageTransition>} />
+              {/* Every route's PageTransition carries a unique static
+                  transitionKey: React Router reuses same-typed elements
+                  across sibling routes (no keying), so without it the
+                  motion.div never remounts and no enter animation plays. */}
+              <Route path="/onboarding" element={<PageTransition transitionKey="onboarding"><Onboarding /></PageTransition>} />
+              <Route path="/login" element={<PageTransition transitionKey="login"><Login /></PageTransition>} />
+              <Route path="/role-selection" element={<PageTransition transitionKey="role-selection"><RoleSelection /></PageTransition>} />
+              <Route path="/register" element={<PageTransition transitionKey="register"><Register /></PageTransition>} />
+              <Route path="/register/labour" element={<PageTransition transitionKey="register-labour"><LabourRegister /></PageTransition>} />
+              <Route path="/register/company-documents" element={<PageTransition transitionKey="company-documents"><CompanyDocuments /></PageTransition>} />
+              <Route path="/business-verification" element={<PageTransition transitionKey="business-verification"><BusinessVerification /></PageTransition>} />
+              <Route path="/seller/categories" element={<PageTransition transitionKey="seller-categories"><SellerCategorySelection /></PageTransition>} />
+              <Route path="/seller/location" element={<PageTransition transitionKey="seller-location"><SellerLocationDetails /></PageTransition>} />
+              <Route path="/store-verification" element={<PageTransition transitionKey="store-verification"><StoreVerification /></PageTransition>} />
+              <Route path="/verification-pending" element={<PageTransition transitionKey="verification-pending"><VerificationPending /></PageTransition>} />
               <Route
                 path="/force-password-change"
                 element={
                   <ProtectedRoute>
-                    <PageTransition>
+                    <PageTransition transitionKey="force-password-change">
                       <ForcePasswordChange />
                     </PageTransition>
                   </ProtectedRoute>
@@ -166,7 +170,7 @@ export default function App() {
                 path="/buyer/quote-details"
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
-                    <PageTransition>
+                    <PageTransition transitionKey="quote-details">
                       <QuoteDetailsPage />
                     </PageTransition>
                   </ProtectedRoute>
@@ -176,7 +180,7 @@ export default function App() {
                 path="/buyer/collection-code/:id"
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
-                    <PageTransition>
+                    <PageTransition transitionKey="collection-code">
                       <CollectionCodePage />
                     </PageTransition>
                   </ProtectedRoute>
@@ -186,7 +190,7 @@ export default function App() {
                 path="/buyer/payment"
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
-                    <PageTransition>
+                    <PageTransition transitionKey="payment">
                       <PaymentPage />
                     </PageTransition>
                   </ProtectedRoute>
@@ -196,7 +200,7 @@ export default function App() {
                 path="/buyer/payment-success"
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
-                    <PageTransition>
+                    <PageTransition transitionKey="payment-success">
                       <PaymentSuccessPage />
                     </PageTransition>
                   </ProtectedRoute>
@@ -207,7 +211,9 @@ export default function App() {
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
                     <DashboardLayout>
-                      <ArchivedQuotesPage />
+                      <PageTransition transitionKey="buyer-archived">
+                        <ArchivedQuotesPage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -217,7 +223,9 @@ export default function App() {
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
                     <DashboardLayout>
-                      <ShopDetailsPage />
+                      <PageTransition transitionKey="shop-details">
+                        <ShopDetailsPage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -227,7 +235,9 @@ export default function App() {
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
                     <DashboardLayout>
-                      <ShopProductsPage />
+                      <PageTransition transitionKey="shop-products">
+                        <ShopProductsPage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -237,7 +247,9 @@ export default function App() {
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
                     <DashboardLayout>
-                      <SuppliersPage />
+                      <PageTransition transitionKey="buyer-suppliers">
+                        <SuppliersPage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -247,7 +259,9 @@ export default function App() {
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
                     <DashboardLayout>
-                      <BuyerProfilePage />
+                      <PageTransition transitionKey="buyer-profile">
+                        <BuyerProfilePage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -257,7 +271,9 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <DashboardLayout>
-                      <SchedulePage />
+                      <PageTransition transitionKey="schedule">
+                        <SchedulePage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -277,6 +293,11 @@ export default function App() {
                     ]}
                   >
                     <DashboardLayout>
+                      {/* No PageTransition here on purpose: every provider
+                          view funnels through DynamicAccountRenderer, whose
+                          own wrapper animates on mount and per tab switch —
+                          and /provider/:tab must keep ProviderDashboard
+                          mounted across tab param changes. */}
                       <ProviderDashboard />
                     </DashboardLayout>
                   </ProtectedRoute>
@@ -296,7 +317,9 @@ export default function App() {
                     ]}
                   >
                     <DashboardLayout>
-                      <SuppliersPage />
+                      <PageTransition transitionKey="provider-suppliers">
+                        <SuppliersPage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -316,7 +339,9 @@ export default function App() {
                     ]}
                   >
                     <DashboardLayout>
-                      <ShopProfilePage />
+                      <PageTransition transitionKey="provider-profile">
+                        <ShopProfilePage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -330,7 +355,9 @@ export default function App() {
                   // does the per-business filtering downstream.
                   <ProtectedRoute allowedRoles={['SELLER']}>
                     <DashboardLayout>
-                      <VenueSpacesManager />
+                      <PageTransition transitionKey="venue-spaces">
+                        <VenueSpacesManager />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -349,7 +376,9 @@ export default function App() {
                     ]}
                   >
                     <DashboardLayout>
-                      <AuditTrailPage />
+                      <PageTransition transitionKey="audit-trail">
+                        <AuditTrailPage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -368,7 +397,9 @@ export default function App() {
                     ]}
                   >
                     <DashboardLayout>
-                      <ArchivedLeadsPage />
+                      <PageTransition transitionKey="archived-leads">
+                        <ArchivedLeadsPage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -383,9 +414,7 @@ export default function App() {
                 path="/admin/:tab"
                 element={
                   <ProtectedRoute allowedRoles={['ADMIN']}>
-                    <PageTransition>
-                      <AdminDashboard />
-                    </PageTransition>
+                    <AdminDashboard />
                   </ProtectedRoute>
                 }
               />

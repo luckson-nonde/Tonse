@@ -719,7 +719,7 @@ export default function DynamicAccountRenderer({
   };
 
   return (
-    <motion.div key={view} className="w-full" {...pageTransitionProps}>
+    <motion.div key={view} data-page-transition className="w-full" {...pageTransitionProps}>
       {renderContent()}
     </motion.div>
   );

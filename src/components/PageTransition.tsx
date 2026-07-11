@@ -47,7 +47,12 @@ export default function PageTransition({
 }: PageTransitionProps) {
   const motionProps = usePageTransitionProps();
   return (
-    <motion.div key={transitionKey} className={className} {...motionProps}>
+    <motion.div
+      key={transitionKey}
+      data-page-transition
+      className={className}
+      {...motionProps}
+    >
       {children}
     </motion.div>
   );
