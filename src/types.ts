@@ -83,7 +83,10 @@ export type SubRole =
   // Service-provider shapes (services are not sellers)
   | 'INDIVIDUAL_PROVIDER'
   | 'AGENCY_PROVIDER'
-  | 'SKILLED_LABOUR';
+  | 'SKILLED_LABOUR'
+  // Equipment rental — a provider type (tier-2, next to Service & Labour) that
+  // hires out plant/machinery rather than performing labour.
+  | 'MACHINERY_HIRE';
 export type EntityType = 'INDIVIDUAL' | 'BUSINESS';
 
 export interface InquiryItem {

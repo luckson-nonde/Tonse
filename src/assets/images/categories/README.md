@@ -25,8 +25,13 @@ with the robust `normalizeSpecialtyKey`, so `Construction & Building.webp`
 resolves without a rename:
 
 - `Construction & Building.webp`, `Domestic & Household.webp`,
-  `Industrial & Factory.webp`, `Skilled Trades.webp`, `Agricultural.webp`,
+  `Industrial & Factory.webp`, `Agricultural.webp`,
   `Transport & Logistics.webp`
+
+(The former `Skilled Trades` track was promoted to its own tier-2 provider type,
+**Heavy Machinery for Hire** — an equipment-rental catalog in
+`labourCategories.ts` (`MACHINERY_GROUP` / `category: 'MACHINERY_HIRE'`) reached
+from the provider menu, not this track grid. `Skilled Trades.webp` is now unused.)
 
 A track becomes image-led once its file is present; otherwise it keeps the icon
 chip. `4:3` crop, `object-cover`.

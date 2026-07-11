@@ -67,7 +67,7 @@ import { useLiteMotion } from '../hooks/useLiteMotion';
 import { nudgeRepaint } from '../utils/forceRepaint';
 import { fetchCategories, Category } from '../services/categories';
 import { useCategoryAvailability } from '../services/categories/availability';
-import { LABOUR_CATEGORY_GROUPS, LABOUR_CATEGORIES } from '../services/labourCategories';
+import { LABOUR_CATEGORY_GROUPS, LABOUR_CATEGORIES, MACHINERY_GROUP } from '../services/labourCategories';
 
 interface CategorySelectionProps {
   onComplete?: (categories: any) => void;
@@ -87,6 +87,10 @@ interface CategorySelectionProps {
   /** When true, mounts directly in the labour trade picker (skips the single
    *  "Labour & Skills" tile screen). Used by the Skilled Labour sub-role. */
   autoLabour?: boolean;
+  /** When true, mounts directly in the Heavy Machinery equipment list (skips
+   *  both the master grid AND the track picker — machinery is a single group).
+   *  Used by the Machinery-Hire sub-role. */
+  autoMachinery?: boolean;
 }
 
 const getCategoryStyles = (id: string) => {
@@ -221,9 +225,9 @@ const LABOUR_GROUP_ICONS: Record<string, React.ComponentType<{ className?: strin
   CONSTRUCTION: HardHat,
   DOMESTIC: Home,
   INDUSTRIAL: Factory,
-  SKILLED_TRADES: Wrench,
   AGRICULTURAL: Sprout,
   TRANSPORT: Truck,
+  MACHINERY_HIRE: Truck,
 };
 
 // Labour sub-type icons — only includes icons already imported in this file.
@@ -240,6 +244,7 @@ const LABOUR_SUB_ICONS: Record<string, React.ComponentType<{ className?: string 
   Truck,
   Sprout,
   Factory,
+  Tractor,
 };
 
 const getSubCategoryIcon = (name: string) => {
@@ -823,6 +828,7 @@ export default function CategorySelection({
   onSubcategoryViewChange,
   preselectedParentId,
   autoLabour = false,
+  autoMachinery = false,
 }: CategorySelectionProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredCategory, setHoveredCategory] = useState<Category | null>(null);
@@ -832,9 +838,11 @@ export default function CategorySelection({
 
   const [activeParent, setActiveParent] = useState<Category | null>(null);
   // Skilled Labour sub-role lands straight in the trade picker (ROOT), skipping
-  // the lone "Labour & Skills" tile.
+  // the lone "Labour & Skills" tile. Machinery-Hire lands one level deeper still
+  // — directly in its equipment list (its group object), as there's no track
+  // picker for a single-group provider type.
   const [activeLabourGroup, setActiveLabourGroup] = useState<any | null>(
-    autoLabour ? 'ROOT' : null,
+    autoMachinery ? MACHINERY_GROUP : autoLabour ? 'ROOT' : null,
   );
 
   // Android-GPU ghosting guard: after each internal view swap (master grid ⇄
@@ -1033,7 +1041,11 @@ export default function CategorySelection({
   //   • Track picker (ROOT) → exit the picker entirely: to the caller's onBack
   //     for the auto-labour sub-role, else back to the master category grid.
   const labourBack = () => {
-    if (activeLabourGroup && activeLabourGroup !== 'ROOT') {
+    // Machinery-Hire has no track picker to fall back to — its equipment list
+    // IS the entry screen, so Back exits the picker to the caller.
+    if (autoMachinery) {
+      onBack?.();
+    } else if (activeLabourGroup && activeLabourGroup !== 'ROOT') {
       setActiveLabourGroup('ROOT');
     } else if (autoLabour) {
       onBack?.();
@@ -1507,7 +1519,12 @@ export default function CategorySelection({
                 Choose a track
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
-                {LABOUR_CATEGORY_GROUPS.map((g) => {
+                {/* Buyers (non-autoLabour entry via the "Labour & Skills"
+                    tile) ALSO get the Heavy Machinery card so they can
+                    request equipment hire. Labour PROVIDERS picking their
+                    trade (autoLabour) don't — machinery is its own provider
+                    type with its own tier-2 entry, not a labour track. */}
+                {(autoLabour ? LABOUR_CATEGORY_GROUPS : [...LABOUR_CATEGORY_GROUPS, MACHINERY_GROUP]).map((g) => {
                   const GroupIcon = LABOUR_GROUP_ICONS[g.id] || Wrench;
                   const img = getLabourGroupImage(g.label);
                   const frameCls =
@@ -1601,7 +1618,7 @@ export default function CategorySelection({
               <div className="mb-6 flex items-center gap-3">
                 <div className="h-px flex-1 bg-[#C9973A]/15" />
                 <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#C9973A] whitespace-nowrap">
-                  {activeLabourGroup.label} · Pick a trade
+                  {activeLabourGroup.label} · {activeLabourGroup.id === 'MACHINERY_HIRE' ? 'Pick equipment' : 'Pick a trade'}
                 </p>
                 <div className="h-px flex-1 bg-[#C9973A]/15" />
               </div>

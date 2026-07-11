@@ -58,8 +58,7 @@ mobile-network-services, satellite-vsat-installation), it-services
 (software-web-development, networking-security, it-support-maintenance),
 drilling-services (borehole-drilling, mining-exploration, geotechnical-drilling).
 
-**Still missing an image** (falls back to the icon + chip card):
-- `event-venues` (Events) — needs `event-venues.webp`
+All Events items now ship artwork (`event-venues.webp` included).
 
 ## Naming convention — LABOUR trades (Skilled Labour flow)
 
@@ -80,6 +79,27 @@ welder, steel-fixer, painter, tiler, roofer (all 10). Other labour tracks
 (Domestic, Industrial, Skilled Trades, Agricultural, Transport) have no images
 yet — icon fallback. Image-led trade cards use a **4:3** crop with the label +
 description beneath.
+
+## Naming convention — HEAVY MACHINERY FOR HIRE (equipment-hire provider)
+
+The *Select Machinery* screen (Machinery-Hire provider sub-role) also reuses this
+folder + `getLabourImage(id)`. Items live in `src/services/labourCategories.ts`
+(`category: 'MACHINERY_HIRE'`) with underscore ids; same lenient matching, so a
+display-name file usually resolves — `Motor Grader.webp` → `motor-grader`,
+`Water Bowser.webp` → `water-bowser`. Renamed to the **id stem** where the label
+carried extra words: `Backhoe Loader (TLB)` → `backhoe-loader.webp`,
+`Concrete Mixer Truck` → `concrete-mixer.webp`, `Diesel Generator` →
+`generator.webp`.
+
+Two files were **mislabelled and reassigned** (verified by viewing each image):
+the file dropped as `Bulldozer.webp` actually depicts a **wheel loader** → it
+became `wheel-loader.webp` (filling the otherwise-missing slot), and its distinct
+alternate `Bulldozer (1).webp` was the real crawler dozer → `bulldozer.webp`.
+
+Currently shipped (all 13): excavator, bulldozer, wheel-loader, backhoe-loader,
+motor-grader, roller-compactor, mobile-crane, forklift, tipper-truck,
+concrete-mixer, water-bowser, generator, tractor. Machinery cards use the same
+**4:3** image-led layout as labour trades.
 
 ## Specs
 - **1:1 square** (≥ 800×800) for specialty items; **4:3** for labour trades. The

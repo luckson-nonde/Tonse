@@ -12,9 +12,12 @@ export type LabourCategoryGroup =
   | 'CONSTRUCTION'
   | 'DOMESTIC'
   | 'INDUSTRIAL'
-  | 'SKILLED_TRADES'
   | 'AGRICULTURAL'
-  | 'TRANSPORT';
+  | 'TRANSPORT'
+  // Not a labour track — the equipment-hire provider type reuses this taxonomy
+  // (LabourSubCategory shape + trade-picker rendering) but is entered from its
+  // own tier-2 card, never from the "Choose a track" grid.
+  | 'MACHINERY_HIRE';
 
 export const LABOUR_CATEGORIES: LabourSubCategory[] = [
   // CONSTRUCTION & BUILDING
@@ -44,12 +47,23 @@ export const LABOUR_CATEGORIES: LabourSubCategory[] = [
   { id: 'forklift_operator', label: 'Forklift Operator', category: 'INDUSTRIAL', inquirySchemaKey: 'forkliftOperatorInquirySchema', profileSchemaKey: 'forkliftOperatorProfileSchema', icon: 'Truck', description: 'Forklift and material handling' },
   { id: 'safety_officer', label: 'Safety Officer', category: 'INDUSTRIAL', inquirySchemaKey: 'safetyOfficerInquirySchema', profileSchemaKey: 'safetyOfficerProfileSchema', icon: 'ShieldCheck', description: 'Workplace health and safety' },
 
-  // SKILLED TRADES
-  { id: 'hvac_technician', label: 'HVAC Technician', category: 'SKILLED_TRADES', inquirySchemaKey: 'hvacTechnicianInquirySchema', profileSchemaKey: 'hvacTechnicianProfileSchema', icon: 'Wind', description: 'HVAC installation and maintenance' },
-  { id: 'auto_mechanic', label: 'Auto Mechanic', category: 'SKILLED_TRADES', inquirySchemaKey: 'autoMechanicInquirySchema', profileSchemaKey: 'autoMechanicProfileSchema', icon: 'Car', description: 'Vehicle repair and maintenance' },
-  { id: 'spray_painter', label: 'Spray Painter', category: 'SKILLED_TRADES', inquirySchemaKey: 'sprayPainterInquirySchema', profileSchemaKey: 'sprayPainterProfileSchema', icon: 'Paintbrush', description: 'Spray painting and finishing' },
-  { id: 'glazier', label: 'Glazier / Window Installer', category: 'SKILLED_TRADES', inquirySchemaKey: 'glazierInquirySchema', profileSchemaKey: 'glazierProfileSchema', icon: 'Square', description: 'Glass and window installation' },
-  { id: 'security_guard', label: 'Security Guard', category: 'SKILLED_TRADES', inquirySchemaKey: 'securityGuardInquirySchema', profileSchemaKey: 'securityGuardProfileSchema', icon: 'Shield', description: 'Security and guarding services' },
+  // HEAVY MACHINERY FOR HIRE (equipment rental — its OWN provider type, entered
+  // from a tier-2 card, not a labour track). Schema keys are the shared generic
+  // ones (getLabourInquirySchema/getLabourProfileSchema fall back to the generic
+  // labour schema) until dedicated machinery-hire schemas are authored.
+  { id: 'excavator', label: 'Excavator', category: 'MACHINERY_HIRE', inquirySchemaKey: 'machineryHireInquirySchema', profileSchemaKey: 'machineryHireProfileSchema', icon: 'HardHat', description: 'Digging, trenching and bulk earthworks' },
+  { id: 'bulldozer', label: 'Bulldozer', category: 'MACHINERY_HIRE', inquirySchemaKey: 'machineryHireInquirySchema', profileSchemaKey: 'machineryHireProfileSchema', icon: 'HardHat', description: 'Land clearing, dozing and site prep' },
+  { id: 'wheel_loader', label: 'Wheel Loader', category: 'MACHINERY_HIRE', inquirySchemaKey: 'machineryHireInquirySchema', profileSchemaKey: 'machineryHireProfileSchema', icon: 'HardHat', description: 'Loading and moving loose material' },
+  { id: 'backhoe_loader', label: 'Backhoe Loader (TLB)', category: 'MACHINERY_HIRE', inquirySchemaKey: 'machineryHireInquirySchema', profileSchemaKey: 'machineryHireProfileSchema', icon: 'HardHat', description: 'Combined digging and loading' },
+  { id: 'motor_grader', label: 'Motor Grader', category: 'MACHINERY_HIRE', inquirySchemaKey: 'machineryHireInquirySchema', profileSchemaKey: 'machineryHireProfileSchema', icon: 'HardHat', description: 'Road grading and levelling' },
+  { id: 'roller_compactor', label: 'Roller / Compactor', category: 'MACHINERY_HIRE', inquirySchemaKey: 'machineryHireInquirySchema', profileSchemaKey: 'machineryHireProfileSchema', icon: 'HardHat', description: 'Soil and asphalt compaction' },
+  { id: 'mobile_crane', label: 'Mobile Crane', category: 'MACHINERY_HIRE', inquirySchemaKey: 'machineryHireInquirySchema', profileSchemaKey: 'machineryHireProfileSchema', icon: 'Factory', description: 'Lifting and hoisting heavy loads' },
+  { id: 'forklift', label: 'Forklift', category: 'MACHINERY_HIRE', inquirySchemaKey: 'machineryHireInquirySchema', profileSchemaKey: 'machineryHireProfileSchema', icon: 'Factory', description: 'Yard and warehouse material handling' },
+  { id: 'tipper_truck', label: 'Tipper Truck', category: 'MACHINERY_HIRE', inquirySchemaKey: 'machineryHireInquirySchema', profileSchemaKey: 'machineryHireProfileSchema', icon: 'Truck', description: 'Hauling sand, gravel and rubble' },
+  { id: 'concrete_mixer', label: 'Concrete Mixer Truck', category: 'MACHINERY_HIRE', inquirySchemaKey: 'machineryHireInquirySchema', profileSchemaKey: 'machineryHireProfileSchema', icon: 'Truck', description: 'On-site concrete mixing and delivery' },
+  { id: 'water_bowser', label: 'Water Bowser', category: 'MACHINERY_HIRE', inquirySchemaKey: 'machineryHireInquirySchema', profileSchemaKey: 'machineryHireProfileSchema', icon: 'Truck', description: 'Water supply and dust suppression' },
+  { id: 'generator', label: 'Diesel Generator', category: 'MACHINERY_HIRE', inquirySchemaKey: 'machineryHireInquirySchema', profileSchemaKey: 'machineryHireProfileSchema', icon: 'Factory', description: 'Temporary standby power supply' },
+  { id: 'tractor', label: 'Tractor', category: 'MACHINERY_HIRE', inquirySchemaKey: 'machineryHireInquirySchema', profileSchemaKey: 'machineryHireProfileSchema', icon: 'Tractor', description: 'Towing, ploughing and haulage' },
 
   // AGRICULTURAL
   { id: 'farm_worker', label: 'Farm Worker / General', category: 'AGRICULTURAL', inquirySchemaKey: 'farmWorkerInquirySchema', profileSchemaKey: 'farmWorkerProfileSchema', icon: 'Sprout', description: 'General farm labour' },
@@ -69,7 +83,17 @@ export const LABOUR_CATEGORY_GROUPS = [
   { id: 'CONSTRUCTION', label: 'Construction & Building', icon: 'HardHat' },
   { id: 'DOMESTIC', label: 'Domestic & Household', icon: 'Home' },
   { id: 'INDUSTRIAL', label: 'Industrial & Factory', icon: 'Factory' },
-  { id: 'SKILLED_TRADES', label: 'Skilled Trades', icon: 'Wrench' },
   { id: 'AGRICULTURAL', label: 'Agricultural', icon: 'Sprout' },
   { id: 'TRANSPORT', label: 'Transport & Logistics', icon: 'Truck' },
 ];
+
+// Heavy Machinery for Hire is NOT a labour track (absent from the grid above);
+// it's the sole "group" of the equipment-hire provider type. CategorySelection
+// drills straight into its item list (autoMachinery) instead of the track
+// picker, reusing the trade-picker rendering. Shape matches a track entry so it
+// slots into the same `activeLabourGroup` state and Screen-B render.
+export const MACHINERY_GROUP = {
+  id: 'MACHINERY_HIRE' as const,
+  label: 'Heavy Machinery for Hire',
+  icon: 'Truck',
+};

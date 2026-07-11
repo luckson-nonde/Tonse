@@ -236,6 +236,14 @@ const serviceProviderSubRoles: RoleOption[] = [
     icon: Wrench,
     subRole: 'SKILLED_LABOUR',
   },
+  {
+    id: 'MACHINERY_HIRE',
+    eyebrow: 'Equipment · Hire',
+    title: 'Heavy Machinery for Hire',
+    description: 'Rent out plant & equipment — excavators, cranes, tippers, generators.',
+    icon: Truck,
+    subRole: 'MACHINERY_HIRE',
+  },
 ];
 
 type MasterRole = 'BUYER' | 'SELLER' | 'SERVICE_PROVIDER';
@@ -305,7 +313,8 @@ export default function RoleSelection() {
     if (
       selectedSubRole === 'INDIVIDUAL_PROVIDER' ||
       selectedSubRole === 'AGENCY_PROVIDER' ||
-      selectedSubRole === 'SKILLED_LABOUR'
+      selectedSubRole === 'SKILLED_LABOUR' ||
+      selectedSubRole === 'MACHINERY_HIRE'
     ) {
       // Services + labour only — pure-SERVICE categories. BOTH-nature
       // categories (Automotive, Agriculture) are product catalogs that belong
@@ -379,7 +388,9 @@ export default function RoleSelection() {
           ? tier === 3 && (masterRole === 'SELLER' || masterRole === 'SERVICE_PROVIDER')
             ? selectedSubRole === 'SKILLED_LABOUR'
               ? 'Choose Your Trade'
-              : 'Choose Specialty'
+              : selectedSubRole === 'MACHINERY_HIRE'
+                ? 'Select Machinery'
+                : 'Choose Specialty'
             : null
           : tier === 1
             ? 'Select Your Role'
@@ -399,7 +410,9 @@ export default function RoleSelection() {
             ? <span className="text-[#1a1612]/60">
                 {selectedSubRole === 'SKILLED_LABOUR'
                   ? 'Pick the trade you specialise in'
-                  : 'Pick exactly what you sell or repair'}
+                  : selectedSubRole === 'MACHINERY_HIRE'
+                    ? 'Pick the equipment you hire out'
+                    : 'Pick exactly what you sell or repair'}
               </span>
             : null
           : <span className="text-[#1a1612]/60">
@@ -490,7 +503,10 @@ export default function RoleSelection() {
                   : masterRole === 'SERVICE_PROVIDER'
                     ? serviceProviderSubRoles
                     : sellerSubRoles;
-                const isStacked = items.length <= 2;
+                // Provider menu stays a vertical stack even at 3 cards (Service /
+                // Labour / Heavy Machinery) — the large stacked cards read better
+                // than a 2-col grid with an orphaned third card.
+                const isStacked = items.length <= 2 || masterRole === 'SERVICE_PROVIDER';
                 return (
                   <div
                     className={
@@ -670,6 +686,9 @@ export default function RoleSelection() {
                     if (masterRole === 'SERVICE_PROVIDER') {
                       // Skilled Labour → only the trade picker.
                       if (selectedSubRole === 'SKILLED_LABOUR') return cat.id === 'labour';
+                      // Machinery Hire → nothing in the master grid; autoMachinery
+                      // drills straight into the equipment list.
+                      if (selectedSubRole === 'MACHINERY_HIRE') return false;
                       // Service → pure-service categories, no Labour tile, no
                       // BOTH-nature product categories (Automotive, Agriculture).
                       return cat.id !== 'labour' && nature === 'SERVICE';
@@ -683,6 +702,7 @@ export default function RoleSelection() {
                   }}
                   onSubcategoryViewChange={setIsViewingSubcategories}
                   autoLabour={selectedSubRole === 'SKILLED_LABOUR'}
+                  autoMachinery={selectedSubRole === 'MACHINERY_HIRE'}
                   onBack={() => {
                     // Labour trade-picker's Back unmounts this child; clear the
                     // subcategory-view flag it pushed so tier 2 renders cleanly.
@@ -716,10 +736,11 @@ export default function RoleSelection() {
         // one specialty". This rule is suffix-agnostic, so it works for
         // categories whose subs carry a variant ("Mobile Phones (Repair)")
         // and ones whose subs don't ("MCs & Hosts", "Event Catering").
-        // Labour trades carry no master pseudo-entry (CategorySelection emits
-        // just the trade ids), so one picked trade is enough; other specialists
-        // need the master + ≥1 sub (length >= 2).
-        const isLabourSelection = selectedSubRole === 'SKILLED_LABOUR';
+        // Labour trades AND machinery items carry no master pseudo-entry
+        // (CategorySelection emits just the ids), so one pick is enough; other
+        // specialists need the master + ≥1 sub (length >= 2).
+        const isLabourSelection =
+          selectedSubRole === 'SKILLED_LABOUR' || selectedSubRole === 'MACHINERY_HIRE';
         const specialistHasSubPicked =
           tier === 3 &&
           isSpecialist &&
