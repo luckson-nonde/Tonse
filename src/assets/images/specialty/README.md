@@ -4,6 +4,38 @@ Dynamic preview images on the **Choose Specialty** step of seller/provider
 onboarding. Each specialty card shows a 1:1 preview that crossfades between
 Sell New / Repair / Both as the seller picks their capability.
 
+## Folder layout
+
+Images are organized into per-category subfolders **purely for tidiness** —
+the resolver (`categoryMeta.ts`) globs recursively and keys off the **bare
+filename**, so an image resolves identically from any subfolder. Drop new
+images in the folder that matches their category (or loose in the root — it
+still works):
+
+```
+specialty/
+├── electronics/        mobile-phones-*, laptops-*, home-appliances-*, audio-video-*, gaming-sell
+├── automotive/         vehicles, car-parts-*, car-accessories, motorcycles-parts, …
+├── entertainment/      DJs, Live Bands, mc-hosts, Dancers, Comedians, …
+├── events/             Event Catering, Event Planning, event-venues, …
+├── telecommunications/ Internet Service Providers, Mobile Network Services, …
+├── it-services/        software-web-development, networking-security, IT Support & Maintenance
+├── drilling-services/  Borehole Drilling, Mining Exploration, Geotechnical Drilling
+├── labour/
+│   ├── construction/   Carpenter, bricklayer, Electrician, Plumber, …
+│   ├── domestic/       House Cleaner, nanny, cook, gardener, …
+│   ├── industrial/     Machine Operator, Forklift Operator, Warehouse Worker, …
+│   ├── agricultural/   Crop Harvesting, farm-worker, Livestock Handler, …
+│   └── transport/      driver-light, driver-heavy, Delivery Rider, loader
+├── machinery-hire/     Excavator, bulldozer, wheel-loader, Tipper Truck, …
+└── _archive/           superseded browser-copy duplicates — EXCLUDED from the
+                        glob, never bundled; kept only for provenance
+```
+
+One rule: **filenames must stay unique across all subfolders** (the key is the
+basename, so two folders shipping `generator.webp` would collide — last glob
+entry wins only via the copy-suffix tiebreak).
+
 ## Naming convention — PER ITEM
 
 Files are named `<stem>-<state>.<ext>`:

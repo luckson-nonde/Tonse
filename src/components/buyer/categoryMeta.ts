@@ -92,10 +92,21 @@ export const getCategoryArt = (id: string): string | undefined => ART_BY_ID[id];
  */
 export type SpecialtyState = 'sell' | 'repair' | 'both';
 
-const SPECIALTY_ART = import.meta.glob('../../assets/images/specialty/*.{png,jpg,jpeg,webp}', {
-  eager: true,
-  import: 'default',
-}) as Record<string, string>;
+// Recursive: images are organized into per-category subfolders (electronics/,
+// machinery-hire/, labour/<track>/, …) purely for tidiness — the lookup key is
+// still the bare filename, so folder placement never affects resolution.
+// _archive/ holds superseded browser-copy duplicates and is excluded so its
+// dead assets are never bundled.
+const SPECIALTY_ART = import.meta.glob(
+  [
+    '../../assets/images/specialty/**/*.{png,jpg,jpeg,webp}',
+    '!**/_archive/**',
+  ],
+  {
+    eager: true,
+    import: 'default',
+  },
+) as Record<string, string>;
 
 /**
  * Normalize a specialty filename to its lookup key. Lower-cases, drops a
