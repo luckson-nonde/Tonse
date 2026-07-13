@@ -1084,6 +1084,61 @@ export const ARCHETYPE_CONFIG: Record<string, ArchetypeConfig> = {
       "availabilityDate"
     ]
   },
+  "hospital-labs": {
+    "categoryName": "Hospital Labs",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "quantity": "unitPrice",
+      "duration": "rate"
+    },
+    "requiredAdditions": [
+      "availabilityDate"
+    ]
+  },
+  "pharmacies": {
+    "categoryName": "Pharmacies",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "quantity": "unitPrice",
+      "duration": "rate"
+    },
+    "requiredAdditions": [
+      "leadTime"
+    ]
+  },
+  "long-term-rentals": {
+    "categoryName": "Long-Term Rentals",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "quantity": "unitPrice",
+      "duration": "rate"
+    },
+    "requiredAdditions": [
+      "availabilityDate"
+    ]
+  },
+  "short-stay-serviced": {
+    "categoryName": "Short Stay & Serviced",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "quantity": "unitPrice",
+      "duration": "rate"
+    },
+    "requiredAdditions": [
+      "availabilityDate"
+    ]
+  },
+  "boarding-student-rooms": {
+    "categoryName": "Boarding & Student Rooms",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "quantity": "unitPrice",
+      "duration": "rate"
+    },
+    "requiredAdditions": [
+      "availabilityDate"
+    ]
+  },
   "poultry-farming": {
     "categoryName": "Poultry Farming",
     "archetype": "PRODUCT",

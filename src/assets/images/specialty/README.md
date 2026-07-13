@@ -28,6 +28,13 @@ specialty/
 │   ├── agricultural/   Crop Harvesting, farm-worker, Livestock Handler, …
 │   └── transport/      driver-light, driver-heavy, Delivery Rider, loader
 ├── machinery-hire/     Excavator, bulldozer, wheel-loader, Tipper Truck, …
+├── Clinical Services/  Hospital Labs, Pharmacies (single-image service items —
+│                       display-name files resolve to `hospital-labs` /
+│                       `pharmacies` via the lenient key, no rename)
+├── appartments/        Long-Term Rentals, short-stay-serviced, Boarding &
+│                       Student Rooms (folder-name typo is harmless — keys are
+│                       basenames; `short-stay-serviced` renamed to the id stem
+│                       because the dropped name carried an extra "Apartments")
 └── _archive/           superseded browser-copy duplicates — EXCLUDED from the
                         glob, never bundled; kept only for provenance
 ```

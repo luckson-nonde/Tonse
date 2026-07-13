@@ -12,6 +12,8 @@ import { lightingLampsSchema, wallArtMirrorsSchema, rugsCarpetsSchema, curtainsB
 import { softwareWebDevSchema, networkingSecuritySchema, itSupportMaintenanceSchema } from './schemas/itServices';
 import { ispSchema, mobileNetworkServicesSchema, satelliteVsatInstallationSchema } from './schemas/telecommunications';
 import { boreholeDrillingSchema, miningExplorationSchema, geotechnicalDrillingSchema } from './schemas/drillingServices';
+import { hospitalLabsSchema, pharmaciesSchema } from './schemas/clinicalServices';
+import { longTermRentalsSchema, shortStayServicedSchema, boardingStudentSchema } from './schemas/apartments';
 import { businessComputersSchema, serversStorageSchema, networkingHardwareSchema, softwareLicensesSchema, printersOfficeEquipmentSchema } from './schemas/itProducts';
 import { poultryFarmingSchema, aquacultureSchema, cropProductionSchema, livestockVeterinarySchema, irrigationHardwareSchema, agroTechServicesSchema } from './schemas/agriculture';
 
@@ -116,6 +118,18 @@ const BASE_CATEGORIES_DB: Category[] = [
     id: 'agriculture',
     name: 'Agriculture & Agro-Dealers',
     image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&q=80&w=800&h=800',
+    parentId: null
+  },
+  {
+    id: 'clinical-services',
+    name: 'Clinical Services',
+    image: 'https://images.unsplash.com/photo-1587854692152-cbe660dbde88?auto=format&fit=crop&q=80&w=800&h=800',
+    parentId: null
+  },
+  {
+    id: 'apartments',
+    name: 'Apartments & Housing',
+    image: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&q=80&w=800&h=800',
     parentId: null
   },
 
@@ -227,13 +241,26 @@ const BASE_CATEGORIES_DB: Category[] = [
   { id: 'livestock-veterinary', name: 'Livestock & Veterinary', parentId: 'agriculture', formSchema: livestockVeterinarySchema },
   { id: 'irrigation-hardware', name: 'Irrigation & Hardware', parentId: 'agriculture', formSchema: irrigationHardwareSchema },
   { id: 'agro-tech-services', name: 'Agro-Tech & Services', parentId: 'agriculture', formSchema: agroTechServicesSchema },
+
+  // Subcategories - Clinical Services (labs fulfil test orders, pharmacies
+  // fulfil prescriptions; the buyer's prescription PHOTO is first-class
+  // request content — see schemas/clinicalServices.ts)
+  { id: 'hospital-labs', name: 'Hospital Labs', parentId: 'clinical-services', formSchema: hospitalLabsSchema },
+  { id: 'pharmacies', name: 'Pharmacies', parentId: 'clinical-services', formSchema: pharmaciesSchema },
+
+  // Subcategories - Apartments & Housing (tenure-split: a monthly lease, a
+  // furnished short stay, and a student room are three different landlord
+  // conversations; unit SIZE is a field inside each form)
+  { id: 'long-term-rentals', name: 'Long-Term Rentals', parentId: 'apartments', formSchema: longTermRentalsSchema },
+  { id: 'short-stay-serviced', name: 'Short Stay & Serviced', parentId: 'apartments', formSchema: shortStayServicedSchema },
+  { id: 'boarding-student-rooms', name: 'Boarding & Student Rooms', parentId: 'apartments', formSchema: boardingStudentSchema },
 ];
 
 export type CategoryNature = 'PRODUCT' | 'SERVICE' | 'BOTH';
 
 export const getCategoryNature = (categoryId: string): CategoryNature => {
   const productParents = ['fashion', 'groceries', 'beauty', 'home-decor', 'it-products', 'electronics', 'furniture'];
-  const serviceParents = ['entertainment', 'events', 'telecommunications', 'it-services', 'drilling-services'];
+  const serviceParents = ['entertainment', 'events', 'telecommunications', 'it-services', 'drilling-services', 'clinical-services', 'apartments'];
   
   const category = CATEGORIES_DB.find(c => c.id === categoryId);
   if (!category) return 'BOTH';

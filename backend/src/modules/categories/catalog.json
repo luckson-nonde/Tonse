@@ -105,6 +105,20 @@
     "type": null
   },
   {
+    "id": "clinical-services",
+    "name": "Clinical Services",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "apartments",
+    "name": "Apartments & Housing",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
     "id": "mobile-phones-buy",
     "name": "Mobile Phones & Accessories (Buy New)",
     "parentId": "electronics",
@@ -654,6 +668,41 @@
     "id": "agro-tech-services",
     "name": "Agro-Tech & Services",
     "parentId": "agriculture",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "hospital-labs",
+    "name": "Hospital Labs",
+    "parentId": "clinical-services",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "pharmacies",
+    "name": "Pharmacies",
+    "parentId": "clinical-services",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "long-term-rentals",
+    "name": "Long-Term Rentals",
+    "parentId": "apartments",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "short-stay-serviced",
+    "name": "Short Stay & Serviced",
+    "parentId": "apartments",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "boarding-student-rooms",
+    "name": "Boarding & Student Rooms",
+    "parentId": "apartments",
     "baseName": null,
     "type": null
   },

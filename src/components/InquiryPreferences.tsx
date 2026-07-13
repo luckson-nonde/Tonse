@@ -442,6 +442,130 @@ const PREFERENCES_OVERRIDES: Record<
       ],
     },
   },
+
+  // ── Clinical Services ────────────────────────────────────────────────
+  'pharmacies': {
+    section1: {
+      title: 'Target Pharmacies',
+      description: 'Who should fill this prescription?',
+      icon: Navigation,
+      options: [
+        { id: 'registered', label: 'Registered Pharmacies', icon: ShieldCheck },
+        { id: 'hospital',   label: 'Hospital Pharmacies',   icon: Building2   },
+        { id: 'nearby',     label: 'Nearest To Me',         icon: MapPin      },
+        { id: 'any',        label: 'Any Pharmacy',          icon: Users       },
+      ],
+    },
+    section2: {
+      title: 'What Matters Most',
+      description: "What's your top priority for this medication?",
+      icon: Settings,
+      options: [
+        { id: 'speed',    label: 'Fastest Availability' },
+        { id: 'price',    label: 'Lowest Price'         },
+        { id: 'distance', label: 'Nearest Pharmacy'     },
+        { id: 'brand',    label: 'Exact Brand Only'     },
+      ],
+    },
+  },
+  'hospital-labs': {
+    section1: {
+      title: 'Target Labs',
+      description: 'Who should run these tests?',
+      icon: Navigation,
+      options: [
+        { id: 'accredited', label: 'Accredited Labs',    icon: ShieldCheck },
+        { id: 'hospital',   label: 'Hospital Labs',      icon: Building2   },
+        { id: 'nearby',     label: 'Nearest To Me',      icon: MapPin      },
+        { id: 'any',        label: 'Any Lab',            icon: Users       },
+      ],
+    },
+    section2: {
+      title: 'What Matters Most',
+      description: "What's your top priority for the tests?",
+      icon: Settings,
+      options: [
+        { id: 'turnaround', label: 'Fastest Results'        },
+        { id: 'price',      label: 'Lowest Price'           },
+        { id: 'home',       label: 'Home Sample Collection' },
+        { id: 'accuracy',   label: 'Accredited / Certified' },
+      ],
+    },
+  },
+
+  // ── Apartments & Housing ─────────────────────────────────────────────
+  'long-term-rentals': {
+    section1: {
+      title: 'Target Landlords',
+      description: 'Who should offer you a unit?',
+      icon: Navigation,
+      options: [
+        { id: 'agents',    label: 'Registered Agents',  icon: ShieldCheck },
+        { id: 'landlords', label: 'Private Landlords',  icon: User        },
+        { id: 'verified',  label: 'Verified Only',      icon: CheckCircle2 },
+        { id: 'any',       label: 'Anyone With a Unit', icon: Users       },
+      ],
+    },
+    section2: {
+      title: 'What Matters Most',
+      description: "What's your top priority for the home?",
+      icon: Settings,
+      options: [
+        { id: 'price',    label: 'Lowest Rent'    },
+        { id: 'area',     label: 'Best Area'      },
+        { id: 'ready',    label: 'Move-In Ready'  },
+        { id: 'security', label: 'Most Secure'    },
+      ],
+    },
+  },
+  'short-stay-serviced': {
+    section1: {
+      title: 'Target Hosts',
+      description: 'Who should host your stay?',
+      icon: Navigation,
+      options: [
+        { id: 'serviced',  label: 'Serviced Apartments', icon: Building2   },
+        { id: 'private',   label: 'Private Hosts',       icon: User        },
+        { id: 'verified',  label: 'Verified Only',       icon: ShieldCheck },
+        { id: 'any',       label: 'Any Host',            icon: Users       },
+      ],
+    },
+    section2: {
+      title: 'What Matters Most',
+      description: "What's your top priority for the stay?",
+      icon: Settings,
+      options: [
+        { id: 'price',     label: 'Best Price'     },
+        { id: 'dates',     label: 'My Exact Dates' },
+        { id: 'amenities', label: 'Most Amenities' },
+        { id: 'location',  label: 'Best Location'  },
+      ],
+    },
+  },
+  'boarding-student-rooms': {
+    section1: {
+      title: 'Target Boarding Houses',
+      description: 'Who should offer you a room?',
+      icon: Navigation,
+      options: [
+        { id: 'registered', label: 'Registered Boarding Houses', icon: ShieldCheck },
+        { id: 'private',    label: 'Private Landlords',          icon: User        },
+        { id: 'campus',     label: 'Near-Campus Only',           icon: MapPin      },
+        { id: 'any',        label: 'Any Boarding House',         icon: Users       },
+      ],
+    },
+    section2: {
+      title: 'What Matters Most',
+      description: "What's your top priority for the room?",
+      icon: Settings,
+      options: [
+        { id: 'price',    label: 'Cheapest'           },
+        { id: 'distance', label: 'Closest to Campus'  },
+        { id: 'meals',    label: 'Meals Included'     },
+        { id: 'security', label: 'Most Secure'        },
+      ],
+    },
+  },
 };
 
 function resolveConfig(categoryType: CategoryType, categoryKey?: string) {

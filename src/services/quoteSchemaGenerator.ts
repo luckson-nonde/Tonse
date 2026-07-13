@@ -533,6 +533,113 @@ const QUOTE_SCHEMA_BY_CATEGORY_ID: Record<
     { name: 'message', label: 'Message to Buyer', type: 'textarea', required: false,
       placeholder: 'Bundled accessories, training/manual included, return policy…', group: 'Notes & Photos' },
   ],
+
+  // Clinical Services — the provider quotes off the buyer's typed items
+  // and/or their prescription photo (rendered in the lead's lightbox).
+  // Pharmacies: stock + substitution + readiness are the decision drivers.
+  'pharmacies': (attrs) => [
+    { name: 'price', label: 'Total Price (ZMW)', type: 'currency', required: true,
+      calculation: 'total', group: 'Pricing' },
+    { name: 'allItemsInStock', label: 'All prescribed items in stock?', type: 'toggle',
+      required: false, group: 'Pricing' },
+    { name: 'genericSubstitution', label: 'Generic substitute offered?', type: 'toggle',
+      required: false, helpText: 'Only if the buyer allowed generic alternatives.',
+      group: 'Pricing' },
+    { name: 'readyIn', label: 'Ready For Collection', type: 'select', required: true,
+      options: ['Ready now', 'Within 1 hour', 'Later today', 'Tomorrow'], group: 'Logistics & Timing' },
+    ...(String(attrs?.fulfilment ?? '').toLowerCase().includes('deliver') ||
+    String(attrs?.fulfilment ?? '').toLowerCase().includes('faster')
+      ? [{ name: 'deliveryFee', label: 'Delivery Fee (ZMW)', type: 'currency', required: false,
+          helpText: 'The buyer asked for delivery (or whichever is faster).',
+          group: 'Logistics & Timing' } as QuoteField]
+      : []),
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'Pharmacist Notes', type: 'textarea', required: false,
+      placeholder: 'Dosage guidance, brand supplied, items out of stock…', group: 'Notes & Photos' },
+  ],
+
+  // ── Apartments & Housing ─────────────────────────────────────────────
+  // The quotation is a FULL UNIT OFFER, not just a number: the landlord/
+  // agent quotes a concrete available unit and attaches up to 5 photos of
+  // it via the quote form's built-in photo section (referencePhotos —
+  // no schema field needed). The buyer compares real units.
+  'long-term-rentals': () => [
+    { name: 'price', label: 'Monthly Rent (ZMW)', type: 'currency', required: true,
+      calculation: 'total', group: 'Pricing' },
+    { name: 'depositMonths', label: 'Deposit Required', type: 'select', required: true,
+      options: ['1 month', '2 months', '3 months', 'Negotiable'], group: 'Pricing' },
+    { name: 'includedInRent', label: 'Included in the Rent', type: 'multiselect', required: false,
+      options: ['Water', 'ZESCO / electricity', 'Security', 'Garbage collection', 'WiFi', 'Parking', 'Garden service'],
+      group: 'Pricing' },
+    { name: 'unitArea', label: 'Location / Area', type: 'textarea', required: true,
+      placeholder: 'e.g. Kabulonga, off Church Road — quiet close', group: 'Logistics & Timing' },
+    { name: 'availabilityDate', label: 'Available From', type: 'date', required: true,
+      group: 'Logistics & Timing' },
+    { name: 'viewingSlot', label: 'Proposed Viewing Time', type: 'textarea', required: false,
+      placeholder: 'e.g. Saturday 10:00, or weekdays after 17:00', group: 'Logistics & Timing' },
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'Unit Description', type: 'textarea', required: true,
+      placeholder: 'Bedrooms, bathrooms, self-contained, wall fence, water supply, nearby landmarks…',
+      group: 'Notes & Photos' },
+  ],
+  'short-stay-serviced': () => [
+    { name: 'price', label: 'Total for the Stay (ZMW)', type: 'currency', required: true,
+      calculation: 'total', group: 'Pricing' },
+    { name: 'nightlyRate', label: 'Rate per Night (ZMW)', type: 'currency', required: false,
+      group: 'Pricing' },
+    { name: 'includedServices', label: 'Included Services', type: 'multiselect', required: false,
+      options: ['WiFi', 'DSTV', 'Housekeeping', 'Breakfast', 'Airport pickup', 'Backup power', 'Pool / gym access'],
+      group: 'Pricing' },
+    { name: 'unitArea', label: 'Location / Area', type: 'textarea', required: true,
+      placeholder: 'e.g. Rhodes Park, near Arcades', group: 'Logistics & Timing' },
+    { name: 'dateFit', label: 'Availability for the Requested Dates', type: 'select', required: true,
+      options: ['Available for your exact dates', 'Alternative dates only (see notes)'],
+      group: 'Logistics & Timing' },
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'Apartment Description', type: 'textarea', required: true,
+      placeholder: 'Rooms, floor, check-in process, house rules…', group: 'Notes & Photos' },
+  ],
+  'boarding-student-rooms': () => [
+    { name: 'price', label: 'Monthly Rent (ZMW)', type: 'currency', required: true,
+      calculation: 'total', group: 'Pricing' },
+    { name: 'depositRequired', label: 'Deposit Required', type: 'select', required: false,
+      options: ['None', 'Half month', '1 month', 'Negotiable'], group: 'Pricing' },
+    { name: 'includedInRent', label: 'Included in the Rent', type: 'multiselect', required: false,
+      options: ['Water', 'ZESCO', 'WiFi', 'Meals', 'Room cleaning'], group: 'Pricing' },
+    { name: 'distanceToCampus', label: 'Distance to Campus', type: 'textarea', required: true,
+      placeholder: 'e.g. 10 minutes walk to UNZA main gate', group: 'Logistics & Timing' },
+    { name: 'roomsAvailable', label: 'Rooms Available', type: 'number', required: false,
+      group: 'Logistics & Timing' },
+    { name: 'availabilityDate', label: 'Available From', type: 'date', required: false,
+      group: 'Logistics & Timing' },
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'House Description', type: 'textarea', required: true,
+      placeholder: 'House rules, caretaker, visiting hours, cooking arrangements…',
+      group: 'Notes & Photos' },
+  ],
+
+  // Hospital Labs: turnaround + collection logistics drive the choice.
+  'hospital-labs': (attrs) => [
+    { name: 'price', label: 'Total Test Fee (ZMW)', type: 'currency', required: true,
+      calculation: 'total', group: 'Pricing' },
+    { name: 'turnaroundHours', label: 'Results Turnaround (hours)', type: 'number',
+      required: true, placeholder: 'e.g. 24', group: 'Logistics & Timing' },
+    ...(attrs?.homeSampleCollection === true || attrs?.homeSampleCollection === 'true'
+      ? [{ name: 'homeCollectionFee', label: 'Home Sample Collection Fee (ZMW)', type: 'currency',
+          required: false, helpText: 'The buyer asked for sample collection at their location.',
+          group: 'Logistics & Timing' } as QuoteField]
+      : []),
+    { name: 'availabilityDate', label: 'Earliest Available Slot', type: 'date', required: true,
+      group: 'Logistics & Timing' },
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'Lab Notes', type: 'textarea', required: false,
+      placeholder: 'Fasting requirements, accreditation, how results are shared…', group: 'Notes & Photos' },
+  ],
 };
 
 export const generateQuoteSchema = (

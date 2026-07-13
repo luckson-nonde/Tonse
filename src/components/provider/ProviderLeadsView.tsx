@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package, Users, Clock } from 'lucide-react';
+import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package, Users, Clock, FileText } from 'lucide-react';
 import emptyLeadsImage from '../../assets/images/empty-states/owl_reading.png';
 import { uniqueKey } from '../../utils/keyUtils';
 import { PreferenceTags, Lightbox } from './LeadsHelpers';
@@ -33,6 +33,9 @@ function collectLeadImages(lead: any, parsedItems: any[]): string[] {
     imgs.push(...parse(lead.attributes.images));
     imgs.push(...parse(lead.attributes.referencePhotos));
     imgs.push(...parse(lead.attributes.photos));
+    // Clinical Services: the buyer's prescription / doctor's order photo IS
+    // the request content — the pharmacist/lab reads it here to quote.
+    imgs.push(...parse(lead.attributes.prescriptionPhotos));
   }
   if (lead.entertainmentData) imgs.push(...parse(lead.entertainmentData.images));
   if (lead.repairData) imgs.push(...parse(lead.repairData.images));
@@ -636,6 +639,16 @@ export default function ProviderLeadsView({
                       responseDeadlineAt={lead.responseDeadlineAt}
                     />
                   )}
+
+                  {/* Clinical: flag that the request carries a prescription /
+                      doctor's order — expand the card to read it (lightbox). */}
+                  {Array.isArray((lead as any).attributes?.prescriptionPhotos) &&
+                    (lead as any).attributes.prescriptionPhotos.length > 0 && (
+                      <span className="self-start flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-teal-50 text-teal-700 border-teal-200 -mt-1">
+                        <FileText className="w-3 h-3" />
+                        Prescription attached
+                      </span>
+                    )}
 
                   {/* Divider */}
                   <div className="h-px w-full bg-gradient-to-r from-slate-100 via-slate-100 to-transparent" />

@@ -217,6 +217,19 @@ function categoriesMatch(categories: string[], pattern: RegExp): boolean {
   return categories.some((c) => pattern.test(c));
 }
 
+// Apartment tenure ids look rental-ish by NAME ('long-term-rentals') but are
+// BOOKING businesses — landlords/agents quoting unit offers, not a fleet-out/
+// fleet-back RENTAL operation. Pin them out of the rental regex below so the
+// word "Rentals" in the id can't reroute an estate agent onto the machinery
+// fleet dashboard. (Mirror of the seeder's SUB_ARCHETYPE id pin.)
+const APARTMENT_TENURE_ID =
+  /^(apartments|long-term-rentals|short-stay-serviced|boarding-student-rooms)$/i;
+function rentalCategoriesMatch(categories: string[]): boolean {
+  return categories.some(
+    (c) => !APARTMENT_TENURE_ID.test(c) && /\b(rental|hire)s?\b/i.test(c),
+  );
+}
+
 /**
  * Multi-archetype resolution. Returns the SET of BusinessType values
  * the user serves. Composition-aware UI surfaces (sidebar merge,
@@ -266,7 +279,7 @@ export function getBusinessTypes(
     const cats = (user.categoryIds && user.categoryIds.length > 0)
       ? user.categoryIds
       : (user.categories || []);
-    if (categoriesMatch(cats, /\b(rental|hire)s?\b/i)) augmented.add('RENTAL');
+    if (rentalCategoriesMatch(cats)) augmented.add('RENTAL');
     if (categoriesMatch(cats, /\b(repair|restoration|recovery|upholstery)\b/i)) augmented.add('REPAIR');
 
     // Add SERVICE for the event sub-archetypes that are SERVICE on the
@@ -316,7 +329,10 @@ export function getBusinessTypes(
   // (or decor / planning / management) seller lands on SERVICE.
   // EVENT_CATEGORY_PATTERN below otherwise catches the word "event" in
   // those slugs first and routes them to the venue dashboard.
-  if (categoriesMatch(categories, /\b(rental|hire)s?\b/i)) return ['RENTAL'];
+  // Apartment agents/landlords are BOOKING even before the backend publishes
+  // their archetype set (mid-onboarding rows).
+  if (categories.some((c) => APARTMENT_TENURE_ID.test(c))) return ['BOOKING'];
+  if (rentalCategoriesMatch(categories)) return ['RENTAL'];
   if (categoriesMatch(categories, /\b(catering|decor|planning|management)\b/i)) return ['SERVICE'];
   if (categoriesMatch(categories, EVENT_CATEGORY_PATTERN)) return ['EVENTS'];
   if (categoriesMatch(categories, ENTERTAINMENT_CATEGORY_PATTERN)) return ['ENTERTAINMENT'];

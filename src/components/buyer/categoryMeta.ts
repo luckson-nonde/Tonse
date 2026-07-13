@@ -14,6 +14,8 @@ import {
   Laptop,
   Droplets,
   Sprout,
+  Stethoscope,
+  Building2,
   Box,
   type LucideIcon,
 } from 'lucide-react';
@@ -47,6 +49,8 @@ export const CATEGORY_META: Record<string, CategoryMeta> = {
   'it-products':         { icon: Laptop,         accent: '#3399C9', tagline: 'Hardware, software, peripherals' },
   'drilling-services':   { icon: Droplets,       accent: '#3399C9', tagline: 'Boreholes, water systems' },
   agriculture:           { icon: Sprout,         accent: '#3FA98B', tagline: 'Seeds, inputs, machinery' },
+  'clinical-services':   { icon: Stethoscope,    accent: '#3FA98B', tagline: 'Lab tests, medication, prescriptions' },
+  apartments:            { icon: Building2,      accent: '#8E6FD8', tagline: 'Rentals, short stay, boarding' },
 };
 
 export const FALLBACK_META: CategoryMeta = {
