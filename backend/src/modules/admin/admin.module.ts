@@ -8,6 +8,7 @@ import { QuotesModule } from '../quotes/quotes.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { AuditModule } from '../audit/audit.module';
 import { CategoriesModule } from '../categories/categories.module';
+import { ReferralsModule } from '../referrals/referrals.module';
 
 @Module({
   imports: [
@@ -18,6 +19,8 @@ import { CategoriesModule } from '../categories/categories.module';
     PaymentsModule,
     AuditModule,
     CategoriesModule,
+    // Promoter programme: milestone CRUD + promoter oversight.
+    ReferralsModule,
   ],
   providers: [AdminService],
   controllers: [AdminController],

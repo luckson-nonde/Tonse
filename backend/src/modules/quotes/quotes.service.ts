@@ -8,6 +8,7 @@ import { InquiriesService } from '../inquiries/inquiries.service';
 import { Inquiry } from '../inquiries/entities/inquiry.entity';
 import { MatchingService } from '../inquiries/services/matching.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { FunnelTrackingService } from '../referrals/services/funnel-tracking.service';
 
 @Injectable()
 export class QuotesService {
@@ -20,6 +21,7 @@ export class QuotesService {
     private readonly matchingService: MatchingService,
     private readonly notificationsService: NotificationsService,
     private readonly dataSource: DataSource,
+    private readonly funnelTrackingService: FunnelTrackingService,
   ) {}
 
   private parseJsonFields(data: any): any {
@@ -265,6 +267,19 @@ export class QuotesService {
           `Reserve auto-release check failed for inquiry ${updated.inquiryId}: ${(e as Error).message}`,
         ),
       );
+    }
+
+    // Referral funnel (service/collection-trade path — no order row exists):
+    // a completed/handed-over quote is that provider's trade_complete.
+    // Fire-and-forget, never fails the status write.
+    if (updated?.providerId && ['COMPLETED', 'HANDED_OVER'].includes(status)) {
+      void this.funnelTrackingService
+        .advanceStage(updated.providerId, 'trade_complete', { type: 'quote', id: updated.id })
+        .catch((e) =>
+          this.logger.warn(
+            `Referral funnel advance failed for quote ${updated.id}: ${(e as Error).message}`,
+          ),
+        );
     }
     return updated;
   }

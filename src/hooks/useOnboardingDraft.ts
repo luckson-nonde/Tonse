@@ -48,12 +48,16 @@ export interface OnboardingDraft {
   role: string;
   subRole?: string;
   categoryIds: string[];
+  /** Promoter referral attribution (?ref=CODE on the shared link). Small
+   *  string, safe to persist — surviving a mid-wizard refresh is the point. */
+  referralCode?: string;
 }
 
 export interface DraftSeed {
   role: string;
   subRole?: string;
   categoryIds: string[];
+  referralCode?: string;
 }
 
 const STORAGE_KEY = 'tonse:onboardingDraft';
@@ -90,6 +94,7 @@ function makeInitial(seed: DraftSeed): OnboardingDraft {
     role: seed.role,
     subRole: seed.subRole,
     categoryIds: seed.categoryIds,
+    referralCode: seed.referralCode,
   };
 }
 
@@ -145,6 +150,9 @@ export function useOnboardingDraft(seed: DraftSeed): UseOnboardingDraftResult {
             role: seed.role,
             subRole: seed.subRole,
             categoryIds: seed.categoryIds,
+            // Same rule for referral attribution — a fresh ?ref wins; only a
+            // refresh with no ?ref falls back to the stored one.
+            referralCode: seed.referralCode ?? stored?.referralCode,
           }
         : base,
     };

@@ -671,11 +671,118 @@ Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`, `onDel
 
 ---
 
+### Module: Referrals (promoter programme)
+
+Hidden, invite-gated promoter accounts (`users.role = 'PROMOTER'`, minted only by `POST /promoter/signup` — the public register DTO rejects the role). PROMOTER users carry **no profile row**; their name/email/phone are denormalized onto `referral_links`.
+
+#### `referral_links`
+Entity file: `backend/src/modules/referrals/entities/referral-link.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| promoterUserId | uuid | NO | — | 1:1 with the PROMOTER user |
+| code | varchar(20) | NO | — | unique shareable code, `REF-XXXXXXXX` (`ReferralCodeUtil`, 32-char unambiguous charset) |
+| promoterName | varchar(255) | NO | — | denormalized (no profile row exists) |
+| promoterEmail | varchar(255) | NO | — | denormalized |
+| promoterPhone | varchar(20) | YES | — | |
+| isActive | boolean | NO | `true` | inactive codes stop capturing NEW conversions |
+| createdAt / updatedAt | timestamp | NO | — | |
+
+Indexes: `idx_referral_links_code` (code, unique) · `idx_referral_links_promoter` (promoterUserId, unique)
+
+Relations: ManyToOne → `users` (promoterUserId, `onDelete: CASCADE`)
+
+#### `conversions`
+Entity file: `backend/src/modules/referrals/entities/conversion.entity.ts`
+
+One row per referred user; `funnelStage` is monotonic (guarded UPDATE in `FunnelTrackingService.advanceStage`). The two `*AdvancedAt` timestamps are independent — a referred provider can jump `registration → trade_complete` with `inquiryAdvancedAt` staying NULL. Milestone counting reads the timestamps, not the coarse stage.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| referralLinkId | uuid | NO | — | FK → referral_links, CASCADE |
+| promoterUserId | uuid | NO | — | denormalized from the link at insert |
+| referredUserId | uuid | NO | — | **UNIQUE** — a user is referred exactly once |
+| funnelStage | enum | NO | `'registration'` | `registration`, `inquiry`, `trade_complete` |
+| inquiryAdvancedAt | timestamp | YES | — | set once, first own inquiry |
+| tradeCompleteAdvancedAt | timestamp | YES | — | set once, first completed trade (order or quote path) |
+| firstInquiryId | uuid | YES | — | audit |
+| firstTradeSource | json | YES | — | audit, `{ type: 'order'\|'quote', id }` |
+| createdAt / updatedAt | timestamp | NO | — | createdAt doubles as registeredAt |
+
+Indexes: `idx_conversions_referred_user` (referredUserId, unique) · `idx_conversions_referral_link` (referralLinkId) · `idx_conversions_promoter_stage` (promoterUserId, funnelStage)
+
+#### `milestones`
+Entity file: `backend/src/modules/referrals/entities/milestone.entity.ts`
+
+Admin-configured global goals (CRUD under `/admin/milestones`). Every mutation triggers a retro-award sweep + `MILESTONE_UPDATED` SSE broadcast.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| title | varchar(255) | NO | — | |
+| targetStage | enum | NO | — | `inquiry`, `trade_complete` (never `registration`) |
+| requiredCount | int | NO | — | DTO-validated ≥ 1 |
+| equitySharesReward | decimal(12,2) | NO | — | |
+| isActive | boolean | NO | `true` | |
+| createdAt / updatedAt | timestamp | NO | — | |
+
+Indexes: `idx_milestones_target_stage` (targetStage) · `idx_milestones_active` (isActive)
+
+#### `promoter_profiles`
+Entity file: `backend/src/modules/referrals/entities/promoter-profile.entity.ts`
+
+1:1 identity profile captured AT SIGNUP (the invite key proves access, not identity): bio, the social platforms the artist runs, an ID document and a live selfie. Admin reviews via `GET /admin/promoters/:id` + `PATCH /admin/promoters/:id/verification`; identity re-uploads reset status to PENDING.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| userId | uuid | NO | — | unique, FK → users CASCADE |
+| bio | text | YES | — | |
+| socialLinks | json | YES | — | `[{ platform, url, handle? }]` — ≥1 required at signup |
+| selfiePath | text | YES | — | base64 data URL (live selfie) |
+| idDocumentPath | text | YES | — | base64 data URL (NRC/passport/licence) |
+| verificationStatus | enum | NO | `'PENDING'` | `PENDING`, `VERIFIED`, `REJECTED` |
+| rejectionReason | varchar(500) | YES | — | shown to the promoter on rejection |
+| createdAt / updatedAt | timestamp | NO | — | |
+
+Indexes: `idx_promoter_profiles_user` (userId, unique) · `idx_promoter_profiles_verification` (verificationStatus)
+
+#### `promoter_settings`
+Entity file: `backend/src/modules/referrals/entities/promoter-setting.entity.ts`
+
+Single-row (get-or-create) programme settings. Holds the **admin-managed invite key** (rotated from the admin Milestones tab via `POST /admin/promoter-invite/rotate`, format `TONSE-XXXXX-XXXXX`). Stored plaintext deliberately — it's a shared distribution secret the admin must read back, not a verify-only credential. When no row exists, `PROMOTER_INVITE_KEY` from the env is the fallback; neither ⇒ signup disabled.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| inviteKey | varchar(64) | NO | — | current gate for POST /promoter/signup |
+| createdAt / updatedAt | timestamp | NO | — | updatedAt = last rotation |
+
+#### `equity_awards`
+Entity file: `backend/src/modules/referrals/entities/equity-award.entity.ts`
+
+Simulated equity ledger — no payment/legal integration. `UNIQUE(promoterUserId, milestoneId)` IS the concurrency model: concurrent qualifiers both attempt the INSERT, the loser's `23505` is swallowed, exactly one award ever lands. `sharesAwarded` snapshots the reward at award time.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| promoterUserId | uuid | NO | — | FK → users, CASCADE |
+| milestoneId | uuid | NO | — | FK → milestones, **RESTRICT** — paid-out milestones can't be deleted (admin DELETE 409s: deactivate instead) |
+| sharesAwarded | decimal(12,2) | NO | — | snapshot |
+| countAtAward | int | NO | — | audit |
+| createdAt | timestamp | NO | — | doubles as awardedAt |
+
+Constraints/Indexes: `uq_equity_awards_promoter_milestone` (promoterUserId, milestoneId, unique) · `idx_equity_awards_promoter` (promoterUserId)
+
+---
+
 ## 4. Enums Reference
 
 | Enum (owning table.column) | Values |
 |---|---|
-| `users.role` | `BUYER`, `SELLER`, `SERVICE_PROVIDER`, `ADMIN` |
+| `users.role` | `BUYER`, `SELLER`, `SERVICE_PROVIDER`, `ADMIN`, `PROMOTER` |
 | `users.activeProfileType` | `BUYER`, `SELLER`, `SERVICE_PROVIDER` |
 | `users.departmentAutonomy` | `INDEPENDENT`, `MANAGED` |
 | `user_emails.verificationStatus` | `NOT_VERIFIED`, `VERIFICATION_SENT`, `VERIFIED` |
@@ -700,6 +807,10 @@ Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`, `onDel
 | `categories.archetype` | `RETAIL`, `RENTAL`, `BOOKING`, `LABOUR`, `REPAIR`, `SERVICE`, `EVENTS`, `ENTERTAINMENT`, `WHOLESALE` |
 | `categories.nature` | `PRODUCT`, `SERVICE`, `BOTH` |
 | `categories.actionVariant` | `BUY_NEW`, `REPAIR` |
+| `notifications.type` | `NEW_LEAD`, `QUOTE_RECEIVED`, `RESERVE_RELEASED`, `MILESTONE_UNLOCKED` |
+| `conversions.funnelStage` | `registration`, `inquiry`, `trade_complete` |
+| `milestones.targetStage` | `inquiry`, `trade_complete` |
+| `promoter_profiles.verificationStatus` | `PENDING`, `VERIFIED`, `REJECTED` |
 
 ---
 
@@ -727,6 +838,8 @@ Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`, `onDel
 | `NODE_ENV` | — | `production` enables `ssl: { rejectUnauthorized: false }` |
 | `ENCRYPTION_KEY` | `your_32_character_key_here_1234` | Key for (currently unused) `EncryptionService` |
 | `ENCRYPTION_IV` | `your_16_character_iv` | IV for (currently unused) `EncryptionService` |
+| `PROMOTER_INVITE_KEY` | — (unset ⇒ signup hard-disabled) | Gates `POST /promoter/signup`; shared privately with NDA'd artists |
+| `PROMOTER_APP_BASE_URL` | `http://localhost:5173` | Frontend origin used to build shareable referral URLs |
 
 ### Seed data
 `backend/src/database/seeds/seed.ts` (run via `npm run seed`) creates exactly **one row** — a platform root ADMIN user. Credentials come from environment variables (`ADMIN_EMAIL`/`ADMIN_PASSWORD` required, `ADMIN_NAME`/`ADMIN_PHONE`/`ADMIN_NRC` optional) loaded from the gitignored `backend/.env`; the script exits with an error if email/password are unset or the password is under 8 characters, and it never logs the plaintext password. It is idempotent: it looks up an existing user by `ADMIN_EMAIL`; if found, it upgrades role to `ADMIN` and sets `isActive=true`, `verificationStatus='VERIFIED'` only where different — the password is only rotated (re-hashed from the current `ADMIN_PASSWORD`) when run as `npm run seed -- --reset-password`. If not found, it hashes `ADMIN_PASSWORD` with bcryptjs, registers with a placeholder NRC, then patches `verificationStatus` to `VERIFIED` and `isActive=true`. No other tables (categories, products, etc.) are seeded by this script.

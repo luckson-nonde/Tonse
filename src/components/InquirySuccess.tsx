@@ -1,56 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { ArrowRight } from 'lucide-react';
 import successOwl from '../assets/images/empty-states/owl_triumphant.png';
+import ConfettiBurst from './ConfettiBurst';
 
 interface InquirySuccessProps {
   onGoToDashboard: () => void;
 }
 
 export default function InquirySuccess({ onGoToDashboard }: InquirySuccessProps) {
-  const [confetti, setConfetti] = useState<Array<{ id: number; left: number; delay: number }>>([]);
-
-  useEffect(() => {
-    // Generate confetti pieces
-    const pieces = Array.from({ length: 30 }, (_, i) => ({
-      id: i,
-      left: Math.random() * 100,
-      delay: Math.random() * 0.5,
-    }));
-    setConfetti(pieces);
-  }, []);
-
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center px-4 relative overflow-hidden bg-gradient-to-b from-[#f8f7f3] to-[#faf9f6]">
-      {/* Confetti Animation */}
-      {confetti.map((piece) => (
-        <div
-          key={piece.id}
-          className="fixed pointer-events-none animate-fall"
-          style={{
-            left: `${piece.left}%`,
-            top: '-10px',
-            animation: `fall ${2 + Math.random()}s linear ${piece.delay}s infinite`,
-          }}
-        >
-          <div
-            className="w-2 h-2 rounded-full"
-            style={{
-              backgroundColor: ['#C9973A', '#d49b35', '#E5B85C', '#F5C744'][
-                Math.floor(Math.random() * 4)
-              ],
-            }}
-          />
-        </div>
-      ))}
-
-      <style>{`
-        @keyframes fall {
-          to {
-            transform: translateY(100vh) rotate(360deg);
-            opacity: 0;
-          }
-        }
-      `}</style>
+      {/* Confetti Animation (shared celebratory component) */}
+      <ConfettiBurst active />
 
       {/* Celebratory Owl Image - With ample top space */}
       <div className="relative pt-12 pb-8 animate-bounce h-64 flex items-center justify-center">

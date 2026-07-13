@@ -14,6 +14,7 @@ import { DisplayIdUtil } from '../../utils/display-id.util';
 import { CategoriesService } from '../categories/categories.service';
 import { MatchingService } from './services/matching.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { FunnelTrackingService } from '../referrals/services/funnel-tracking.service';
 
 @Injectable()
 export class InquiriesService {
@@ -28,6 +29,7 @@ export class InquiriesService {
     private readonly categoriesService: CategoriesService,
     private readonly matchingService: MatchingService,
     private readonly notificationsService: NotificationsService,
+    private readonly funnelTrackingService: FunnelTrackingService,
   ) {}
 
   /**
@@ -121,6 +123,16 @@ export class InquiriesService {
           `NEW_LEAD dispatch failed for inquiry ${saved.id}: ${(e as Error).message}`,
         ),
       );
+      // Referral funnel: a referred buyer's first inquiry advances their
+      // conversion row (repeat inquiries no-op via the guarded UPDATE).
+      // Same fire-and-forget contract — never fails the buyer's 201.
+      void this.funnelTrackingService
+        .advanceStage(saved.buyerId, 'inquiry', { type: 'inquiry', id: saved.id })
+        .catch((e) =>
+          this.logger.error(
+            `Referral funnel advance failed for inquiry ${saved.id}: ${(e as Error).message}`,
+          ),
+        );
       return saved;
     });
   }

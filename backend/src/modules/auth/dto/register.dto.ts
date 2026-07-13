@@ -74,4 +74,17 @@ export class RegisterDto {
   @IsString()
   @IsOptional()
   subRole?: string;
+
+  /**
+   * Promoter referral code (?ref=CODE on the shared signup link). Pure
+   * attribution metadata — threaded through registration in the same
+   * server call (same lesson as categoryIds above: never a follow-up
+   * PATCH). A bad/unknown code silently no-ops; it can never fail or
+   * privilege a registration. Note PROMOTER is deliberately NOT accepted
+   * by `role` here — promoter accounts are minted only via the
+   * invite-gated POST /promoter/signup.
+   */
+  @IsString()
+  @IsOptional()
+  referralCode?: string;
 }

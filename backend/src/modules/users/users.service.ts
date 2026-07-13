@@ -18,6 +18,7 @@ import { Archetype } from '../categories/entities/category.entity';
 import { UserDisplayIdUtil } from '../../utils/user-display-id.util';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ProfileMatchingService } from './services/profile-matching.service';
+import { FunnelTrackingService } from '../referrals/services/funnel-tracking.service';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcryptjs';
 
@@ -85,6 +86,10 @@ export class UsersService {
     private readonly identityAuditService: IdentityAuditService,
     private readonly profileMatchingService: ProfileMatchingService,
     private readonly dataSource: DataSource,
+    // Referral funnel capture at registration. One-directional edge:
+    // UsersModule → ReferralsModule (referrals never imports UsersModule —
+    // it uses entity-only User/UserEmail repos).
+    private readonly funnelTrackingService: FunnelTrackingService,
   ) {}
 
   // ===== PROFILE HELPERS (Phase 3) ============================================
@@ -610,6 +615,14 @@ export class UsersService {
      * seller registered to date.
      */
     profileSeed?: { categoryIds?: string[]; subRole?: string },
+    /**
+     * Promoter referral code (?ref=CODE). Captured right after the identity
+     * is durably created — awaited so it lands before the HTTP response,
+     * but try/caught so a broken attribution can NEVER fail registration
+     * (asymmetric stakes: a lost referral credit is invisible; a failed
+     * signup is a hard user-facing error).
+     */
+    referralCode?: string,
   ): Promise<User> {
     // Normalize NRC
     const normalizedNrc = UserDisplayIdUtil.normalizeIdentifier(nrcNumber);
@@ -662,6 +675,18 @@ export class UsersService {
         verificationStatus: 'NOT_VERIFIED',
       })
     );
+
+    // Referral attribution (promoter funnel). Same-call, never a follow-up
+    // round-trip; failure is logged and swallowed.
+    if (referralCode) {
+      try {
+        await this.funnelTrackingService.captureRegistration(savedUser.id, referralCode);
+      } catch (e: any) {
+        this.logger.warn(
+          `register(${savedUser.id}): referral capture failed for code=${referralCode}: ${e?.message}`,
+        );
+      }
+    }
 
     // Create the matching profile row and point activeProfileId at it. The
     // profile carries the user-facing fields (name, email, phone, etc.) so

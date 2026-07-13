@@ -23,6 +23,7 @@ import { CategoriesModule } from './modules/categories/categories.module';
 import { TeamModule } from './modules/team/team.module';
 import { PortfolioModule } from './modules/portfolio/portfolio.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ReferralsModule } from './modules/referrals/referrals.module';
 
 // Common
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -33,13 +34,14 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import encryptionConfig from './config/encryption.config';
+import promoterConfig from './config/promoter.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
-      load: [databaseConfig, jwtConfig, encryptionConfig],
+      load: [databaseConfig, jwtConfig, encryptionConfig, promoterConfig],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -73,6 +75,7 @@ import encryptionConfig from './config/encryption.config';
     TeamModule,
     PortfolioModule,
     NotificationsModule,
+    ReferralsModule,
   ],
   providers: [
     {

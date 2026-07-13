@@ -14,17 +14,29 @@ export interface StreamMessage {
   data: string;
 }
 
-export type DurableType = 'NEW_LEAD' | 'QUOTE_RECEIVED' | 'RESERVE_RELEASED';
-export type EphemeralType = 'QUOTE_COUNT_UPDATE' | 'LEAD_FULL' | 'PROVIDER_ACCEPTED';
+export type DurableType =
+  | 'NEW_LEAD'
+  | 'QUOTE_RECEIVED'
+  | 'RESERVE_RELEASED'
+  | 'MILESTONE_UNLOCKED';
+export type EphemeralType =
+  | 'QUOTE_COUNT_UPDATE'
+  | 'LEAD_FULL'
+  | 'PROVIDER_ACCEPTED'
+  | 'REFERRAL_PROGRESS'
+  | 'MILESTONE_UPDATED';
 
 /** DB enum → lowercase SSE event name (EventSource convention). */
 const SSE_EVENT_NAME: Record<DurableType | EphemeralType, string> = {
   NEW_LEAD: 'new_lead',
   QUOTE_RECEIVED: 'quote_received',
   RESERVE_RELEASED: 'reserve_released',
+  MILESTONE_UNLOCKED: 'milestone_unlocked',
   QUOTE_COUNT_UPDATE: 'quote_count_update',
   LEAD_FULL: 'lead_full',
   PROVIDER_ACCEPTED: 'provider_accepted',
+  REFERRAL_PROGRESS: 'referral_progress',
+  MILESTONE_UPDATED: 'milestone_updated',
 };
 
 /**

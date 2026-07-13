@@ -29,6 +29,22 @@ export interface NotificationStreamHandlers {
   onReserveReleased?: (payload: Record<string, any>) => void;
   /** Buyer: live "X providers accepted" tick (ephemeral). */
   onProviderAccepted?: (payload: { inquiryId: string; acceptedCount: number }) => void;
+  /** Promoter: a referral milestone unlocked + equity shares awarded (durable). */
+  onMilestoneUnlocked?: (payload: {
+    notificationId: string;
+    milestoneId: string;
+    milestoneTitle: string;
+    sharesAwarded: number;
+    totalEquityShares: number;
+  } & Record<string, any>) => void;
+  /** Promoter: live funnel counter tick (ephemeral). */
+  onReferralProgress?: (payload: {
+    registrations: number;
+    inquiries: number;
+    tradesComplete: number;
+  }) => void;
+  /** Promoter: admin edited the milestone set — refetch goals (ephemeral). */
+  onMilestoneUpdated?: (payload: { milestoneId: string; action: string }) => void;
   /** Stream (re)opened — force a REST resync of anything counter-shaped. */
   onReconnect?: () => void;
 }
@@ -84,6 +100,7 @@ export function useNotificationStream(
       if (n.type === 'NEW_LEAD') handlersRef.current.onNewLead?.(payload as any);
       else if (n.type === 'QUOTE_RECEIVED') handlersRef.current.onQuoteReceived?.(payload);
       else if (n.type === 'RESERVE_RELEASED') handlersRef.current.onReserveReleased?.(payload);
+      else if (n.type === 'MILESTONE_UNLOCKED') handlersRef.current.onMilestoneUnlocked?.(payload as any);
     };
 
     const catchUp = async () => {
@@ -141,6 +158,16 @@ export function useNotificationStream(
       });
       es.addEventListener('provider_accepted', (e) => {
         handlersRef.current.onProviderAccepted?.(parse(e as MessageEvent));
+      });
+      es.addEventListener('milestone_unlocked', (e) => {
+        lastSeen = new Date().toISOString();
+        routeDurable({ type: 'MILESTONE_UNLOCKED', ...parse(e as MessageEvent) });
+      });
+      es.addEventListener('referral_progress', (e) => {
+        handlersRef.current.onReferralProgress?.(parse(e as MessageEvent));
+      });
+      es.addEventListener('milestone_updated', (e) => {
+        handlersRef.current.onMilestoneUpdated?.(parse(e as MessageEvent));
       });
       // heartbeat events need no handler — their arrival keeps proxies from
       // idling the connection out.

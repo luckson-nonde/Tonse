@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Order } from './entities/order.entity';
@@ -6,13 +6,17 @@ import { Quote } from '../quotes/entities/quote.entity';
 import { Inquiry } from '../inquiries/entities/inquiry.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
+import { FunnelTrackingService } from '../referrals/services/funnel-tracking.service';
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     @InjectRepository(Order)
     private ordersRepository: Repository<Order>,
     private readonly dataSource: DataSource,
+    private readonly funnelTrackingService: FunnelTrackingService,
   ) {}
 
   async create(createOrderDto: CreateOrderDto): Promise<Order> {
@@ -27,8 +31,8 @@ export class OrdersService {
     // either everything advances or nothing does. Status writes here
     // are server-authoritative; clients shouldn't try to PATCH status
     // separately (and for the buyer they're not authorised to anyway).
-    return this.dataSource.transaction(async (m) => {
-      const order = await m.getRepository(Order).save(
+    const order = await this.dataSource.transaction(async (m) => {
+      const created = await m.getRepository(Order).save(
         m.getRepository(Order).create({ ...createOrderDto, orderNumber }),
       );
 
@@ -43,8 +47,35 @@ export class OrdersService {
         }
       }
 
-      return order;
+      return created;
     });
+
+    // Referral funnel: the default status is PENDING, but a direct-complete
+    // create is guarded identically to updateStatus. Post-commit.
+    if (order.status === 'COMPLETED') {
+      this.maybeAdvanceTradeComplete(order);
+    }
+
+    return order;
+  }
+
+  /**
+   * Referral funnel hook (product-trade path). Fires trade_complete for the
+   * buyer AND the seller independently — either could be the referred user;
+   * each call no-ops unless that id has a conversion row. Fire-and-forget:
+   * must never break the order write it rides on.
+   */
+  private maybeAdvanceTradeComplete(order: Order): void {
+    for (const userId of [order.buyerId, order.sellerId]) {
+      if (!userId) continue;
+      void this.funnelTrackingService
+        .advanceStage(userId, 'trade_complete', { type: 'order', id: order.id })
+        .catch((e) =>
+          this.logger.warn(
+            `Referral funnel advance failed for order ${order.id} (user ${userId}): ${(e as Error).message}`,
+          ),
+        );
+    }
   }
 
   async findAll(filters: any = {}): Promise<{ data: Order[]; total: number }> {
@@ -126,7 +157,11 @@ export class OrdersService {
 
   async updateStatus(id: string, status: string): Promise<Order> {
     await this.ordersRepository.update(id, { status });
-    return this.findOne(id);
+    const order = await this.findOne(id);
+    if (order && status === 'COMPLETED') {
+      this.maybeAdvanceTradeComplete(order);
+    }
+    return order;
   }
 
   async updateTrackingNumber(id: string, trackingNumber: string): Promise<Order> {

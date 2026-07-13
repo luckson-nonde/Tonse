@@ -12,6 +12,8 @@ import Onboarding from './pages/Onboarding';
 import RoleSelection from './pages/RoleSelection';
 import Register from './pages/Register';
 import LabourRegister from './pages/LabourRegister';
+import PromoterSignup from './pages/PromoterSignup';
+import PromoterDashboard from './pages/PromoterDashboard';
 // Phase 2: LabourDashboard import removed — /labour/* now redirects to /provider.
 import BusinessVerification from './pages/BusinessVerification';
 import SellerCategorySelection from './pages/SellerCategorySelection';
@@ -98,6 +100,7 @@ function RootRedirect() {
   if (!user) return <Navigate to="/login" replace />;
   if (user.mustChangePassword) return <Navigate to="/force-password-change" replace />;
   if (user.role === 'ADMIN') return <Navigate to="/admin" replace />;
+  if (user.role === 'PROMOTER') return <Navigate to="/promoter" replace />;
   if (user.role === 'BUYER') return <Navigate to="/buyer" replace />;
   // Phase 2: SERVICE_PROVIDER (incl. former LABOUR users) and SELLER (incl.
   // former EVENTS / ENTERTAINMENT / SUPPLIER) all land on the unified
@@ -132,6 +135,23 @@ export default function App() {
               <Route path="/role-selection" element={<PageTransition transitionKey="role-selection"><RoleSelection /></PageTransition>} />
               <Route path="/register" element={<PageTransition transitionKey="register"><Register /></PageTransition>} />
               <Route path="/register/labour" element={<PageTransition transitionKey="register-labour"><LabourRegister /></PageTransition>} />
+              {/* Promoter programme. /promote is deliberately UNLISTED — it
+                  appears in no nav, sitemap, or link; the URL travels
+                  privately to NDA'd artists (the invite key is the real
+                  gate, validated server-side). */}
+              <Route path="/promote" element={<PageTransition transitionKey="promote"><PromoterSignup /></PageTransition>} />
+              <Route path="/promoter" element={<Navigate to="/promoter/dashboard" replace />} />
+              <Route
+                path="/promoter/:tab"
+                element={
+                  <ProtectedRoute allowedRoles={['PROMOTER']}>
+                    {/* Tab switches animate inside the shell (same reasoning as
+                        /admin/:tab) — PageTransition would remount the whole
+                        sidebar on every tab click. */}
+                    <PromoterDashboard />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/register/company-documents" element={<PageTransition transitionKey="company-documents"><CompanyDocuments /></PageTransition>} />
               <Route path="/business-verification" element={<PageTransition transitionKey="business-verification"><BusinessVerification /></PageTransition>} />
               <Route path="/seller/categories" element={<PageTransition transitionKey="seller-categories"><SellerCategorySelection /></PageTransition>} />

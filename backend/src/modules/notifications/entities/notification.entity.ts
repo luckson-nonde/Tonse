@@ -19,9 +19,13 @@ import { User } from '../../users/entities/user.entity';
  *   QUOTE_RECEIVED    → buyer: a provider quoted their inquiry.
  *   RESERVE_RELEASED  → provider: their reserve-tier quote is now visible
  *                       to the buyer.
+ *   MILESTONE_UNLOCKED→ promoter: a referral milestone crossed its threshold
+ *                       and equity shares were awarded (must survive the
+ *                       promoter being offline → durable + catch-up replay).
  *
- * Ephemeral counter events (QUOTE_COUNT_UPDATE, LEAD_FULL, PROVIDER_ACCEPTED)
- * are push-only — never persisted; REST refetch self-heals them.
+ * Ephemeral counter events (QUOTE_COUNT_UPDATE, LEAD_FULL, PROVIDER_ACCEPTED,
+ * REFERRAL_PROGRESS, MILESTONE_UPDATED) are push-only — never persisted;
+ * REST refetch self-heals them.
  */
 @Entity('notifications')
 @Index('idx_notifications_user_created', ['userId', 'createdAt'])
@@ -40,7 +44,7 @@ export class Notification {
 
   @Column({
     type: 'enum',
-    enum: ['NEW_LEAD', 'QUOTE_RECEIVED', 'RESERVE_RELEASED'],
+    enum: ['NEW_LEAD', 'QUOTE_RECEIVED', 'RESERVE_RELEASED', 'MILESTONE_UNLOCKED'],
   })
   type: string;
 

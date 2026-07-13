@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShoppingBag,
   Store,
@@ -258,6 +258,12 @@ export default function RoleSelection() {
   const [isCompanyExpanded, setIsCompanyExpanded] = useState(false);
   const [isViewingSubcategories, setIsViewingSubcategories] = useState(false);
   const navigate = useNavigate();
+  // Promoter referral attribution: a shared link lands here as
+  // /role-selection?ref=REF-XXXXXXXX. Carry the code through every hop to
+  // /register so it reaches the backend with the account creation itself.
+  const [searchParams] = useSearchParams();
+  const referralCode = searchParams.get('ref') || '';
+  const refSuffix = referralCode ? `&ref=${encodeURIComponent(referralCode)}` : '';
 
   // Android-GPU ghosting guard (see useLiteMotion.ts). On touch devices the
   // tier slides are stripped entirely — prop ABSENCE (not duration:0) is what
@@ -340,7 +346,7 @@ export default function RoleSelection() {
       if (masterRole === 'SELLER' || masterRole === 'SERVICE_PROVIDER') {
         setTier(3);
       } else {
-        navigate(`/register?role=${masterRole}&subRole=${selectedSubRole}`);
+        navigate(`/register?role=${masterRole}&subRole=${selectedSubRole}${refSuffix}`);
       }
     } else if (tier === 3 && selectedCategories.length > 0) {
       // selectedCategories is now an array of stable category IDs
@@ -350,7 +356,7 @@ export default function RoleSelection() {
       // ({ categoryIds: [...] }).
       const categoryIdsParam = selectedCategories.join(',');
       navigate(
-        `/register?role=${masterRole}&subRole=${selectedSubRole}&categoryIds=${categoryIdsParam}`
+        `/register?role=${masterRole}&subRole=${selectedSubRole}&categoryIds=${categoryIdsParam}${refSuffix}`
       );
     }
   };

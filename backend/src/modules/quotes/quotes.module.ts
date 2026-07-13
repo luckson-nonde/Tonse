@@ -5,9 +5,11 @@ import { QuotesService } from './quotes.service';
 import { QuotesController } from './controllers/quotes.controller';
 import { InquiriesModule } from '../inquiries/inquiries.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { ReferralsModule } from '../referrals/referrals.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Quote]), InquiriesModule, NotificationsModule],
+  // ReferralsModule: trade_complete funnel hook on quote COMPLETED/HANDED_OVER.
+  imports: [TypeOrmModule.forFeature([Quote]), InquiriesModule, NotificationsModule, ReferralsModule],
   providers: [QuotesService],
   controllers: [QuotesController],
   exports: [QuotesService],

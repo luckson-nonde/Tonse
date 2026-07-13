@@ -6,6 +6,10 @@ import { QuotesService } from '../quotes/quotes.service';
 import { PaymentsService } from '../payments/payments.service';
 import { AuditService } from '../audit/audit.service';
 import { CategoriesService } from '../categories/categories.service';
+import { MilestonesService } from '../referrals/services/milestones.service';
+import { PromotersService } from '../referrals/services/promoters.service';
+import { CreateMilestoneDto } from '../referrals/dto/create-milestone.dto';
+import { UpdateMilestoneDto } from '../referrals/dto/update-milestone.dto';
 
 @Injectable()
 export class AdminService {
@@ -18,7 +22,9 @@ export class AdminService {
     private readonly quotesService: QuotesService,
     private readonly paymentsService: PaymentsService,
     private readonly auditService: AuditService,
-    private readonly categoriesService: CategoriesService
+    private readonly categoriesService: CategoriesService,
+    private readonly milestonesService: MilestonesService,
+    private readonly promotersService: PromotersService
   ) {}
 
   // ───── Platform overview ────────────────────────────────────────────────
@@ -306,6 +312,51 @@ export class AdminService {
         this.logger.warn(`Audit log for category toggle failed: ${e?.message ?? e}`)
       );
     return category;
+  }
+
+  // ───── Promoter programme (milestones + oversight) ──────────────────────
+  // Same composition pattern as category control above: the feature logic
+  // lives in ReferralsModule; AdminService just fronts it behind the
+  // class-wide ADMIN guard. MilestonesService itself handles the retro-award
+  // sweep + MILESTONE_UPDATED broadcast after every mutation.
+
+  async listMilestones() {
+    return this.milestonesService.list();
+  }
+
+  async createMilestone(dto: CreateMilestoneDto) {
+    return this.milestonesService.create(dto);
+  }
+
+  async updateMilestone(id: string, dto: UpdateMilestoneDto) {
+    return this.milestonesService.update(id, dto);
+  }
+
+  async removeMilestone(id: string) {
+    return this.milestonesService.remove(id);
+  }
+
+  async listPromoters() {
+    return this.promotersService.listForAdmin();
+  }
+
+  async getPromoterDetail(id: string) {
+    return this.promotersService.getAdminDetail(id);
+  }
+
+  async setPromoterVerification(id: string, status: 'VERIFIED' | 'REJECTED', reason?: string) {
+    if (status !== 'VERIFIED' && status !== 'REJECTED') {
+      throw new NotFoundException('status must be VERIFIED or REJECTED');
+    }
+    return this.promotersService.setVerification(id, status, reason);
+  }
+
+  async getPromoterInvite() {
+    return this.promotersService.getInviteSettings();
+  }
+
+  async rotatePromoterInvite() {
+    return this.promotersService.rotateInviteKey();
   }
 
   // ───── Cross-cutting list endpoints ─────────────────────────────────────

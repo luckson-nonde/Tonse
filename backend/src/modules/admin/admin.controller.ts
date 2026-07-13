@@ -12,6 +12,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { CreateMilestoneDto } from '../referrals/dto/create-milestone.dto';
+import { UpdateMilestoneDto } from '../referrals/dto/update-milestone.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -89,6 +91,62 @@ export class AdminController {
     @Body() body: { isActive: boolean }
   ) {
     return this.adminService.setCategoryActive(id, !!body?.isActive);
+  }
+
+  // ───── Promoter programme (milestones + oversight) ──────────────────────
+
+  @Get('milestones')
+  async listMilestones() {
+    return this.adminService.listMilestones();
+  }
+
+  @Post('milestones')
+  async createMilestone(@Body() dto: CreateMilestoneDto) {
+    return this.adminService.createMilestone(dto);
+  }
+
+  @Patch('milestones/:id')
+  async updateMilestone(@Param('id') id: string, @Body() dto: UpdateMilestoneDto) {
+    return this.adminService.updateMilestone(id, dto);
+  }
+
+  /** 409s (via MilestonesService) if the milestone has already paid out. */
+  @Delete('milestones/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeMilestone(@Param('id') id: string) {
+    await this.adminService.removeMilestone(id);
+  }
+
+  @Get('promoters')
+  async listPromoters() {
+    return this.adminService.listPromoters();
+  }
+
+  /** Full detail for identity review — selfie, ID document, socials. */
+  @Get('promoters/:id')
+  async getPromoterDetail(@Param('id') id: string) {
+    return this.adminService.getPromoterDetail(id);
+  }
+
+  /** Approve/reject the promoter's identity proof. */
+  @Patch('promoters/:id/verification')
+  async setPromoterVerification(
+    @Param('id') id: string,
+    @Body() body: { status: 'VERIFIED' | 'REJECTED'; reason?: string },
+  ) {
+    return this.adminService.setPromoterVerification(id, body?.status, body?.reason);
+  }
+
+  /** Current invite key + unlisted signup URL (what the admin shares). */
+  @Get('promoter-invite')
+  async getPromoterInvite() {
+    return this.adminService.getPromoterInvite();
+  }
+
+  /** Mint a fresh invite key — the old one stops working immediately. */
+  @Post('promoter-invite/rotate')
+  async rotatePromoterInvite() {
+    return this.adminService.rotatePromoterInvite();
   }
 
   // ───── Cross-cutting lists ──────────────────────────────────────────────
