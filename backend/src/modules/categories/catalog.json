@@ -105,6 +105,13 @@
     "type": null
   },
   {
+    "id": "loans",
+    "name": "Loans",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
     "id": "mobile-phones-buy",
     "name": "Mobile Phones & Accessories (Buy New)",
     "parentId": "electronics",
@@ -654,6 +661,27 @@
     "id": "agro-tech-services",
     "name": "Agro-Tech & Services",
     "parentId": "agriculture",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "loan-collateral",
+    "name": "Collateral Loan",
+    "parentId": "loans",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "loan-salary",
+    "name": "Salary Loan",
+    "parentId": "loans",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "loan-government",
+    "name": "Government Employee Loan",
+    "parentId": "loans",
     "baseName": null,
     "type": null
   }

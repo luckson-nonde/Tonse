@@ -1159,5 +1159,57 @@ export const ARCHETYPE_CONFIG: Record<string, ArchetypeConfig> = {
     "requiredAdditions": [
       "availabilityDate"
     ]
+  },
+  "loans": {
+    "categoryName": "Loans",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "loanAmount": "principal",
+      "tenureMonths": "tenureMonths"
+    },
+    "requiredAdditions": [
+      "interestRate",
+      "processingFee",
+      "monthlyRepayment"
+    ]
+  },
+  "loan-collateral": {
+    "categoryName": "Collateral Loan",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "loanAmount": "principal",
+      "tenureMonths": "tenureMonths"
+    },
+    "requiredAdditions": [
+      "interestRate",
+      "processingFee",
+      "monthlyRepayment"
+    ]
+  },
+  "loan-salary": {
+    "categoryName": "Salary Loan",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "loanAmount": "principal",
+      "tenureMonths": "tenureMonths"
+    },
+    "requiredAdditions": [
+      "interestRate",
+      "processingFee",
+      "monthlyRepayment"
+    ]
+  },
+  "loan-government": {
+    "categoryName": "Government Employee Loan",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "loanAmount": "principal",
+      "tenureMonths": "tenureMonths"
+    },
+    "requiredAdditions": [
+      "interestRate",
+      "processingFee",
+      "monthlyRepayment"
+    ]
   }
 };

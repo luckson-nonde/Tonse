@@ -212,6 +212,14 @@ const serviceProviderSubRoles: RoleOption[] = [
     subRole: 'AGENCY_PROVIDER',
   },
   {
+    id: 'LENDER',
+    eyebrow: 'Finance · Lender',
+    title: 'Loan Provider',
+    description: 'Licensed lender — offer collateral, salary and government-employee loans.',
+    icon: Building2,
+    subRole: 'LENDER',
+  },
+  {
     id: 'SKILLED_LABOUR',
     eyebrow: 'Trade · Skilled Labour',
     title: 'Skilled Labour',
@@ -258,6 +266,10 @@ export default function RoleSelection() {
         const nature = getCategoryNature(c.id);
         return nature === 'PRODUCT' || nature === 'BOTH';
       });
+    }
+    // Loan Provider: a guided signup — only the Loans category is offered.
+    if (selectedSubRole === 'LENDER') {
+      return rootCategories.filter((c) => c.id === 'loans');
     }
     // SERVICE_PROVIDER subRoles all see service categories. Tier-3 click
     // drills into the specialty step where the variant (Repair / Hire /
@@ -557,6 +569,9 @@ export default function RoleSelection() {
                     const nature = getCategoryNature(cat.id);
                     if (selectedSubRole === 'PRODUCT_SELLER') {
                       return nature === 'PRODUCT' || nature === 'BOTH';
+                    }
+                    if (selectedSubRole === 'LENDER') {
+                      return cat.id === 'loans';
                     }
                     if (
                       selectedSubRole === 'INDIVIDUAL_PROVIDER' ||

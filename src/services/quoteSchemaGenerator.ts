@@ -86,10 +86,35 @@ const resolveCategoryRow = (input: string): Category | undefined => {
 // fees that the generic SERVICE template doesn't ask for. Adding a new
 // category is a single-entry data change here; mirrors the
 // PREFERENCES_OVERRIDES pattern in InquiryPreferences.tsx.
+// Loan OFFER shape (a lender's quote). The lender reads the borrower's request
+// attributes (requested amount, tenure) to price interest, fees and the
+// monthly repayment. Shared across every loan type.
+const LOAN_TENURE_OPTIONS = ['3 months', '6 months', '12 months', '24 months', '36 months', '48 months', '60 months'];
+const buildLoanOffer = (attrs: Record<string, any>): QuoteField[] => {
+  const requested = attrs?.loanAmount
+    ? ` Borrower requested ZMW ${Number(attrs.loanAmount).toLocaleString()}.`
+    : '';
+  return [
+    { name: 'price', label: 'Approved Amount (ZMW)', type: 'currency', required: true, calculation: 'total', helpText: `The principal you are offering.${requested}`, group: 'Pricing' },
+    { name: 'interestRatePct', label: 'Interest Rate (% per month)', type: 'number', required: true, helpText: 'Monthly interest rate on the loan.', group: 'Pricing' },
+    { name: 'interestType', label: 'Interest Type', type: 'select', required: true, options: ['Flat', 'Reducing Balance'], group: 'Pricing' },
+    { name: 'processingFee', label: 'Processing Fee (ZMW)', type: 'currency', required: false, helpText: 'One-off arrangement fee, if any.', group: 'Pricing' },
+    { name: 'monthlyRepayment', label: 'Monthly Repayment (ZMW)', type: 'currency', required: true, helpText: 'Installment the borrower pays each month.', group: 'Pricing' },
+    { name: 'tenureMonths', label: 'Repayment Period', type: 'select', required: true, options: LOAN_TENURE_OPTIONS, helpText: attrs?.tenureMonths ? `Borrower asked for ${attrs.tenureMonths}.` : 'Repayment period you are offering.', group: 'Logistics & Timing' },
+    { name: 'disbursementDays', label: 'Disbursement Time (days)', type: 'number', required: true, helpText: 'How soon funds are released once accepted.', group: 'Logistics & Timing' },
+    { name: 'validity', label: 'Offer Valid For', type: 'select', required: true, options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'conditions', label: 'Terms & Conditions', type: 'textarea', required: true, placeholder: 'Collateral / documents needed, repayment terms, penalties...', group: 'Notes & Photos' },
+  ];
+};
+
 const QUOTE_SCHEMA_BY_CATEGORY_ID: Record<
   string,
   (attrs: Record<string, any>) => QuoteField[]
 > = {
+  loans: buildLoanOffer,
+  'loan-collateral': buildLoanOffer,
+  'loan-salary': buildLoanOffer,
+  'loan-government': buildLoanOffer,
   'event-equipment-rental': (attrs) => {
     const fields: QuoteField[] = [
       {

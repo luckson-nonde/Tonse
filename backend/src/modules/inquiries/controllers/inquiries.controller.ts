@@ -94,6 +94,7 @@ export class InquiriesController {
         page: query?.page,
         limit: query?.limit,
         variant,
+        providerUserId: profileOwner.id,
       },
     );
   }

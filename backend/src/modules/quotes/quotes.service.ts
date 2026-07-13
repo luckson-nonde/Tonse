@@ -149,6 +149,18 @@ export class QuotesService {
     return this.findOne(id);
   }
 
+  /**
+   * Merge a buyer counter-offer into the quote's dynamicFields (loan
+   * negotiation lives here — no new status enum). Read-modify-write so we keep
+   * the lender's original terms alongside the counter.
+   */
+  async saveCounter(id: string, counter: any): Promise<Quote> {
+    const quote = await this.findOne(id);
+    const dynamicFields = { ...(quote?.dynamicFields || {}), counter };
+    await this.quotesRepository.update(id, { dynamicFields });
+    return this.findOne(id);
+  }
+
   async archive(id: string): Promise<Quote> {
     await this.quotesRepository.update(id, { isArchived: true });
     return this.findOne(id);

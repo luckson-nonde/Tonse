@@ -22,6 +22,8 @@ import { FilesModule } from './modules/files/files.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { TeamModule } from './modules/team/team.module';
 import { PortfolioModule } from './modules/portfolio/portfolio.module';
+import { CollectionModule } from './modules/collection/collection.module';
+import { LoanModule } from './modules/loans/loans.module';
 
 // Common
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -71,6 +73,8 @@ import encryptionConfig from './config/encryption.config';
     CategoriesModule,
     TeamModule,
     PortfolioModule,
+    CollectionModule,
+    LoanModule,
   ],
   providers: [
     {

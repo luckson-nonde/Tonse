@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Wrench,
   Award,
+  Landmark,
 } from 'lucide-react';
 import AuthSplitLayout from '../components/AuthSplitLayout';
 import FloatingInput from '../components/FloatingInput';
@@ -41,6 +42,8 @@ interface DocsConfig {
   /** Whether TPIN is required. (When false, the TPIN input still renders so
    *  the user can opt-in, but validation skips it if empty.) */
   requiresTPIN: boolean;
+  /** Lenders must also supply a Bank of Zambia lending licence (number + doc). */
+  requiresBoZ?: boolean;
   /** Section 02 heading + tile copy. */
   docTitle: string;
   docTileHeadline: string;
@@ -113,6 +116,21 @@ function getDocsConfig(type: BusinessType): DocsConfig {
           'Performers can list bookings immediately. Verified portfolios surface higher in search.',
       };
 
+    case 'LENDING':
+      return {
+        brandLabel: 'Registered Lender Name',
+        brandHint: 'Exactly as registered with PACRA.',
+        brandIcon: Landmark,
+        requiresPACRA: true,
+        requiresTPIN: true,
+        requiresBoZ: true,
+        docTitle: 'PACRA Certificate',
+        docTileHeadline: 'Certificate of Incorporation',
+        docTileSubcopy: 'PDF, JPG, PNG · max 5MB',
+        activationCopy:
+          'Lending compliance review takes 24–48 hours. PACRA, ZRA TPIN and a Bank of Zambia lending licence are required to operate.',
+      };
+
     case 'RETAIL':
     default:
       return {
@@ -145,6 +163,10 @@ export default function CompanyDocuments() {
   const [tpin, setTpin] = useState(user?.tpin || '');
   const [certUrl, setCertUrl] = useState(user?.incorporationCertUrl || '');
   const [certName, setCertName] = useState('');
+  const [bozLicenceNumber, setBozLicenceNumber] = useState((user as any)?.bozLicenceNumber || '');
+  const [bozCertUrl, setBozCertUrl] = useState((user as any)?.bozLicenceUrl || '');
+  const [bozCertName, setBozCertName] = useState('');
+  const bozFileRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -168,7 +190,11 @@ export default function CompanyDocuments() {
   const tpinV = validation.field('tpin', tpin);
   const certRef = useRef<HTMLDivElement | null>(null);
 
-  const handleFileSelect = async (file: File) => {
+  const handleFileSelect = async (
+    file: File,
+    setUrl: (v: string) => void,
+    setName: (v: string) => void,
+  ) => {
     setError('');
     if (file.size > 5 * 1024 * 1024) {
       setError('File too large — max 5MB.');
@@ -180,8 +206,8 @@ export default function CompanyDocuments() {
     }
     const reader = new FileReader();
     reader.onload = () => {
-      setCertUrl(reader.result as string);
-      setCertName(file.name);
+      setUrl(reader.result as string);
+      setName(file.name);
     };
     reader.readAsDataURL(file);
   };
@@ -221,12 +247,17 @@ export default function CompanyDocuments() {
       certRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
+    if (cfg.requiresBoZ && (!bozLicenceNumber.trim() || !bozCertUrl)) {
+      setError('Provide your Bank of Zambia licence number and upload the licence document.');
+      return;
+    }
     setIsLoading(true);
     try {
       await updateUser({
         companyName,
         tpin,
         incorporationCertUrl: certUrl,
+        ...(cfg.requiresBoZ ? { bozLicenceNumber, bozLicenceUrl: bozCertUrl } : {}),
         verificationStatus: 'PENDING',
       } as any);
       await navigateAfter();
@@ -369,7 +400,7 @@ export default function CompanyDocuments() {
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) handleFileSelect(f);
+              if (f) handleFileSelect(f, setCertUrl, setCertName);
             }}
           />
 
@@ -425,6 +456,89 @@ export default function CompanyDocuments() {
             Stored encrypted · only Tonse compliance reviewers can read.
           </p>
         </section>
+
+        {/* Section 03 — Bank of Zambia lending licence (lenders only) */}
+        {cfg.requiresBoZ && (
+          <section className="space-y-4">
+            <div className="flex items-center gap-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A]">
+                Section 03
+              </p>
+              <div className="h-px flex-1 bg-[#e8e4dc]" />
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#1a1612]/50">
+                Bank of Zambia Licence
+              </p>
+            </div>
+
+            <FloatingInput
+              label="BoZ Lending Licence Number"
+              type="text"
+              value={bozLicenceNumber}
+              onChange={(e) => setBozLicenceNumber(e.target.value)}
+              required
+              icon={Landmark}
+              placeholder="e.g. FSP/BFI/2024/001"
+            />
+
+            <input
+              ref={bozFileRef}
+              type="file"
+              accept=".pdf,image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFileSelect(f, setBozCertUrl, setBozCertName);
+              }}
+            />
+
+            {bozCertUrl ? (
+              <div className="flex items-center gap-3 p-3.5 rounded-2xl border border-[#C9973A]/35 bg-white">
+                <div className="w-12 h-12 rounded-xl bg-[#C9973A]/10 text-[#C9973A] flex items-center justify-center shrink-0">
+                  <FileText className="w-5 h-5" strokeWidth={2} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600 mb-0.5 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3 h-3" strokeWidth={3} /> Licence Attached
+                  </p>
+                  <p className="text-[12px] font-medium text-[#1a1612] truncate">
+                    {bozCertName || 'boz-licence.pdf'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBozCertUrl('');
+                    setBozCertName('');
+                    if (bozFileRef.current) bozFileRef.current.value = '';
+                  }}
+                  className="w-8 h-8 rounded-full bg-[#f5f2ee] hover:bg-[#e8e4dc] text-[#1a1612]/50 flex items-center justify-center transition-colors shrink-0"
+                  aria-label="Remove file"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => bozFileRef.current?.click()}
+                className="w-full flex items-center gap-3 p-3.5 rounded-2xl border border-[#e8e4dc] bg-brand-white hover:border-[#C9973A]/45 transition-all duration-200 text-left"
+              >
+                <div className="w-11 h-11 rounded-xl bg-[#C9973A]/10 text-[#C9973A] flex items-center justify-center shrink-0">
+                  <Upload className="w-5 h-5" strokeWidth={2} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-bold text-[#1a1612] leading-tight">
+                    Bank of Zambia lending licence
+                  </p>
+                  <p className="text-[11px] text-[#1a1612]/55 mt-0.5">PDF, JPG, PNG · max 5MB</p>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#C9973A] shrink-0">
+                  Upload →
+                </span>
+              </button>
+            )}
+          </section>
+        )}
 
         {/* Activation status tile */}
         <div className="flex items-start gap-3 p-3.5 rounded-2xl border border-[#e8e4dc] bg-brand-white">

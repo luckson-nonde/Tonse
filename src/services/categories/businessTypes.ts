@@ -41,6 +41,7 @@ export type BusinessType =
   | 'EVENTS'
   | 'ENTERTAINMENT'
   | 'WHOLESALE'
+  | 'LENDING'
   // UI-only states (no archetype equivalent)
   | 'BUYER'
   | 'ADMIN'
@@ -67,6 +68,7 @@ const MASTER_CATEGORY_TYPE: Record<string, CategoryType> = {
   telecommunications:  'SERVICES',
   'it-services':       'SERVICES',
   'drilling-services': 'SERVICES',
+  loans:               'SERVICES',
 };
 
 const SUB_CATEGORY_TYPE_OVERRIDES: Record<string, CategoryType> = {
@@ -158,6 +160,7 @@ function archetypeToBusinessType(archetype: string | undefined): BusinessType | 
     case 'EVENTS':
     case 'ENTERTAINMENT':
     case 'WHOLESALE':
+    case 'LENDING':
       return upper as BusinessType;
     default:
       return null;
@@ -191,6 +194,7 @@ const BUSINESS_TYPE_PRIORITY: BusinessType[] = [
   'ENTERTAINMENT',
   'REPAIR',
   'WHOLESALE',
+  'LENDING',
   'BOOKING',
   'RENTAL',
   'SERVICE',
@@ -320,6 +324,9 @@ export function getBusinessTypes(
   if (categoriesMatch(categories, /\b(catering|decor|planning|management)\b/i)) return ['SERVICE'];
   if (categoriesMatch(categories, EVENT_CATEGORY_PATTERN)) return ['EVENTS'];
   if (categoriesMatch(categories, ENTERTAINMENT_CATEGORY_PATTERN)) return ['ENTERTAINMENT'];
+  // Loan providers land on the lending dashboard (checked before the generic
+  // SERVICE_PROVIDER → SERVICE fallback below).
+  if (categoriesMatch(categories, /\bloans?\b|\blending\b/i)) return ['LENDING'];
 
   if (role === 'SERVICE_PROVIDER') {
     if (subRole === 'SKILLED_LABOUR') return ['LABOUR'];
@@ -454,6 +461,8 @@ export function getBusinessTypeLabel(type: BusinessType): string {
       return 'Entertainment Provider';
     case 'WHOLESALE':
       return 'Wholesale Supplier';
+    case 'LENDING':
+      return 'Loan Provider';
     case 'SERVICE':
       return 'Service Provider';
     case 'REPAIR':

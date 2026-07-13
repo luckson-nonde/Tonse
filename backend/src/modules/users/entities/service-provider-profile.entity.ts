@@ -93,6 +93,18 @@ export class ServiceProviderProfile {
   @Column({ type: 'uuid', nullable: true })
   businessLicenseId: string;
 
+  /**
+   * Regulatory compliance for lenders (LENDING archetype): the Bank of Zambia
+   * lending licence number + uploaded licence document. Captured at onboarding
+   * alongside PACRA (incorporationCertUrl) + ZRA (tpin). Nullable — only loan
+   * companies fill these.
+   */
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  bozLicenceNumber: string;
+
+  @Column({ type: 'text', nullable: true })
+  bozLicenceUrl: string;
+
   // ===== Verification audit =====
 
   @Column({

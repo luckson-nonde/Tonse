@@ -1,0 +1,601 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Landmark,
+  User,
+  Loader2,
+  Check,
+  X,
+  FileText,
+  Clock,
+  Send,
+  ArrowLeftRight,
+  PhoneCall,
+  Mail,
+} from 'lucide-react';
+import { useAuth } from '../../AuthContext';
+import { loanService } from '../../services/api/loanService';
+import { generateQuoteSchema, type QuoteField } from '../../services/quoteSchemaGenerator';
+
+const zmw = (v: any) => `ZMW ${Number(v || 0).toLocaleString()}`;
+
+// Human-friendly rendering of a borrower's request attributes (the loan
+// officer needs the full picture to accept/decline).
+const prettifyKey = (k: string) =>
+  k
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, (c) => c.toUpperCase())
+    .replace(/_/g, ' ')
+    .trim();
+
+const RequestDetails: React.FC<{ attributes: Record<string, any> }> = ({ attributes }) => {
+  const entries = Object.entries(attributes || {}).filter(
+    ([, v]) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0),
+  );
+  if (entries.length === 0) return null;
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+      {entries.map(([k, v]) => (
+        <div key={k} className="flex flex-col p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            {prettifyKey(k)}
+          </span>
+          <span className="text-sm font-medium text-slate-800 break-words">
+            {typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// Compact offer form built from the loan-offer QuoteField[] schema.
+const OfferForm: React.FC<{
+  request: any;
+  onCancel: () => void;
+  onSubmit: (values: Record<string, any>) => Promise<void>;
+}> = ({ request, onCancel, onSubmit }) => {
+  const categoryKey = request.categoryIds?.[0] || request.category || 'loans';
+  const { fields } = generateQuoteSchema(categoryKey, request.attributes || {}, 'STANDARD');
+  const [values, setValues] = useState<Record<string, any>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const set = (name: string, v: any) => setValues((prev) => ({ ...prev, [name]: v }));
+
+  const handleSubmit = async () => {
+    const missing = fields.filter((f) => f.required && (values[f.name] === undefined || values[f.name] === ''));
+    if (missing.length) {
+      setError(`Please fill: ${missing.map((m) => m.label).join(', ')}`);
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await onSubmit(values);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to send offer.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const renderField = (f: QuoteField) => {
+    const common = 'w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#C9973A] outline-none';
+    if (f.type === 'select') {
+      return (
+        <select className={common} value={values[f.name] ?? ''} onChange={(e) => set(f.name, e.target.value)}>
+          <option value="">Select…</option>
+          {f.options?.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      );
+    }
+    if (f.type === 'textarea') {
+      return (
+        <textarea
+          className={common}
+          rows={3}
+          placeholder={f.placeholder}
+          value={values[f.name] ?? ''}
+          onChange={(e) => set(f.name, e.target.value)}
+        />
+      );
+    }
+    return (
+      <input
+        type={f.type === 'currency' || f.type === 'number' ? 'number' : 'text'}
+        className={common}
+        placeholder={f.placeholder}
+        value={values[f.name] ?? ''}
+        onChange={(e) => set(f.name, e.target.value)}
+      />
+    );
+  };
+
+  return (
+    <div className="mt-4 p-4 bg-white border border-[#C9973A]/30 rounded-2xl">
+      <h4 className="font-bold text-slate-900 mb-3">Make a Loan Offer</h4>
+      {error && <p className="text-rose-500 text-sm mb-3">{error}</p>}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {fields.map((f) => (
+          <div key={f.name} className={f.type === 'textarea' ? 'sm:col-span-2' : ''}>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">
+              {f.label}
+              {f.required && <span className="text-[#C9973A]"> *</span>}
+            </label>
+            {renderField(f)}
+            {f.helpText && <p className="text-[11px] text-slate-400 mt-1">{f.helpText}</p>}
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2 justify-end mt-4">
+        <button onClick={onCancel} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700">
+          Cancel
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={saving}
+          className="px-5 py-2 text-sm font-bold text-white bg-[#C9973A] rounded-xl flex items-center gap-2 disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          Send Offer
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export const LoanRequestsView: React.FC = () => {
+  const { user } = useAuth();
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setRequests(await loanService.listRequests({ status: 'OPEN' }));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const submitOffer = async (request: any, values: Record<string, any>) => {
+    const { price, ...terms } = values;
+    await loanService.makeOffer({
+      inquiryId: String(request.id),
+      inquiryTitle: request.title || 'Loan Request',
+      providerName: user?.companyName || user?.name || 'Lender',
+      price,
+      condition: 'LOAN',
+      message: terms.conditions || 'Loan offer',
+      // Travel the lender's own contact with the offer (stored in
+      // dynamicFields) so once the borrower accepts they can reach the
+      // lender directly to arrange disbursement — no extra lookup.
+      lenderContact: {
+        name: user?.companyName || user?.name || 'Lender',
+        phone: (user as any)?.phone || '',
+        email: (user as any)?.email || '',
+      },
+      ...terms,
+    });
+    setOpenId(null);
+    await load();
+  };
+
+  const decline = async (request: any) => {
+    const reason = window.prompt('Reason for declining this loan request?') || '';
+    if (reason === null) return;
+    await loanService.decline({
+      inquiryId: String(request.id),
+      inquiryTitle: request.title || 'Loan Request',
+      providerName: user?.companyName || user?.name || 'Lender',
+      reason,
+    });
+    await load();
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-16">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto text-[#C9973A]" />
+      </div>
+    );
+  }
+
+  if (requests.length === 0) {
+    return (
+      <div className="bg-white rounded-3xl p-12 text-center border border-slate-100">
+        <Landmark className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+        <p className="text-slate-500 font-medium">No loan requests yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {requests.map((r) => {
+        const a = r.attributes || {};
+        return (
+          <div key={String(r.id)} className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="font-bold text-slate-900">{r.title || 'Loan Request'}</h3>
+                <div className="text-sm text-slate-500 flex items-center gap-2 mt-0.5">
+                  <User className="w-3.5 h-3.5" /> {r.buyerName || 'Borrower'}
+                  {r.category && <span className="text-slate-300">·</span>}
+                  {r.category && <span>{r.category}</span>}
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-lg font-black text-[#C9973A]">{zmw(a.loanAmount)}</div>
+                {a.tenureMonths && <div className="text-xs text-slate-400">{a.tenureMonths}</div>}
+              </div>
+            </div>
+
+            <RequestDetails attributes={a} />
+
+            {openId === String(r.id) ? (
+              <OfferForm
+                request={r}
+                onCancel={() => setOpenId(null)}
+                onSubmit={(v) => submitOffer(r, v)}
+              />
+            ) : (
+              <div className="flex gap-2 justify-end mt-4">
+                <button
+                  onClick={() => decline(r)}
+                  className="px-4 py-2 text-sm font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl flex items-center gap-1.5"
+                >
+                  <X className="w-4 h-4" /> Decline
+                </button>
+                <button
+                  onClick={() => setOpenId(String(r.id))}
+                  className="px-5 py-2 text-sm font-bold text-white bg-[#C9973A] rounded-xl flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" /> Make Offer
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const STATUS_STYLE: Record<string, string> = {
+  PENDING: 'bg-amber-100 text-amber-700',
+  ACCEPTED: 'bg-emerald-100 text-emerald-700',
+  REJECTED: 'bg-rose-100 text-rose-700',
+  PAID: 'bg-blue-100 text-blue-700',
+  COMPLETED: 'bg-emerald-100 text-emerald-700',
+};
+
+const monthsOf = (t: any): number => {
+  const m = String(t || '').match(/(\d+)/);
+  return m ? Number(m[1]) : 0;
+};
+
+/**
+ * On-demand full view of an offer: the terms the lender offered (and, once
+ * ACCEPTED, that the borrower agreed to) PLUS the original loan request the
+ * borrower submitted. Lets the lender pull up the whole deal from the Loan
+ * Offers list without hunting for the (now non-OPEN) request.
+ */
+const OfferDetailModal: React.FC<{ offer: any; onClose: () => void }> = ({ offer, onClose }) => {
+  const d = offer.dynamicFields || {};
+  const months = monthsOf(d.tenureMonths);
+  const totalRepayable = d.monthlyRepayment && months ? Number(d.monthlyRepayment) * months : null;
+  const declined = offer.status === 'REJECTED' || d.declined;
+
+  let attrs: any = offer.inquiry?.attributes || {};
+  if (typeof attrs === 'string') {
+    try { attrs = JSON.parse(attrs); } catch { attrs = {}; }
+  }
+
+  const terms: Array<[string, string]> = [
+    ['Approved Amount', zmw(offer.price)],
+    ...(d.interestRatePct != null ? ([['Interest Rate', `${d.interestRatePct}% / mo`]] as [string, string][]) : []),
+    ...(d.interestType ? ([['Interest Type', String(d.interestType)]] as [string, string][]) : []),
+    ...(d.tenureMonths ? ([['Repayment Period', String(d.tenureMonths)]] as [string, string][]) : []),
+    ...(d.monthlyRepayment != null ? ([['Monthly Repayment', zmw(d.monthlyRepayment)]] as [string, string][]) : []),
+    ...(d.processingFee != null ? ([['Processing Fee', zmw(d.processingFee)]] as [string, string][]) : []),
+    ...(totalRepayable != null ? ([['Total Repayable', zmw(totalRepayable)]] as [string, string][]) : []),
+    ...(d.disbursementDays != null ? ([['Disbursement', `${d.disbursementDays} days`]] as [string, string][]) : []),
+    ...(d.validity || offer.expiryDuration ? ([['Offer Valid For', String(d.validity || offer.expiryDuration)]] as [string, string][]) : []),
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-3xl w-full max-w-2xl max-h-[88vh] overflow-y-auto shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-start justify-between gap-3 z-10">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-2xl bg-[#C9973A]/10 text-[#C9973A] flex items-center justify-center shrink-0">
+              <Landmark className="w-6 h-6" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-serif font-black text-brand-dark truncate">
+                {offer.inquiryTitle || 'Loan Offer'}
+              </h3>
+              <span
+                className={`inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                  STATUS_STYLE[offer.status] || 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {offer.status}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg shrink-0"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {!declined && (
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#C9973A] mb-3">
+                {offer.status === 'ACCEPTED' ? 'Accepted Offer Terms' : 'Offer Terms'}
+              </h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                {terms.map(([k, v]) => (
+                  <div key={k} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{k}</p>
+                    <p className="text-sm font-black text-slate-900 break-words">{v}</p>
+                  </div>
+                ))}
+              </div>
+              {(d.conditions || offer.message) && (
+                <div className="mt-3 p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Terms &amp; Conditions
+                  </p>
+                  <p className="text-sm text-slate-700 italic">“{d.conditions || offer.message}”</p>
+                </div>
+              )}
+            </div>
+          )}
+          {declined && d.reason && (
+            <div className="p-3.5 bg-rose-50 rounded-xl border border-rose-100 text-rose-600 text-sm">
+              Declined: {d.reason}
+            </div>
+          )}
+
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5" /> Borrower's Loan Request
+            </h4>
+            {offer.inquiry?.description && (
+              <p className="text-sm text-slate-600 mt-1">{offer.inquiry.description}</p>
+            )}
+            {Object.keys(attrs).length > 0 ? (
+              <RequestDetails attributes={attrs} />
+            ) : (
+              <p className="text-sm text-slate-400 mt-2">
+                No request details are available for this offer.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const LoanOffersView: React.FC = () => {
+  const [offers, setOffers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [reviseId, setReviseId] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setOffers(await loanService.listOffers());
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const submitRevision = async (offer: any, values: Record<string, any>) => {
+    const { price, ...terms } = values;
+    await loanService.revise(String(offer.id), { price, message: terms.conditions, ...terms });
+    setReviseId(null);
+    await load();
+  };
+
+  const detailOffer = offers.find((o) => String(o.id) === detailId);
+
+  if (loading) {
+    return (
+      <div className="text-center py-16">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto text-[#C9973A]" />
+      </div>
+    );
+  }
+
+  if (offers.length === 0) {
+    return (
+      <div className="bg-white rounded-3xl p-12 text-center border border-slate-100">
+        <FileText className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+        <p className="text-slate-500 font-medium">You haven't made any offers yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+    <div className="space-y-3">
+      {offers.map((o) => {
+        const d = o.dynamicFields || {};
+        const declined = d.declined || o.status === 'REJECTED';
+        const counter = d.counter;
+        const counterPending = counter && !counter.resolved && o.status === 'PENDING';
+        const accepted = o.status === 'ACCEPTED';
+        // Borrower's follow-up contact, captured on the loan request and
+        // stored on inquiry.attributes. attributes is a json column (object),
+        // but tolerate a stringified payload just in case.
+        let attrs: any = o.inquiry?.attributes || {};
+        if (typeof attrs === 'string') {
+          try { attrs = JSON.parse(attrs); } catch { attrs = {}; }
+        }
+        const contactPhone: string = attrs.contactPhone || '';
+        const contactEmail: string = attrs.contactEmail || '';
+        const contactName: string = attrs.contactName || '';
+        const preferred: string = attrs.preferredContact || '';
+        const hasContact = !!(contactName || contactPhone || contactEmail);
+        return (
+          <div key={String(o.id)} className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="font-bold text-slate-900">{o.inquiryTitle || 'Loan Offer'}</h3>
+                {!declined && (
+                  <div className="text-sm text-slate-500 mt-0.5">
+                    {zmw(o.price)}
+                    {d.interestRatePct ? ` · ${d.interestRatePct}%/mo` : ''}
+                    {d.tenureMonths ? ` · ${d.tenureMonths}` : ''}
+                    {d.monthlyRepayment ? ` · ${zmw(d.monthlyRepayment)}/mo` : ''}
+                  </div>
+                )}
+                {declined && d.reason && (
+                  <div className="text-sm text-rose-500 mt-0.5">Declined: {d.reason}</div>
+                )}
+              </div>
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
+                    STATUS_STYLE[o.status] || 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {o.status}
+                </span>
+                {o.createdAt && (
+                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                    <Clock className="w-2.5 h-2.5" />
+                    {new Date(o.createdAt).toLocaleDateString()}
+                  </span>
+                )}
+                <button
+                  onClick={() => setDetailId(String(o.id))}
+                  className="mt-1 text-[11px] font-bold text-[#C9973A] hover:underline flex items-center gap-1"
+                >
+                  <FileText className="w-3 h-3" /> View details
+                </button>
+              </div>
+            </div>
+
+            {accepted && (
+              <div className="mt-3 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200">
+                <p className="text-xs font-bold text-emerald-700 flex items-center gap-1.5 mb-2">
+                  <PhoneCall className="w-4 h-4" /> Approved — follow up with the borrower
+                </p>
+                {hasContact ? (
+                  <>
+                    <div className="text-[13px] text-emerald-900 space-y-0.5 mb-3">
+                      {contactName && (
+                        <div>
+                          <span className="text-emerald-700/60">Contact:</span> {contactName}
+                        </div>
+                      )}
+                      {contactPhone && (
+                        <div>
+                          <span className="text-emerald-700/60">Phone:</span> {contactPhone}
+                        </div>
+                      )}
+                      {contactEmail && (
+                        <div>
+                          <span className="text-emerald-700/60">Email:</span> {contactEmail}
+                        </div>
+                      )}
+                      {preferred && (
+                        <div>
+                          <span className="text-emerald-700/60">Prefers:</span> {preferred}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      {contactPhone && (
+                        <a
+                          href={`tel:${contactPhone.replace(/[^\d+]/g, '')}`}
+                          className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 rounded-lg flex items-center gap-1.5"
+                        >
+                          <PhoneCall className="w-3.5 h-3.5" /> Call
+                        </a>
+                      )}
+                      {contactEmail && (
+                        <a
+                          href={`mailto:${contactEmail}`}
+                          className="px-4 py-2 text-xs font-bold text-emerald-700 border border-emerald-300 rounded-lg flex items-center gap-1.5"
+                        >
+                          <Mail className="w-3.5 h-3.5" /> Email
+                        </a>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-[13px] text-emerald-800/80">
+                    No contact details were captured on this request. Reach the borrower through their inquiry.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {counterPending && (
+              <div className="mt-3 p-3.5 rounded-2xl bg-amber-50 border border-amber-200">
+                <p className="text-xs font-bold text-amber-700 flex items-center gap-1.5 mb-1.5">
+                  <ArrowLeftRight className="w-4 h-4" /> Borrower counter-offer
+                </p>
+                <div className="text-[13px] text-amber-800 space-y-0.5">
+                  {counter.requestedAmount != null && <div>Requested amount: {zmw(counter.requestedAmount)}</div>}
+                  {counter.maxInterestRatePct != null && <div>Max rate: {counter.maxInterestRatePct}% / mo</div>}
+                  {counter.requestedTenure && <div>Preferred period: {counter.requestedTenure}</div>}
+                  {counter.note && <div className="italic">“{counter.note}”</div>}
+                </div>
+                {reviseId !== String(o.id) && (
+                  <button
+                    onClick={() => setReviseId(String(o.id))}
+                    className="mt-3 px-4 py-2 text-xs font-bold text-white bg-[#C9973A] rounded-lg"
+                  >
+                    Revise Offer
+                  </button>
+                )}
+              </div>
+            )}
+
+            {reviseId === String(o.id) && (
+              <OfferForm
+                request={o.inquiry || { attributes: {}, categoryIds: ['loans'] }}
+                onCancel={() => setReviseId(null)}
+                onSubmit={(v) => submitRevision(o, v)}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+    {detailOffer && <OfferDetailModal offer={detailOffer} onClose={() => setDetailId(null)} />}
+    </>
+  );
+};

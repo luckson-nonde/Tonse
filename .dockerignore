@@ -1,0 +1,20 @@
+# Frontend build context (repo root). Keep it small & exclude the backend —
+# nginx.conf MUST stay in context (the frontend Dockerfile COPYs it).
+node_modules
+dist
+build
+coverage
+backend
+server
+scripts
+archive
+public/cat design
+.git
+.github
+.claude
+.vscode
+*.log
+.env
+.env.*
+!.env.example
+*.md

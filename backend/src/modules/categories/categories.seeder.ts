@@ -36,6 +36,7 @@ const PARENT_ARCHETYPE: Record<string, Archetype> = {
   'it-products': 'RETAIL',
   'drilling-services': 'SERVICE',
   agriculture: 'RETAIL',
+  loans: 'LENDING',
 };
 
 const PARENT_NATURE: Record<string, CategoryNature> = {
@@ -54,6 +55,7 @@ const PARENT_NATURE: Record<string, CategoryNature> = {
   'it-products': 'PRODUCT',
   'drilling-services': 'SERVICE',
   agriculture: 'BOTH',
+  loans: 'SERVICE',
 };
 
 function deriveActionVariant(name: string): ActionVariant {

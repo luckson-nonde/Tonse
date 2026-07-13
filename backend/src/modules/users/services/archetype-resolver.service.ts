@@ -13,6 +13,7 @@ const PRIORITY: Archetype[] = [
   'ENTERTAINMENT',
   'REPAIR',
   'WHOLESALE',
+  'LENDING',
   'BOOKING',
   'RENTAL',
   'SERVICE',

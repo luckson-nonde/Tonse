@@ -128,6 +128,14 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsString()
+  bozLicenceNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  bozLicenceUrl?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(50)
   labourCategory?: string;
 
@@ -168,6 +176,6 @@ export class UpdateUserDto {
   categoryIds?: string[];
 
   @IsOptional()
-  @IsEnum(['RETAIL', 'RENTAL', 'BOOKING', 'LABOUR', 'REPAIR', 'SERVICE', 'EVENTS', 'ENTERTAINMENT'])
+  @IsEnum(['RETAIL', 'RENTAL', 'BOOKING', 'LABOUR', 'REPAIR', 'SERVICE', 'EVENTS', 'ENTERTAINMENT', 'WHOLESALE', 'LENDING'])
   archetype?: string;
 }

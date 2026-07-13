@@ -7,17 +7,30 @@ import {
   Trash2,
   CheckCircle,
   FileText,
-  QrCode,
   ShieldAlert,
   Crown,
   XCircle,
+  ShieldCheck,
+  Landmark,
+  Power,
+  Ban,
 } from 'lucide-react';
 import { PERMISSIONS, hasPermission } from '../utils/rbac';
 import { teamService, TeamMember } from '../services/api/teamService';
 import { getEffectiveBusinessType } from '../services/categories';
 import { useActiveProfileContext } from '../hooks/useActiveProfileContext';
 
-const ROLES = [
+interface RolePreset {
+  id: string;
+  title: string;
+  description: string;
+  icon: React.ElementType;
+  color: string;
+  /** When set, the preset only shows for that department's persona. */
+  businessType?: string;
+}
+
+const ROLES: RolePreset[] = [
   {
     id: 'QUOTATION_ONLY',
     title: 'Quotation Manager',
@@ -26,21 +39,31 @@ const ROLES = [
     color: 'blue',
   },
   {
-    id: 'COLLECTION_MANAGER',
-    title: 'Collection Manager',
-    description: 'Read, Write & Allow Collections',
-    icon: QrCode,
+    id: 'COLLECTION_OFFICER',
+    title: 'Collection Officer',
+    description: 'Collections only — QR handover & completion',
+    icon: ShieldCheck,
+    color: 'amber',
+  },
+  {
+    id: 'LOAN_OFFICER',
+    title: 'Loan Officer',
+    description: 'Loans only — review requests & make offers',
+    icon: Landmark,
     color: 'emerald',
+    // Only shown to lending departments (persona-as-department filter below).
+    businessType: 'LENDING',
   },
 ];
 
 const permissionsForRole = (role: string): string[] => {
-  if (role === 'COLLECTION_MANAGER') {
-    return [
-      PERMISSIONS.MANAGE_QUOTES,
-      PERMISSIONS.MANAGE_COLLECTIONS,
-      PERMISSIONS.VIEW_ANALYTICS,
-    ];
+  // Collection-only: the officer sees/does nothing but the handover flow.
+  if (role === 'COLLECTION_OFFICER') {
+    return [PERMISSIONS.MANAGE_COLLECTIONS];
+  }
+  // Loan-only: review loan requests, make/track offers.
+  if (role === 'LOAN_OFFICER') {
+    return [PERMISSIONS.MANAGE_LOANS];
   }
   // Default = QUOTATION_ONLY
   return [PERMISSIONS.MANAGE_QUOTES, PERMISSIONS.VIEW_ANALYTICS];
@@ -71,6 +94,8 @@ export default function TeamManagement() {
     autonomy: 'INDEPENDENT' | 'MANAGED';
   } | null>(null);
   const [isSavingPromotion, setIsSavingPromotion] = useState(false);
+  // On-demand access switch — which staff row is mid-toggle (spinner + disable).
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const canManage = hasPermission(user, PERMISSIONS.MANAGE_TEAM);
 
@@ -82,6 +107,26 @@ export default function TeamManagement() {
     [user, activeContext],
   );
   const isPersonalPersona = activeContext.type === 'personal';
+
+  // Presets are scoped to the department: a lending department offers the Loan
+  // Officer role; every other department offers Quotation/Collection roles.
+  const visibleRoles = useMemo(
+    () =>
+      ROLES.filter((r) =>
+        (r as any).businessType
+          ? activeArchetype === (r as any).businessType
+          : activeArchetype !== 'LENDING',
+      ),
+    [activeArchetype],
+  );
+
+  // Keep the selected role valid for the visible set (e.g. a lender's default
+  // 'QUOTATION_ONLY' isn't offered → fall back to the first lending preset).
+  useEffect(() => {
+    if (visibleRoles.length && !visibleRoles.some((r: { id: string }) => r.id === role)) {
+      setRole(visibleRoles[0].id);
+    }
+  }, [visibleRoles, role]);
 
   const loadTeam = useCallback(async () => {
     if (!user?.id) return;
@@ -200,6 +245,30 @@ export default function TeamManagement() {
       alert(err?.message || 'Failed to promote staff member.');
     } finally {
       setIsSavingPromotion(false);
+    }
+  };
+
+  // Switch a team member's access off / on. Suspending (isActive=false)
+  // revokes ALL their functionality immediately — the backend rejects their
+  // next request, next login, and token refresh — until re-activated.
+  const handleToggleActive = async (member: TeamMember) => {
+    const next = !member.isActive;
+    if (
+      !next &&
+      !window.confirm(
+        `Switch off ${member.name}? They will lose all access and be signed out immediately. You can switch them back on any time.`,
+      )
+    ) {
+      return;
+    }
+    setTogglingId(member.id);
+    try {
+      await teamService.update(member.id, { isActive: next });
+      await loadTeam();
+    } catch (err: any) {
+      alert(err?.message || 'Failed to update team member access.');
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -343,7 +412,7 @@ export default function TeamManagement() {
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-3">Role Assignment</label>
             <div className="grid grid-cols-1 gap-3">
-              {ROLES.map((r) => {
+              {visibleRoles.map((r) => {
                 const Icon = r.icon;
                 const isActive = role === r.id;
                 return (
@@ -431,7 +500,11 @@ export default function TeamManagement() {
               return (
                 <div
                   key={member.id}
-                  className="p-4 bg-slate-50 rounded-xl border border-slate-100"
+                  className={`p-4 rounded-xl border transition-colors ${
+                    member.isActive
+                      ? 'bg-slate-50 border-slate-100'
+                      : 'bg-rose-50/40 border-rose-100'
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
@@ -449,8 +522,24 @@ export default function TeamManagement() {
                         <span className="flex items-center gap-1 text-xs font-medium text-[#C9973A] bg-[#fdf8f0] px-2 py-0.5 rounded-full w-fit">
                           <Shield className="w-3 h-3" />
                           {member.permissions?.includes(PERMISSIONS.MANAGE_COLLECTIONS)
-                            ? 'Collection Manager'
-                            : 'Quotation Manager'}
+                            ? 'Collection Officer'
+                            : member.permissions?.includes(PERMISSIONS.MANAGE_LOANS)
+                              ? 'Loan Officer'
+                              : 'Quotation Manager'}
+                        </span>
+                        <span
+                          className={`flex items-center gap-1.5 text-xs font-bold px-2 py-0.5 rounded-full w-fit ${
+                            member.isActive
+                              ? 'text-emerald-700 bg-emerald-50'
+                              : 'text-rose-700 bg-rose-50'
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              member.isActive ? 'bg-emerald-500' : 'bg-rose-500'
+                            }`}
+                          />
+                          {member.isActive ? 'Active' : 'Switched off'}
                         </span>
                       </div>
                     </div>
@@ -478,6 +567,27 @@ export default function TeamManagement() {
                           Demote
                         </button>
                       )}
+                      <button
+                        onClick={() => handleToggleActive(member)}
+                        disabled={togglingId === member.id}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50 ${
+                          member.isActive
+                            ? 'text-amber-700 bg-amber-50 hover:bg-amber-100'
+                            : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                        }`}
+                        title={member.isActive ? 'Switch off access on demand' : 'Switch access back on'}
+                      >
+                        {member.isActive ? (
+                          <Ban className="w-3.5 h-3.5" />
+                        ) : (
+                          <Power className="w-3.5 h-3.5" />
+                        )}
+                        {togglingId === member.id
+                          ? 'Saving…'
+                          : member.isActive
+                            ? 'Switch Off'
+                            : 'Switch On'}
+                      </button>
                       <button
                         onClick={() => handleRemoveStaff(member.id)}
                         className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"

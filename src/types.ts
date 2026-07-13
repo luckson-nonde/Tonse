@@ -83,7 +83,9 @@ export type SubRole =
   // Service-provider shapes (services are not sellers)
   | 'INDIVIDUAL_PROVIDER'
   | 'AGENCY_PROVIDER'
-  | 'SKILLED_LABOUR';
+  | 'SKILLED_LABOUR'
+  // Lender (loan company) — a service provider offering loan products.
+  | 'LENDER';
 export type EntityType = 'INDIVIDUAL' | 'BUSINESS';
 
 export interface InquiryItem {

@@ -17,6 +17,12 @@ interface LeadsFilters {
    * `assignedArchetype` is set. NULL / undefined = no restriction.
    */
   variant?: string;
+  /**
+   * The provider's user.id. When set, honor per-inquiry targeting: a
+   * `targetedProviderId` inquiry is returned ONLY to that provider; broadcast
+   * (null target) inquiries reach everyone as before.
+   */
+  providerUserId?: string;
 }
 
 interface ProfileSelector {
@@ -157,6 +163,13 @@ export class MatchingService {
     if (filters.province) {
       where += ` AND i.province = $${++p}`;
       params.push(filters.province);
+    }
+
+    // Targeting: a directed inquiry (targetedProviderId set) is visible only to
+    // that provider; broadcast inquiries (NULL) reach every matching provider.
+    if (filters.providerUserId) {
+      where += ` AND (i."targetedProviderId" IS NULL OR i."targetedProviderId" = $${++p})`;
+      params.push(filters.providerUserId);
     }
 
     // Variant filter — narrow to inquiries whose category carries the

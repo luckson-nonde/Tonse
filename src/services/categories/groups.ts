@@ -44,6 +44,11 @@ export const CATEGORY_GROUPS: CategoryGroup[] = [
     label: 'Lifestyle',
     categoryIds: ['entertainment', 'events'],
   },
+  {
+    id: 'finance',
+    label: 'Finance',
+    categoryIds: ['loans'],
+  },
 ];
 
 export interface GroupedCategories {

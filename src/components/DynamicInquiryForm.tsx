@@ -173,7 +173,11 @@ export default function DynamicInquiryForm({
     (setValue as any)(name, updatedImages);
   };
 
-  const requiredFields = activeSchema.filter((f) => f.required);
+  // Only count required fields that are actually VISIBLE — a conditional
+  // (dependsOn) field that's hidden shouldn't hold the progress bar back.
+  const isFieldVisible = (f: FieldSchema) =>
+    !f.dependsOn || (formValues as any)[f.dependsOn.field] === f.dependsOn.value;
+  const requiredFields = activeSchema.filter((f) => f.required && isFieldVisible(f));
   const filledRequiredFields = requiredFields.filter((f) => {
     const val = (formValues as any)[f.name];
     return (

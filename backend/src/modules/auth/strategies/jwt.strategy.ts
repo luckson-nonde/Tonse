@@ -27,9 +27,28 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       // left over from a wiped dev DB).
       throw new UnauthorizedException('User not found');
     }
+    // Suspension takes effect IMMEDIATELY, not just at next login/refresh.
+    // An owner switching off a team member (isActive=false) revokes access on
+    // the very next request — the still-valid access token is rejected here,
+    // the frontend clears tokens on the 401, and the staff is bounced to login.
+    if (!user.isActive) {
+      throw new UnauthorizedException('Account is suspended or inactive');
+    }
     // Phase 3: email lives on the active profile, not the user row. The JWT
     // payload already carries the email claim from sign-in / refresh, so use
     // it directly — avoids an extra DB hit per authenticated request.
-    return { id: user.id, email: payload.email, role: user.role, displayId: user.displayId };
+    //
+    // parentProviderId + permissions are needed by PermissionsGuard (staff
+    // scoping, e.g. the Collection Officer) and by the /collection routes'
+    // act-as-parent resolution. `user` is the full row from findById, so this
+    // is free.
+    return {
+      id: user.id,
+      email: payload.email,
+      role: user.role,
+      displayId: user.displayId,
+      parentProviderId: user.parentProviderId ?? null,
+      permissions: user.permissions ?? [],
+    };
   }
 }

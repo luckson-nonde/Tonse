@@ -133,6 +133,16 @@ export class Inquiry {
   @Column({ type: 'varchar', length: 50, nullable: true })
   labourSubType: string;
 
+  /**
+   * Targeted inquiry: when set, this request is directed at ONE provider
+   * (their user.id) and matching returns it only to that provider — used by
+   * the "send to this lender" flow. NULL = broadcast to every matching
+   * provider by category (the default). Previously DTO-only and dropped on
+   * persist; now a real column so targeting is enforceable.
+   */
+  @Column({ type: 'uuid', nullable: true })
+  targetedProviderId: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

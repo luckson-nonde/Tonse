@@ -33,6 +33,7 @@ import { MasterAccountSchema } from '../services/accountSchemaTypes';
 import Button from './Button';
 import InquiryCard from './InquiryCard';
 import QuoteCard from './QuoteCard';
+import LoanOfferCard from './loan/LoanOfferCard';
 import DynamicProfileForm from './DynamicProfileForm';
 import InquiryDetails from './InquiryDetails';
 import QuoteDetails from './QuoteDetails';
@@ -46,6 +47,9 @@ import ProviderScheduleView from './provider/ProviderScheduleView';
 import ProviderTeamView from './provider/ProviderTeamView';
 import VenueManagementView from './provider/VenueManagementView';
 import CollectionPage from '../pages/CollectionPage';
+import { LoanRequestsView, LoanOffersView } from './loan/LoanViews';
+import { LoanHomeView } from './loan/LoanHomeView';
+import LoanOfferDetail from './loan/LoanOfferDetail';
 import FinancialPage from '../pages/FinancialPage';
 import { Inquiry, Quote } from '../types';
 import { getLabourProfileSchema } from '../services/labourSchemaRegistry';
@@ -499,6 +503,15 @@ export default function DynamicAccountRenderer({
                   />
                 );
               }
+              if (view === 'loan_offers') {
+                return (
+                  <LoanOfferCard
+                    key={uniqueKey('loan-offer', item.id, idx)}
+                    offer={item}
+                    onView={() => onAction('view_quote', item)}
+                  />
+                );
+              }
               if (view === 'orders') {
                 // Key by `orderId` (the row's own primary key), not
                 // `item.id` — that one is the inquiry id and collides
@@ -539,6 +552,7 @@ export default function DynamicAccountRenderer({
               <p className="text-slate-500 mb-10 max-w-sm mx-auto text-lg leading-relaxed font-medium">
                 {view === 'inquiries' ? 'Start by creating a new inquiry to receive quotes from providers.' :
                  view === 'quotes' ? 'No quotes received yet for your inquiries.' :
+                 view === 'loan_offers' ? 'No loan offers yet. Once a lender responds to your loan request, their offer appears here.' :
                  view === 'orders' ? 'No completed orders yet.' :
                  'There is no data to display here yet.'}
               </p>
@@ -586,12 +600,20 @@ export default function DynamicAccountRenderer({
             onAction={onAction}
           />
         ) : view === 'quote_details' ? (
-          <QuoteDetails
-            quote={item}
-            inquiry={data?.inquiries?.find((i: Inquiry) => i.id === item.inquiryId)}
-            onAction={onAction}
-            autoOpenPay={data?.autoPayQuoteId === item.id}
-          />
+          (item as any).condition === 'LOAN' ? (
+            <LoanOfferDetail
+              quote={item}
+              inquiry={data?.inquiries?.find((i: Inquiry) => i.id === item.inquiryId)}
+              onAction={onAction}
+            />
+          ) : (
+            <QuoteDetails
+              quote={item}
+              inquiry={data?.inquiries?.find((i: Inquiry) => i.id === item.inquiryId)}
+              onAction={onAction}
+              autoOpenPay={data?.autoPayQuoteId === item.id}
+            />
+          )
         ) : view === 'order_details' ? (
           <OrderDetails
             order={item}
@@ -700,6 +722,12 @@ export default function DynamicAccountRenderer({
         return <VenueManagementView />;
       case 'provider_collection':
         return <CollectionPage />;
+      case 'loan_home':
+        return <LoanHomeView />;
+      case 'loan_requests':
+        return <LoanRequestsView />;
+      case 'loan_offers':
+        return <LoanOffersView />;
       case 'labour_home':
         return <LabourHomeView {...data?.homeProps} />;
       case 'labour_jobs':
