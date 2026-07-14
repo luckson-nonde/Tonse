@@ -13,3 +13,4 @@ docs/
 
 # graphify knowledge-graph output (generated)
 graphify-out/
+.devlogs/
