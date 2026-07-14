@@ -126,6 +126,13 @@
     "type": null
   },
   {
+    "id": "pastry-bakery",
+    "name": "Pastry and Bakery",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
     "id": "mobile-phones-buy",
     "name": "Mobile Phones & Accessories (Buy New)",
     "parentId": "electronics",
@@ -731,6 +738,20 @@
     "id": "loan-government",
     "name": "Government Employee Loan",
     "parentId": "loans",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "custom-cakes",
+    "name": "Custom Cakes",
+    "parentId": "pastry-bakery",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "bread-pastries",
+    "name": "Bread & Pastries",
+    "parentId": "pastry-bakery",
     "baseName": null,
     "type": null
   },

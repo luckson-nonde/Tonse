@@ -665,6 +665,67 @@ const QUOTE_SCHEMA_BY_CATEGORY_ID: Record<
     { name: 'message', label: 'Lab Notes', type: 'textarea', required: false,
       placeholder: 'Fasting requirements, accreditation, how results are shared…', group: 'Notes & Photos' },
   ],
+
+  // ── Pastry & Bakery ────────────────────────────────────────────────────
+  // Custom Cakes: a firm made-to-order commitment. canMatchDesign only
+  // renders when the buyer actually attached a reference photo — otherwise
+  // it's a phantom toggle.
+  'custom-cakes': (attrs) => {
+    const hasReferenceImages = Array.isArray(attrs?.images) && attrs.images.length > 0;
+    const fields: QuoteField[] = [
+      { name: 'price', label: 'Total Price (ZMW)', type: 'currency', required: true,
+        calculation: 'total', group: 'Pricing' },
+      { name: 'depositRequired', label: 'Deposit Required (ZMW)', type: 'currency', required: false,
+        helpText: 'Upfront deposit to confirm the order, if any.', group: 'Pricing' },
+    ];
+    if (hasReferenceImages) {
+      fields.push({
+        name: 'canMatchDesign', label: 'Can you match the reference photo?', type: 'toggle',
+        required: false, helpText: 'The buyer attached a design reference — let them know if you can recreate it closely.',
+        group: 'Pricing',
+      });
+    }
+    fields.push(
+      { name: 'readyBy', label: 'Ready For Collection / Delivery', type: 'date', required: true,
+        helpText: 'The date the cake will be ready — on or before the date the buyer needs it.',
+        group: 'Logistics & Timing' },
+      ...(String(attrs?.fulfilment ?? '').toLowerCase().includes('deliver') ||
+      String(attrs?.fulfilment ?? '').toLowerCase().includes('faster')
+        ? [{ name: 'deliveryFee', label: 'Delivery Fee (ZMW)', type: 'currency', required: false,
+            helpText: 'The buyer asked for delivery (or whichever is faster).',
+            group: 'Logistics & Timing' } as QuoteField]
+        : []),
+      { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+        options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+      { name: 'message', label: 'Message to Buyer', type: 'textarea', required: false,
+        placeholder: 'Design notes, flavour substitutions, cake stand / delivery arrangement…',
+        group: 'Notes & Photos' },
+    );
+    return fields;
+  },
+
+  // Bread & Pastries: a stock/availability check (same shape as pharmacies)
+  // rather than a design commitment.
+  'bread-pastries': (attrs) => [
+    { name: 'price', label: 'Total Price (ZMW)', type: 'currency', required: true,
+      calculation: 'total', group: 'Pricing' },
+    { name: 'allItemsAvailable', label: 'All items available as requested?', type: 'toggle',
+      required: false, helpText: "Toggle off if some items need substituting or aren't available.",
+      group: 'Pricing' },
+    { name: 'readyIn', label: 'Ready For Collection', type: 'select', required: true,
+      options: ['Ready now', 'Within 1 hour', 'Later today', 'Tomorrow', 'Standing order — set schedule'],
+      group: 'Logistics & Timing' },
+    ...(String(attrs?.fulfilment ?? '').toLowerCase().includes('deliver') ||
+    String(attrs?.fulfilment ?? '').toLowerCase().includes('faster')
+      ? [{ name: 'deliveryFee', label: 'Delivery Fee (ZMW)', type: 'currency', required: false,
+          helpText: 'The buyer asked for delivery (or whichever is faster).',
+          group: 'Logistics & Timing' } as QuoteField]
+      : []),
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'Message to Buyer', type: 'textarea', required: false,
+      placeholder: 'Substitutions, packaging, standing-order schedule details…', group: 'Notes & Photos' },
+  ],
 };
 
 export const generateQuoteSchema = (

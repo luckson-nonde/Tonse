@@ -668,6 +668,56 @@ const PREFERENCES_OVERRIDES: Record<
     },
     section3: LOAN_VALIDITY,
   },
+
+  // ── Pastry & Bakery ─────────────────────────────────────────────────────
+  'custom-cakes': {
+    section1: {
+      title: 'Target Bakers',
+      description: 'Who should bake your cake?',
+      icon: Navigation,
+      options: [
+        { id: 'home_bakers', label: 'Home Bakers',         icon: User      },
+        { id: 'bakeries',    label: 'Registered Bakeries', icon: Building2 },
+        { id: 'top_rated',   label: 'Top Rated Only',      icon: Star      },
+        { id: 'any',         label: 'Any Baker',           icon: Users     },
+      ],
+    },
+    section2: {
+      title: 'What Matters Most',
+      description: "What's your top priority for the cake?",
+      icon: Settings,
+      options: [
+        { id: 'price',  label: 'Lowest Price'         },
+        { id: 'design', label: 'Design Matching'      },
+        { id: 'taste',  label: 'Best Reviews / Taste' },
+        { id: 'speed',  label: 'Fastest Turnaround'   },
+      ],
+    },
+  },
+  'bread-pastries': {
+    section1: {
+      title: 'Target Bakeries',
+      description: 'Who should fill this order?',
+      icon: Navigation,
+      options: [
+        { id: 'bakeries',    label: 'Registered Bakeries', icon: Building2 },
+        { id: 'home_bakers', label: 'Home Bakers',         icon: User      },
+        { id: 'nearby',      label: 'Nearest To Me',       icon: MapPin    },
+        { id: 'any',         label: 'Any Baker',           icon: Users     },
+      ],
+    },
+    section2: {
+      title: 'What Matters Most',
+      description: "What's your top priority for this order?",
+      icon: Settings,
+      options: [
+        { id: 'price',       label: 'Lowest Price'             },
+        { id: 'freshness',   label: 'Freshest / Same-Day'      },
+        { id: 'variety',     label: 'Widest Selection'         },
+        { id: 'reliability', label: 'Reliable Standing Orders' },
+      ],
+    },
+  },
 };
 
 function resolveConfig(categoryType: CategoryType, categoryKey?: string) {

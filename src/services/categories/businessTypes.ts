@@ -221,16 +221,19 @@ function categoriesMatch(categories: string[], pattern: RegExp): boolean {
   return categories.some((c) => pattern.test(c));
 }
 
-// Apartment tenure ids look rental-ish by NAME ('long-term-rentals') but are
-// BOOKING businesses — landlords/agents quoting unit offers, not a fleet-out/
-// fleet-back RENTAL operation. Pin them out of the rental regex below so the
-// word "Rentals" in the id can't reroute an estate agent onto the machinery
-// fleet dashboard. (Mirror of the seeder's SUB_ARCHETYPE id pin.)
-const APARTMENT_TENURE_ID =
-  /^(apartments|long-term-rentals|short-stay-serviced|boarding-student-rooms)$/i;
+// BOOKING-vertical master + sub ids, pinned by exact id. Two jobs: (1) keep
+// booking ids out of the generic name regexes below — apartment tenure ids
+// look rental-ish by NAME ('long-term-rentals') and would otherwise reroute
+// an estate agent onto the machinery fleet dashboard; (2) short-circuit
+// mid-onboarding rows to BOOKING before the backend publishes their
+// archetype set (the SERVICE_PROVIDER fallback would otherwise land them on
+// the generic SERVICE dashboard). Extend this list for every new BOOKING
+// vertical — mirror of the seeder's PARENT_ARCHETYPE / SUB_ARCHETYPE pins.
+const BOOKING_CATEGORY_ID =
+  /^(apartments|long-term-rentals|short-stay-serviced|boarding-student-rooms|pastry-bakery|custom-cakes|bread-pastries)$/i;
 function rentalCategoriesMatch(categories: string[]): boolean {
   return categories.some(
-    (c) => !APARTMENT_TENURE_ID.test(c) && /\b(rental|hire)s?\b/i.test(c),
+    (c) => !BOOKING_CATEGORY_ID.test(c) && /\b(rental|hire)s?\b/i.test(c),
   );
 }
 
@@ -333,9 +336,9 @@ export function getBusinessTypes(
   // (or decor / planning / management) seller lands on SERVICE.
   // EVENT_CATEGORY_PATTERN below otherwise catches the word "event" in
   // those slugs first and routes them to the venue dashboard.
-  // Apartment agents/landlords are BOOKING even before the backend publishes
-  // their archetype set (mid-onboarding rows).
-  if (categories.some((c) => APARTMENT_TENURE_ID.test(c))) return ['BOOKING'];
+  // Apartment agents/landlords and bakers are BOOKING even before the
+  // backend publishes their archetype set (mid-onboarding rows).
+  if (categories.some((c) => BOOKING_CATEGORY_ID.test(c))) return ['BOOKING'];
   if (rentalCategoriesMatch(categories)) return ['RENTAL'];
   if (categoriesMatch(categories, /\b(catering|decor|planning|management)\b/i)) return ['SERVICE'];
   if (categoriesMatch(categories, EVENT_CATEGORY_PATTERN)) return ['EVENTS'];

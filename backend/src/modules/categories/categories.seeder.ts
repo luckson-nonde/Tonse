@@ -52,6 +52,9 @@ const PARENT_ARCHETYPE: Record<string, Archetype> = {
   // the BOOKING dashboard ("Booking Requests") fits, NOT machinery RENTAL.
   apartments: 'BOOKING',
   loans: 'LENDING',
+  // Bakers quote a made-to-order commitment (cake / standing order) against
+  // a needed-by date — BOOKING like Apartments, not a RETAIL SKU storefront.
+  'pastry-bakery': 'BOOKING',
 };
 
 /**
@@ -88,6 +91,7 @@ const PARENT_NATURE: Record<string, CategoryNature> = {
   'clinical-services': 'SERVICE',
   apartments: 'SERVICE',
   loans: 'SERVICE',
+  'pastry-bakery': 'SERVICE',
 };
 
 function deriveActionVariant(name: string): ActionVariant {
@@ -219,3 +223,5 @@ export class CategoriesSeederService implements OnModuleInit {
 // catalog.json regenerated 2026-07-11: +clinical-services (hospital-labs, pharmacies)
 
 // catalog.json regenerated: +apartments (long-term-rentals, short-stay-serviced, boarding-student-rooms)
+
+// catalog.json regenerated: +pastry-bakery (custom-cakes, bread-pastries)

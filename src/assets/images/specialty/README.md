@@ -35,6 +35,15 @@ specialty/
 │                       Student Rooms (folder-name typo is harmless — keys are
 │                       basenames; `short-stay-serviced` renamed to the id stem
 │                       because the dropped name carried an extra "Apartments")
+├── Pastry and Bakery/  Custom Cakes, Bread & Pastries (single-image service
+│                       items — display-name files resolve to `custom-cakes` /
+│                       `bread-pastries` via the lenient key, no rename; master
+│                       tile lives at images/categories/pastry-bakery.webp)
+├── loans/              loan-collateral, loan-salary, loan-government — named
+│                       for the ID stem because the display names invert the
+│                       word order ("Collateral Loan" → collateral-loan would
+│                       never match `loan-collateral`); master tile lives at
+│                       images/categories/loans.webp
 └── _archive/           superseded browser-copy duplicates — EXCLUDED from the
                         glob, never bundled; kept only for provenance
 ```
@@ -134,6 +143,16 @@ Two files were **mislabelled and reassigned** (verified by viewing each image):
 the file dropped as `Bulldozer.webp` actually depicts a **wheel loader** → it
 became `wheel-loader.webp` (filling the otherwise-missing slot), and its distinct
 alternate `Bulldozer (1).webp` was the real crawler dozer → `bulldozer.webp`.
+
+The loans drop had the same swap (verified by viewing): the file named
+`Salary Loan.webp` shows a civil servant outside ministry buildings flying
+Zambian flags → it became `loan-government.webp`, while the corporate-lobby
+scene dropped as `Government Employee Loan.webp` became `loan-salary.webp`.
+The loans consultation photo that came with the drop is parked in `_archive/`
+as `loans-consultation-spare.webp` (the "Top Layer" flat-lay is the master
+tile), alongside `bread-pastries-breadshop-spare.webp` — the alternate
+bread-shelf shop scene; the savoury-pastries kitchen holds the
+`bread-pastries` slot.
 
 Currently shipped (all 13): excavator, bulldozer, wheel-loader, backhoe-loader,
 motor-grader, roller-compactor, mobile-crane, forklift, tipper-truck,

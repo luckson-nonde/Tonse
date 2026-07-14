@@ -17,6 +17,7 @@ import { longTermRentalsSchema, shortStayServicedSchema, boardingStudentSchema }
 import { businessComputersSchema, serversStorageSchema, networkingHardwareSchema, softwareLicensesSchema, printersOfficeEquipmentSchema } from './schemas/itProducts';
 import { poultryFarmingSchema, aquacultureSchema, cropProductionSchema, livestockVeterinarySchema, irrigationHardwareSchema, agroTechServicesSchema } from './schemas/agriculture';
 import { loanCollateralSchema, loanSalarySchema, loanGovernmentSchema } from './schemas/loans';
+import { customCakesSchema, breadPastriesSchema } from './schemas/pastryBakery';
 
 export const GENERIC_FALLBACK_SCHEMA: FieldSchema[] = [
   { name: "images", label: "Reference Photos", type: "image_upload", required: false },
@@ -137,6 +138,12 @@ const BASE_CATEGORIES_DB: Category[] = [
     id: 'loans',
     name: 'Loans',
     image: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&q=80&w=800&h=800',
+    parentId: null
+  },
+  {
+    id: 'pastry-bakery',
+    name: 'Pastry and Bakery',
+    image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&q=80&w=800&h=800',
     parentId: null
   },
 
@@ -266,13 +273,19 @@ const BASE_CATEGORIES_DB: Category[] = [
   { id: 'loan-collateral', name: 'Collateral Loan', parentId: 'loans', formSchema: loanCollateralSchema },
   { id: 'loan-salary', name: 'Salary Loan', parentId: 'loans', formSchema: loanSalarySchema },
   { id: 'loan-government', name: 'Government Employee Loan', parentId: 'loans', formSchema: loanGovernmentSchema },
+
+  // Subcategories - Pastry and Bakery (BOOKING archetype like Apartments —
+  // a baker quotes a made-to-order commitment against a needed-by date,
+  // not an off-the-shelf SKU; see schemas/pastryBakery.ts)
+  { id: 'custom-cakes', name: 'Custom Cakes', parentId: 'pastry-bakery', formSchema: customCakesSchema },
+  { id: 'bread-pastries', name: 'Bread & Pastries', parentId: 'pastry-bakery', formSchema: breadPastriesSchema },
 ];
 
 export type CategoryNature = 'PRODUCT' | 'SERVICE' | 'BOTH';
 
 export const getCategoryNature = (categoryId: string): CategoryNature => {
   const productParents = ['fashion', 'groceries', 'beauty', 'home-decor', 'it-products', 'electronics', 'furniture'];
-  const serviceParents = ['entertainment', 'events', 'telecommunications', 'it-services', 'drilling-services', 'clinical-services', 'apartments', 'loans'];
+  const serviceParents = ['entertainment', 'events', 'telecommunications', 'it-services', 'drilling-services', 'clinical-services', 'apartments', 'loans', 'pastry-bakery'];
   
   const category = CATEGORIES_DB.find(c => c.id === categoryId);
   if (!category) return 'BOTH';

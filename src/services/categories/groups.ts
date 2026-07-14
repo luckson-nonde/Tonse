@@ -25,6 +25,7 @@ export const CATEGORY_GROUPS: CategoryGroup[] = [
       'furniture',
       'home-decor',
       'groceries',
+      'pastry-bakery',
       'beauty',
       'it-products',
     ],

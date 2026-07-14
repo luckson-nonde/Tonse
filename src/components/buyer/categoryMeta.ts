@@ -16,6 +16,7 @@ import {
   Sprout,
   Stethoscope,
   Building2,
+  Croissant,
   Box,
   type LucideIcon,
 } from 'lucide-react';
@@ -51,6 +52,7 @@ export const CATEGORY_META: Record<string, CategoryMeta> = {
   agriculture:           { icon: Sprout,         accent: '#3FA98B', tagline: 'Seeds, inputs, machinery' },
   'clinical-services':   { icon: Stethoscope,    accent: '#3FA98B', tagline: 'Lab tests, medication, prescriptions' },
   apartments:            { icon: Building2,      accent: '#8E6FD8', tagline: 'Rentals, short stay, boarding' },
+  'pastry-bakery':       { icon: Croissant,      accent: '#E8884B', tagline: 'Custom cakes, bread, pastries' },
 };
 
 export const FALLBACK_META: CategoryMeta = {

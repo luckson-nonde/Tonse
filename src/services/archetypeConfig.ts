@@ -1266,5 +1266,27 @@ export const ARCHETYPE_CONFIG: Record<string, ArchetypeConfig> = {
       "processingFee",
       "monthlyRepayment"
     ]
+  },
+  "custom-cakes": {
+    "categoryName": "Custom Cakes",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "quantity": "unitPrice",
+      "duration": "rate"
+    },
+    "requiredAdditions": [
+      "availabilityDate"
+    ]
+  },
+  "bread-pastries": {
+    "categoryName": "Bread & Pastries",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "quantity": "unitPrice",
+      "duration": "rate"
+    },
+    "requiredAdditions": [
+      "leadTime"
+    ]
   }
 };
