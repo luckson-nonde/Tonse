@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package, Users, Clock, FileText } from 'lucide-react';
+import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package, Users, Clock, FileText, Flag } from 'lucide-react';
+import ReportUserModal from '../ReportUserModal';
 import emptyLeadsImage from '../../assets/images/empty-states/owl_reading.png';
 import { uniqueKey } from '../../utils/keyUtils';
 import { PreferenceTags, Lightbox } from './LeadsHelpers';
@@ -360,6 +361,8 @@ export default function ProviderLeadsView({
   // Local viewCount overrides keyed by lead id so the UI bumps optimistically
   // the moment a provider expands a row, even before the next leads refresh.
   const [viewCounts, setViewCounts] = useState<Record<string, number>>({});
+  // Report-a-buyer modal — holds the lead whose buyer is being reported.
+  const [reportingLead, setReportingLead] = useState<any | null>(null);
   // Record each (provider, inquiry) at most once per session so re-expanding
   // the same row doesn't pad the counter — the backend would no-op anyway,
   // but skipping the call avoids unnecessary network chatter.
@@ -600,9 +603,31 @@ export default function ProviderLeadsView({
                         {((lead as any).buyerName || 'B').charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <h4 className="text-[15px] font-bold text-slate-900 leading-tight">
-                          {(lead as any).buyerName || 'Buyer'}
-                        </h4>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="text-[15px] font-bold text-slate-900 leading-tight">
+                            {(lead as any).buyerName || 'Buyer'}
+                          </h4>
+                          {(lead as any).buyerVerificationStatus &&
+                            (lead as any).buyerVerificationStatus !== 'VERIFIED' && (
+                              /* Opaque border hex on purpose — translucent borders
+                                 mis-rasterize on Mali-GPU Android phones. */
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-[#fdf6e9] border border-[#ecd9b3] text-[9px] font-bold uppercase tracking-wider text-[#b07f24] shrink-0">
+                                Unverified
+                              </span>
+                            )}
+                          {(lead as any).buyerId && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setReportingLead(lead);
+                              }}
+                              className="p-1 rounded-md text-slate-300 hover:text-[#c0392b] hover:bg-red-50 transition-colors shrink-0"
+                              title="Report this buyer"
+                            >
+                              <Flag className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                         <p className="text-[11px] text-slate-400 font-medium mt-0.5">
                           {daysAgo === 0 ? 'Today' : `${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago`}
                         </p>
@@ -803,6 +828,16 @@ export default function ProviderLeadsView({
           })
         )}
       </div>
+
+      {reportingLead && (
+        <ReportUserModal
+          reportedUserId={String(reportingLead.buyerId)}
+          reportedUserName={reportingLead.buyerName || 'this buyer'}
+          contextType="INQUIRY"
+          contextId={String(reportingLead.id)}
+          onClose={() => setReportingLead(null)}
+        />
+      )}
     </div>
   );
 }

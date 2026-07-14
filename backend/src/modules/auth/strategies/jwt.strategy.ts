@@ -37,6 +37,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // Phase 3: email lives on the active profile, not the user row. The JWT
     // payload already carries the email claim from sign-in / refresh, so use
     // it directly — avoids an extra DB hit per authenticated request.
-    return { id: user.id, email: payload.email, role: user.role, displayId: user.displayId };
+    //
+    // parentProviderId + permissions ride along for AdminPermissionsGuard
+    // (restricted sub-admin routes). They come from the user row loaded
+    // above, so they're DB-fresh on every request — permission edits and
+    // revocations apply immediately, no token refresh needed.
+    return {
+      id: user.id,
+      email: payload.email,
+      role: user.role,
+      displayId: user.displayId,
+      parentProviderId: user.parentProviderId ?? null,
+      permissions: user.permissions ?? [],
+    };
   }
 }

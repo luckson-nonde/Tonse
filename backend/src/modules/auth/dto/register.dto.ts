@@ -25,11 +25,13 @@ export class RegisterDto {
   @MinLength(10)
   phone: string;
 
-  @IsEnum(['BUYER', 'SELLER', 'SERVICE_PROVIDER', 'ADMIN'])
+  @IsEnum(['BUYER', 'SELLER', 'SERVICE_PROVIDER'])
   @IsOptional()
   role?: string; // Phase 2: legacy values (EVENTS, ENTERTAINMENT, SUPPLIER,
   // LABOUR) are now category strings, not roles. Backfill SQL already
-  // collapsed existing rows.
+  // collapsed existing rows. ADMIN is deliberately NOT accepted here —
+  // admins are provisioned only via the seed CLI or POST /admin/managers
+  // (public self-registration as admin was an open hole).
 
   @IsString()
   @IsNotEmpty()

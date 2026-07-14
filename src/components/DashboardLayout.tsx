@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import Logo from './Logo';
 import ConfirmModal from './ConfirmModal';
+import BuyerVerificationBanner from './BuyerVerificationBanner';
 import DashboardCalendar, { CalendarTone, CounterCard } from './DashboardCalendar';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useDashboard } from '../DashboardContext';
@@ -1122,6 +1123,7 @@ export default function DashboardLayout({
             ref={mainRef}
             className="flex-1 px-4 sm:px-5 pt-4 sm:pt-6 pb-24 md:pb-8 relative overflow-x-hidden overflow-y-auto"
           >
+            <BuyerVerificationBanner />
             {children}
           </main>
 

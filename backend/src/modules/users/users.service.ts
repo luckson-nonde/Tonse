@@ -155,7 +155,21 @@ export class UsersService {
   async flattenWithProfile(user: User | null | undefined): Promise<any> {
     if (!user) return null;
     const profile = await this.loadActiveProfile(user);
-    if (!profile) return user;
+    if (!profile) {
+      // ADMIN has no profile table — name lives on users.name (the one
+      // carve-out to the profile contract) and email on the primary
+      // user_emails row. Backfill both so admin identity renders in the
+      // console sidebar and the User Manager team list like any other
+      // role. Other profile-less rows (e.g. PROMOTER) pass through
+      // unchanged — their surfaces resolve identity elsewhere.
+      if (user.role === 'ADMIN') {
+        const primaryEmail = await this.userEmailRepository.findOne({
+          where: { userId: user.id, isPrimary: true },
+        });
+        return { ...user, name: user.name ?? null, email: primaryEmail?.email ?? null };
+      }
+      return user;
+    }
 
     // Side query: select only the pin column so we can publish
     // hasPin without ever shipping the value itself. Staff
@@ -655,6 +669,9 @@ export class UsersService {
       password: passwordHash,
       role,
       isActive: true,
+      // ADMIN carve-out: no profile row exists to hold the name, so it
+      // lives on the auth row (see the users.name column doc).
+      ...(role === 'ADMIN' ? { name } : {}),
       ...(nrcDocumentPath ? { nrcDocumentPath } : {}),
     });
 

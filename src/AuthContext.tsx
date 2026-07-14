@@ -57,7 +57,10 @@ export interface User {
   coverImage?: string;
   latitude?: number;
   longitude?: number;
-  verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'INCOMPLETE';
+  verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED' | 'INCOMPLETE';
+  /** Admin's reason when verificationStatus is REJECTED. Flattened from
+   *  the active profile row by /auth/me + /auth/login. */
+  verificationRejectionReason?: string | null;
   /** Whether a PIN has been set on the active profile. Backend
    * publishes this boolean in /auth/me + /auth/login + /users/:id
    * responses; the actual PIN value never leaves the server. */

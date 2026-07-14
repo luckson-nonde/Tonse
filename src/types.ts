@@ -113,6 +113,10 @@ export interface Inquiry {
   location: string;
   buyerName: string;
   buyerId: number;
+  /** Buyer's account verification status, joined from buyer_profiles by the
+   *  leads endpoint. Anything other than VERIFIED renders an "unverified
+   *  buyer" badge on the seller's lead card. */
+  buyerVerificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED' | 'INCOMPLETE';
   createdAt: number;
   status: 'OPEN' | 'QUOTED' | 'CLOSED';
   viewCount?: number;

@@ -291,27 +291,37 @@ export class MatchingService {
         }
       }
 
-      // Buyer name for the lead — resolved from buyer_profiles
-      // (the users row has no name column in this schema). Without
-      // this, the seller's lead detail panel renders "Unknown Buyer"
-      // for every inquiry. Single batched query keyed by the unique
-      // buyer-id set in this page of results.
+      // Buyer name + verification status for the lead — resolved from
+      // buyer_profiles (the users row has no name column in this schema).
+      // Without this, the seller's lead detail panel renders "Unknown
+      // Buyer" for every inquiry. verificationStatus lets the seller see
+      // an "unverified buyer" badge — unapproved buyers can still send
+      // inquiries, they just carry the badge until an admin approves them.
+      // Single batched query keyed by the unique buyer-id set in this
+      // page of results.
       const buyerIds = Array.from(
         new Set((rows as any[]).map((r) => r.buyerId).filter(Boolean)),
       );
       if (buyerIds.length > 0) {
-        const buyerRows: Array<{ userId: string; name: string }> =
-          await this.inquiryRepository.query(
-            `SELECT "userId", name FROM buyer_profiles WHERE "userId" = ANY($1::uuid[])`,
-            [buyerIds],
-          );
+        const buyerRows: Array<{
+          userId: string;
+          name: string;
+          verificationStatus: string;
+        }> = await this.inquiryRepository.query(
+          `SELECT "userId", name, "verificationStatus" FROM buyer_profiles WHERE "userId" = ANY($1::uuid[])`,
+          [buyerIds],
+        );
         const nameByUserId = new Map<string, string>();
+        const statusByUserId = new Map<string, string>();
         for (const br of buyerRows) {
           if (br.name) nameByUserId.set(br.userId, br.name);
+          if (br.verificationStatus) statusByUserId.set(br.userId, br.verificationStatus);
         }
         for (const row of rows as any[]) {
           const name = nameByUserId.get(row.buyerId);
           if (name) row.buyerName = name;
+          const status = statusByUserId.get(row.buyerId);
+          if (status) row.buyerVerificationStatus = status;
         }
       }
     }

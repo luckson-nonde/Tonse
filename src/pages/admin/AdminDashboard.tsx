@@ -45,8 +45,12 @@ import {
   Link2,
   KeyRound,
   Copy,
+  Flag,
 } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
+import { ADMIN_PERMISSIONS } from '../../utils/rbac';
+import TeamManagersView from '../../components/admin/TeamManagersView';
+import ReportsView from '../../components/admin/ReportsView';
 // StatTile / FunnelCard / Switch were extracted to DashboardPrimitives so the
 // promoter dashboard shares them — same components, zero behavior change.
 import { StatTile, FunnelCard, Switch } from '../../components/admin/DashboardPrimitives';
@@ -71,22 +75,42 @@ type AdminTab =
   | 'overview'
   | 'users'
   | 'verifications'
+  | 'reports'
   | 'categories'
   | 'milestones'
   | 'inquiries'
   | 'quotes'
   | 'financial'
+  | 'team'
   | 'audit';
 
-const TABS: { id: AdminTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+/**
+ * `permission` opens a tab to restricted sub-admins ("User Managers")
+ * holding that code; tabs without one are primary-admin-only. The real
+ * enforcement is server-side (AdminPermissionsGuard) — this only decides
+ * what the sidebar shows.
+ */
+const TABS: {
+  id: AdminTab;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  permission?: string;
+}[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { id: 'users', label: 'Users', icon: Users },
-  { id: 'verifications', label: 'Verifications', icon: ShieldQuestion },
+  { id: 'users', label: 'Users', icon: Users, permission: ADMIN_PERMISSIONS.USERS },
+  {
+    id: 'verifications',
+    label: 'Verifications',
+    icon: ShieldQuestion,
+    permission: ADMIN_PERMISSIONS.VERIFICATIONS,
+  },
+  { id: 'reports', label: 'Reports', icon: Flag, permission: ADMIN_PERMISSIONS.REPORTS },
   { id: 'categories', label: 'Category Control', icon: SlidersHorizontal },
   { id: 'milestones', label: 'Milestones', icon: Sparkles },
   { id: 'inquiries', label: 'Inquiries', icon: MessageSquare },
   { id: 'quotes', label: 'Quotes', icon: FileText },
   { id: 'financial', label: 'Financial', icon: Wallet },
+  { id: 'team', label: 'Admin Team', icon: UserPlus },
   { id: 'audit', label: 'Audit Log', icon: History },
 ];
 
@@ -101,6 +125,28 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const activeTab: AdminTab = (TABS.find((t) => t.id === tab)?.id ?? 'overview') as AdminTab;
+
+  // Sub-admin ("User Manager") = ADMIN with a parent. They see only the
+  // tabs their permission codes open; the primary admin sees everything.
+  const isSubAdmin = !!user?.parentProviderId;
+  const visibleTabs = useMemo(
+    () =>
+      isSubAdmin
+        ? TABS.filter((t) => t.permission && (user?.permissions ?? []).includes(t.permission))
+        : TABS,
+    [isSubAdmin, user?.permissions]
+  );
+
+  // Defense-in-depth: a sub-admin typing /admin/financial (or landing on
+  // the default /admin/overview) gets bounced to their first visible tab.
+  // The backend 403s those endpoints regardless — this just avoids a
+  // broken page.
+  const tabVisible = visibleTabs.some((t) => t.id === activeTab);
+  useEffect(() => {
+    if (!tabVisible && visibleTabs.length > 0) {
+      navigate(`/admin/${visibleTabs[0].id}`, { replace: true });
+    }
+  }, [tabVisible, visibleTabs, navigate]);
 
   return (
     <div className="min-h-screen bg-[#f5f2ed] flex">
@@ -117,7 +163,7 @@ export default function AdminDashboard() {
         </div>
 
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
-          {TABS.map((t) => {
+          {visibleTabs.map((t) => {
             const Icon = t.icon;
             const isActive = activeTab === t.id;
             return (
@@ -169,7 +215,7 @@ export default function AdminDashboard() {
           onChange={(e) => navigate(`/admin/${e.target.value}`)}
           className="bg-white/10 border border-white/15 text-white text-[12px] font-bold rounded-lg px-3 py-1.5 outline-none"
         >
-          {TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <option key={t.id} value={t.id} className="text-[#1a1a2e]">
               {t.label}
             </option>
@@ -181,15 +227,17 @@ export default function AdminDashboard() {
       <main className="flex-1 min-w-0 px-5 sm:px-8 lg:px-10 xl:px-14 pt-20 md:pt-10 pb-12 overflow-x-hidden">
         <div className="max-w-[1400px] mx-auto w-full">
           <PageTransition transitionKey={activeTab}>
-            {activeTab === 'overview' && <OverviewView />}
-            {activeTab === 'users' && <UsersView />}
-            {activeTab === 'verifications' && <VerificationsView />}
-            {activeTab === 'categories' && <CategoryControlView />}
-            {activeTab === 'milestones' && <MilestonesView />}
-            {activeTab === 'inquiries' && <InquiriesView />}
-            {activeTab === 'quotes' && <QuotesView />}
-            {activeTab === 'financial' && <FinancialView />}
-            {activeTab === 'audit' && <AuditView />}
+            {activeTab === 'overview' && tabVisible && <OverviewView />}
+            {activeTab === 'users' && tabVisible && <UsersView />}
+            {activeTab === 'verifications' && tabVisible && <VerificationsView />}
+            {activeTab === 'reports' && tabVisible && <ReportsView />}
+            {activeTab === 'categories' && tabVisible && <CategoryControlView />}
+            {activeTab === 'milestones' && tabVisible && <MilestonesView />}
+            {activeTab === 'inquiries' && tabVisible && <InquiriesView />}
+            {activeTab === 'quotes' && tabVisible && <QuotesView />}
+            {activeTab === 'financial' && tabVisible && <FinancialView />}
+            {activeTab === 'team' && tabVisible && <TeamManagersView />}
+            {activeTab === 'audit' && tabVisible && <AuditView />}
           </PageTransition>
         </div>
       </main>
@@ -2243,6 +2291,9 @@ function AuditView() {
                   <th className="text-left px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400 hidden md:table-cell">
                     User
                   </th>
+                  <th className="text-left px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400 hidden md:table-cell">
+                    Admin
+                  </th>
                   <th className="text-left px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400 hidden lg:table-cell">
                     Details
                   </th>
@@ -2263,6 +2314,9 @@ function AuditView() {
                     </td>
                     <td className="px-5 py-4 text-slate-600 truncate max-w-[160px] hidden md:table-cell">
                       {entry.userId || '—'}
+                    </td>
+                    <td className="px-5 py-4 text-slate-600 truncate max-w-[140px] hidden md:table-cell font-mono text-[12px]">
+                      {entry.staffName || '—'}
                     </td>
                     <td className="px-5 py-4 text-slate-500 truncate max-w-[280px] text-[12px] hidden lg:table-cell">
                       {typeof entry.details === 'string'
@@ -2291,12 +2345,14 @@ function AuditView() {
 
 const ROLE_GROUP_LABELS: Record<string, string> = {
   ALL: 'All pending',
+  BUYERS: 'Buyers',
   SHOPS: 'Shops',
   SERVICES: 'Service Providers',
   LABOUR: 'Labour',
 };
 
 const ROLES_IN_GROUP: Record<string, string[]> = {
+  BUYERS: ['BUYER'],
   SHOPS: ['SELLER', 'SUPPLIER'],
   SERVICES: ['SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS'],
   LABOUR: ['LABOUR'],
@@ -2309,7 +2365,9 @@ function VerificationsView() {
   const [statusFilter, setStatusFilter] = useState<'PENDING' | 'VERIFIED' | 'REJECTED'>(
     'PENDING'
   );
-  const [groupFilter, setGroupFilter] = useState<'ALL' | 'SHOPS' | 'SERVICES' | 'LABOUR'>('ALL');
+  const [groupFilter, setGroupFilter] = useState<
+    'ALL' | 'BUYERS' | 'SHOPS' | 'SERVICES' | 'LABOUR'
+  >('ALL');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState<AdminUser | null>(null);
@@ -2348,7 +2406,7 @@ function VerificationsView() {
       <ViewHeader
         eyebrow="Section 03 / Trust"
         title="Verifications"
-        subtitle="Approve or reject the documents that shops, service providers, and labour submitted during onboarding. Buyers don't pass through this queue."
+        subtitle="Approve or reject the documents that buyers, shops, service providers, and labour submitted during onboarding. Unapproved buyers keep full access — sellers just see them marked as unverified."
         rightSlot={
           <button
             onClick={load}
@@ -2363,7 +2421,7 @@ function VerificationsView() {
       <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)] overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col md:flex-row gap-3">
           <div className="flex flex-wrap gap-1.5 p-1 bg-slate-100/70 rounded-xl">
-            {(['ALL', 'SHOPS', 'SERVICES', 'LABOUR'] as const).map((g) => (
+            {(['ALL', 'BUYERS', 'SHOPS', 'SERVICES', 'LABOUR'] as const).map((g) => (
               <button
                 key={g}
                 onClick={() => {

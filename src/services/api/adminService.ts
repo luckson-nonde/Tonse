@@ -97,9 +97,53 @@ export interface AdminAuditLog {
   entityType?: string;
   entityId?: string | number;
   details?: any;
+  /** Acting admin (primary or User Manager) — id + displayId label. */
+  staffId?: string;
+  staffName?: string;
+  status?: string;
+  reason?: string;
   createdAt?: string;
   timestamp?: number;
   [key: string]: any;
+}
+
+/** Restricted sub-admin account created by the primary admin. */
+export interface AdminManagerUser {
+  id: string;
+  displayId?: string;
+  name?: string;
+  email?: string;
+  phone?: string | null;
+  permissions?: string[];
+  isActive?: boolean;
+  mustChangePassword?: boolean;
+  createdAt?: string;
+  lastLoginAt?: string;
+  [key: string]: any;
+}
+
+export type AdminReportStatus = 'OPEN' | 'RESOLVED' | 'DISMISSED';
+
+/** User-submitted complaint, hydrated with both parties' identity. */
+export interface AdminReport {
+  id: string;
+  reporterId: string;
+  reporterName?: string | null;
+  reporterDisplayId?: string | null;
+  reporterRole?: string | null;
+  reportedUserId: string;
+  reportedUserName?: string | null;
+  reportedUserDisplayId?: string | null;
+  reportedUserRole?: string | null;
+  category: string;
+  description: string;
+  contextType?: 'INQUIRY' | 'QUOTE' | 'ORDER' | null;
+  contextId?: string | null;
+  status: AdminReportStatus;
+  resolutionNote?: string | null;
+  resolvedByAdminId?: string | null;
+  resolvedAt?: string | null;
+  createdAt: string;
 }
 
 const buildQuery = (params: Record<string, any>) => {
@@ -269,6 +313,59 @@ export const adminService = {
     const res = await apiClient.post<PromoterInvite>('/admin/promoter-invite/rotate');
     return res.data ?? null;
   },
+
+  // ───── User Managers (restricted sub-admins) — primary admin only ─────────
+
+  async listManagers(): Promise<AdminManagerUser[]> {
+    const res = await apiClient.get<AdminManagerUser[]>('/admin/managers');
+    return res.data ?? [];
+  },
+
+  /** generatedPassword is returned ONCE — show it to the admin immediately. */
+  async createManager(payload: {
+    name: string;
+    email: string;
+    phone?: string;
+    permissions: string[];
+  }): Promise<{ user: AdminManagerUser; generatedPassword: string } | null> {
+    const res = await apiClient.post<{ user: AdminManagerUser; generatedPassword: string }>(
+      '/admin/managers',
+      payload
+    );
+    return res.data ?? null;
+  },
+
+  async updateManager(
+    id: string,
+    payload: { permissions?: string[]; isActive?: boolean; name?: string; phone?: string }
+  ): Promise<AdminManagerUser | null> {
+    const res = await apiClient.patch<AdminManagerUser>(`/admin/managers/${id}`, payload);
+    return res.data ?? null;
+  },
+
+  async deleteManager(id: string): Promise<{ success: boolean } | null> {
+    const res = await apiClient.delete<{ success: boolean }>(`/admin/managers/${id}`);
+    return res.data ?? null;
+  },
+
+  // ───── User reports (complaints) ───────────────────────────────────────────
+
+  async listReports(
+    params: Record<string, any> = {}
+  ): Promise<PaginatedResponse<AdminReport>> {
+    const res = await apiClient.get<PaginatedResponse<AdminReport>>(
+      `/admin/reports${buildQuery(params)}`
+    );
+    return res.data ?? emptyPage<AdminReport>();
+  },
+
+  async resolveReport(
+    id: string,
+    payload: { status: 'RESOLVED' | 'DISMISSED'; resolutionNote?: string }
+  ): Promise<AdminReport | null> {
+    const res = await apiClient.patch<AdminReport>(`/admin/reports/${id}`, payload);
+    return res.data ?? null;
+  },
 };
 
 export interface PromoterInvite {
@@ -319,10 +416,13 @@ export interface AdminPromoterDetail extends Omit<AdminPromoter, 'isActive'> {
 }
 
 /**
- * Roles eligible for the verification badge. Buyers and admins are excluded.
+ * Roles eligible for the verification badge. Only admins are excluded —
+ * buyers are verified too (they keep full access while pending; sellers
+ * just see an "unverified" badge on their inquiries).
  * Mirrors the backend constant in `AdminService.VERIFIABLE_ROLES`.
  */
 export const VERIFIABLE_ROLES = [
+  'BUYER',
   'SELLER',
   'SUPPLIER',
   'SERVICE_PROVIDER',
