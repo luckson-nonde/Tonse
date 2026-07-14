@@ -18,8 +18,12 @@ import {
   ExternalLink,
   FileText,
   Calendar,
+  Flag,
 } from 'lucide-react';
 import { getShopProfile, type ShopProfile, type ShopResult } from '../services/api/shopService';
+import { reviewService, type ShopReview } from '../services/api/reviewService';
+import ReportUserModal from './ReportUserModal';
+import { Star } from 'lucide-react';
 
 interface ShopProfileViewProps {
   profileId: string;
@@ -62,6 +66,12 @@ function memberSince(iso: string | undefined) {
 export default function ShopProfileView({ profileId, onBack, onSendInquiry }: ShopProfileViewProps) {
   const [profile, setProfile] = useState<ShopProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showReport, setShowReport] = useState(false);
+  const [reviews, setReviews] = useState<{ data: ShopReview[]; total: number; average: number }>({
+    data: [],
+    total: 0,
+    average: 0,
+  });
 
   useEffect(() => {
     setLoading(true);
@@ -69,6 +79,19 @@ export default function ShopProfileView({ profileId, onBack, onSendInquiry }: Sh
       .then(setProfile)
       .finally(() => setLoading(false));
   }, [profileId]);
+
+  // Sequential by necessity: reviews key off the seller's users.id
+  // (profile.sellerId — NOT profileId, the profile row), which only
+  // exists once the profile resolves.
+  useEffect(() => {
+    if (!profile?.sellerId) return;
+    let cancelled = false;
+    reviewService
+      .fetchForShop(profile.sellerId, { limit: 10 })
+      .then((r) => { if (!cancelled) setReviews(r); })
+      .catch(() => { /* reviews are additive — profile stays useful without them */ });
+    return () => { cancelled = true; };
+  }, [profile?.sellerId]);
 
   if (loading) {
     return (
@@ -165,6 +188,17 @@ export default function ShopProfileView({ profileId, onBack, onSendInquiry }: Sh
               >
                 Send Inquiry <ArrowRight className="w-4 h-4" />
               </button>
+
+              {/* Report — sellerId is the shop owner's users.id (profile.id
+                  is the profile row, not a reportable user) */}
+              {profile.sellerId && (
+                <button
+                  onClick={() => setShowReport(true)}
+                  className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 hover:text-[#c0392b] transition-colors"
+                >
+                  <Flag className="w-3 h-3" /> Report this shop
+                </button>
+              )}
             </div>
 
             {/* Contact card */}
@@ -304,6 +338,63 @@ export default function ShopProfileView({ profileId, onBack, onSendInquiry }: Sh
               </div>
             )}
 
+            {/* Customer reviews — earned through DELIVERED/COMPLETED orders */}
+            <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-5">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#C9973A]">Customer Reviews</p>
+                {reviews.total > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <Star className="w-4 h-4 text-[#C9973A] fill-[#C9973A]" />
+                    <span className="text-[14px] font-black text-[#1a1a2e]">{reviews.average.toFixed(1)}</span>
+                    <span className="text-[11px] font-medium text-slate-400">
+                      ({reviews.total} review{reviews.total !== 1 ? 's' : ''})
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {reviews.data.length === 0 ? (
+                <div className="py-8 flex flex-col items-center gap-2 text-center">
+                  <Star className="w-8 h-8 text-slate-200" />
+                  <p className="text-[13px] font-medium text-slate-400">No reviews yet</p>
+                  <p className="text-[11px] text-slate-300">
+                    Buyers can rate this shop after a completed order.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {reviews.data.map((r) => (
+                    <div
+                      key={r.id}
+                      className="p-3.5 rounded-xl bg-slate-50/60 border border-slate-100"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[12px] font-bold text-[#1a1a2e] truncate">
+                          {r.reviewerName || 'Buyer'}
+                        </p>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <Star
+                              key={n}
+                              className={`w-3.5 h-3.5 ${
+                                n <= r.rating ? 'text-[#C9973A] fill-[#C9973A]' : 'text-slate-200'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      {r.comment && (
+                        <p className="mt-1.5 text-[12px] text-slate-600 leading-relaxed">{r.comment}</p>
+                      )}
+                      <p className="mt-1 text-[10px] text-slate-400 font-medium">
+                        {formatDate(r.createdAt)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Activity feed */}
             <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6">
               <div className="flex items-center justify-between mb-5">
@@ -358,6 +449,14 @@ export default function ShopProfileView({ profileId, onBack, onSendInquiry }: Sh
           </div>
         </div>
       </div>
+
+      {showReport && profile.sellerId && (
+        <ReportUserModal
+          reportedUserId={profile.sellerId}
+          reportedUserName={profile.name}
+          onClose={() => setShowReport(false)}
+        />
+      )}
     </div>
   );
 }

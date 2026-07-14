@@ -57,6 +57,22 @@ export class ServiceProviderProfile {
   @Column({ type: 'text', nullable: true })
   profilePicture: string;
 
+  /**
+   * Business/shop logo — the brand mark on marketplace directory cards
+   * (GET /shops). Distinct from profilePicture, which is the OWNER'S
+   * photo and belongs on the shop profile page. Submitted from the
+   * account-settings "Shop / Business Logo" upload.
+   */
+  @Column({ type: 'text', nullable: true })
+  logo: string;
+
+  /**
+   * Showcase image / cover — the circular photo on directory cards.
+   * When unset, GET /shops falls back to the provider's newest product image.
+   */
+  @Column({ type: 'text', nullable: true })
+  coverImage: string;
+
   @Column({ type: 'text', nullable: true })
   socialLinks: string;
 

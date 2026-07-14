@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, X, SlidersHorizontal, Store } from 'lucide-react';
+import { Search, X, Store, LayoutGrid, Briefcase } from 'lucide-react';
 import { fetchShops, type ShopResult } from '../services/api/shopService';
+import { CATEGORIES_DB, getBusinessTypeLabel, type BusinessType } from '../services/categories';
 import ShopCard from './ShopCard';
+import InlineFilterDropdown from './InlineFilterDropdown';
 import owlSearching from '../assets/images/empty-states/owl_searching.png';
 
 interface BrowseShopsViewProps {
@@ -9,11 +11,25 @@ interface BrowseShopsViewProps {
   onViewProfile: (shop: ShopResult) => void;
 }
 
+/** Archetypes offered in the "Select Service Type" filter, in menu order. */
+const SERVICE_TYPE_ARCHETYPES = [
+  'RETAIL',
+  'WHOLESALE',
+  'REPAIR',
+  'SERVICE',
+  'RENTAL',
+  'BOOKING',
+  'EVENTS',
+  'ENTERTAINMENT',
+  'LABOUR',
+] as const;
+
 export default function BrowseShopsView({ onSendInquiry, onViewProfile }: BrowseShopsViewProps) {
   const [shops, setShops] = useState<ShopResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
+  const [selectedServiceType, setSelectedServiceType] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -23,47 +39,84 @@ export default function BrowseShopsView({ onSendInquiry, onViewProfile }: Browse
       .finally(() => setLoading(false));
   }, []);
 
-  // Derive unique categories from returned shops — chips only appear
-  // for categories that have at least one registered provider.
-  const availableCategories = useMemo(() => {
-    const seen = new Map<string, string>(); // id → display name
+  // Leaf category id → master (industry) id, from the static catalog.
+  const categoryParentMap = useMemo(
+    () => new Map(CATEGORIES_DB.map((c) => [c.id, c.parentId])),
+    []
+  );
+
+  // "Choose Industry Category" — the master categories (parentId null),
+  // shown only when at least one fetched shop serves a leaf under them.
+  // Catalog names use "&"; this directory spells it out as "and".
+  const industryOptions = useMemo(() => {
+    const present = new Set<string>();
     for (const shop of shops) {
-      const ids = shop.categoryIds ?? [];
-      const names = shop.categoryNames ?? [];
-      ids.forEach((id, i) => {
-        if (id && !seen.has(id)) seen.set(id, names[i] || id);
-      });
+      for (const id of shop.categoryIds ?? []) {
+        const parent = categoryParentMap.get(id);
+        present.add(parent ?? id); // defensive: id might itself be a master
+      }
     }
-    return Array.from(seen.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    return CATEGORIES_DB.filter((c) => c.parentId === null && present.has(c.id))
+      .map((c) => ({ value: c.id, label: c.name.replace(/\s*&\s*/g, ' and ') }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [shops, categoryParentMap]);
+
+  // "Select Service Type" — archetypes present across the fetched shops.
+  const serviceTypeOptions = useMemo(() => {
+    const present = new Set(shops.flatMap((s) => s.archetypes ?? []));
+    return SERVICE_TYPE_ARCHETYPES.filter((a) => present.has(a)).map((a) => ({
+      value: a,
+      label: getBusinessTypeLabel(a as BusinessType),
+    }));
   }, [shops]);
 
-  // Client-side filter: text search + active category chip
+  // Client-side filter: text search + industry + service type.
   const filtered = useMemo(() => {
     let list = shops;
-    if (activeCategory) {
-      list = list.filter((s) => (s.categoryIds ?? []).includes(activeCategory));
+    if (selectedIndustry) {
+      list = list.filter((s) =>
+        (s.categoryIds ?? []).some((id) => (categoryParentMap.get(id) ?? id) === selectedIndustry)
+      );
+    }
+    if (selectedServiceType) {
+      list = list.filter((s) => (s.archetypes ?? []).includes(selectedServiceType));
     }
     if (search.trim()) {
       const q = search.toLowerCase();
+      // Categories display as "and" but the catalog stores "&" — match
+      // against both spellings so either phrasing finds the shop.
       list = list.filter(
         (s) =>
           s.name.toLowerCase().includes(q) ||
           s.location.toLowerCase().includes(q) ||
-          (s.categoryNames ?? []).some((n) => n.toLowerCase().includes(q)),
+          (s.categoryNames ?? []).some(
+            (n) =>
+              n.toLowerCase().includes(q) ||
+              n.replace(/\s*&\s*/g, ' and ').toLowerCase().includes(q),
+          ),
       );
     }
     return list;
-  }, [shops, search, activeCategory]);
+  }, [shops, search, selectedIndustry, selectedServiceType, categoryParentMap]);
 
-  const activeCategoryName = availableCategories.find((c) => c.id === activeCategory)?.name;
+  const hasActiveFilters = !!(search || selectedIndustry || selectedServiceType);
+  const selectedIndustryLabel = industryOptions.find((o) => o.value === selectedIndustry)?.label;
+  const selectedServiceTypeLabel = serviceTypeOptions.find(
+    (o) => o.value === selectedServiceType
+  )?.label;
+
+  const clearFilters = () => {
+    setSearch('');
+    setSelectedIndustry(null);
+    setSelectedServiceType(null);
+  };
 
   return (
     <div className="space-y-5">
       {/* Marketplace hero — a distinct storefront-directory banner that sets
           this browse/discovery tab apart from the transactional Inquiries /
-          Quotes list views, with the search integrated into the banner. */}
+          Quotes list views. Search AND both filters live in one white bar
+          (the Choose-Specialty search-bar pattern). */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1B3068] to-[#2a407a] p-6 sm:p-7 text-white shadow-lg">
         <div
           className="absolute -right-12 -top-12 w-48 h-48 bg-[#d49b35]/20 rounded-full blur-2xl pointer-events-none"
@@ -78,68 +131,59 @@ export default function BrowseShopsView({ onSendInquiry, onViewProfile }: Browse
             </p>
           </div>
           <h2 className="text-2xl sm:text-[28px] font-serif font-bold leading-tight">
-            Discover Shops &amp; Providers
+            Discover Shops and Providers
           </h2>
           <p className="text-white/55 text-[13px] mt-1">
             {loading
               ? 'Loading verified shops…'
-              : `${shops.length} verified ${shops.length === 1 ? 'shop' : 'shops'} · browse, compare & send an inquiry`}
+              : `${shops.length} verified ${shops.length === 1 ? 'shop' : 'shops'} · browse, compare and send an inquiry`}
           </p>
 
-          {/* Integrated search */}
-          <div className="relative mt-5">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search by name, category, or location…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-11 pr-10 py-3.5 rounded-2xl bg-white/10 border border-white/20 text-[14px] text-white placeholder:text-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-[#d49b35]/40 focus:border-[#d49b35]/60 focus:bg-white/15 transition-all"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch('')}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+          {/* One white bar: search left, filter dropdowns embedded right.
+              On mobile the dropdown pair wraps to a second row inside the
+              same bar. Opaque border per the Android Mali rule. */}
+          <div className="mt-5 flex flex-col sm:flex-row sm:items-center gap-2 bg-white border-[1.5px] border-slate-200 rounded-2xl pl-3.5 pr-1.5 py-1.5 focus-within:border-[#C9973A] transition-colors">
+            <div className="flex items-center gap-2 flex-1 min-w-0 py-1.5 sm:py-0">
+              <Search className="w-4 h-4 text-slate-400 shrink-0" />
+              <input
+                type="text"
+                placeholder="Search by name, category, or location…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="flex-1 min-w-0 border-none outline-none bg-transparent text-[13px] text-[#1a1612] placeholder-slate-400"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  aria-label="Clear search"
+                  className="text-slate-300 hover:text-slate-500 shrink-0 pr-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 sm:flex items-center gap-1 bg-[#f5f2ed] rounded-[10px] p-[3px] shrink-0">
+              <InlineFilterDropdown
+                icon={LayoutGrid}
+                shortLabel="Industry"
+                fullLabel="Choose Industry Category"
+                options={industryOptions}
+                value={selectedIndustry}
+                onChange={setSelectedIndustry}
+              />
+              <InlineFilterDropdown
+                icon={Briefcase}
+                shortLabel="Service"
+                fullLabel="Select Service Type"
+                options={serviceTypeOptions}
+                value={selectedServiceType}
+                onChange={setSelectedServiceType}
+              />
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Category filter chips — derived from actual registered providers */}
-      {!loading && availableCategories.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            Filter
-          </div>
-          <button
-            onClick={() => setActiveCategory(null)}
-            className={`px-3.5 py-1.5 rounded-full text-[12px] font-semibold border transition-all ${
-              !activeCategory
-                ? 'bg-[#1a1612] text-white border-[#1a1612]'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
-            }`}
-          >
-            All
-          </button>
-          {availableCategories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setActiveCategory(activeCategory === cat.id ? null : cat.id)}
-              className={`px-3.5 py-1.5 rounded-full text-[12px] font-semibold border transition-all ${
-                activeCategory === cat.id
-                  ? 'bg-[#d49b35] text-white border-[#d49b35]'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-[#d49b35]/50 hover:text-[#d49b35]'
-              }`}
-            >
-              {cat.name}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Content */}
       {loading ? (
@@ -149,18 +193,20 @@ export default function BrowseShopsView({ onSendInquiry, onViewProfile }: Browse
               key={i}
               className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm animate-pulse"
             >
-              <div className="h-20 bg-slate-200/70" />
-              <div className="px-5 -mt-9 relative">
-                <div className="w-16 h-16 rounded-2xl bg-slate-100 ring-4 ring-white" />
+              <div className="relative h-32 bg-slate-200/70">
+                <div className="absolute inset-x-0 top-4 flex justify-center">
+                  <div className="w-22 h-22 rounded-full bg-slate-100 ring-4 ring-white" />
+                </div>
               </div>
-              <div className="px-5 pt-3 pb-5 space-y-3">
+              <div className="px-5 pt-4 pb-5 flex flex-col items-center space-y-3">
                 <div className="h-3.5 bg-slate-100 rounded w-2/3" />
                 <div className="h-2.5 bg-slate-100 rounded w-1/3" />
-                <div className="h-3 bg-slate-100 rounded w-full" />
-                <div className="flex gap-2 pt-1">
-                  <div className="h-9 bg-slate-100 rounded-xl flex-1" />
-                  <div className="h-9 bg-slate-100 rounded-xl flex-[1.4]" />
+                <div className="h-6 bg-slate-100 rounded w-16" />
+                <div className="flex gap-2 w-full justify-center">
+                  <div className="h-5 bg-slate-100 rounded-full w-20" />
+                  <div className="h-5 bg-slate-100 rounded-full w-20" />
                 </div>
+                <div className="h-11 bg-slate-100 rounded-xl w-full" />
               </div>
             </div>
           ))}
@@ -172,17 +218,21 @@ export default function BrowseShopsView({ onSendInquiry, onViewProfile }: Browse
             alt="No shops found"
             className="w-44 h-44 object-contain opacity-90 mb-8"
           />
-          {search || activeCategory ? (
+          {hasActiveFilters ? (
             <>
               <p className="text-[17px] font-bold text-slate-700 mb-2">No shops match your filter</p>
               <p className="text-[13px] text-slate-400 mb-5">
-                {activeCategory
-                  ? `No providers registered under "${activeCategoryName}".`
-                  : `No results for "${search}".`}
+                {selectedIndustryLabel && selectedServiceTypeLabel
+                  ? `No ${selectedServiceTypeLabel.toLowerCase()} providers in ${selectedIndustryLabel}.`
+                  : selectedIndustryLabel
+                    ? `No providers registered under "${selectedIndustryLabel}".`
+                    : selectedServiceTypeLabel
+                      ? `No "${selectedServiceTypeLabel}" providers found.`
+                      : `No results for "${search}".`}
               </p>
               <button
-                onClick={() => { setSearch(''); setActiveCategory(null); }}
-                className="px-5 py-2 text-[13px] font-bold text-[#d49b35] bg-[#fdf6e9] border border-[#d49b35]/20 rounded-xl hover:bg-[#fcecd4] transition-colors"
+                onClick={clearFilters}
+                className="px-5 py-2 text-[13px] font-bold text-[#d49b35] bg-[#fdf6e9] border border-[#ecd9b3] rounded-xl hover:bg-[#fcecd4] transition-colors"
               >
                 Clear filters
               </button>
@@ -205,7 +255,8 @@ export default function BrowseShopsView({ onSendInquiry, onViewProfile }: Browse
           </div>
           <p className="text-[11px] text-slate-400 font-medium text-center">
             {filtered.length} shop{filtered.length !== 1 ? 's' : ''} found
-            {activeCategoryName ? ` in "${activeCategoryName}"` : ''}
+            {selectedIndustryLabel ? ` in "${selectedIndustryLabel}"` : ''}
+            {selectedServiceTypeLabel ? ` · ${selectedServiceTypeLabel}` : ''}
             {search ? ` matching "${search}"` : ''}
           </p>
         </>

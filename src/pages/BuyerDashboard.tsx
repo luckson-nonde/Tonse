@@ -35,6 +35,7 @@ import { getLabourInquirySchema } from '../services/labourSchemaRegistry';
 import FinancialPage from './FinancialPage';
 import BrowseShopsView from '../components/BrowseShopsView';
 import ShopProfileView from '../components/ShopProfileView';
+import RateShopModal from '../components/RateShopModal';
 import type { ShopResult } from '../services/api/shopService';
 
 export default function BuyerDashboard() {
@@ -116,6 +117,17 @@ export default function BuyerDashboard() {
     return () => { cancelled = true; };
   }, [user?.id, ordersRefreshKey]);
 
+  // Orders this buyer has already rated this session — flips the order
+  // card's "Rate this shop" button into a quiet "Rated" state without a
+  // refetch. (The server enforces one-review-per-order regardless.)
+  const [ratedOrderIds, setRatedOrderIds] = useState<Set<string>>(new Set());
+  // Target of the rate-shop modal; sellerId is the provider's users.id.
+  const [ratingTarget, setRatingTarget] = useState<{
+    sellerId: string;
+    sellerName?: string;
+    orderId: string;
+  } | null>(null);
+
   // Order History list: every backend Order, hydrated with its quote +
   // inquiry data so InquiryCard renders correctly. Falls back to the
   // bare order shape when the related quote/inquiry hasn't loaded yet.
@@ -137,9 +149,13 @@ export default function BuyerDashboard() {
         },
         orderId: o.id,
         orderStatus: o.status,
+        // Rate-this-shop target: the seller's users.id + display name.
+        sellerId: o.sellerId,
+        sellerName: o.seller?.businessName || o.seller?.fullName,
+        alreadyRated: ratedOrderIds.has(o.id),
       };
     });
-  }, [backendOrders, quotes, inquiries]);
+  }, [backendOrders, quotes, inquiries, ratedOrderIds]);
 
 
   // TODO: Transactions endpoint not yet implemented on backend
@@ -341,6 +357,15 @@ export default function BuyerDashboard() {
         // flag (post-mount), so a later re-mount of the same quote
         // doesn't keep popping the modal.
         setAutoPayQuoteId(null);
+        break;
+      case 'rate_shop':
+        if (payload?.sellerId && payload?.orderId) {
+          setRatingTarget({
+            sellerId: payload.sellerId,
+            sellerName: payload.sellerName,
+            orderId: payload.orderId,
+          });
+        }
         break;
       case 'view_order':
         if (payload?.id) {
@@ -890,6 +915,18 @@ export default function BuyerDashboard() {
             onAction={handleAction}
             onNavigate={handleTabChange}
             user={user}
+          />
+        )}
+
+        {ratingTarget && (
+          <RateShopModal
+            sellerUserId={ratingTarget.sellerId}
+            sellerName={ratingTarget.sellerName}
+            orderId={ratingTarget.orderId}
+            onSubmitted={() =>
+              setRatedOrderIds((prev) => new Set(prev).add(ratingTarget.orderId))
+            }
+            onClose={() => setRatingTarget(null)}
           />
         )}
       </div>

@@ -70,6 +70,18 @@ export class UpdateUserDto {
   @IsString()
   profilePicture?: string;
 
+  /** Business/shop logo (directory-card brand mark) — provider profiles
+   *  only; distinct from profilePicture, the owner's photo. */
+  @IsOptional()
+  @IsString()
+  logo?: string;
+
+  /** Shop image / cover shown on directory cards — provider profiles only.
+   *  GET /shops falls back to the newest product image when unset. */
+  @IsOptional()
+  @IsString()
+  coverImage?: string;
+
   // ===== Promoted from metadata jsonb (Phase 1) =====
 
   @IsOptional()

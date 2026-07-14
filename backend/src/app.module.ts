@@ -24,6 +24,8 @@ import { TeamModule } from './modules/team/team.module';
 import { PortfolioModule } from './modules/portfolio/portfolio.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReferralsModule } from './modules/referrals/referrals.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
 
 // Common
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -76,6 +78,8 @@ import promoterConfig from './config/promoter.config';
     PortfolioModule,
     NotificationsModule,
     ReferralsModule,
+    ReportsModule,
+    ReviewsModule,
   ],
   providers: [
     {

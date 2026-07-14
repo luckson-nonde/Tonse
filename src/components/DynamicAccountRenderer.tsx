@@ -514,6 +514,12 @@ export default function DynamicAccountRenderer({
                     paidQuote={item.paidQuote}
                     onAction={() => onAction('view_order', item)}
                     onDelete={() => onAction('delete_inquiry', item)}
+                    onRate={
+                      (item as any).sellerId
+                        ? () => onAction('rate_shop', item)
+                        : undefined
+                    }
+                    alreadyRated={(item as any).alreadyRated}
                   />
                 );
               }

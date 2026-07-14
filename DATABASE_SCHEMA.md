@@ -90,6 +90,7 @@ Entity file: `backend/src/modules/users/entities/user.entity.ts`
 | password | text | NO | — | `select:false`; `@Exclude({toPlainOnly:true})` |
 | refreshToken | varchar(500) | YES | — | `select:false`; `@Exclude({toPlainOnly:true})` |
 | role | enum | NO | `BUYER` | `BUYER, SELLER, SERVICE_PROVIDER, ADMIN` |
+| name | varchar(255) | YES | — | ADMIN ONLY — every other role's name lives on its profile row; admins have no profile table, so this is the one carve-out. NULL on non-admin rows. |
 | isNrcVerified | boolean | NO | `false` | |
 | nrcDocumentPath | text | YES | — | `select:false`; `@Exclude({toPlainOnly:true})` |
 | isActive | boolean | NO | `true` | |
@@ -97,8 +98,8 @@ Entity file: `backend/src/modules/users/entities/user.entity.ts`
 | lastNrcVerificationAt | timestamp | YES | — | |
 | activeProfileId | uuid | YES | — | |
 | activeProfileType | enum | YES | — | `BUYER, SELLER, SERVICE_PROVIDER` |
-| parentProviderId | uuid | YES | — | |
-| permissions | simple-array | YES | — | |
+| parentProviderId | uuid | YES | — | Provider staff (parent = owner) OR admin "User Manager" sub-accounts (parent = primary admin) |
+| permissions | simple-array | YES | — | Provider staff codes (`MANAGE_QUOTES`, …) or admin sub-account codes (`ADMIN_USERS`, `ADMIN_VERIFICATIONS`, `ADMIN_REPORTS`) |
 | assignedArchetype | varchar(32) | YES | — | |
 | mustChangePassword | boolean | NO | `false` | |
 | isDepartmentHead | boolean | NO | `false` | |
@@ -206,7 +207,9 @@ Entity file: `backend/src/modules/users/entities/seller-profile.entity.ts`
 | email | varchar(255) | YES | — | |
 | phone | varchar(20) | YES | — | |
 | dateOfBirth | date | YES | — | |
-| profilePicture | text | YES | — | |
+| profilePicture | text | YES | — | owner's photo (shop profile page) |
+| logo | text | YES | — | business/shop logo — directory-card brand mark, distinct from profilePicture |
+| coverImage | text | YES | — | shop image on directory cards; GET /shops falls back to newest product image |
 | socialLinks | text | YES | — | |
 | subRole | varchar(50) | YES | — | `PRODUCT_SELLER` |
 | companyName | varchar(255) | YES | — | |
@@ -269,7 +272,9 @@ Entity file: `backend/src/modules/users/entities/service-provider-profile.entity
 | email | varchar(255) | YES | — | |
 | phone | varchar(20) | YES | — | |
 | dateOfBirth | date | YES | — | |
-| profilePicture | text | YES | — | |
+| profilePicture | text | YES | — | owner's photo (shop profile page) |
+| logo | text | YES | — | business logo — directory-card brand mark, distinct from profilePicture |
+| coverImage | text | YES | — | showcase image on directory cards; GET /shops falls back to newest product image |
 | socialLinks | text | YES | — | |
 | subRole | varchar(50) | YES | — | `INDIVIDUAL_PROVIDER / AGENCY_PROVIDER / SKILLED_LABOUR` |
 | labourCategory | varchar(50) | YES | — | only populated when subRole = SKILLED_LABOUR |
@@ -624,10 +629,10 @@ Entity file: `backend/src/modules/audit/entities/audit-log.entity.ts`
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
 | id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
-| userId | uuid | YES | — | |
+| userId | uuid | YES | — | target user of the action |
 | providerId | uuid | YES | — | |
-| staffId | uuid | YES | — | |
-| staffName | varchar(100) | YES | — | |
+| staffId | uuid | YES | — | actor id — provider staff, or the acting admin on moderation actions (`USER_VERIFIED/REJECTED/SUSPENDED/UNSUSPENDED`, `REPORT_RESOLVED/DISMISSED`) |
+| staffName | varchar(100) | YES | — | actor label (admin displayId on moderation actions) |
 | action | varchar(50) | NO | — | |
 | entityType | varchar(100) | NO | — | |
 | entityId | uuid | YES | — | |
@@ -645,6 +650,57 @@ Entity file: `backend/src/modules/audit/entities/audit-log.entity.ts`
 Indexes: `idx_audit_logs_user_id` (userId) · `idx_audit_logs_action` (action) · `idx_audit_logs_entity` (entityType, entityId) · `idx_audit_logs_created_at` (createdAt)
 
 Relations: none (no `@ManyToOne`/relation decorators declared — `userId`, `providerId`, `staffId`, `entityId` are loose uuid columns without FK relation metadata)
+
+---
+
+### Module: Reports (user complaints)
+
+#### `user_reports`
+User-submitted complaints against other users (buyer ↔ seller/provider). Filed via `POST /reports` (any authenticated user); reviewed under `/admin/reports*` by the primary admin or a User Manager holding `ADMIN_REPORTS`.
+Entity file: `backend/src/modules/reports/entities/user-report.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| reporterId | uuid | NO | — | filer's users.id |
+| reportedUserId | uuid | NO | — | target's users.id |
+| category | enum | NO | — | `SCAM_FRAUD, ABUSIVE_BEHAVIOR, NO_SHOW, FAKE_LISTING, PAYMENT_DISPUTE, OTHER` |
+| description | text | NO | — | |
+| contextType | enum | YES | — | `INQUIRY, QUOTE, ORDER` — surface the report was filed from |
+| contextId | uuid | YES | — | |
+| status | enum | NO | `OPEN` | `OPEN, RESOLVED, DISMISSED` |
+| resolutionNote | text | YES | — | |
+| resolvedByAdminId | uuid | YES | — | acting admin (primary or User Manager) |
+| resolvedAt | timestamp | YES | — | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn()` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn()` |
+
+Indexes: `idx_user_reports_reporter` (reporterId) · `idx_user_reports_reported` (reportedUserId) · `idx_user_reports_status` (status) · `idx_user_reports_created_at` (createdAt)
+
+Relations: none — loose uuid columns like `audit_logs`, so reports survive either party's account deletion. One OPEN report per (reporter, target) pair is enforced in `ReportsService.create()` (409 on resubmit).
+
+---
+
+### Module: Reviews (shop ratings)
+
+#### `shop_reviews`
+A buyer's rating of a shop/provider, earned through a real trade: `POST /shops/:sellerUserId/reviews` only accepts a review when the caller has an order with that provider in DELIVERED or COMPLETED status. Aggregated (AVG + COUNT) into `GET /shops` and `GET /shops/:id/profile` via a pre-grouped `review_agg` CTE (pre-aggregation matters — the shops query fans out per category).
+Entity file: `backend/src/modules/reviews/entities/shop-review.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| providerUserId | uuid | NO | — | seller's users.id (= ShopResult.sellerId, NOT the profile row id) |
+| reviewerUserId | uuid | NO | — | buyer's users.id |
+| orderId | uuid | NO | — | the qualifying order |
+| rating | int | NO | — | 1–5 |
+| comment | text | YES | — | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn()` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn()` |
+
+Indexes: `idx_shop_reviews_provider` (providerUserId) · `idx_shop_reviews_reviewer` (reviewerUserId) · `idx_shop_reviews_order` (orderId) · `idx_shop_reviews_reviewer_order_unique` (reviewerUserId, orderId — **unique**; one review per order, service catches 23505 → 409)
+
+Relations: none — loose uuid columns like `audit_logs`/`user_reports`.
 
 ---
 

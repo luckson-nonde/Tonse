@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MapPin, Clock, CheckCircle2, Eye, Users } from 'lucide-react';
+import { MapPin, Clock, CheckCircle2, Eye, Users, Star } from 'lucide-react';
 import Button from './Button';
 import { ARCHETYPE_CONFIG } from '../services/archetypeConfig';
 import { getCategorySchema } from '../services/categories';
@@ -14,6 +14,12 @@ interface InquiryCardProps {
   /** Buyer action: surface the reserved (overflow) quote batch. Rendered
    *  only when `inquiry.reserveCount > 0`. */
   onReleaseReserve?: () => void;
+  /** Order-history only: opens the rate-shop modal. Shown when the order
+   *  is DELIVERED/COMPLETED and this handler is provided. */
+  onRate?: () => void;
+  /** Order-history only: this order already has a review — show a quiet
+   *  "Rated" state instead of the button. */
+  alreadyRated?: boolean;
 }
 
 export default function InquiryCard({
@@ -24,6 +30,8 @@ export default function InquiryCard({
   onAction,
   onDelete,
   onReleaseReserve,
+  onRate,
+  alreadyRated,
 }: InquiryCardProps) {
   // Inquiries no longer carry a `category` string column — they live
   // in the inquiry_categories junction. The buyer endpoint hydrates
@@ -256,6 +264,29 @@ export default function InquiryCard({
                 Paid on {new Date(paidQuote.updatedAt).toLocaleDateString()} · via Mobile Money
               </p>
             </div>
+
+            {/* Rate-the-shop — only once the order actually reached the
+                buyer (DELIVERED/COMPLETED), and only where the order list
+                provides the handler. */}
+            {onRate &&
+              ['DELIVERED', 'COMPLETED'].includes(String(paidQuote.status || '')) &&
+              (alreadyRated ? (
+                <div className="flex items-center gap-2 text-[12px] font-bold text-slate-400 font-sans px-1">
+                  <Star className="w-4 h-4 text-[#C9973A] fill-[#C9973A]" />
+                  You rated this shop
+                </div>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRate();
+                  }}
+                  className="w-full py-2.5 rounded-xl border border-[#e8dcc4] bg-[#fdf6e9] text-[#8a6118] text-[12px] font-bold font-sans flex items-center justify-center gap-1.5 hover:border-[#d49b35] transition-colors"
+                >
+                  <Star className="w-4 h-4" />
+                  Rate this shop
+                </button>
+              ))}
           </div>
         )}
       </div>

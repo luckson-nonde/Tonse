@@ -29,6 +29,7 @@ import { useDashboard } from '../DashboardContext';
 import { motion, AnimatePresence } from 'motion/react';
 import Button from '../components/Button';
 import { getProfileSchema, ProfileSection } from '../services/userSchemas';
+import { filterToUpdatableUserFields } from '../services/updatableUserFields';
 import DynamicProfileForm from '../components/DynamicProfileForm';
 
 export default function BuyerProfilePage() {
@@ -73,7 +74,10 @@ export default function BuyerProfilePage() {
       if (logo !== undefined) payload.profilePicture = logo;
       if (ownerName !== undefined) payload.name = ownerName;
       if (gps?.latitude != null) { payload.latitude = gps.latitude; payload.longitude = gps.longitude; }
-      await updateUser(payload);
+      // PATCH /users runs forbidNonWhitelisted — a stray schema-only key
+      // (e.g. `country`) used to 400 the whole save, killing even the
+      // profile-picture change. Send only DTO-accepted fields.
+      await updateUser(filterToUpdatableUserFields(payload));
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
       setIsEditModalOpen(false);
