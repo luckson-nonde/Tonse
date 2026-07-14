@@ -18,6 +18,7 @@ export const MASTER_LOAN_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'home', label: 'Home', icon: 'Home', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     { id: 'leads', label: 'Loan Requests', icon: 'FileText', permissions: [PERMISSIONS.MANAGE_LOANS] },
     { id: 'my-quotes', label: 'Loan Offers', icon: 'MessageSquare', permissions: [PERMISSIONS.MANAGE_LOANS] },
+    { id: 'loan-terms', label: 'Loan Terms', icon: 'FileText', permissions: [PERMISSIONS.MANAGE_TEAM] },
     { id: 'archived-leads', label: 'Archived Requests', icon: 'Archive', permissions: [PERMISSIONS.MANAGE_LOANS] },
     { id: 'team', label: 'Team Management', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
@@ -40,6 +41,11 @@ export const MASTER_LOAN_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       subtitle: 'Offers you have made and their status',
       componentType: 'loan_offers',
       dataKey: 'quotes',
+    },
+    'loan-terms': {
+      title: 'Loan Terms',
+      subtitle: 'Author your terms & conditions once, per loan type — they auto-fill into every offer',
+      componentType: 'loan_terms',
     },
     'archived-leads': {
       title: 'Archived Requests',

@@ -27,6 +27,8 @@ import {
   ShieldCheck,
   PackageOpen,
   Car,
+  Landmark,
+  Coins,
 } from 'lucide-react';
 
 export type CategoryType = 'PRODUCTS' | 'SERVICES' | 'VENUES' | 'LABOR';
@@ -216,6 +218,22 @@ type ParamSection = typeof PREFERENCES_CONFIG.SERVICES.section2;
 // even though the archetype is the same — e.g. all event subtypes are
 // SERVICES, but the trade-offs a buyer cares about for renting equipment are
 // not the trade-offs they care about for hiring a planner.
+// Shared by every loan type — how long a lender's offer stays open for the
+// borrower to compare before it lapses. (Loans reuse the SERVICES base, so
+// without this the borrower would see generic "how long should quotes remain
+// valid" copy.)
+const LOAN_VALIDITY: ParamSection = {
+  title: 'Offer Validity',
+  description: 'How long should lender offers stay open for you to compare?',
+  icon: Clock,
+  options: [
+    { id: '24h', label: '24 Hours' },
+    { id: '3d', label: '3 Days' },
+    { id: '1w', label: '1 Week' },
+    { id: 'flexible', label: 'Flexible' },
+  ],
+};
+
 const PREFERENCES_OVERRIDES: Record<
   string,
   Partial<{ section1: SectionShape; section2: ParamSection; section3: ParamSection }>
@@ -442,6 +460,90 @@ const PREFERENCES_OVERRIDES: Record<
       ],
     },
   },
+
+  // ─── LOANS ──────────────────────────────────────────────────────────
+  // Each loan TYPE gets its own preferences: which lenders to reach and what
+  // the borrower optimises for differ by how the loan is secured. Loans reuse
+  // the SERVICES base, so these fully replace all three sections; the component
+  // also switches its language to lenders/offers when the key starts with 'loan'.
+
+  'loan-collateral': {
+    section1: {
+      title: 'Target Lenders',
+      description: 'Which kind of lender should see your secured loan request?',
+      icon: Navigation,
+      options: [
+        { id: 'banks',        label: 'Banks',                 icon: Landmark    },
+        { id: 'asset_backed', label: 'Asset-backed Lenders',  icon: ShieldCheck },
+        { id: 'microfinance', label: 'Microfinance',          icon: Building2   },
+        { id: 'any',          label: 'Any Lender',            icon: Users       },
+      ],
+    },
+    section2: {
+      title: 'What Matters Most',
+      description: "What's your top priority in an offer?",
+      icon: Settings,
+      options: [
+        { id: 'interest',     label: 'Lowest Interest'      },
+        { id: 'ltv',          label: 'Highest Loan-to-Value'},
+        { id: 'disbursement', label: 'Fastest Disbursement' },
+        { id: 'fees',         label: 'Lowest Fees'          },
+      ],
+    },
+    section3: LOAN_VALIDITY,
+  },
+
+  'loan-salary': {
+    section1: {
+      title: 'Target Lenders',
+      description: 'Which kind of lender should see your salary-based request?',
+      icon: Navigation,
+      options: [
+        { id: 'banks',        label: 'Banks',         icon: Landmark  },
+        { id: 'microfinance', label: 'Microfinance',  icon: Building2 },
+        { id: 'saccos',       label: 'SACCOs',        icon: Coins     },
+        { id: 'any',          label: 'Any Lender',    icon: Users     },
+      ],
+    },
+    section2: {
+      title: 'What Matters Most',
+      description: "What's your top priority in an offer?",
+      icon: Settings,
+      options: [
+        { id: 'interest',     label: 'Lowest Interest'         },
+        { id: 'repayment',    label: 'Lowest Monthly Repayment'},
+        { id: 'tenure',       label: 'Longest Tenure'          },
+        { id: 'disbursement', label: 'Fastest Disbursement'    },
+      ],
+    },
+    section3: LOAN_VALIDITY,
+  },
+
+  'loan-government': {
+    section1: {
+      title: 'Target Lenders',
+      description: 'Which kind of lender should see your public-sector request?',
+      icon: Navigation,
+      options: [
+        { id: 'banks',        label: 'Banks',                  icon: Landmark  },
+        { id: 'payroll',      label: 'Payroll-linked Lenders', icon: Briefcase },
+        { id: 'microfinance', label: 'Microfinance',           icon: Building2 },
+        { id: 'any',          label: 'Any Lender',             icon: Users     },
+      ],
+    },
+    section2: {
+      title: 'What Matters Most',
+      description: "What's your top priority in an offer?",
+      icon: Settings,
+      options: [
+        { id: 'interest', label: 'Lowest Interest'   },
+        { id: 'payroll',  label: 'Payroll Deduction' },
+        { id: 'tenure',   label: 'Longest Tenure'    },
+        { id: 'approval', label: 'Fastest Approval'  },
+      ],
+    },
+    section3: LOAN_VALIDITY,
+  },
 };
 
 function resolveConfig(categoryType: CategoryType, categoryKey?: string) {
@@ -463,12 +565,20 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
   // reads wrong when the target is a venue, service provider, or labour
   // worker. (Spotted on the screenshot: "This Shop Only" appearing
   // when sending direct to an event venue.)
+  // Loan mode: a loan request negotiates OFFERS from LENDERS, not quotes from
+  // shops. Detected off the sub-category key ('loan-collateral' etc.) so the
+  // whole screen speaks the right language without a new CategoryType.
+  const isLoan = (categoryKey || '').startsWith('loan');
+  const nounSingular = isLoan ? 'offer' : 'quote';
+  const nounPlural = isLoan ? 'offers' : 'quotes';
+
   const targetNoun =
-    categoryType === 'VENUES'   ? 'Venue'
+    isLoan ? 'Lender'
+    : categoryType === 'VENUES'   ? 'Venue'
     : categoryType === 'SERVICES' ? 'Provider'
     : categoryType === 'LABOR'    ? 'Worker'
     : 'Shop';
-  const PrimaryIcon = categoryType === 'VENUES' ? Building2 : Store;
+  const PrimaryIcon = isLoan ? Landmark : categoryType === 'VENUES' ? Building2 : Store;
 
   const section1 = isTargeted
     ? {
@@ -570,8 +680,10 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
                 </h1>
                 <p className="text-[14px] text-[#1a1a2e]/60 leading-relaxed font-medium">
                   {isTargeted
-                    ? `Fine-tune how your inquiry reaches ${targetedShop!.name} and tell us how many quotes you'd like back.`
-                    : "Tell us where to look, what matters most, and how many quotes you'd like to receive before we close the inquiry."}
+                    ? `Fine-tune how your ${isLoan ? 'request' : 'inquiry'} reaches ${targetedShop!.name} and tell us how many ${nounPlural} you'd like back.`
+                    : isLoan
+                      ? 'Tell us which lenders to reach, what matters most in an offer, and how many offers you want to compare before we close the request.'
+                      : "Tell us where to look, what matters most, and how many quotes you'd like to receive before we close the inquiry."}
                 </p>
               </div>
             </div>
@@ -592,7 +704,9 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
                 </div>
               </div>
               <p className="text-[13px] text-[#1a1a2e]/65 leading-relaxed font-medium mb-5">
-                These settings tune which providers see your inquiry, how they compete for it, and when we stop accepting more offers.
+                {isLoan
+                  ? 'These settings tune which lenders see your request, how they compete for it, and when we stop accepting more offers.'
+                  : 'These settings tune which providers see your inquiry, how they compete for it, and when we stop accepting more offers.'}
               </p>
               <ul className="space-y-3">
                 {isTargeted ? (
@@ -614,20 +728,23 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
                   <li className="flex items-start gap-3">
                     <Navigation className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
                     <p className="text-[12px] text-[#1a1a2e]/80 leading-relaxed">
-                      <span className="font-bold text-[#1a1a2e]">Target shops</span> narrow your inquiry to the right kind of seller.
+                      <span className="font-bold text-[#1a1a2e]">{isLoan ? 'Target lenders' : 'Target shops'}</span>{' '}
+                      {isLoan
+                        ? 'narrow your request to the right kind of lender.'
+                        : 'narrow your inquiry to the right kind of seller.'}
                     </p>
                   </li>
                 )}
                 <li className="flex items-start gap-3">
                   <Settings className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
                   <p className="text-[12px] text-[#1a1a2e]/80 leading-relaxed">
-                    <span className="font-bold text-[#1a1a2e]">Quote priority</span> tells us which offers to surface first.
+                    <span className="font-bold text-[#1a1a2e]">{isLoan ? 'Offer priority' : 'Quote priority'}</span> tells us which offers to surface first.
                   </p>
                 </li>
                 <li className="flex items-start gap-3">
                   <Layers className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
                   <p className="text-[12px] text-[#1a1a2e]/80 leading-relaxed">
-                    <span className="font-bold text-[#1a1a2e]">Quote count</span> caps how many offers you'll receive — we close the inquiry the moment your target is reached.
+                    <span className="font-bold text-[#1a1a2e]">{isLoan ? 'Offer count' : 'Quote count'}</span> caps how many {nounPlural} you'll receive — we close the {isLoan ? 'request' : 'inquiry'} the moment your target is reached.
                   </p>
                 </li>
                 <li className="flex items-start gap-3">
@@ -740,16 +857,16 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
                   <div className="w-8 h-8 rounded-full bg-[rgba(201,151,58,0.08)] flex items-center justify-center">
                     <Layers className="w-4 h-4 text-[#C9973A]" />
                   </div>
-                  Number of Quotations
+                  {isLoan ? 'Number of Lender Offers' : 'Number of Quotations'}
                 </h3>
 
                 {isThisShopOnly ? (
                   /* Fixed: exactly 1 quote from this specific shop */
                   <div className="flex items-center justify-between gap-4 px-5 py-4 rounded-2xl bg-[#fdf6e9]/60 border border-[#C9973A]/20">
                     <div>
-                      <p className="text-[13px] font-bold text-[#1a1a2e]">1 quote expected</p>
+                      <p className="text-[13px] font-bold text-[#1a1a2e]">1 {nounSingular} expected</p>
                       <p className="text-[11px] text-[#94a3b8] font-medium mt-0.5">
-                        You're sending directly to one {targetNoun.toLowerCase()} — one quote is all you need.
+                        You're sending directly to one {targetNoun.toLowerCase()} — one {nounSingular} is all you need.
                       </p>
                     </div>
                     <div className="text-right shrink-0">
@@ -763,7 +880,9 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
                     <p className="text-[11px] font-medium text-[#94a3b8] ml-1 leading-relaxed font-sans">
                       {isTargeted
                         ? "Choose how many branch locations can respond before we close the inquiry."
-                        : "Choose how many quotes you'd like to receive. We'll automatically close the inquiry once your target is reached."}
+                        : isLoan
+                          ? "Choose how many lender offers you'd like to receive. We'll automatically close the request once your target is reached."
+                          : "Choose how many quotes you'd like to receive. We'll automatically close the inquiry once your target is reached."}
                     </p>
                     <div className={`grid gap-2 md:gap-3 ${
                       isTargeted
@@ -791,7 +910,7 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
                               {tier.count}
                             </span>
                             <span className={`text-[9px] font-bold uppercase tracking-[0.14em] transition-colors ${isSelected ? 'text-[#C9973A]' : 'text-[#cbd5e1]'}`}>
-                              quotes
+                              {nounPlural}
                             </span>
                             <span className={`text-[12px] font-black mt-1 transition-colors ${isSelected ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`}>
                               K{tier.price}
@@ -802,7 +921,8 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
                     </div>
                     <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-[#fdf6e9]/60 border border-[#C9973A]/15 mt-1">
                       <p className="text-[11px] font-medium text-[#1a1a2e]/70 leading-snug">
-                        Inquiry auto-closes after <span className="font-black text-[#1a1a2e]">{selectedTier.count} quotes</span>
+                        {isLoan ? 'Request' : 'Inquiry'} auto-closes after{' '}
+                        <span className="font-black text-[#1a1a2e]">{selectedTier.count} {nounPlural}</span>
                       </p>
                       <p className="text-[12px] font-black text-[#C9973A] shrink-0">
                         Service fee: K{selectedTier.price}

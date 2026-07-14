@@ -77,24 +77,32 @@ export class AuditService {
     });
   }
 
-  async findByUser(userId: string, limit: number = 50): Promise<AuditLog[]> {
+  // providerId scopes every read to the caller's shop (passed by the
+  // controller from the JWT) so one lender can't read another's trail.
+  async findByUser(userId: string, limit: number = 50, providerId?: string): Promise<AuditLog[]> {
+    const where: any = { userId };
+    if (providerId) where.providerId = providerId;
     return this.auditRepository.find({
-      where: { userId },
+      where,
       order: { createdAt: 'DESC' },
       take: limit,
     });
   }
 
-  async findByEntity(entityType: string, entityId: string): Promise<AuditLog[]> {
+  async findByEntity(entityType: string, entityId: string, providerId?: string): Promise<AuditLog[]> {
+    const where: any = { entityType, entityId };
+    if (providerId) where.providerId = providerId;
     return this.auditRepository.find({
-      where: { entityType, entityId },
+      where,
       order: { createdAt: 'DESC' },
     });
   }
 
-  async findByAction(action: string, limit: number = 50): Promise<AuditLog[]> {
+  async findByAction(action: string, limit: number = 50, providerId?: string): Promise<AuditLog[]> {
+    const where: any = { action };
+    if (providerId) where.providerId = providerId;
     return this.auditRepository.find({
-      where: { action },
+      where,
       order: { createdAt: 'DESC' },
       take: limit,
     });

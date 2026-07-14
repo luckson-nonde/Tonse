@@ -33,7 +33,10 @@ export class QuotesService {
     return parsed;
   }
 
-  async create(createQuoteDto: CreateQuoteDto): Promise<Quote> {
+  async create(
+    createQuoteDto: CreateQuoteDto,
+    opts: { skipInquiryTransition?: boolean } = {},
+  ): Promise<Quote> {
     const parsedDto = this.parseJsonFields(createQuoteDto);
     const quote = this.quotesRepository.create(parsedDto);
     const saved = (await this.quotesRepository.save(quote)) as unknown as Quote;
@@ -44,7 +47,10 @@ export class QuotesService {
     // /inquiries/:id with status=QUOTED and 403'd because that
     // endpoint gates on inquiry.buyerId === req.user.id — sellers
     // (and their staff) aren't the buyer.
-    if (saved.inquiryId) {
+    // `skipInquiryTransition` is set for a loan DECLINE — a decline is not an
+    // offer, so it must NOT flip the request to QUOTED (that would hide it from
+    // every other lender and mislead the borrower).
+    if (saved.inquiryId && !opts.skipInquiryTransition) {
       try {
         await this.inquiriesService.updateStatus(saved.inquiryId, 'QUOTED');
       } catch (e) {
@@ -157,6 +163,15 @@ export class QuotesService {
   async saveCounter(id: string, counter: any): Promise<Quote> {
     const quote = await this.findOne(id);
     const dynamicFields = { ...(quote?.dynamicFields || {}), counter };
+    await this.quotesRepository.update(id, { dynamicFields });
+    return this.findOne(id);
+  }
+
+  /** Shallow-merge a patch into the quote's dynamicFields (e.g. loan
+   *  lifecycle acknowledgements). Preserves everything else. */
+  async patchDynamicFields(id: string, patch: Record<string, any>): Promise<Quote> {
+    const quote = await this.findOne(id);
+    const dynamicFields = { ...(quote?.dynamicFields || {}), ...patch };
     await this.quotesRepository.update(id, { dynamicFields });
     return this.findOne(id);
   }

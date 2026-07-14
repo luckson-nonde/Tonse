@@ -45,6 +45,7 @@ export interface ViewDefinition {
     | 'loan_requests'
     | 'loan_offers'
     | 'loan_home'
+    | 'loan_terms'
     | 'home_renderer'
     | 'leads_renderer'
     | 'paid_orders_renderer'

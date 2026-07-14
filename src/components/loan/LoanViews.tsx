@@ -14,9 +14,27 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
 import { loanService } from '../../services/api/loanService';
+import { recordInquiryView } from '../../services/api/inquiryService';
 import { generateQuoteSchema, type QuoteField } from '../../services/quoteSchemaGenerator';
+import {
+  loanTypeKey,
+  DEFAULT_INTEREST_TYPE,
+  computeMonthlyRepayment,
+  roundZmw,
+  nextLoanStage,
+  LOAN_STAGE_LABEL,
+  loanStageIndex,
+  type LoanTypeKey,
+  type LoanStage,
+} from '../../utils/loan';
 
 const zmw = (v: any) => `ZMW ${Number(v || 0).toLocaleString()}`;
+
+// Survives LoanRequestsView remounts within the session, so a lender
+// navigating away and back doesn't re-inflate the borrower's "N lenders
+// viewed" count. (Server dedup per (viewer,inquiry) is the proper fix; this
+// keeps the client from padding it in the meantime.)
+const SESSION_VIEWED_REQUESTS = new Set<string>();
 
 // Human-friendly rendering of a borrower's request attributes (the loan
 // officer needs the full picture to accept/decline).
@@ -27,9 +45,19 @@ const prettifyKey = (k: string) =>
     .replace(/_/g, ' ')
     .trim();
 
+// Borrower follow-up contact is PRIVATE until the borrower accepts an offer —
+// it's revealed only in the accepted-offer "follow up" panel, never on the open
+// request. Keep these keys out of the general attribute dump.
+const HIDDEN_ATTR_KEYS = new Set(['contactName', 'contactPhone', 'contactEmail', 'preferredContact']);
+
 const RequestDetails: React.FC<{ attributes: Record<string, any> }> = ({ attributes }) => {
   const entries = Object.entries(attributes || {}).filter(
-    ([, v]) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0),
+    ([k, v]) =>
+      !HIDDEN_ATTR_KEYS.has(k) &&
+      v !== undefined &&
+      v !== null &&
+      v !== '' &&
+      !(Array.isArray(v) && v.length === 0),
   );
   if (entries.length === 0) return null;
   return (
@@ -53,14 +81,69 @@ const OfferForm: React.FC<{
   request: any;
   onCancel: () => void;
   onSubmit: (values: Record<string, any>) => Promise<void>;
-}> = ({ request, onCancel, onSubmit }) => {
+  /** Force loan behaviour + type (used on REVISE, where `request` is the
+   *  offer's inquiry relation and lacks categoryIds to auto-detect from). */
+  isLoanOverride?: boolean;
+  loanTypeOverride?: LoanTypeKey | null;
+  /** Pre-fill values, wins over the request-derived defaults. On revise this
+   *  carries the EXISTING offer's terms overlaid with the borrower's counter,
+   *  so the lender tweaks rather than re-types (and custom T&C survive). */
+  seed?: Record<string, any>;
+}> = ({ request, onCancel, onSubmit, isLoanOverride, loanTypeOverride, seed }) => {
+  const { user } = useAuth();
   const categoryKey = request.categoryIds?.[0] || request.category || 'loans';
   const { fields } = generateQuoteSchema(categoryKey, request.attributes || {}, 'STANDARD');
-  const [values, setValues] = useState<Record<string, any>>({});
+  const lt = loanTypeOverride ?? loanTypeKey(categoryKey, request.category, request.title);
+  const isLoan = isLoanOverride ?? !!lt;
+
+  // Terms & Conditions default from the lender's saved, per-loan-type terms
+  // (type-specific → general fallback) so they rarely retype boilerplate.
+  const savedTerms = ((user as any)?.loanTerms || {}) as Record<string, string>;
+  const defaultTerms = isLoan ? savedTerms[lt as string] || savedTerms.general || '' : '';
+
+  // Seed the offer from the borrower's ask + a sensible interest method per
+  // loan type, so the lender edits rather than types everything from scratch.
+  // On revise, `seed` (existing offer + counter) overrides these defaults.
+  const [values, setValues] = useState<Record<string, any>>(() => {
+    if (!isLoan) return seed ? { ...seed } : {};
+    const base: Record<string, any> = {
+      price: request.attributes?.loanAmount ?? '',
+      tenureMonths: request.attributes?.tenureMonths ?? '',
+      interestType: lt ? DEFAULT_INTEREST_TYPE[lt] : 'Flat',
+      conditions: defaultTerms,
+    };
+    // Only let defined seed values override, so a missing counter field
+    // doesn't blank out a good default.
+    const merged = { ...base };
+    if (seed) {
+      for (const [k, v] of Object.entries(seed)) {
+        if (v !== undefined && v !== null && v !== '') merged[k] = v;
+      }
+    }
+    return merged;
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const set = (name: string, v: any) => setValues((prev) => ({ ...prev, [name]: v }));
+
+  // Auto-price: derive the monthly repayment from amount, monthly rate, tenure
+  // and interest method (Flat vs Reducing Balance). Kept in `values` so it
+  // submits, and surfaced read-only in the grid + a summary strip below.
+  const monthly = isLoan
+    ? computeMonthlyRepayment({
+        principal: Number(values.price) || 0,
+        monthlyRatePct: Number(values.interestRatePct) || 0,
+        tenure: values.tenureMonths,
+        interestType: values.interestType,
+      })
+    : 0;
+  const tenureN = Number(String(values.tenureMonths ?? '').match(/(\d+)/)?.[1] || 0);
+  const totalRepayable = monthly && tenureN ? monthly * tenureN : 0;
+  useEffect(() => {
+    if (!isLoan) return;
+    setValues((prev) => ({ ...prev, monthlyRepayment: monthly ? roundZmw(monthly) : '' }));
+  }, [monthly, isLoan]);
 
   const handleSubmit = async () => {
     const missing = fields.filter((f) => f.required && (values[f.name] === undefined || values[f.name] === ''));
@@ -81,6 +164,18 @@ const OfferForm: React.FC<{
 
   const renderField = (f: QuoteField) => {
     const common = 'w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#C9973A] outline-none';
+    // Monthly repayment is auto-priced for loans — show it read-only so the
+    // lender can't fat-finger the arithmetic.
+    if (isLoan && f.name === 'monthlyRepayment') {
+      return (
+        <div className={`${common} bg-slate-50 flex items-center justify-between`}>
+          <span className="font-bold text-slate-900">
+            {values.monthlyRepayment ? `ZMW ${Number(values.monthlyRepayment).toLocaleString()}` : '—'}
+          </span>
+          <span className="text-[10px] font-black uppercase tracking-wider text-[#C9973A]">Auto</span>
+        </div>
+      );
+    }
     if (f.type === 'select') {
       return (
         <select className={common} value={values[f.name] ?? ''} onChange={(e) => set(f.name, e.target.value)}>
@@ -131,6 +226,26 @@ const OfferForm: React.FC<{
           </div>
         ))}
       </div>
+
+      {isLoan && monthly > 0 && (
+        <div className="mt-4 p-3.5 rounded-2xl bg-[#fdf6e9]/70 border border-[#C9973A]/20 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[#C9973A]">Monthly Repayment</p>
+            <p className="text-lg font-black text-slate-900">ZMW {roundZmw(monthly).toLocaleString()}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Total Repayable{tenureN ? ` · ${tenureN} mo` : ''}
+            </p>
+            <p className="text-lg font-black text-slate-900">ZMW {roundZmw(totalRepayable).toLocaleString()}</p>
+          </div>
+          <p className="w-full text-[11px] text-slate-500 leading-snug">
+            Auto-calculated from the amount at {values.interestRatePct || 0}%/mo ({values.interestType || 'interest'})
+            over {tenureN || '—'} months. Change any input above and this updates instantly.
+          </p>
+        </div>
+      )}
+
       <div className="flex gap-2 justify-end mt-4">
         <button onClick={onCancel} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700">
           Cancel
@@ -167,6 +282,20 @@ export const LoanRequestsView: React.FC = () => {
     load();
   }, [load]);
 
+  // Record a lender view of each matched request once per session, so the
+  // borrower sees "N lenders viewed" progress. The backend only counts
+  // non-buyer/non-owner hits; the ref dedupes within this session.
+  useEffect(() => {
+    if (!requests.length) return;
+    if (user?.role === 'BUYER' || user?.role === 'ADMIN') return;
+    requests.forEach((r) => {
+      const key = String(r.id);
+      if (SESSION_VIEWED_REQUESTS.has(key)) return;
+      SESSION_VIEWED_REQUESTS.add(key);
+      recordInquiryView(r.id).catch(() => {});
+    });
+  }, [requests, user?.role]);
+
   const submitOffer = async (request: any, values: Record<string, any>) => {
     const { price, ...terms } = values;
     await loanService.makeOffer({
@@ -191,15 +320,21 @@ export const LoanRequestsView: React.FC = () => {
   };
 
   const decline = async (request: any) => {
-    const reason = window.prompt('Reason for declining this loan request?') || '';
+    // window.prompt returns null on Cancel — capture it BEFORE defaulting, or
+    // Cancel would fall through and decline the request anyway.
+    const reason = window.prompt('Reason for declining this loan request?');
     if (reason === null) return;
-    await loanService.decline({
-      inquiryId: String(request.id),
-      inquiryTitle: request.title || 'Loan Request',
-      providerName: user?.companyName || user?.name || 'Lender',
-      reason,
-    });
-    await load();
+    try {
+      await loanService.decline({
+        inquiryId: String(request.id),
+        inquiryTitle: request.title || 'Loan Request',
+        providerName: user?.companyName || user?.name || 'Lender',
+        reason: reason || 'Declined',
+      });
+      await load();
+    } catch (e: any) {
+      alert(e?.message || 'Failed to decline the request. Please try again.');
+    }
   };
 
   if (loading) {
@@ -405,6 +540,7 @@ export const LoanOffersView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [reviseId, setReviseId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [stageBusyId, setStageBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -424,6 +560,40 @@ export const LoanOffersView: React.FC = () => {
     await loanService.revise(String(offer.id), { price, message: terms.conditions, ...terms });
     setReviseId(null);
     await load();
+  };
+
+  // Revise seeds the form from the EXISTING offer, overlaid with the borrower's
+  // pending counter, and forces loan behaviour/type (the offer's inquiry
+  // relation has no categoryIds to auto-detect from).
+  const reviseProps = (o: any) => {
+    const d = o.dynamicFields || {};
+    const c = d.counter && !d.counter.resolved ? d.counter : null;
+    return {
+      loanType: loanTypeKey(o.inquiryTitle, o.inquiry?.category, o.inquiry?.title),
+      seed: {
+        price: c?.requestedAmount ?? o.price,
+        interestRatePct: c?.maxInterestRatePct ?? d.interestRatePct,
+        interestType: d.interestType,
+        tenureMonths: c?.requestedTenure ?? d.tenureMonths,
+        processingFee: d.processingFee,
+        disbursementDays: d.disbursementDays,
+        validity: d.validity,
+        conditions: d.conditions ?? o.message,
+      } as Record<string, any>,
+    };
+  };
+
+  // Advance an accepted loan's lifecycle stage (drives the borrower's tracker).
+  const advanceStage = async (offer: any, stage: LoanStage) => {
+    setStageBusyId(String(offer.id));
+    try {
+      await loanService.advanceStage(String(offer.id), stage);
+      await load();
+    } catch (e: any) {
+      alert(e?.message || 'Failed to update the loan stage.');
+    } finally {
+      setStageBusyId(null);
+    }
   };
 
   const detailOffer = offers.find((o) => String(o.id) === detailId);
@@ -511,6 +681,42 @@ export const LoanOffersView: React.FC = () => {
                 <p className="text-xs font-bold text-emerald-700 flex items-center gap-1.5 mb-2">
                   <PhoneCall className="w-4 h-4" /> Approved — follow up with the borrower
                 </p>
+
+                {/* Lifecycle control — advance the loan; drives the borrower's tracker. */}
+                {(() => {
+                  const stage = (d.stage || 'ACCEPTED') as LoanStage;
+                  const next = nextLoanStage(stage);
+                  const borrowerConfirmed = !!d.borrowerConfirmedAt;
+                  const atDisbursed = loanStageIndex(stage) >= loanStageIndex('DISBURSED');
+                  return (
+                    <div className="mb-3">
+                      <div className="flex items-center gap-2 flex-wrap mb-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700/60">
+                          Loan stage
+                        </span>
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                          {LOAN_STAGE_LABEL[stage]}
+                        </span>
+                        {atDisbursed &&
+                          (borrowerConfirmed ? (
+                            <span className="text-[11px] font-bold text-emerald-700">· Borrower confirmed receipt ✓</span>
+                          ) : (
+                            <span className="text-[11px] font-bold text-amber-600">· Awaiting borrower confirmation</span>
+                          ))}
+                      </div>
+                      {next && (
+                        <button
+                          onClick={() => advanceStage(o, next.stage)}
+                          disabled={stageBusyId === String(o.id)}
+                          className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {stageBusyId === String(o.id) && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                          {next.label}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
                 {hasContact ? (
                   <>
                     <div className="text-[13px] text-emerald-900 space-y-0.5 mb-3">
@@ -584,13 +790,20 @@ export const LoanOffersView: React.FC = () => {
               </div>
             )}
 
-            {reviseId === String(o.id) && (
-              <OfferForm
-                request={o.inquiry || { attributes: {}, categoryIds: ['loans'] }}
-                onCancel={() => setReviseId(null)}
-                onSubmit={(v) => submitRevision(o, v)}
-              />
-            )}
+            {reviseId === String(o.id) &&
+              (() => {
+                const rp = reviseProps(o);
+                return (
+                  <OfferForm
+                    request={o.inquiry || { attributes: {}, categoryIds: ['loans'] }}
+                    isLoanOverride={true}
+                    loanTypeOverride={rp.loanType}
+                    seed={rp.seed}
+                    onCancel={() => setReviseId(null)}
+                    onSubmit={(v) => submitRevision(o, v)}
+                  />
+                );
+              })()}
           </div>
         );
       })}

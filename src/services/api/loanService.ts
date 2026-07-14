@@ -40,4 +40,11 @@ export const loanService = {
     const res = await apiClient.patch(`/loans/offers/${id}`, body);
     return payload<any>(res, {});
   },
+
+  /** Advance an accepted loan's lifecycle stage
+   *  (CONTACTED / VERIFIED / DISBURSED / COMPLETED). */
+  async advanceStage(id: string, stage: string): Promise<any> {
+    const res = await apiClient.patch(`/loans/offers/${id}/stage`, { stage });
+    return payload<any>(res, {});
+  },
 };

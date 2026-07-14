@@ -37,6 +37,34 @@ export default function LoanOfferCard({ offer, onView }: LoanOfferCardProps) {
   const badge = STATUS_STYLE[status] || { label: status, cls: 'bg-slate-100 text-slate-600' };
   const counter = d.counter;
   const counterPending = counter && !counter.resolved && status === 'PENDING';
+  const declined = String(offer?.condition || '').toUpperCase() === 'DECLINED' || status === 'REJECTED';
+
+  // A decline isn't an offer to act on — show the lender + reason so the
+  // borrower gets closure, and route nowhere (no terms to view).
+  if (declined) {
+    return (
+      <div className="bg-white rounded-4xl border border-rose-100 shadow-sm p-6">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center shrink-0">
+            <Landmark className="w-6 h-6" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-rose-500 mb-0.5">Loan Request Declined</p>
+            <h3 className="font-serif text-lg font-black text-brand-dark truncate">{offer.providerName || 'Lender'}</h3>
+            <p className="text-xs text-slate-500 truncate">{offer.inquiryTitle || 'Loan Request'}</p>
+            {(d.reason || offer.message) && (
+              <p className="mt-2 text-sm text-slate-600 bg-slate-50 rounded-xl p-3 border border-slate-100">
+                “{d.reason || offer.message}”
+              </p>
+            )}
+            <p className="mt-2 text-xs text-slate-400">
+              You can still receive offers from other lenders on this request.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const term = (Icon: React.ElementType, label: string, value: React.ReactNode) => (
     <div className="flex items-center gap-2 min-w-0">

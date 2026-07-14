@@ -105,6 +105,16 @@ export class ServiceProviderProfile {
   @Column({ type: 'text', nullable: true })
   bozLicenceUrl: string;
 
+  /**
+   * Per-loan-type Terms & Conditions the lender publishes with every offer,
+   * keyed by loan type: { collateral, salary, government, general }. The loan
+   * offer form pre-fills the matching type (falling back to `general`) so the
+   * lender doesn't retype boilerplate — and T&Cs stay context-aware because
+   * each loan type carries different terms. LENDING archetype only; nullable.
+   */
+  @Column({ type: 'json', nullable: true })
+  loanTerms: Record<string, string>;
+
   // ===== Verification audit =====
 
   @Column({

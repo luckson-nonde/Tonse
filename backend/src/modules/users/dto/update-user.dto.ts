@@ -7,6 +7,7 @@ import {
   MinLength,
   MaxLength,
   IsBoolean,
+  IsObject,
   Min,
   Max,
 } from 'class-validator';
@@ -133,6 +134,12 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   bozLicenceUrl?: string;
+
+  /** Per-loan-type Terms & Conditions: { collateral, salary, government,
+   *  general }. Routed to the service-provider profile (not an auth field). */
+  @IsOptional()
+  @IsObject()
+  loanTerms?: Record<string, string>;
 
   @IsOptional()
   @IsString()

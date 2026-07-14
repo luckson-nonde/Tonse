@@ -210,6 +210,9 @@ export class UsersService {
         verificationOverride = {
           verificationStatus: (ownerProfile as any).verificationStatus,
           verifiedAt: (ownerProfile as any).verifiedAt ?? null,
+          // Loan officers act as their parent lender — inherit the shop's
+          // per-loan-type T&Cs so their offer form pre-fills the same terms.
+          loanTerms: (ownerProfile as any).loanTerms ?? null,
         };
       }
     }

@@ -152,6 +152,15 @@ export async function counterLoanOffer(
 }
 
 /**
+ * Borrower confirms receipt of the disbursed funds (only valid once the lender
+ * has marked the loan DISBURSED). Advances the loan tracker. Buyer-authorized.
+ */
+export async function confirmLoanDisbursement(quoteId: string): Promise<QuoteResponse> {
+  const response = await apiClient.patch<any>(`/quotes/${quoteId}/loan-confirm`, {});
+  return normalizeQuote(response.data ?? response);
+}
+
+/**
  * Mark a quote as read by the buyer
  */
 export async function markQuoteAsRead(quoteId: string): Promise<QuoteResponse> {

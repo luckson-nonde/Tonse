@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -9,6 +10,7 @@ import { Repository } from 'typeorm';
 import { Quote } from '../quotes/entities/quote.entity';
 import { QuotesService } from '../quotes/quotes.service';
 import { AuditService } from '../audit/audit.service';
+import { InquiriesService } from '../inquiries/inquiries.service';
 
 /**
  * Lending surface — a lender's loan officer reviews borrower requests and makes
@@ -29,10 +31,26 @@ export class LoanService {
     private readonly quotes: Repository<Quote>,
     private readonly quotesService: QuotesService,
     private readonly auditService: AuditService,
+    private readonly inquiriesService: InquiriesService,
   ) {}
 
   private audit(entry: Record<string, any>) {
     return this.auditService.create(entry as any).catch(() => undefined);
+  }
+
+  /**
+   * A lender may only make/decline offers on a real request that is broadcast
+   * OR targeted at them — never an arbitrary inquiry id. Prevents unsolicited /
+   * cross-tenant loan writes and honours the `targetedProviderId` model.
+   */
+  private async assertOwnLoanRequest(lenderId: string, inquiryId: string): Promise<void> {
+    if (!inquiryId) throw new NotFoundException('Loan request not found');
+    const inquiry = await this.inquiriesService.findOne(inquiryId);
+    if (!inquiry) throw new NotFoundException('Loan request not found');
+    const target = (inquiry as any).targetedProviderId;
+    if (target && target !== lenderId) {
+      throw new ForbiddenException('This loan request is not addressed to you');
+    }
   }
 
   /** Loan offers this lender has made (incl. accepted / declined). */
@@ -46,6 +64,7 @@ export class LoanService {
 
   /** Make a loan offer on a borrower's request. */
   async createOffer(lenderId: string, dto: any): Promise<Quote> {
+    await this.assertOwnLoanRequest(lenderId, dto?.inquiryId);
     const { inquiryId, inquiryTitle, providerName, price, condition, message, ...terms } = dto;
     const quote = await this.quotesService.create({
       inquiryId,
@@ -71,19 +90,25 @@ export class LoanService {
     return quote;
   }
 
-  /** Decline a request — a REJECTED Quote carrying the reason. */
+  /** Decline a request — a REJECTED Quote carrying the reason. Does NOT flip
+   *  the request to QUOTED (a decline is not an offer), so other lenders still
+   *  see it and the borrower isn't misled into thinking an offer arrived. */
   async decline(lenderId: string, dto: any): Promise<Quote> {
-    const quote = await this.quotesService.create({
-      inquiryId: dto.inquiryId,
-      inquiryTitle: dto.inquiryTitle || 'Loan Request',
-      providerId: lenderId,
-      providerName: dto.providerName || 'Lender',
-      price: 0,
-      condition: 'DECLINED',
-      message: String(dto.reason || 'Declined'),
-      status: 'REJECTED',
-      dynamicFields: { declined: true, reason: dto.reason ?? null },
-    } as any);
+    await this.assertOwnLoanRequest(lenderId, dto?.inquiryId);
+    const quote = await this.quotesService.create(
+      {
+        inquiryId: dto.inquiryId,
+        inquiryTitle: dto.inquiryTitle || 'Loan Request',
+        providerId: lenderId,
+        providerName: dto.providerName || 'Lender',
+        price: 0,
+        condition: 'DECLINED',
+        message: String(dto.reason || 'Declined'),
+        status: 'REJECTED',
+        dynamicFields: { declined: true, reason: dto.reason ?? null },
+      } as any,
+      { skipInquiryTransition: true },
+    );
     this.audit({
       action: 'LOAN_REQUEST_DECLINED',
       entityType: 'QUOTE',
@@ -124,6 +149,55 @@ export class LoanService {
       targetTitle: quote.inquiryTitle,
       amount: patch.price ?? (Number(quote.price) || 0),
       details: 'Lender revised the loan offer',
+    });
+    return this.quotes.findOne({ where: { id: quoteId } });
+  }
+
+  // Post-acceptance loan lifecycle — stored on dynamicFields.stage (no new
+  // enum/table). Forward-only: ACCEPTED → CONTACTED → VERIFIED → DISBURSED →
+  // COMPLETED. Drives the borrower's "What happens next" tracker live.
+  private static readonly STAGE_ORDER = [
+    'ACCEPTED',
+    'CONTACTED',
+    'VERIFIED',
+    'DISBURSED',
+    'COMPLETED',
+  ];
+
+  /** Lender advances an ACCEPTED loan to the next lifecycle stage. */
+  async advanceStage(lenderId: string, quoteId: string, stage: string): Promise<Quote> {
+    const target = String(stage || '').toUpperCase();
+    const order = LoanService.STAGE_ORDER;
+    if (!order.includes(target) || target === 'ACCEPTED') {
+      throw new BadRequestException('Invalid loan stage');
+    }
+    const quote = await this.quotes.findOne({ where: { id: quoteId } });
+    if (!quote) throw new NotFoundException('Offer not found');
+    if (quote.providerId !== lenderId) throw new ForbiddenException('Not your offer');
+    if ((quote as any).condition !== 'LOAN') {
+      throw new BadRequestException('Not a loan offer');
+    }
+    if (quote.status !== 'ACCEPTED') {
+      throw new ForbiddenException('The borrower must accept the offer before you can progress it');
+    }
+    const d = quote.dynamicFields || {};
+    const current = d.stage || 'ACCEPTED';
+    // Forward-only; allow only single-step or later, never backward.
+    if (order.indexOf(target) <= order.indexOf(current)) {
+      throw new ForbiddenException(`Loan is already at "${current}" — cannot move back to "${target}"`);
+    }
+    const stageAt = { ...(d.stageAt || {}), [target.toLowerCase()]: new Date().toISOString() };
+    const merged: any = { ...d, stage: target, stageAt };
+    await this.quotes.update(quoteId, { dynamicFields: merged });
+    this.audit({
+      action: `LOAN_${target}`,
+      entityType: 'QUOTE',
+      entityId: quoteId,
+      providerId: lenderId,
+      targetTitle: quote.inquiryTitle,
+      amount: Number(quote.price) || 0,
+      status: target,
+      details: `Lender marked the loan ${target.toLowerCase()}`,
     });
     return this.quotes.findOne({ where: { id: quoteId } });
   }

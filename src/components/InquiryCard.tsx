@@ -3,6 +3,7 @@ import { MapPin, Clock, CheckCircle2, Eye, Users } from 'lucide-react';
 import Button from './Button';
 import { ARCHETYPE_CONFIG } from '../services/archetypeConfig';
 import { getCategorySchema } from '../services/categories';
+import { isLoanContext } from '../utils/loan';
 
 interface InquiryCardProps {
   inquiry: any;
@@ -34,6 +35,16 @@ export default function InquiryCard({
     archetype: 'PRODUCT',
     categoryName: categoryKey,
   };
+
+  // Loan requests speak lending terminology (offers/lenders, not
+  // quotes/suppliers) — see [[tonse-architecture]] loan spine.
+  const isLoan = isLoanContext(
+    categoryKey,
+    inquiry.categoryIds,
+    inquiry.title,
+    archetypeConfig.categoryName,
+  );
+  const views = inquiry.viewCount ?? 0;
 
   const borderColors = {
     open: 'border-t-[#d49b35]',
@@ -167,7 +178,9 @@ export default function InquiryCard({
         <div className="flex items-center gap-2 mb-4">
           <div className="w-1.5 h-1.5 rounded-full bg-[#d49b35]"></div>
           <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase font-sans">
-            {archetypeConfig.archetype} SCHEMA{categoryKey && ` · ${categoryKey.replace(/-/g, ' ')} ARCHETYPE`}
+            {isLoan
+              ? 'LOAN REQUEST · REVIEWED BY LICENSED LENDERS'
+              : `${archetypeConfig.archetype} SCHEMA${categoryKey ? ` · ${categoryKey.replace(/-/g, ' ')} ARCHETYPE` : ''}`}
           </p>
         </div>
 
@@ -193,7 +206,7 @@ export default function InquiryCard({
         {state === 'open' && (
           <div className="bg-[#f4efe8] rounded-xl p-3 flex items-center gap-2 text-slate-500 text-sm font-medium font-sans">
             <Clock className="w-4 h-4" />
-            Awaiting responses from suppliers
+            {isLoan ? "Awaiting offers from lenders" : 'Awaiting responses from suppliers'}
           </div>
         )}
 
@@ -228,7 +241,7 @@ export default function InquiryCard({
               <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-full">
                 <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
                 <span className="text-sm font-bold text-blue-700 font-sans">
-                  {quoteCount} Quotes Received
+                  {quoteCount} {isLoan ? (quoteCount === 1 ? 'Offer' : 'Offers') : 'Quotes'} Received
                 </span>
               </div>
             ) : (
@@ -254,7 +267,9 @@ export default function InquiryCard({
             )}
             <div className="flex items-center gap-1 text-[11px] font-medium text-slate-400 font-sans">
               <Eye className="w-3.5 h-3.5" />
-              {inquiry.viewCount ?? 0}
+              {isLoan
+                ? `${views} ${views === 1 ? 'lender' : 'lenders'} viewed`
+                : views}
             </div>
           </div>
         </div>
@@ -276,7 +291,7 @@ export default function InquiryCard({
           }
         >
           {state === 'open' && 'View Details'}
-          {state === 'quoted' && 'View Quotes →'}
+          {state === 'quoted' && (isLoan ? 'View Offers →' : 'View Quotes →')}
           {state === 'paid' && 'View Receipt'}
         </Button>
       </div>

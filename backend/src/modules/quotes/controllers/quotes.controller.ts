@@ -150,10 +150,24 @@ export class QuotesController {
   ) {
     const quote = await this.quotesService.findOne(id);
     // ENFORCE: Buyer can accept/reject, Provider can update status
-    const hasAccess =
-      quote.providerId === this.providerScope(req) || quote.inquiry?.buyerId === req.user.id;
-    if (!hasAccess) {
+    const isProvider = quote.providerId === this.providerScope(req);
+    const isBuyer = quote.inquiry?.buyerId === req.user.id;
+    if (!isProvider && !isBuyer) {
       throw new ForbiddenException('You do not have access to this quote');
+    }
+    // SECURITY: a loan OFFER only moves PENDING → ACCEPTED/REJECTED, and ONLY
+    // the borrower may accept or reject it. This blocks a lender from
+    // self-accepting a loan the borrower never agreed to, and blocks anyone
+    // from pushing a loan into fulfilment states (PAID/COMPLETED/HANDED_OVER…)
+    // that don't exist for loans.
+    if ((quote as any).condition === 'LOAN') {
+      const LOAN_LEGAL = ['PENDING', 'ACCEPTED', 'REJECTED', 'ARCHIVED'];
+      if (!LOAN_LEGAL.includes(body.status)) {
+        throw new ForbiddenException('Invalid status transition for a loan offer');
+      }
+      if ((body.status === 'ACCEPTED' || body.status === 'REJECTED') && !isBuyer) {
+        throw new ForbiddenException('Only the borrower can accept or reject a loan offer');
+      }
     }
     const result = await this.quotesService.updateStatus(id, body.status);
     // Audit borrower decisions on a LOAN offer so both sides have a trail.
@@ -212,6 +226,40 @@ export class QuotesController {
         amount: counter.requestedAmount ?? (Number((quote as any).price) || 0),
         details: 'Borrower submitted a counter-offer',
         reason: counter.note,
+      })
+      .catch(() => undefined);
+    return result;
+  }
+
+  /**
+   * Borrower confirms they received the disbursed funds. Buyer-authorized; only
+   * valid once the lender has marked the loan DISBURSED. Advances the tracker
+   * and gives the lender an on-platform acknowledgement.
+   */
+  @Patch(':id/loan-confirm')
+  async confirmLoanDisbursement(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    const quote = await this.quotesService.findOne(id);
+    if (quote?.inquiry?.buyerId !== req.user.id) {
+      throw new ForbiddenException('You can only confirm your own loan');
+    }
+    if ((quote as any).condition !== 'LOAN') {
+      throw new ForbiddenException('Not a loan offer');
+    }
+    if ((quote.dynamicFields as any)?.stage !== 'DISBURSED') {
+      throw new ForbiddenException('The lender has not marked the funds disbursed yet');
+    }
+    const result = await this.quotesService.patchDynamicFields(id, {
+      borrowerConfirmedAt: new Date().toISOString(),
+    });
+    await this.auditService
+      .create({
+        action: 'LOAN_DISBURSEMENT_CONFIRMED',
+        entityType: 'QUOTE',
+        entityId: id,
+        providerId: quote.providerId,
+        targetTitle: quote.inquiryTitle,
+        amount: Number((quote as any).price) || 0,
+        details: 'Borrower confirmed receipt of the disbursed funds',
       })
       .catch(() => undefined);
     return result;

@@ -19,8 +19,9 @@ import {
   Circle,
   Hash,
 } from 'lucide-react';
-import { updateQuoteStatus, counterLoanOffer } from '../../services/api/quoteService';
+import { updateQuoteStatus, counterLoanOffer, confirmLoanDisbursement } from '../../services/api/quoteService';
 import { useAuth } from '../../AuthContext';
+import { loanStageIndex } from '../../utils/loan';
 
 const zmw = (v: any) => `ZMW ${Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 const monthsOf = (t: any): number => {
@@ -47,7 +48,7 @@ export default function LoanOfferDetail({ quote, onAction }: LoanOfferDetailProp
   const counterPending = counter && !counter.resolved;
   const isTerminal = status === 'ACCEPTED' || status === 'REJECTED';
 
-  const [busy, setBusy] = useState<'accept' | 'reject' | 'counter' | null>(null);
+  const [busy, setBusy] = useState<'accept' | 'reject' | 'counter' | 'confirm' | null>(null);
   const [showCounter, setShowCounter] = useState(false);
   const [error, setError] = useState('');
   const [cAmount, setCAmount] = useState('');
@@ -72,14 +73,20 @@ export default function LoanOfferDetail({ quote, onAction }: LoanOfferDetailProp
   const telHref = (p: string) => `tel:${p.replace(/[^\d+]/g, '')}`;
   const waHref = (p: string) => `https://wa.me/${p.replace(/[^\d]/g, '')}`;
 
-  // Post-acceptance roadmap. Step 1 is done; step 2 is where the ball now sits.
+  // Post-acceptance roadmap driven by the loan's REAL lifecycle stage
+  // (dynamicFields.stage, advanced by the lender). done = i <= stageIdx;
+  // active = the step immediately after the last completed one.
+  const stageIdx = loanStageIndex(d.stage);
+  const disbursed = stageIdx >= loanStageIndex('DISBURSED');
+  const borrowerConfirmed = !!d.borrowerConfirmedAt;
+  const confirmReceived = () => act('confirm', () => confirmLoanDisbursement(String(quote.id)));
   const nextSteps = [
-    { label: 'Offer accepted', done: true, active: false },
-    { label: `${lenderName} contacts you to arrange disbursement`, done: false, active: true },
-    { label: 'Verify your identity & collateral / documents', done: false, active: false },
-    { label: 'Funds disbursed to you', done: false, active: false },
-    { label: 'Repay according to your schedule', done: false, active: false },
-  ];
+    { label: 'Offer accepted' },
+    { label: `${lenderName} contacts you to arrange disbursement` },
+    { label: 'Verify your identity & collateral / documents' },
+    { label: 'Funds disbursed to you' },
+    { label: 'Repay according to your schedule' },
+  ].map((s, i) => ({ ...s, done: i <= stageIdx, active: i === stageIdx + 1 }));
 
   // Self-contained printable loan agreement. Opens a clean document the
   // borrower can print or "Save as PDF" — their record of the accepted terms.
@@ -148,7 +155,7 @@ export default function LoanOfferDetail({ quote, onAction }: LoanOfferDetailProp
     }, 350);
   };
 
-  const act = async (kind: 'accept' | 'reject' | 'counter', fn: () => Promise<any>) => {
+  const act = async (kind: 'accept' | 'reject' | 'counter' | 'confirm', fn: () => Promise<any>) => {
     setBusy(kind);
     setError('');
     try {
@@ -291,6 +298,29 @@ export default function LoanOfferDetail({ quote, onAction }: LoanOfferDetailProp
                   </div>
                 ))}
               </div>
+
+              {/* Confirm receipt — appears once the lender marks the loan
+                  disbursed, so the borrower closes the loop on-platform. */}
+              {disbursed && !borrowerConfirmed && (
+                <div className="mt-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-200">
+                  <p className="text-sm font-bold text-emerald-800 mb-2">
+                    {lenderName} has marked your funds as disbursed.
+                  </p>
+                  <button
+                    onClick={confirmReceived}
+                    disabled={busy === 'confirm'}
+                    className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {busy === 'confirm' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    I've received the funds
+                  </button>
+                </div>
+              )}
+              {borrowerConfirmed && (
+                <div className="mt-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-bold flex items-center gap-2">
+                  <Check className="w-4 h-4" /> You confirmed receipt of the funds.
+                </div>
+              )}
 
               <div className="mt-4 pt-5 border-t border-slate-100">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">

@@ -18,6 +18,7 @@ import {
 import { Inquiry, Quote } from '../types';
 import { INQUIRY_STATUS_SCHEMA } from '../services/buyerAccountSchema';
 import Button from '../components/Button';
+import { isLoanContext } from '../utils/loan';
 
 interface InquiryDetailsProps {
   inquiry: Inquiry;
@@ -28,6 +29,13 @@ interface InquiryDetailsProps {
 export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDetailsProps) {
   const statusInfo =
     INQUIRY_STATUS_SCHEMA.states[inquiry.status] || INQUIRY_STATUS_SCHEMA.states['PENDING'];
+
+  // Loan requests read in lending terminology (offers/lenders).
+  const isLoan = isLoanContext(
+    (inquiry as any).category,
+    (inquiry as any).categoryIds,
+    inquiry.title,
+  );
 
   // Attributes are now normalized at the service layer
   const parsedAttributes = inquiry.attributes || {};
@@ -237,7 +245,7 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                   <Eye className="w-5 h-5 text-blue-600" />
                 </div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Views
+                  {isLoan ? 'Lenders Viewed' : 'Views'}
                 </p>
                 {/* Real viewCount from the inquiry, not a randomised
                     placeholder. The previous `Math.random()` here meant
@@ -407,7 +415,7 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                 <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
                   <MessageSquare className="w-5 h-5 text-blue-600" />
                 </div>
-                Quotes Received
+                {isLoan ? 'Offers Received' : 'Quotes Received'}
               </h3>
               {quotes.length > 0 && (
                 <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-bold">
@@ -432,14 +440,16 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                         <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
                           {quote.providerName}
                         </p>
-                        <p className="text-xs text-slate-500 font-medium mt-1">{quote.condition}</p>
+                        <p className="text-xs text-slate-500 font-medium mt-1">
+                          {isLoan ? 'Loan Offer' : quote.condition}
+                        </p>
                       </div>
                       <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 transition-colors mt-1" />
                     </div>
                     <div className="flex items-baseline justify-between">
-                      <span className="text-xs text-slate-400 font-medium">Amount</span>
+                      <span className="text-xs text-slate-400 font-medium">{isLoan ? 'Approved' : 'Amount'}</span>
                       <span className="text-lg font-black text-blue-600">
-                        K{quote.price.toLocaleString()}
+                        {isLoan ? 'ZMW ' : 'K'}{Number(quote.price || 0).toLocaleString()}
                       </span>
                     </div>
                   </motion.div>
@@ -460,7 +470,7 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                   <Clock className="w-7 h-7 text-slate-400" />
                 </div>
                 <p className="text-sm font-semibold text-slate-600 mb-2">
-                  Awaiting Provider Responses
+                  {isLoan ? 'Awaiting Lender Offers' : 'Awaiting Provider Responses'}
                 </p>
                 {/* The previous copy claimed "shared with N providers"
                     where N was a randomised number — pure noise. The
@@ -468,7 +478,9 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                     don't fabricate one. Generic encouraging copy
                     instead. */}
                 <p className="text-xs text-slate-500 px-4">
-                  Matched providers will respond shortly.
+                  {isLoan
+                    ? 'Licensed lenders will review your request and send offers shortly.'
+                    : 'Matched providers will respond shortly.'}
                 </p>
               </motion.div>
             )}
@@ -504,7 +516,7 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                 </span>
               </div>
               <div className="flex justify-between items-center py-2">
-                <span className="text-xs font-medium text-slate-600">Quotes Received</span>
+                <span className="text-xs font-medium text-slate-600">{isLoan ? 'Offers Received' : 'Quotes Received'}</span>
                 <span className="text-sm font-bold text-slate-900">{quotes.length}</span>
               </div>
             </div>

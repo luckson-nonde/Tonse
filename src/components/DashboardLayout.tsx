@@ -338,10 +338,18 @@ export default function DashboardLayout({
 
     if (sidebarIsBuyer) {
       const activeInquiries = (sidebarOwnInquiries ?? []).filter(isActiveInquiry).length;
-      const activeQuotes    = (sidebarQuotes ?? []).filter(isActiveQuote).length;
+      // Mirror the page split: loan offers live under "Loan Offers", not
+      // "Received Quotes". Marketplace badge excludes loans; the loan badge
+      // signals pending offers the borrower still needs to act on.
+      const isLoanish = (q: any) => ['LOAN', 'DECLINED'].includes(String(q?.condition || '').toUpperCase());
+      const activeQuotes = (sidebarQuotes ?? []).filter((q: any) => isActiveQuote(q) && !isLoanish(q)).length;
+      const pendingLoanOffers = (sidebarQuotes ?? []).filter(
+        (q: any) => isLoanish(q) && String(q?.status || '').toUpperCase() === 'PENDING',
+      ).length;
       counts.inquiries = activeInquiries;
-      counts.quotes    = activeQuotes;
-      counts.orders    = sidebarOrders.length; // Order History shows every backend order
+      counts.quotes = activeQuotes;
+      counts.loan_offers = pendingLoanOffers;
+      counts.orders = sidebarOrders.length; // Order History shows every backend order
       return counts;
     }
 
@@ -626,7 +634,9 @@ export default function DashboardLayout({
       case 'inquiries':
         return 'MY INQUIRIES';
       case 'create-inquiry':
-        return 'EVENT BOOKING REQUEST';
+        // Neutral — this step serves every category (loans, products, services,
+        // events). The form itself shows the specific category header.
+        return 'REQUEST DETAILS';
       case 'inquiry-items':
         return 'ITEM LIST';
       case 'category-selection':
@@ -666,6 +676,8 @@ export default function DashboardLayout({
       case 'my-quotes':
         if (effectiveBusinessType === 'LENDING') return 'LOAN OFFERS';
         return effectiveBusinessType === 'WHOLESALE' ? 'ACTIVE QUOTATIONS' : 'MY QUOTES';
+      case 'loan-terms':
+        return 'LOAN TERMS';
       case 'schedule':
         return 'MY SCHEDULE';
       case 'audit-trail':

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -39,6 +40,15 @@ export class LoanController {
   constructor(private readonly loans: LoanService) {}
 
   private lenderId(req: AuthenticatedRequest): string {
+    // SECURITY: PermissionsGuard treats any account WITHOUT a parentProviderId
+    // as an "owner" and bypasses MANAGE_LOANS — which includes BUYERS. Lenders
+    // onboard as SERVICE_PROVIDER, so gate the whole surface on that role here
+    // (staff loan officers inherit their parent's SERVICE_PROVIDER role). This
+    // stops a borrower (or a non-lending seller/admin) from operating the
+    // lender console / spoofing loan offers.
+    if (req.user?.role !== 'SERVICE_PROVIDER') {
+      throw new ForbiddenException('Only lending providers can access loan offers');
+    }
     return req.user.parentProviderId ?? req.user.id;
   }
 
@@ -64,5 +74,15 @@ export class LoanController {
     @Request() req: AuthenticatedRequest,
   ) {
     return this.loans.reviseOffer(this.lenderId(req), id, body);
+  }
+
+  /** Advance an accepted loan's lifecycle (CONTACTED/VERIFIED/DISBURSED/COMPLETED). */
+  @Patch('offers/:id/stage')
+  advanceStage(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.loans.advanceStage(this.lenderId(req), id, String(body?.stage || ''));
   }
 }

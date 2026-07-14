@@ -202,12 +202,14 @@ export default function BuyerDashboard() {
       return { ...q, inquiryCategory, inquiryAttributes: inq.attributes };
     });
     const activeQuotes = enrichedQuotes.filter(isActiveQuote);
-    // A loan OFFER is a Quote with condition 'LOAN'. It lives in its own
-    // "Loan Offers" surface (custom card + LoanOfferDetail), NOT alongside
-    // marketplace quotes — a loan is accepted/countered, never "paid".
-    const isLoanQuote = (q: any) => String(q?.condition || '').toUpperCase() === 'LOAN';
-    const loanOffers = activeQuotes.filter(isLoanQuote);
-    const marketplaceQuotes = activeQuotes.filter((q) => !isLoanQuote(q));
+    // A loan OFFER (condition LOAN) or DECLINE (condition DECLINED) is a Quote
+    // that lives in its own "Loan Offers" surface (custom card + LoanOfferDetail),
+    // NOT alongside marketplace quotes — a loan is accepted/countered, never
+    // "paid". Include terminal ones (REJECTED/DECLINED) so the borrower actually
+    // sees a lender's decision + reason instead of the request going silent.
+    const isLoanish = (q: any) => ['LOAN', 'DECLINED'].includes(String(q?.condition || '').toUpperCase());
+    const loanOffers = enrichedQuotes.filter((q) => isLoanish(q) && !(q as any).isArchived);
+    const marketplaceQuotes = activeQuotes.filter((q) => !isLoanish(q));
 
     // Recent activity: one card per inquiry, labelled by its
     // most-advanced known stage (Order Placed > Quote Received >
@@ -234,7 +236,10 @@ export default function BuyerDashboard() {
         return {
           id: `q-${i.id}`,
           title: i.title,
-          subtitle: `Quote Received · K${(liveQuote.price || 0).toLocaleString()}`,
+          subtitle:
+            String((liveQuote as any).condition || '').toUpperCase() === 'LOAN'
+              ? `Offer Received · ZMW ${(liveQuote.price || 0).toLocaleString()}`
+              : `Quote Received · K${(liveQuote.price || 0).toLocaleString()}`,
           time: 'Recently',
           icon: 'FileText',
         };

@@ -49,6 +49,7 @@ import VenueManagementView from './provider/VenueManagementView';
 import CollectionPage from '../pages/CollectionPage';
 import { LoanRequestsView, LoanOffersView } from './loan/LoanViews';
 import { LoanHomeView } from './loan/LoanHomeView';
+import LoanTermsEditor from './loan/LoanTermsEditor';
 import LoanOfferDetail from './loan/LoanOfferDetail';
 import FinancialPage from '../pages/FinancialPage';
 import { Inquiry, Quote } from '../types';
@@ -586,12 +587,17 @@ export default function DynamicAccountRenderer({
 
     return (
       <div className="space-y-8">
-        <button
-          onClick={() => onNavigate(getBackView())}
-          className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-brand-gold transition-colors"
-        >
-          <ChevronLeft className="w-4 h-4" /> Back to {getBackView()}
-        </button>
+        {/* LoanOfferDetail renders its own "Back to offers" — showing this
+            generic one too gives a loan a duplicate, mislabeled "Back to
+            quotes" that lands on the wrong (empty-of-this-item) surface. */}
+        {!(view === 'quote_details' && (item as any).condition === 'LOAN') && (
+          <button
+            onClick={() => onNavigate(getBackView())}
+            className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-brand-gold transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" /> Back to {getBackView()}
+          </button>
+        )}
 
         {view === 'inquiry_details' ? (
           <InquiryDetails
@@ -728,6 +734,8 @@ export default function DynamicAccountRenderer({
         return <LoanRequestsView />;
       case 'loan_offers':
         return <LoanOffersView />;
+      case 'loan_terms':
+        return <LoanTermsEditor />;
       case 'labour_home':
         return <LabourHomeView {...data?.homeProps} />;
       case 'labour_jobs':

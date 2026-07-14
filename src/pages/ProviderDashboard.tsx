@@ -1101,6 +1101,33 @@ export default function ProviderDashboard() {
           onNavigate={handleTabClick}
           user={user}
         />
+      ) : activeTab === 'loan-terms' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="loan-terms"
+          data={{}}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'archived-leads' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="archived-leads"
+          data={{}}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'audit-trail' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="audit-trail"
+          data={{}}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
       ) : (
         <DynamicAccountRenderer
           schema={currentSchema}
