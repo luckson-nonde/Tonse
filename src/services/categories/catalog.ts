@@ -16,6 +16,7 @@ import { hospitalLabsSchema, pharmaciesSchema } from './schemas/clinicalServices
 import { longTermRentalsSchema, shortStayServicedSchema, boardingStudentSchema } from './schemas/apartments';
 import { businessComputersSchema, serversStorageSchema, networkingHardwareSchema, softwareLicensesSchema, printersOfficeEquipmentSchema } from './schemas/itProducts';
 import { poultryFarmingSchema, aquacultureSchema, cropProductionSchema, livestockVeterinarySchema, irrigationHardwareSchema, agroTechServicesSchema } from './schemas/agriculture';
+import { loanCollateralSchema, loanSalarySchema, loanGovernmentSchema } from './schemas/loans';
 
 export const GENERIC_FALLBACK_SCHEMA: FieldSchema[] = [
   { name: "images", label: "Reference Photos", type: "image_upload", required: false },
@@ -130,6 +131,12 @@ const BASE_CATEGORIES_DB: Category[] = [
     id: 'apartments',
     name: 'Apartments & Housing',
     image: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&q=80&w=800&h=800',
+    parentId: null
+  },
+  {
+    id: 'loans',
+    name: 'Loans',
+    image: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&q=80&w=800&h=800',
     parentId: null
   },
 
@@ -254,13 +261,18 @@ const BASE_CATEGORIES_DB: Category[] = [
   { id: 'long-term-rentals', name: 'Long-Term Rentals', parentId: 'apartments', formSchema: longTermRentalsSchema },
   { id: 'short-stay-serviced', name: 'Short Stay & Serviced', parentId: 'apartments', formSchema: shortStayServicedSchema },
   { id: 'boarding-student-rooms', name: 'Boarding & Student Rooms', parentId: 'apartments', formSchema: boardingStudentSchema },
+
+  // Subcategories - Loans (loan TYPE selects the request form)
+  { id: 'loan-collateral', name: 'Collateral Loan', parentId: 'loans', formSchema: loanCollateralSchema },
+  { id: 'loan-salary', name: 'Salary Loan', parentId: 'loans', formSchema: loanSalarySchema },
+  { id: 'loan-government', name: 'Government Employee Loan', parentId: 'loans', formSchema: loanGovernmentSchema },
 ];
 
 export type CategoryNature = 'PRODUCT' | 'SERVICE' | 'BOTH';
 
 export const getCategoryNature = (categoryId: string): CategoryNature => {
   const productParents = ['fashion', 'groceries', 'beauty', 'home-decor', 'it-products', 'electronics', 'furniture'];
-  const serviceParents = ['entertainment', 'events', 'telecommunications', 'it-services', 'drilling-services', 'clinical-services', 'apartments'];
+  const serviceParents = ['entertainment', 'events', 'telecommunications', 'it-services', 'drilling-services', 'clinical-services', 'apartments', 'loans'];
   
   const category = CATEGORIES_DB.find(c => c.id === categoryId);
   if (!category) return 'BOTH';

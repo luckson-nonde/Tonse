@@ -12,7 +12,19 @@ import { MASTER_EVENTS_ACCOUNT_SCHEMA } from './eventsAccountSchema';
 import { MASTER_ENTERTAINMENT_ACCOUNT_SCHEMA } from './entertainmentAccountSchema';
 import { MASTER_PROVIDER_ACCOUNT_SCHEMA } from './providerAccountSchema';
 import { MASTER_PERSONAL_ACCOUNT_SCHEMA } from './personalAccountSchema';
+import { MASTER_COLLECTION_OFFICER_ACCOUNT_SCHEMA } from './collectionOfficerAccountSchema';
+import { MASTER_QUOTATION_MANAGER_ACCOUNT_SCHEMA } from './quotationManagerAccountSchema';
+import { MASTER_LOAN_PROVIDER_ACCOUNT_SCHEMA } from './loanProviderAccountSchema';
+import { MASTER_LOAN_OFFICER_ACCOUNT_SCHEMA } from './loanOfficerAccountSchema';
+import { isCollectionOfficer, isQuotationManager, isLoanOfficer } from '../utils/rbac';
 import type { ActiveProfileContext } from '../hooks/useActiveProfileContext';
+
+/** Minimal shape pickSchemasForUser needs off the authed user. */
+type SchemaUser = {
+  role?: string;
+  permissions?: string[] | null;
+  parentProviderId?: string | null;
+};
 
 /**
  * Map an Archetype/BusinessType (the seller side ones) to the schema
@@ -28,6 +40,7 @@ const ARCHETYPE_TO_SCHEMA: Partial<Record<BusinessType, MasterAccountSchema>> = 
   RENTAL: MASTER_RENTAL_ACCOUNT_SCHEMA,
   SERVICE: MASTER_SERVICE_ACCOUNT_SCHEMA,
   RETAIL: MASTER_RETAIL_ACCOUNT_SCHEMA,
+  LENDING: MASTER_LOAN_PROVIDER_ACCOUNT_SCHEMA,
 };
 
 // MERGE_PRIORITY removed when the simplified persona model dropped
@@ -94,13 +107,31 @@ export function mergeSchemas(schemas: MasterAccountSchema[]): MasterAccountSchem
  *                         dashboard isn't empty.
  */
 export function pickSchemasForUser(
-  user: { role?: string } | null | undefined,
+  user: SchemaUser | null | undefined,
   businessTypes: BusinessType[],
   _primaryBusinessType: BusinessType,
   activeContext?: ActiveProfileContext,
 ): MasterAccountSchema[] {
   if (!user) return [MASTER_PROVIDER_ACCOUNT_SCHEMA];
   if (user.role === 'BUYER') return [MASTER_BUYER_ACCOUNT_SCHEMA];
+
+  // Collection Officer (collection-only staff) → dedicated minimal dashboard
+  // (just the handover surface + profile). Checked before the persona/archetype
+  // logic so it wins regardless of the owner's business type.
+  if (isCollectionOfficer(user as any)) {
+    return [MASTER_COLLECTION_OFFICER_ACCOUNT_SCHEMA];
+  }
+
+  // Quotation Manager (quoting-only staff) → dedicated minimal dashboard
+  // (buyer inquiries + quotes + profile).
+  if (isQuotationManager(user as any)) {
+    return [MASTER_QUOTATION_MANAGER_ACCOUNT_SCHEMA];
+  }
+
+  // Loan Officer (lending-only staff) → dedicated minimal loan dashboard.
+  if (isLoanOfficer(user as any)) {
+    return [MASTER_LOAN_OFFICER_ACCOUNT_SCHEMA];
+  }
 
   // Personal persona overrides everything — even labour users see the
   // personal schema when they're in this mode.
@@ -146,7 +177,7 @@ export function pickSchemasForUser(
  * MasterAccountSchema ready for the renderer / nav filter.
  */
 export function resolveSchemaForUser(
-  user: { role?: string } | null | undefined,
+  user: SchemaUser | null | undefined,
   businessTypes: BusinessType[],
   primaryBusinessType: BusinessType,
   activeContext?: ActiveProfileContext,

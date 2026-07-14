@@ -55,11 +55,18 @@ export class QuotesService {
    * reserve. The QUOTED status flip now lives in the SAME transaction
    * (previously a separate best-effort write).
    *
+   * `opts.skipInquiryTransition` (loan DECLINE path): a decline is not an
+   * offer, so it must NOT flip the request to QUOTED — that would hide it
+   * from every other lender and mislead the borrower.
+   *
    * Post-commit, fire-and-forget: live counter events to every matched
    * provider + a durable QUOTE_RECEIVED to the buyer. Dispatch failure
    * never fails the create — the poll fallback self-heals counters.
    */
-  async create(createQuoteDto: CreateQuoteDto): Promise<Quote> {
+  async create(
+    createQuoteDto: CreateQuoteDto,
+    opts: { skipInquiryTransition?: boolean } = {},
+  ): Promise<Quote> {
     const parsedDto = this.parseJsonFields(createQuoteDto);
 
     const result = await this.dataSource.transaction(async (manager) => {
@@ -95,7 +102,11 @@ export class QuotesService {
 
       const quote = manager.getRepository(Quote).create({ ...parsedDto, slotTier });
       const saved = (await manager.getRepository(Quote).save(quote)) as unknown as Quote;
-      await manager.getRepository(Inquiry).update(inquiry.id, { status: 'QUOTED' });
+      // Loan DECLINEs skip the QUOTED flip (see doc comment above) — the
+      // decline quote still lands, but the request stays visible to lenders.
+      if (!opts.skipInquiryTransition) {
+        await manager.getRepository(Inquiry).update(inquiry.id, { status: 'QUOTED' });
+      }
 
       return {
         quote: saved,
@@ -307,6 +318,27 @@ export class QuotesService {
 
   async markAsRead(id: string): Promise<Quote> {
     await this.quotesRepository.update(id, { isRead: true });
+    return this.findOne(id);
+  }
+
+  /**
+   * Merge a buyer counter-offer into the quote's dynamicFields (loan
+   * negotiation lives here — no new status enum). Read-modify-write so we keep
+   * the lender's original terms alongside the counter.
+   */
+  async saveCounter(id: string, counter: any): Promise<Quote> {
+    const quote = await this.findOne(id);
+    const dynamicFields = { ...(quote?.dynamicFields || {}), counter };
+    await this.quotesRepository.update(id, { dynamicFields });
+    return this.findOne(id);
+  }
+
+  /** Shallow-merge a patch into the quote's dynamicFields (e.g. loan
+   *  lifecycle acknowledgements). Preserves everything else. */
+  async patchDynamicFields(id: string, patch: Record<string, any>): Promise<Quote> {
+    const quote = await this.findOne(id);
+    const dynamicFields = { ...(quote?.dynamicFields || {}), ...patch };
+    await this.quotesRepository.update(id, { dynamicFields });
     return this.findOne(id);
   }
 

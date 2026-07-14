@@ -24,7 +24,7 @@ export class SellerProfileArchetype {
 
   @PrimaryColumn({
     type: 'enum',
-    enum: ['RETAIL', 'RENTAL', 'BOOKING', 'LABOUR', 'REPAIR', 'SERVICE', 'EVENTS', 'ENTERTAINMENT', 'WHOLESALE'],
+    enum: ['RETAIL', 'RENTAL', 'BOOKING', 'LABOUR', 'REPAIR', 'SERVICE', 'EVENTS', 'ENTERTAINMENT', 'WHOLESALE', 'LENDING'],
   })
   archetype: Archetype;
 

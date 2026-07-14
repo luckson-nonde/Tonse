@@ -53,6 +53,11 @@ export const CATEGORY_GROUPS: CategoryGroup[] = [
     label: 'People & Equipment',
     categoryIds: ['labour', 'machinery-hire'],
   },
+  {
+    id: 'finance',
+    label: 'Finance',
+    categoryIds: ['loans'],
+  },
 ];
 
 export interface GroupedCategories {

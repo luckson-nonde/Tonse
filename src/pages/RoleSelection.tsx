@@ -229,6 +229,16 @@ const serviceProviderSubRoles: RoleOption[] = [
     subRole: 'INDIVIDUAL_PROVIDER',
   },
   {
+    // Lender (loan company) — Agency stays merged into "Service" (retired as
+    // a separate card in this lineage); LENDER is the one genuinely new shape.
+    id: 'LENDER',
+    eyebrow: 'Finance · Lender',
+    title: 'Loan Provider',
+    description: 'Licensed lender — offer collateral, salary and government-employee loans.',
+    icon: Building2,
+    subRole: 'LENDER',
+  },
+  {
     id: 'SKILLED_LABOUR',
     eyebrow: 'Trade · Hands-on',
     title: 'Labour',
@@ -312,6 +322,10 @@ export default function RoleSelection() {
         const nature = getCategoryNature(c.id);
         return nature === 'PRODUCT' || nature === 'BOTH';
       });
+    }
+    // Loan Provider: a guided signup — only the Loans category is offered.
+    if (selectedSubRole === 'LENDER') {
+      return rootCategories.filter((c) => c.id === 'loans');
     }
     // SERVICE_PROVIDER subRoles all see service categories. Tier-3 click
     // drills into the specialty step where the variant (Repair / Hire /
@@ -695,9 +709,13 @@ export default function RoleSelection() {
                       // Machinery Hire → nothing in the master grid; autoMachinery
                       // drills straight into the equipment list.
                       if (selectedSubRole === 'MACHINERY_HIRE') return false;
+                      // Lender → only the Loans catalog (loan types are its
+                      // "specialties"); other providers never see the tile.
+                      if (selectedSubRole === 'LENDER') return cat.id === 'loans';
                       // Service → pure-service categories, no Labour tile, no
-                      // BOTH-nature product categories (Automotive, Agriculture).
-                      return cat.id !== 'labour' && nature === 'SERVICE';
+                      // Loans tile, no BOTH-nature product categories
+                      // (Automotive, Agriculture).
+                      return cat.id !== 'labour' && cat.id !== 'loans' && nature === 'SERVICE';
                     }
                     // Seller — Labour never applies here.
                     if (cat.id === 'labour') return false;

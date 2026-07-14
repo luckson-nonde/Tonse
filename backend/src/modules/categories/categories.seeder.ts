@@ -51,6 +51,7 @@ const PARENT_ARCHETYPE: Record<string, Archetype> = {
   // Landlords/agents quote unit offers against booking-shaped requests —
   // the BOOKING dashboard ("Booking Requests") fits, NOT machinery RENTAL.
   apartments: 'BOOKING',
+  loans: 'LENDING',
 };
 
 /**
@@ -86,6 +87,7 @@ const PARENT_NATURE: Record<string, CategoryNature> = {
   'machinery-hire': 'SERVICE',
   'clinical-services': 'SERVICE',
   apartments: 'SERVICE',
+  loans: 'SERVICE',
 };
 
 function deriveActionVariant(name: string): ActionVariant {

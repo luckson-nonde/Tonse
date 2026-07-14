@@ -1,6 +1,14 @@
+# TONSE full-stack local/demo orchestration.
+#   frontend (nginx :3000) -> backend (NestJS :3001) -> postgres :5432
+# Bring it up with:  docker compose up -d --build
+# Change every "change_me" / placeholder secret before any real deployment.
+
 services:
   postgres:
-    image: postgres:15-alpine
+    # 15-alpine and 16-alpine are interchangeable for this app (TypeORM
+    # synchronize + standard SQL). 16-alpine is pinned because it is commonly
+    # already cached; switch to 15-alpine if you need to match production.
+    image: postgres:16-alpine
     container_name: tonse_postgres
     environment:
       POSTGRES_USER: tonse_user
@@ -16,9 +24,62 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    build:
+      context: ./backend
+    container_name: tonse_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # --- Database (points at the postgres service above) ---
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USERNAME: tonse_user
+      DB_PASSWORD: tonse_password_secure_change_me
+      DB_NAME: tonse_db
+      # Required: this app has no migrations for the profile tables — TypeORM
+      # `synchronize` creates the schema on boot. The categories seeder also
+      # runs on boot (OnModuleInit) from catalog.json.
+      DB_SYNCHRONIZE: 'true'
+      DB_LOGGING: 'false'
+      # NODE_ENV is intentionally NOT 'production': database.config.ts forces
+      # DB SSL when NODE_ENV=production, but the bundled Postgres has no TLS.
+      # For a managed SSL Postgres in real prod, set this to 'production'.
+      NODE_ENV: development
+      PORT: '3001'
+      # --- Secrets (CHANGE THESE) ---
+      JWT_SECRET: change_me_super_secret_jwt_key
+      JWT_EXPIRATION: '3600s'
+      JWT_REFRESH_SECRET: change_me_super_secret_refresh_key
+      JWT_REFRESH_EXPIRATION: '604800s'
+      ENCRYPTION_KEY: change_me_32_character_key_000001
+      ENCRYPTION_IV: change_me_16_char
+    ports:
+      - '3001:3001'
+    volumes:
+      # Persist uploaded files across container rebuilds.
+      - backend_uploads:/app/public/uploads
+
+  frontend:
+    build:
+      context: .
+      args:
+        # Same-origin: nginx proxies /api -> backend. See nginx.conf.
+        VITE_API_URL: /api
+    container_name: tonse_frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - '3000:80'
+
+  # Optional DB admin UI. Kept out of the default `up` (it is a large pull);
+  # start it explicitly with:  docker compose --profile tools up -d
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: tonse_pgadmin
+    profiles: ['tools']
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@tonse.marketplace
       PGADMIN_DEFAULT_PASSWORD: admin
@@ -26,15 +87,14 @@ services:
       - '5050:80'
     depends_on:
       - postgres
-    # If connecting from the Dockerized pgAdmin UI, use the PostgreSQL service hostname:
-    # Host: postgres
-    # Port: 5432
+    # From the pgAdmin UI connect to host "postgres", port 5432.
     volumes:
       - pgadmin_data:/var/lib/pgadmin
 
 volumes:
   postgres_data:
   pgadmin_data:
+  backend_uploads:
 
 networks:
   default:

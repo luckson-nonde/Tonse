@@ -28,7 +28,7 @@ import { UsersService } from '../../users/users.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 
 interface AuthenticatedRequest extends ExpressRequest {
-  user?: { id: string; email: string; role: string };
+  user?: { id: string; email: string; role: string; parentProviderId?: string | null };
 }
 
 @Controller('inquiries')
@@ -94,6 +94,7 @@ export class InquiriesController {
         page: query?.page,
         limit: query?.limit,
         variant,
+        providerUserId: profileOwner.id,
       },
       // Dispatch notifications are addressed to the profile OWNER's userId
       // (reverse matching resolves profiles → owner), so staff callers see
@@ -266,9 +267,21 @@ export class InquiriesController {
   @UseGuards(JwtAuthGuard)
   async findOne(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     const inquiry = await this.inquiriesService.findOne(id);
-    // ENFORCE RBAC: Buyers can only view their own inquiries
-    if (inquiry && inquiry.buyerId !== req.user.id && req.user.role === 'BUYER') {
-      throw new ForbiddenException('You can only view your own inquiries');
+    if (!inquiry) return inquiry;
+    // ENFORCE RBAC: this returns the RAW inquiry (attributes with contact PII,
+    // exact location, buyerId), so lock it down. Previously any non-buyer could
+    // read ANY inquiry by id — an IDOR that leaked borrower PII and defeated the
+    // targetedProviderId model. Allow only: the owner, an ADMIN, or the
+    // specifically-targeted provider. (Providers get their matched leads via
+    // GET /inquiries/leads/me, which withholds contact PII.)
+    const isOwner = inquiry.buyerId === req.user.id;
+    const isAdmin = req.user.role === 'ADMIN';
+    if (!isOwner && !isAdmin) {
+      const scope = req.user.parentProviderId ?? req.user.id;
+      const target = (inquiry as any).targetedProviderId;
+      if (!target || target !== scope) {
+        throw new ForbiddenException('You do not have access to this inquiry');
+      }
     }
     return inquiry;
   }

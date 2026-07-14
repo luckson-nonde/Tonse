@@ -219,6 +219,23 @@ export class UsersService {
     // mobile-phones-buy and mobile-phones-repair).
     const archetypes = await this.loadActiveProfileArchetypes(archetypeOwner);
 
+    // Staff (parentProviderId set) don't carry their own verification — it
+    // mirrors the shop owner's, so a staff member is exactly as verified as
+    // their shop and stays in sync if the owner is verified/rejected later.
+    let verificationOverride: Record<string, any> | null = null;
+    if (user.parentProviderId && archetypeOwner !== user) {
+      const ownerProfile = await this.loadActiveProfile(archetypeOwner).catch(() => null);
+      if (ownerProfile) {
+        verificationOverride = {
+          verificationStatus: (ownerProfile as any).verificationStatus,
+          verifiedAt: (ownerProfile as any).verifiedAt ?? null,
+          // Loan officers act as their parent lender — inherit the shop's
+          // per-loan-type T&Cs so their offer form pre-fills the same terms.
+          loanTerms: (ownerProfile as any).loanTerms ?? null,
+        };
+      }
+    }
+
     const {
       id: _profId,
       userId: _profUserId,
@@ -228,7 +245,14 @@ export class UsersService {
       archetype: _legacyArchetype, // dropped column; strip just in case a stale row leaks through
       ...profileFields
     } = profile as any;
-    return { ...user, ...profileFields, hasPin, categoryIds, archetypes };
+    return {
+      ...user,
+      ...profileFields,
+      ...(verificationOverride ?? {}),
+      hasPin,
+      categoryIds,
+      archetypes,
+    };
   }
 
   /**

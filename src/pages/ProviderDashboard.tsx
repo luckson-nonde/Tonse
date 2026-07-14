@@ -46,6 +46,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useLiveQuery } from '../hooks/useLiveQuery';
 import { useMatchedLeads } from '../hooks/useInquiries';
 import { db } from '../services/api/database';
+import { collectionService } from '../services/api/collectionService';
 import {
   getCategorySchema,
   getCategoryNature,
@@ -55,7 +56,7 @@ import {
   getEffectiveBusinessTypes,
   isRepairVariant,
 } from '../services/categories';
-import { hasPermission, PERMISSIONS } from '../utils/rbac';
+import { hasPermission, isCollectionOfficer, isQuotationManager, PERMISSIONS } from '../utils/rbac';
 import { logAuditAction } from '../utils/auditLogger';
 import DynamicDataDisplay from '../components/DynamicDataDisplay';
 import Notification from '../components/Notification';
@@ -117,6 +118,24 @@ export default function ProviderDashboard() {
   // "My Account" button on the provider home view silently rendered the
   // wrong screen.
   useEffect(() => {
+    // Collection Officer (collection-only staff) is locked to the handover
+    // surface. They arrive at /provider/home like everyone else — force them
+    // onto the collection tab and block navigation to any other view (only
+    // their own profile is also reachable). Handled here (the single tab-sync
+    // effect) so it can't ping-pong with the generic sync below.
+    if (isCollectionOfficer(user)) {
+      const target = tab === 'profile' ? 'profile' : 'collection';
+      if (activeTab !== target) setActiveTab(target);
+      return;
+    }
+    // Quotation Manager (quoting-only staff) is locked to the quoting surface.
+    // leads + my-quotes render here; profile / archived-leads are dedicated
+    // routes (this component isn't mounted there). Any other tab → leads.
+    if (isQuotationManager(user)) {
+      const target = tab === 'my-quotes' ? 'my-quotes' : 'leads';
+      if (activeTab !== target) setActiveTab(target);
+      return;
+    }
     if (
       tab &&
       tab !== activeTab &&
@@ -132,7 +151,7 @@ export default function ProviderDashboard() {
     } else if (!tab && activeTab !== 'home') {
       setActiveTab('home');
     }
-  }, [tab, activeTab, setActiveTab]);
+  }, [tab, activeTab, setActiveTab, user]);
 
   const { context: activeContext } = useActiveProfileContext();
 
@@ -582,26 +601,11 @@ export default function ProviderDashboard() {
     if (!user) return;
     setIsUpdating(true);
     try {
-      const quote = await db.quotes.get(quoteId);
-      if (!quote) return;
-
-      await db.quotes.update(quoteId, { status: 'COMPLETED' });
-
-      // Release funds from escrow
-      const escrowTx = await db.transactions
-        .where('quoteId')
-        .equals(quoteId)
-        .toArray()
-        .then((txs: any[]) => txs.find((tx: any) => tx.status === 'ESCROW'));
-
-      if (escrowTx && escrowTx.id) {
-        await db.transactions.update(escrowTx.id, {
-          status: 'COMPLETED',
-          description: `Funds released for Quote #${quoteId} (Handover Completed)`,
-          category: 'ESCROW_RELEASE',
-          createdAt: Date.now(),
-        });
-      }
+      // Server-authoritative: transitions the quote to COMPLETED AND releases
+      // escrow to the shop in one place (shared with the Collection Officer
+      // flow). Replaces the old client-side db.quotes + db.transactions writes.
+      await collectionService.complete(String(quoteId));
+      const quote = activeChecklistQuote || (await db.quotes.get(quoteId)) || null;
 
       setHandoverCompleteQuote(quote);
       setActiveChecklistQuote(null);
@@ -696,7 +700,8 @@ export default function ProviderDashboard() {
     if (!verifyingQuote?.id) return;
     setIsUpdating(true);
     try {
-      await db.quotes.update(verifyingQuote.id, { status: 'AWAITING_PICKUP' });
+      // Server-authoritative (shared with the Collection Officer flow).
+      await collectionService.verify(String(verifyingQuote.id));
       setActiveChecklistQuote(verifyingQuote);
       setVerifyingQuote(null);
       showNotification('Buyer identity verified successfully!');
@@ -1166,6 +1171,33 @@ export default function ProviderDashboard() {
         <DynamicAccountRenderer
           schema={currentSchema}
           view="financial"
+          data={{}}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'loan-terms' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="loan-terms"
+          data={{}}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'archived-leads' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="archived-leads"
+          data={{}}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'audit-trail' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="audit-trail"
           data={{}}
           onAction={handleAction}
           onNavigate={handleTabClick}

@@ -31,6 +31,7 @@ import {
   ChevronDown,
   LayoutDashboard,
   Wallet,
+  Landmark,
 } from 'lucide-react';
 import Logo from './Logo';
 import ConfirmModal from './ConfirmModal';
@@ -38,7 +39,7 @@ import BuyerVerificationBanner from './BuyerVerificationBanner';
 import DashboardCalendar, { CalendarTone, CounterCard } from './DashboardCalendar';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useDashboard } from '../DashboardContext';
-import { hasPermission, PERMISSIONS } from '../utils/rbac';
+import { hasPermission, isCollectionOfficer, isQuotationManager, PERMISSIONS } from '../utils/rbac';
 import {
   getBusinessTypes,
   getPrimaryBusinessType,
@@ -258,6 +259,7 @@ const iconMap: Record<string, any> = {
   ClipboardCheck,
   List,
   Wallet,
+  Landmark,
 };
 
 interface DashboardLayoutProps {
@@ -392,10 +394,18 @@ export default function DashboardLayout({
 
     if (sidebarIsBuyer) {
       const activeInquiries = (sidebarOwnInquiries ?? []).filter(isActiveInquiry).length;
-      const activeQuotes    = (sidebarQuotes ?? []).filter(isActiveQuote).length;
+      // Mirror the page split: loan offers live under "Loan Offers", not
+      // "Received Quotes". Marketplace badge excludes loans; the loan badge
+      // signals pending offers the borrower still needs to act on.
+      const isLoanish = (q: any) => ['LOAN', 'DECLINED'].includes(String(q?.condition || '').toUpperCase());
+      const activeQuotes = (sidebarQuotes ?? []).filter((q: any) => isActiveQuote(q) && !isLoanish(q)).length;
+      const pendingLoanOffers = (sidebarQuotes ?? []).filter(
+        (q: any) => isLoanish(q) && String(q?.status || '').toUpperCase() === 'PENDING',
+      ).length;
       counts.inquiries = activeInquiries;
-      counts.quotes    = activeQuotes;
-      counts.orders    = sidebarOrders.length; // Order History shows every backend order
+      counts.quotes = activeQuotes;
+      counts.loan_offers = pendingLoanOffers;
+      counts.orders = sidebarOrders.length; // Order History shows every backend order
       return counts;
     }
 
@@ -672,14 +682,17 @@ export default function DashboardLayout({
     switch (activeTab) {
       case 'home':
       case 'dashboard':
-        return 'MARKETPLACE OVERVIEW';
+        return effectiveBusinessType === 'LENDING' ? 'LENDING OVERVIEW' : 'MARKETPLACE OVERVIEW';
       case 'quotes':
         return 'RECEIVED QUOTATIONS';
+      case 'loan_offers':
+        return 'LOAN OFFERS';
       case 'inquiries':
         return 'MY INQUIRIES';
       case 'create-inquiry':
         // Category-neutral: this tab hosts every request type (goods,
-        // services, labour trades, machinery hire) — not just events.
+        // services, labour trades, machinery hire, loans) — the form itself
+        // shows the specific category header.
         return 'NEW REQUEST';
       case 'inquiry-items':
         return 'ITEM LIST';
@@ -706,6 +719,7 @@ export default function DashboardLayout({
       case 'archived':
         return effectiveBusinessType === 'WHOLESALE' ? 'ARCHIVED REQUESTS' : 'ARCHIVED QUOTES';
       case 'profile':
+        if (effectiveBusinessType === 'LENDING') return 'LENDER PROFILE';
         return effectiveBusinessType === 'WHOLESALE' ? 'SUPPLIER PROFILE' : 'SHOP PROFILE';
       case 'leads':
         if (effectiveBusinessType === 'WHOLESALE') return 'PURCHASE REQUESTS';
@@ -714,9 +728,13 @@ export default function DashboardLayout({
         if (effectiveBusinessType === 'EVENTS') return 'EVENT BOOKINGS';
         if (effectiveBusinessType === 'ENTERTAINMENT') return 'PERFORMANCE BOOKINGS';
         if (effectiveBusinessType === 'RETAIL') return 'BUYER INQUIRIES';
+        if (effectiveBusinessType === 'LENDING') return 'LOAN REQUESTS';
         return 'BOOKING REQUESTS';
       case 'my-quotes':
+        if (effectiveBusinessType === 'LENDING') return 'LOAN OFFERS';
         return effectiveBusinessType === 'WHOLESALE' ? 'ACTIVE QUOTATIONS' : 'MY QUOTES';
+      case 'loan-terms':
+        return 'LOAN TERMS';
       case 'schedule':
         return 'MY SCHEDULE';
       case 'audit-trail':
@@ -1139,22 +1157,26 @@ export default function DashboardLayout({
 
         {/* Mobile Bottom Navigation */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#1a1612]/5 flex justify-around items-center h-17.5 z-110 px-2 pb-safe shadow-[0_-10px_30px_rgba(26,22,18,0 (truncated…).05)]">
-          <button
-            onClick={() => handleTabClick('home')}
-            className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'home' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
-          >
-            <Home
-              className="w-5.5 h-5.5 mb-1"
-              stroke="white"
-              strokeWidth={1.5}
-              fill="currentColor"
-            />
-            <span
-              className={`text-[11px] font-sans tracking-tight ${activeTab === 'home' ? 'font-bold' : 'font-normal'}`}
+          {/* Collection Officers / Quotation Managers have no Home — they're
+              locked to their scoped surface. */}
+          {!isCollectionOfficer(user) && !isQuotationManager(user) && (
+            <button
+              onClick={() => handleTabClick('home')}
+              className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'home' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
             >
-              Home
-            </span>
-          </button>
+              <Home
+                className="w-5.5 h-5.5 mb-1"
+                stroke="white"
+                strokeWidth={1.5}
+                fill="currentColor"
+              />
+              <span
+                className={`text-[11px] font-sans tracking-tight ${activeTab === 'home' ? 'font-bold' : 'font-normal'}`}
+              >
+                Home
+              </span>
+            </button>
+          )}
 
           {user?.role === 'BUYER' ? (
             <>
@@ -1266,7 +1288,7 @@ export default function DashboardLayout({
                 </>
               )}
 
-              {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && (
+              {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && !isQuotationManager(user) && (
                 <button
                   onClick={() => handleTabClick('products')}
                   className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'products' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
@@ -1304,7 +1326,8 @@ export default function DashboardLayout({
                 </button>
               )}
 
-              {user?.parentProviderId && !hasPermission(user, PERMISSIONS.MANAGE_COLLECTIONS) && (
+              {user?.parentProviderId &&
+                (!hasPermission(user, PERMISSIONS.MANAGE_COLLECTIONS) || isCollectionOfficer(user)) && (
                 <button
                   onClick={() => handleTabClick('profile')}
                   className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'profile' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}

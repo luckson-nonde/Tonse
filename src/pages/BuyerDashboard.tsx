@@ -14,7 +14,7 @@ import { useUserInquiries, notifyInquiriesChanged } from '../hooks/useInquiries'
 import { useUserQuotes, notifyQuotesChanged } from '../hooks/useQuotes';
 import { useNotificationStream } from '../hooks/useNotificationStream';
 import { releaseReserveQuotes } from '../services/api/notificationService';
-import { markQuoteAsRead, archiveQuote, deleteQuote } from '../services/api/quoteService';
+import { markQuoteAsRead, archiveQuote, deleteQuote, updateQuoteStatus } from '../services/api/quoteService';
 import { createOrder, fetchBuyerOrders, type OrderRecord } from '../services/api/orderService';
 import { isActiveInquiry, isActiveQuote } from '../services/lifecycleFilters';
 import { ViewType, MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
@@ -237,6 +237,14 @@ export default function BuyerDashboard() {
       return { ...q, inquiryCategory, inquiryAttributes: inq.attributes };
     });
     const activeQuotes = enrichedQuotes.filter(isActiveQuote);
+    // A loan OFFER (condition LOAN) or DECLINE (condition DECLINED) is a Quote
+    // that lives in its own "Loan Offers" surface (custom card + LoanOfferDetail),
+    // NOT alongside marketplace quotes — a loan is accepted/countered, never
+    // "paid". Include terminal ones (REJECTED/DECLINED) so the borrower actually
+    // sees a lender's decision + reason instead of the request going silent.
+    const isLoanish = (q: any) => ['LOAN', 'DECLINED'].includes(String(q?.condition || '').toUpperCase());
+    const loanOffers = enrichedQuotes.filter((q) => isLoanish(q) && !(q as any).isArchived);
+    const marketplaceQuotes = activeQuotes.filter((q) => !isLoanish(q));
 
     // Recent activity: one card per inquiry, labelled by its
     // most-advanced known stage (Order Placed > Quote Received >
@@ -263,7 +271,10 @@ export default function BuyerDashboard() {
         return {
           id: `q-${i.id}`,
           title: i.title,
-          subtitle: `Quote Received · K${(liveQuote.price || 0).toLocaleString()}`,
+          subtitle:
+            String((liveQuote as any).condition || '').toUpperCase() === 'LOAN'
+              ? `Offer Received · ZMW ${(liveQuote.price || 0).toLocaleString()}`
+              : `Quote Received · K${(liveQuote.price || 0).toLocaleString()}`,
           time: 'Recently',
           icon: 'FileText',
         };
@@ -279,7 +290,8 @@ export default function BuyerDashboard() {
 
     return {
       inquiries: activeInquiries,
-      quotes: activeQuotes,
+      quotes: marketplaceQuotes,
+      loanOffers,
       orders,
       balance,
       escrowBalance,
@@ -410,9 +422,33 @@ export default function BuyerDashboard() {
         refreshOrders();
         handleTabChange('orders');
         break;
+      case 'loan_action_done':
+        // Borrower accepted / rejected / countered a loan offer (LoanOfferDetail
+        // did the API call + server-side audit). Refresh and return to offers.
+        refreshQuotes();
+        refreshInquiries();
+        handleTabChange('loan_offers');
+        break;
+      case 'back_to_quotes':
+        handleTabChange('loan_offers');
+        break;
       case 'generate_po': {
         const quote = payload as Quote;
         if (!quote?.id || !quote?.providerId || quote?.price == null) break;
+        // A loan OFFER is accepted, not "paid" — there's no Order/payment for a
+        // loan (money flows lender→borrower later). Accepting just marks the
+        // offer ACCEPTED; the lender then proceeds off-platform / Phase-2.
+        if ((quote as any).condition === 'LOAN') {
+          try {
+            await updateQuoteStatus(String(quote.id), 'ACCEPTED');
+            refreshQuotes();
+            refreshInquiries();
+            handleTabChange('loan_offers');
+          } catch (err: any) {
+            alert(err?.message || 'Failed to accept the loan offer. Please try again.');
+          }
+          break;
+        }
         try {
           await createOrder({
             quoteId: String(quote.id),

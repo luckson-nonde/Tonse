@@ -175,7 +175,14 @@ export class AdminService {
   // ───── User management ──────────────────────────────────────────────────
 
   async listUsers(filters: Record<string, any> = {}) {
-    return this.usersService.findAll(filters);
+    const page = await this.usersService.findAll(filters);
+    // Phase 3: name / email / business identity live on the profile row, not
+    // the users (auth) row. Flatten each so the admin Users table isn't a
+    // list of anonymous display IDs.
+    const data = await Promise.all(
+      page.data.map((u) => this.usersService.flattenWithProfile(u))
+    );
+    return { ...page, data };
   }
 
   async suspendUser(id: string, actingAdmin?: ActingAdmin) {
@@ -239,7 +246,9 @@ export class AdminService {
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
     }
-    return user;
+    // Flatten so the Review modal shows name / email / company details rather
+    // than just the display ID.
+    return this.usersService.flattenWithProfile(user);
   }
 
   // ───── Verification queue ───────────────────────────────────────────────
@@ -291,7 +300,12 @@ export class AdminService {
       )
     );
 
-    const merged = all.flatMap((p) => p.data ?? []);
+    const merged = all
+      .flatMap((p) => p.data ?? [])
+      // Staff (parentProviderId set) inherit the shop owner's verification —
+      // they're vouched for by the owner, not the platform admin — so they
+      // never enter the verification queue.
+      .filter((u) => !(u as any).parentProviderId);
     merged.sort((a, b) => {
       const ta = a.createdAt ? new Date(a.createdAt as any).getTime() : 0;
       const tb = b.createdAt ? new Date(b.createdAt as any).getTime() : 0;
@@ -302,10 +316,15 @@ export class AdminService {
     const page = Number(filters.page) || 1;
     const limit = Number(filters.limit) || 20;
     const start = (page - 1) * limit;
-    return {
-      data: merged.slice(start, start + limit),
-      total: merged.length,
-    };
+    const pageRows = merged.slice(start, start + limit);
+    // Phase 3: name / email / business identity live on the profile row, not
+    // the users (auth) row — so the raw findAll rows carry NO name and the
+    // admin queue showed anonymous display IDs. Flatten each page row so the
+    // admin can see WHO (name / business) they're verifying.
+    const data = await Promise.all(
+      pageRows.map((u) => this.usersService.flattenWithProfile(u))
+    );
+    return { data, total: merged.length };
   }
 
   async verifyUser(id: string, actingAdmin?: ActingAdmin) {

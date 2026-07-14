@@ -3,9 +3,10 @@ import { MasterAccountSchema } from './accountSchemaTypes';
 export type ViewType = 
   | 'dashboard' 
   | 'profile' 
-  | 'inquiries' 
-  | 'quotes' 
-  | 'orders' 
+  | 'inquiries'
+  | 'quotes'
+  | 'loan_offers'
+  | 'orders'
   | 'settings'
   | 'inquiry_details'
   | 'quote_details'
@@ -19,6 +20,7 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'dashboard', label: 'Overview', icon: 'LayoutDashboard' },
     { id: 'inquiries', label: 'My Inquiries', icon: 'MessageSquare' },
     { id: 'quotes', label: 'Received Quotes', icon: 'FileText' },
+    { id: 'loan_offers', label: 'Loan Offers', icon: 'Landmark' },
     { id: 'orders', label: 'Order History', icon: 'ShoppingBag' },
     { id: 'shops', label: 'Browse Shops', icon: 'Store' },
     { id: 'profile', label: 'Account Settings', icon: 'User' },
@@ -54,6 +56,12 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       subtitle: "Review and compare offers from verified providers",
       componentType: 'list_renderer',
       dataKey: 'quotes'
+    },
+    loan_offers: {
+      title: "Loan Offers",
+      subtitle: "Review and respond to loan offers from lenders",
+      componentType: 'list_renderer',
+      dataKey: 'loanOffers'
     },
     orders: {
       title: "Order History",

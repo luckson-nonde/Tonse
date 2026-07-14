@@ -7,6 +7,7 @@ import {
   MinLength,
   MaxLength,
   IsBoolean,
+  IsObject,
   Min,
   Max,
 } from 'class-validator';
@@ -140,6 +141,20 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsString()
+  bozLicenceNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  bozLicenceUrl?: string;
+
+  /** Per-loan-type Terms & Conditions: { collateral, salary, government,
+   *  general }. Routed to the service-provider profile (not an auth field). */
+  @IsOptional()
+  @IsObject()
+  loanTerms?: Record<string, string>;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(50)
   labourCategory?: string;
 
@@ -180,6 +195,6 @@ export class UpdateUserDto {
   categoryIds?: string[];
 
   @IsOptional()
-  @IsEnum(['RETAIL', 'RENTAL', 'BOOKING', 'LABOUR', 'REPAIR', 'SERVICE', 'EVENTS', 'ENTERTAINMENT'])
+  @IsEnum(['RETAIL', 'RENTAL', 'BOOKING', 'LABOUR', 'REPAIR', 'SERVICE', 'EVENTS', 'ENTERTAINMENT', 'WHOLESALE', 'LENDING'])
   archetype?: string;
 }

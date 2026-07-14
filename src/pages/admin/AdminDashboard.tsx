@@ -2646,6 +2646,9 @@ function ReviewDrawer({
   const isLabour = !!(user as any)?.labourCategory;
   const isShopOrSupplier = (user?.role || '') === 'SELLER';
   const isService = (user?.role || '') === 'SERVICE_PROVIDER';
+  const isLender = Array.isArray((user as any)?.archetypes)
+    ? (user as any).archetypes.includes('LENDING')
+    : false;
 
   return (
     <div className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-md flex items-stretch justify-end">
@@ -2754,6 +2757,55 @@ function ReviewDrawer({
                           <DocImage key={i} src={doc} alt={`doc-${i}`} compact />
                         ))}
                       </div>
+                    </div>
+                  )}
+                </ReviewSection>
+              )}
+
+              {/* Lenders are regulated — the admin must see PACRA + ZRA + Bank
+                  of Zambia licence to approve. A required-doc checklist makes an
+                  incomplete dossier obvious at a glance. */}
+              {isLender && (
+                <ReviewSection title="Regulatory Compliance" eyebrow="Lending" icon={ShieldCheck}>
+                  <ReviewGrid>
+                    <ReviewField label="Bank of Zambia Licence No." value={meta.bozLicenceNumber} mono />
+                  </ReviewGrid>
+
+                  <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {[
+                      { label: 'PACRA Certificate', ok: !!meta.incorporationCertUrl },
+                      { label: 'ZRA TPIN', ok: !!meta.tpin },
+                      { label: 'Bank of Zambia Licence', ok: !!meta.bozLicenceUrl },
+                    ].map((c) => (
+                      <div
+                        key={c.label}
+                        className={`flex items-center gap-2 p-2.5 rounded-xl border text-[11px] font-bold ${
+                          c.ok
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            : 'border-rose-200 bg-rose-50 text-rose-600'
+                        }`}
+                      >
+                        {c.ok ? (
+                          <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        ) : (
+                          <XCircle className="w-4 h-4 shrink-0" />
+                        )}
+                        {c.label}
+                      </div>
+                    ))}
+                  </div>
+
+                  {meta.bozLicenceUrl ? (
+                    <div className="mt-5">
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">
+                        Bank of Zambia Lending Licence
+                      </p>
+                      <DocImage src={meta.bozLicenceUrl} alt="boz licence" />
+                    </div>
+                  ) : (
+                    <div className="mt-4 flex items-center gap-2 text-rose-500 text-[12px] font-medium">
+                      <ShieldAlert className="w-4 h-4 shrink-0" /> Bank of Zambia licence not uploaded —
+                      required to approve a lender.
                     </div>
                   )}
                 </ReviewSection>

@@ -1,13 +1,32 @@
 import { z } from 'zod';
 import { FieldSchema } from './categories';
 
+const isEmptyValue = (v: any): boolean =>
+  v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
+
 /**
  * Dynamically generates a Zod schema from an array of FieldSchema objects.
+ *
+ * `dependsOn` awareness: a field that is only shown when another field matches
+ * (e.g. the collateral vehicle/property fields on a loan request) is kept
+ * LENIENT at the base level so a HIDDEN field never blocks submit. When it is
+ * `required`, that requiredness is enforced ONLY WHEN VISIBLE via the
+ * `superRefine` below. This is what makes "all requirements filled before the
+ * request is sent" hold for conditional forms without dead-locking on fields
+ * the user can't even see.
  */
 export function generateZodSchema(fields: FieldSchema[]) {
   const schemaShape: Record<string, any> = {};
 
   fields.forEach((field) => {
+    const fieldName = field.name || (field as any).id;
+
+    // Conditional field → lenient base (validated when-visible in superRefine).
+    if (field.dependsOn) {
+      schemaShape[fieldName] = z.any().optional();
+      return;
+    }
+
     let fieldSchema: any;
 
     switch (field.type) {
@@ -82,9 +101,27 @@ export function generateZodSchema(fields: FieldSchema[]) {
       fieldSchema = fieldSchema.optional().or(z.literal(''));
     }
 
-    const fieldName = field.name || (field as any).id;
     schemaShape[fieldName] = fieldSchema;
   });
 
-  return z.object(schemaShape);
+  const base = z.object(schemaShape);
+
+  // Enforce required-when-visible for conditional fields.
+  const conditionalRequired = fields.filter((f) => f.required && f.dependsOn);
+  if (conditionalRequired.length === 0) return base;
+
+  return base.superRefine((data: any, ctx: z.RefinementCtx) => {
+    for (const f of conditionalRequired) {
+      const dep = f.dependsOn!;
+      const visible = data[dep.field] === dep.value;
+      const fieldName = f.name || (f as any).id;
+      if (visible && isEmptyValue(data[fieldName])) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [fieldName],
+          message: `${f.label} is required`,
+        });
+      }
+    }
+  });
 }

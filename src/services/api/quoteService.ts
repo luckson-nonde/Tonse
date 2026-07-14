@@ -140,6 +140,27 @@ export async function updateQuoteStatus(
 }
 
 /**
+ * Buyer counter-offer on a loan offer. Sends the borrower's proposed terms;
+ * the lender can then revise. Buyers bypass the MANAGE_QUOTES guard.
+ */
+export async function counterLoanOffer(
+  quoteId: string,
+  terms: { requestedAmount?: number; maxInterestRatePct?: number; requestedTenure?: string; note?: string }
+): Promise<QuoteResponse> {
+  const response = await apiClient.patch<any>(`/quotes/${quoteId}/counter`, terms);
+  return normalizeQuote(response.data ?? response);
+}
+
+/**
+ * Borrower confirms receipt of the disbursed funds (only valid once the lender
+ * has marked the loan DISBURSED). Advances the loan tracker. Buyer-authorized.
+ */
+export async function confirmLoanDisbursement(quoteId: string): Promise<QuoteResponse> {
+  const response = await apiClient.patch<any>(`/quotes/${quoteId}/loan-confirm`, {});
+  return normalizeQuote(response.data ?? response);
+}
+
+/**
  * Mark a quote as read by the buyer
  */
 export async function markQuoteAsRead(quoteId: string): Promise<QuoteResponse> {

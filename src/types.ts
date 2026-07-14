@@ -86,7 +86,9 @@ export type SubRole =
   | 'SKILLED_LABOUR'
   // Equipment rental — a provider type (tier-2, next to Service & Labour) that
   // hires out plant/machinery rather than performing labour.
-  | 'MACHINERY_HIRE';
+  | 'MACHINERY_HIRE'
+  // Lender (loan company) — a service provider offering loan products.
+  | 'LENDER';
 export type EntityType = 'INDIVIDUAL' | 'BUSINESS';
 
 export interface InquiryItem {

@@ -15,6 +15,7 @@ import { UserDisplayIdUtil } from '../../utils/user-display-id.util';
 import { generatePassword } from '../../utils/generate-password.util';
 import { CreateTeamMemberDto } from './dto/create-team-member.dto';
 import { UpdateTeamMemberDto } from './dto/update-team-member.dto';
+import { AuditService } from '../audit/audit.service';
 
 /**
  * Team Service — owners (top-level providers) manage staff users.
@@ -39,6 +40,7 @@ export class TeamService {
     @InjectRepository(UserEmail)
     private readonly userEmailRepository: Repository<UserEmail>,
     private readonly usersService: UsersService,
+    private readonly auditService: AuditService,
   ) {}
 
   async create(parentProvider: User, dto: CreateTeamMemberDto) {
@@ -91,13 +93,21 @@ export class TeamService {
       }),
     );
 
+    // Staff don't hold their own verification — they inherit the shop
+    // owner's (they're vouched for by the owner, not the platform admin). Seed
+    // the minimal profile with the owner's CURRENT status so a staff member of
+    // a VERIFIED shop is verified from creation. flattenWithProfile keeps this
+    // in sync afterwards, and the admin verification queue excludes staff.
+    const parentFlat = await this.usersService.flattenWithProfile(parentProvider);
+    const inheritedStatus = parentFlat?.verificationStatus ?? 'PENDING';
+
     // Minimal profile so name/email/phone display works; no category
     // junctions, no archetypes — staff inherit those from the parent.
     await this.usersService.createProfileForRole(saved.id, parentProvider.role, {
       name: dto.name,
       email: emailLower,
       phone: dto.phone,
-      verificationStatus: 'PENDING',
+      verificationStatus: inheritedStatus,
     });
 
     const reloaded = await this.usersService.findById(saved.id);
@@ -229,7 +239,29 @@ export class TeamService {
     }
 
     const reloaded = await this.usersService.findById(staffId);
-    return this.usersService.flattenWithProfile(reloaded);
+    const flat = await this.usersService.flattenWithProfile(reloaded);
+
+    // Audit the on-demand switch — suspending/re-activating a team member
+    // revokes or restores ALL their access, so both sides need a trail.
+    if (dto.isActive !== undefined) {
+      this.auditService
+        .create({
+          action: dto.isActive ? 'STAFF_REACTIVATED' : 'STAFF_SUSPENDED',
+          entityType: 'USER',
+          entityId: staffId,
+          providerId: parentProvider.id,
+          staffId,
+          staffName: flat?.name,
+          targetTitle: flat?.name,
+          status: dto.isActive ? 'ACTIVE' : 'SUSPENDED',
+          details: dto.isActive
+            ? 'Owner re-activated a team member (access restored)'
+            : 'Owner switched off a team member (access revoked)',
+        } as any)
+        .catch(() => undefined);
+    }
+
+    return flat;
   }
 
   async remove(parentProvider: User, staffId: string) {
