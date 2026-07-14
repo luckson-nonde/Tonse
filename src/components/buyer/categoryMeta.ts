@@ -114,13 +114,15 @@ const SPECIALTY_ART = import.meta.glob(
 
 /**
  * Normalize a specialty filename to its lookup key. Lower-cases, drops a
- * trailing `" (n)"` copy suffix (browser re-downloads), and collapses every run
- * of non-alphanumeric characters — spaces, underscores, `&`, `()`, `/` — into a
+ * trailing `" (n)"` copy suffix (browser re-downloads), DELETES apostrophes
+ * (catalog ids drop them: "Men's Clothing" → `mens-clothing`, so `'`/`’` must
+ * vanish rather than become a hyphen), and collapses every remaining run of
+ * non-alphanumeric characters — spaces, underscores, `&`, `()`, `/` — into a
  * single hyphen. So a file named for the item's *display name*
- * ("Software & Web Development.webp", "IT Support & Maintenance.webp") keys to
- * the same stem as its catalog **id** (`software-web-development`,
- * `it-support-maintenance`) with no manual rename. State-suffixed electronics
- * stems (`mobile-phones-sell`) are unaffected — their hyphens re-collapse to
+ * ("Software & Web Development.webp", "Men's Clothing.webp") keys to the same
+ * stem as its catalog **id** (`software-web-development`, `mens-clothing`)
+ * with no manual rename. State-suffixed electronics stems
+ * (`mobile-phones-sell`) are unaffected — their hyphens re-collapse to
  * themselves.
  */
 export const normalizeSpecialtyKey = (fileName: string): string =>
@@ -128,6 +130,7 @@ export const normalizeSpecialtyKey = (fileName: string): string =>
     .replace(/\.(png|jpe?g|webp)$/i, '')
     .toLowerCase()
     .replace(/\s*\(\d+\)\s*$/, '')
+    .replace(/['’]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
