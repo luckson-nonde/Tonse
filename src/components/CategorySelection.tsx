@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Search,
@@ -69,6 +69,13 @@ import { fetchCategories, Category } from '../services/categories';
 import { useCategoryAvailability } from '../services/categories/availability';
 import { LABOUR_CATEGORY_GROUPS, LABOUR_CATEGORIES, MACHINERY_GROUP } from '../services/labourCategories';
 
+// Border colors on the pick cards/chips are OPAQUE hex equivalents of the old
+// translucent gold (`border-[#C9973A]/NN` ≈ gold blended over the white card):
+// /20→#F4EAD8 /30→#EFE0C4 /40→#E9D5B0 /45→#E7D0A6 /50→#E4CB9D /60→#DFC189.
+// Translucent border strokes on these rounded cards mis-rasterize on budget
+// Android GPUs (Tecno/Mali: card surfaces vanish, text echoes in "wavy"
+// cascades) — proven by on-device bisect. Don't reintroduce /NN border
+// opacities here; see .claude/skills/android-gpu-ghosting.
 interface CategorySelectionProps {
   onComplete?: (categories: any) => void;
   onChange?: (categories: string[]) => void;
@@ -304,7 +311,7 @@ const CategoryCard = ({ category, isSelected, onClick, onHover, compact }: Categ
         } ${
           isSelected
             ? 'border-[#C9973A] bg-white shadow-[0_8px_24px_-14px_rgba(201,151,58,0.45)]'
-            : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/40 hover:shadow-[0_6px_18px_-14px_rgba(26,22,18,0.12)]'
+            : 'border-[#e8e4dc] bg-white hover:border-[#E9D5B0] hover:shadow-[0_6px_18px_-14px_rgba(26,22,18,0.12)]'
         }`}
       >
         {/* Left-edge gold accent — system signature (icon fallback only;
@@ -386,7 +393,7 @@ const CategoryCard = ({ category, isSelected, onClick, onHover, compact }: Categ
       } ${
         isSelected
           ? 'border-[#C9973A] bg-white shadow-[0_15px_30px_rgba(201,151,58,0.12)]'
-          : 'border-slate-100 bg-white hover:border-[#C9973A]/20 hover:shadow-[0_15px_30px_rgba(0,0,0,0.04)]'
+          : 'border-slate-100 bg-white hover:border-[#F4EAD8] hover:shadow-[0_15px_30px_rgba(0,0,0,0.04)]'
       }`}
     >
       {showArt ? (
@@ -530,12 +537,15 @@ const SpecialtyImageCard = ({
     return hasBuy && hasRepair; // both
   });
 
+  // Lift transforms are lg:-gated and paint is contained: transform
+  // transitions on touch churn compositor layers, which ghosts/smears on
+  // budget Android GPUs (see useLiteMotion.ts).
   return (
     <div
       className={`group/card relative rounded-2xl bg-white border p-2 pb-2.5 flex flex-col transition-all duration-300 ${
         isSelected
-          ? 'border-[#C9973A] shadow-[0_10px_28px_-12px_rgba(201,151,58,0.45)] -translate-y-0.5'
-          : 'border-[#e8e4dc] hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-14px_rgba(26,22,18,0.18)]'
+          ? 'border-[#C9973A] shadow-[0_10px_28px_-12px_rgba(201,151,58,0.45)] lg:-translate-y-0.5'
+          : 'border-[#e8e4dc] hover:border-[#E7D0A6] lg:hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-14px_rgba(26,22,18,0.18)]'
       }`}
     >
       {/* 1:1 preview with true (overlapping) crossfade — both images are
@@ -595,12 +605,12 @@ const SpecialtyImageCard = ({
               className={`relative w-full px-2.5 h-8 rounded-lg text-[10px] font-bold uppercase tracking-[0.12em] transition-all duration-200 flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-1 focus-visible:ring-offset-white ${
                 active
                   ? 'bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white border border-[#a87a1f] shadow-[0_4px_12px_-6px_rgba(201,151,58,0.5)]'
-                  : 'bg-white border border-[#C9973A]/30 text-[#C9973A] hover:border-[#C9973A]/60 hover:bg-[#fdf6e9]/50'
+                  : 'bg-white border border-[#EFE0C4] text-[#C9973A] hover:border-[#DFC189] hover:bg-[#fdf6e9]/50'
               }`}
             >
               <span
                 className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
-                  active ? 'border-white' : 'border-[#C9973A]/50'
+                  active ? 'border-white' : 'border-[#E4CB9D]'
                 }`}
               >
                 {active && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
@@ -645,8 +655,8 @@ const SpecialtySingleCard = ({
       aria-pressed={selected}
       className={`group/card relative rounded-2xl bg-white border p-2 pb-2.5 flex flex-col text-left transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-1 focus-visible:ring-offset-white ${
         selected
-          ? 'border-[#C9973A] shadow-[0_10px_28px_-12px_rgba(201,151,58,0.45)] -translate-y-0.5'
-          : 'border-[#e8e4dc] hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-14px_rgba(26,22,18,0.18)]'
+          ? 'border-[#C9973A] shadow-[0_10px_28px_-12px_rgba(201,151,58,0.45)] lg:-translate-y-0.5'
+          : 'border-[#e8e4dc] hover:border-[#E7D0A6] lg:hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-14px_rgba(26,22,18,0.18)]'
       }`}
     >
       <div className="relative rounded-xl overflow-hidden aspect-square bg-[#f5efe4]">
@@ -671,7 +681,7 @@ const SpecialtySingleCard = ({
         className={`w-full px-2.5 h-8 rounded-lg text-[10px] font-bold uppercase tracking-[0.12em] flex items-center gap-2 mt-auto transition-all duration-200 ${
           selected
             ? 'bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white border border-[#a87a1f]'
-            : 'bg-white border border-[#C9973A]/30 text-[#C9973A] group-hover/card:border-[#C9973A]/60 group-hover/card:bg-[#fdf6e9]/50'
+            : 'bg-white border border-[#EFE0C4] text-[#C9973A] group-hover/card:border-[#DFC189] group-hover/card:bg-[#fdf6e9]/50'
         }`}
       >
         <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -717,7 +727,7 @@ const WorkflowIllustration = ({
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="w-full bg-[#f8f6f2] rounded-[40px] p-16 border border-slate-200/50 flex flex-col items-center justify-center text-center gap-6 min-h-[400px]"
+        className="w-full bg-[#f8f6f2] rounded-[40px] p-16 border border-[#EDEFF1] flex flex-col items-center justify-center text-center gap-6 min-h-[400px]"
       >
         <div className="w-24 h-24 bg-slate-50 rounded-[32px] flex items-center justify-center border border-slate-100 mb-2">
           <Sparkles className="w-10 h-10 text-slate-200" />
@@ -845,20 +855,41 @@ export default function CategorySelection({
     autoMachinery ? MACHINERY_GROUP : autoLabour ? 'ROOT' : null,
   );
 
+  const [subcategories, setSubcategories] = useState<Category[]>([]);
+  const [loadingSub, setLoadingSub] = useState(false);
+
   // Android-GPU ghosting guard: after each internal view swap (master grid ⇄
   // specialty ⇄ labour screens) force the compositor to re-raster this region
   // so stale tiles from the previous view can't survive. No-op on desktop.
+  // `loadingSub` must be a dependency: the specialty swap paints TWICE (spinner
+  // while fetchCategories is in flight, then the real grid), and a nudge fired
+  // only on the spinner frame leaves the grid paint unguarded — which is where
+  // the wavy stale-tile smears on budget phones came from. The delayed second
+  // nudge covers the lazy <img> decodes that land after the grid mounts.
   const viewWrapRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     nudgeRepaint(viewWrapRef.current);
+    const t = window.setTimeout(() => nudgeRepaint(viewWrapRef.current), 450);
+    return () => window.clearTimeout(t);
+  }, [activeParent, activeLabourGroup, loadingSub]);
+
+  // Each internal step starts at the top. Runs BEFORE paint (layout effect):
+  // replacing a deep-scrolled grid with a shorter view would otherwise let
+  // Chrome Android's scroll-anchoring clamp the scroll mid-swap under the
+  // sticky header layer — the stale-tile smear recipe on budget GPUs.
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
   }, [activeParent, activeLabourGroup]);
-  const [subcategories, setSubcategories] = useState<Category[]>([]);
-  const [loadingSub, setLoadingSub] = useState(false);
   const [subSearchQuery, setSubSearchQuery] = useState('');
   const [labourSubSearch, setLabourSubSearch] = useState('');
   const [activeSubGroup, setActiveSubGroup] = useState<string | null>(null);
 
   const [selectedCategories, setSelectedCategories] = useState<any[]>([]);
+
+  // Touch devices get a static loader icon: animate-spin is a continuously
+  // rotating composited transform, and animated transforms are what corrupt
+  // budget Android GPUs (see useLiteMotion.ts).
+  const lite = useLiteMotion();
 
   const { isAvailable } = useCategoryAvailability();
 
@@ -1214,7 +1245,7 @@ export default function CategorySelection({
             )}
             {loadingSub ? (
               <div className="py-20 flex flex-col items-center gap-4">
-                <Loader2 className="w-10 h-10 animate-spin text-[#C9973A]" />
+                <Loader2 className={`w-10 h-10 text-[#C9973A] ${lite ? '' : 'animate-spin'}`} />
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   Loading details
                 </p>
@@ -1307,8 +1338,8 @@ export default function CategorySelection({
                         key={group.baseName}
                         className={`group/card relative p-3 rounded-2xl bg-white border transition-all duration-200 ${
                           hasSelection
-                            ? 'border-[#C9973A]/60 shadow-[0_8px_24px_-14px_rgba(201,151,58,0.4)]'
-                            : 'border-[#e8e4dc] hover:border-[#C9973A]/40 hover:shadow-[0_6px_18px_-14px_rgba(26,22,18,0.12)]'
+                            ? 'border-[#DFC189] shadow-[0_8px_24px_-14px_rgba(201,151,58,0.4)]'
+                            : 'border-[#e8e4dc] hover:border-[#E9D5B0] hover:shadow-[0_6px_18px_-14px_rgba(26,22,18,0.12)]'
                         }`}
                       >
                         <div className="flex items-center gap-2.5 mb-2.5">
@@ -1341,7 +1372,7 @@ export default function CategorySelection({
                                     ? isRepairAction
                                       ? 'bg-gradient-to-b from-[#1a1a2e] to-[#262640] text-white border border-[#0f1023] shadow-[0_4px_12px_-6px_rgba(26,26,46,0.5)]'
                                       : 'bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white border border-[#a87a1f] shadow-[0_4px_12px_-6px_rgba(201,151,58,0.5)]'
-                                    : 'bg-white border border-[#C9973A]/30 text-[#C9973A] hover:border-[#C9973A]/60 hover:bg-[#fdf6e9]/50'
+                                    : 'bg-white border border-[#EFE0C4] text-[#C9973A] hover:border-[#DFC189] hover:bg-[#fdf6e9]/50'
                                 }`}
                               >
                                 <ActionIcon className="w-3.5 h-3.5 shrink-0" />
@@ -1364,8 +1395,8 @@ export default function CategorySelection({
                       key={group.baseName}
                       className={`group/card relative p-5 sm:p-6 md:p-7 rounded-[20px] bg-white border transition-all duration-500 ease-out ${
                         hasSelection
-                          ? 'border-[#C9973A]/60 shadow-[0_18px_40px_-12px_rgba(201,151,58,0.22)]'
-                          : 'border-[#C9973A]/20 hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-12px_rgba(201,151,58,0.18)]'
+                          ? 'border-[#DFC189] shadow-[0_18px_40px_-12px_rgba(201,151,58,0.22)]'
+                          : 'border-[#F4EAD8] hover:border-[#E7D0A6] lg:hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-12px_rgba(201,151,58,0.18)]'
                       }`}
                     >
                       {hasSelection && (
@@ -1412,7 +1443,7 @@ export default function CategorySelection({
                                   ? isRepairAction
                                     ? 'bg-gradient-to-br from-[#1a1a2e] to-[#262640] text-white border border-[#0f1023] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_6px_18px_-4px_rgba(26,26,46,0.45)]'
                                     : 'bg-gradient-to-br from-[#C9973A] to-[#b58726] text-white border border-[#a87a1f] shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_6px_18px_-4px_rgba(201,151,58,0.5)]'
-                                  : 'bg-white border border-[#C9973A]/30 text-[#C9973A] hover:border-[#C9973A]/60 hover:bg-[#fdf6e9]/50'
+                                  : 'bg-white border border-[#EFE0C4] text-[#C9973A] hover:border-[#DFC189] hover:bg-[#fdf6e9]/50'
                               }`}
                             >
                               <ActionIcon className="w-3.5 h-3.5 shrink-0" />
@@ -1528,7 +1559,7 @@ export default function CategorySelection({
                   const GroupIcon = LABOUR_GROUP_ICONS[g.id] || Wrench;
                   const img = getLabourGroupImage(g.label);
                   const frameCls =
-                    'group/card relative rounded-2xl bg-white border border-[#e8e4dc] hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-14px_rgba(26,22,18,0.18)] transition-all duration-300 ease-out text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-1 focus-visible:ring-offset-white';
+                    'group/card relative rounded-2xl bg-white border border-[#e8e4dc] hover:border-[#E7D0A6] lg:hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-14px_rgba(26,22,18,0.18)] transition-all duration-300 ease-out text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-1 focus-visible:ring-offset-white';
 
                   // Image-led track card (track has artwork): photo on top, label +
                   // arrow beneath. Falls back to the icon chip when no image.
@@ -1655,8 +1686,8 @@ export default function CategorySelection({
                       const img = getLabourImage(s.id);
                       const frameCls = `group/card relative rounded-[20px] bg-white border text-left transition-all duration-500 ease-out ${
                         selected
-                          ? 'border-[#C9973A]/60 shadow-[0_18px_40px_-12px_rgba(201,151,58,0.22)]'
-                          : 'border-[#C9973A]/20 hover:border-[#C9973A]/45 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-12px_rgba(201,151,58,0.18)]'
+                          ? 'border-[#DFC189] shadow-[0_18px_40px_-12px_rgba(201,151,58,0.22)]'
+                          : 'border-[#F4EAD8] hover:border-[#E7D0A6] lg:hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-12px_rgba(201,151,58,0.18)]'
                       }`;
 
                       // Image-led card (trade has artwork): photo on top, label +
@@ -1731,7 +1762,7 @@ export default function CategorySelection({
           // handleExplore to fire. Shows the same spinner the specialty view uses
           // so the transition feels like a single continuous load, not a missed step.
           <div className={`flex flex-col items-center justify-center gap-4 ${hideHeader ? 'py-12' : 'py-24'}`}>
-            <Loader2 className="w-8 h-8 animate-spin text-[#C9973A]" />
+            <Loader2 className={`w-8 h-8 text-[#C9973A] ${lite ? '' : 'animate-spin'}`} />
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
               Loading specialties
             </p>
@@ -1787,7 +1818,7 @@ export default function CategorySelection({
                       placeholder="Search 500+ categories..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-12 sm:pl-16 pr-6 sm:pr-8 py-4 sm:py-5 md:py-6 bg-white border-2 border-slate-200 focus:border-[#C9973A]/40 rounded-2xl sm:rounded-[28px] xl:rounded-[32px] text-base sm:text-lg outline-none transition-all placeholder:text-slate-300 shadow-sm focus:shadow-[0_8px_24px_rgba(201,151,58,0.08)]"
+                      className="w-full pl-12 sm:pl-16 pr-6 sm:pr-8 py-4 sm:py-5 md:py-6 bg-white border-2 border-slate-200 focus:border-[#E9D5B0] rounded-2xl sm:rounded-[28px] xl:rounded-[32px] text-base sm:text-lg outline-none transition-all placeholder:text-slate-300 shadow-sm focus:shadow-[0_8px_24px_rgba(201,151,58,0.08)]"
                     />
                   </div>
                 </div>

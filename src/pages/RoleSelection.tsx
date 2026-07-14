@@ -475,7 +475,7 @@ export default function RoleSelection() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
-                    className="group relative p-4 pl-5 rounded-2xl border border-[#C9973A]/40 bg-white shadow-[0_6px_18px_-14px_rgba(201,151,58,0.3)] text-left flex items-center gap-3 mb-3"
+                    className="group relative p-4 pl-5 rounded-2xl border border-[#E9D5B0] bg-white shadow-[0_6px_18px_-14px_rgba(201,151,58,0.3)] text-left flex items-center gap-3 mb-3"
                   >
                     <div className="absolute left-0 top-3 bottom-3 w-[2px] bg-[#C9973A] rounded-full" />
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-[#C9973A] text-white">
@@ -546,7 +546,7 @@ export default function RoleSelection() {
                               className={`group relative flex flex-col overflow-hidden rounded-2xl border text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-white ${
                                 isSelected
                                   ? 'border-[#C9973A] bg-white shadow-[0_8px_28px_-14px_rgba(201,151,58,0.45)]'
-                                  : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/40 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)]'
+                                  : 'border-[#e8e4dc] bg-white hover:border-[#E9D5B0] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)]'
                               }`}
                             >
                               <div className="relative aspect-video overflow-hidden bg-[#f5f2ee]">
@@ -598,7 +598,7 @@ export default function RoleSelection() {
                             } focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-white ${
                               isSelected
                                 ? 'border-[#C9973A] bg-white shadow-[0_8px_28px_-14px_rgba(201,151,58,0.45)]'
-                                : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/40 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)]'
+                                : 'border-[#e8e4dc] bg-white hover:border-[#E9D5B0] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)]'
                             }`}
                           >
                             <div
@@ -766,7 +766,7 @@ export default function RoleSelection() {
             <Button
               onClick={handleContinue}
               disabled={disabled}
-              className="w-full h-[58px] shadow-[0_12px_28px_-8px_rgba(201,151,58,0.4)] disabled:from-[#e8e4dc] disabled:to-[#e0dccf] disabled:text-[#1a1612]/30 disabled:shadow-none disabled:cursor-not-allowed text-[13px] font-sans font-bold text-white bg-gradient-to-b from-[#D5A547] to-[#C9973A] hover:from-[#C9973A] hover:to-[#B08432] transition-all active:scale-[0.98] rounded-2xl uppercase tracking-[0.22em] flex justify-center items-center gap-2"
+              className="w-full h-[58px] shadow-[0_12px_28px_-8px_rgba(201,151,58,0.4)] disabled:from-[#e8e4dc] disabled:to-[#e0dccf] disabled:text-[#1a1612]/30 disabled:shadow-none disabled:cursor-not-allowed text-[13px] font-sans font-bold text-white bg-gradient-to-b from-[#D5A547] to-[#C9973A] hover:from-[#C9973A] hover:to-[#B08432] transition-all lg:active:scale-[0.98] rounded-2xl uppercase tracking-[0.22em] flex justify-center items-center gap-2"
             >
               {tier === 1
                 ? 'Next Step'

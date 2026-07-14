@@ -1,5 +1,12 @@
 @import 'tailwindcss';
 
+/* Light-only document — reinforces the <meta name="color-scheme"> opt-out so
+   Chrome/OEM auto-dark never inverts the UI (see index.html for the full
+   rationale; broken inversion on Mali GPUs was the Choose-Specialty bug). */
+:root {
+  color-scheme: only light;
+}
+
 @theme {
   --color-primary: #c9973a;
   --color-accent: #c9973a;
