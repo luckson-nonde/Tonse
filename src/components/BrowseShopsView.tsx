@@ -117,10 +117,13 @@ export default function BrowseShopsView({ onSendInquiry, onViewProfile }: Browse
           this browse/discovery tab apart from the transactional Inquiries /
           Quotes list views. Search AND both filters live in one white bar
           (the Choose-Specialty search-bar pattern). */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1B3068] to-[#2a407a] p-6 sm:p-7 text-white shadow-lg">
-        <div
-          className="absolute -right-12 -top-12 w-48 h-48 bg-[#d49b35]/20 rounded-full blur-2xl pointer-events-none"
-        />
+      <div className="relative rounded-3xl bg-gradient-to-br from-[#1B3068] to-[#2a407a] p-6 sm:p-7 text-white shadow-lg">
+        {/* Decorative glow lives in its OWN clipped layer — the banner
+            itself must not be overflow-hidden, or it cuts off the filter
+            dropdown panels that open below the search bar. */}
+        <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
+          <div className="absolute -right-12 -top-12 w-48 h-48 bg-[#d49b35]/20 rounded-full blur-2xl" />
+        </div>
         <div className="relative z-10">
           <div className="flex items-center gap-2.5 mb-2">
             <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center backdrop-blur-sm">
