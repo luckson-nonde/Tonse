@@ -48,6 +48,9 @@ const PARENT_ARCHETYPE: Record<string, Archetype> = {
   // Hospital Labs + Pharmacies both fulfil buyer requests (test orders /
   // prescriptions) — generic SERVICE archetype, no bespoke dashboard.
   'clinical-services': 'SERVICE',
+  // Locksmiths fulfil key/lock requests (cutting, replacement, car-key
+  // programming) — generic SERVICE archetype, no bespoke dashboard.
+  'locksmith-key-services': 'SERVICE',
   // Landlords/agents quote unit offers against booking-shaped requests —
   // the BOOKING dashboard ("Booking Requests") fits, NOT machinery RENTAL.
   apartments: 'BOOKING',
@@ -89,6 +92,7 @@ const PARENT_NATURE: Record<string, CategoryNature> = {
   labour: 'SERVICE',
   'machinery-hire': 'SERVICE',
   'clinical-services': 'SERVICE',
+  'locksmith-key-services': 'SERVICE',
   apartments: 'SERVICE',
   loans: 'SERVICE',
   'pastry-bakery': 'SERVICE',
@@ -225,3 +229,5 @@ export class CategoriesSeederService implements OnModuleInit {
 // catalog.json regenerated: +apartments (long-term-rentals, short-stay-serviced, boarding-student-rooms)
 
 // catalog.json regenerated: +pastry-bakery (custom-cakes, bread-pastries)
+
+// catalog.json regenerated: +locksmith-key-services (key-replacement)

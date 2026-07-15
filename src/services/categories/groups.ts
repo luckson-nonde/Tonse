@@ -33,7 +33,7 @@ export const CATEGORY_GROUPS: CategoryGroup[] = [
   {
     id: 'professional-services',
     label: 'Professional Services',
-    categoryIds: ['construction', 'it-services', 'drilling-services', 'telecommunications', 'clinical-services'],
+    categoryIds: ['construction', 'it-services', 'drilling-services', 'telecommunications', 'clinical-services', 'locksmith-key-services'],
   },
   {
     id: 'business-industry',

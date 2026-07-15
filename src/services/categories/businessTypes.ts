@@ -68,6 +68,7 @@ const MASTER_CATEGORY_TYPE: Record<string, CategoryType> = {
   telecommunications:  'SERVICES',
   'it-services':       'SERVICES',
   'drilling-services': 'SERVICES',
+  'locksmith-key-services': 'SERVICES',
   loans:               'SERVICES',
 };
 

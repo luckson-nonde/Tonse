@@ -17,6 +17,7 @@ import {
   Stethoscope,
   Building2,
   Croissant,
+  KeyRound,
   HardHat,
   Tractor,
   Box,
@@ -53,6 +54,7 @@ export const CATEGORY_META: Record<string, CategoryMeta> = {
   'drilling-services':   { icon: Droplets,       accent: '#3399C9', tagline: 'Boreholes, water systems' },
   agriculture:           { icon: Sprout,         accent: '#3FA98B', tagline: 'Seeds, inputs, machinery' },
   'clinical-services':   { icon: Stethoscope,    accent: '#3FA98B', tagline: 'Lab tests, medication, prescriptions' },
+  'locksmith-key-services': { icon: KeyRound,    accent: '#A8763E', tagline: 'Key cutting, lock repair, car keys' },
   apartments:            { icon: Building2,      accent: '#8E6FD8', tagline: 'Rentals, short stay, boarding' },
   'pastry-bakery':       { icon: Croissant,      accent: '#E8884B', tagline: 'Custom cakes, bread, pastries' },
   // Synthetic buyer masters (BuyerCategoryPicker) — not in BASE_CATEGORIES_DB.

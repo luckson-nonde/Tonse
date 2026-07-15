@@ -18,6 +18,7 @@ import { businessComputersSchema, serversStorageSchema, networkingHardwareSchema
 import { poultryFarmingSchema, aquacultureSchema, cropProductionSchema, livestockVeterinarySchema, irrigationHardwareSchema, agroTechServicesSchema } from './schemas/agriculture';
 import { loanCollateralSchema, loanSalarySchema, loanGovernmentSchema } from './schemas/loans';
 import { customCakesSchema, breadPastriesSchema } from './schemas/pastryBakery';
+import { keyReplacementSchema } from './schemas/keyServices';
 
 export const GENERIC_FALLBACK_SCHEMA: FieldSchema[] = [
   { name: "images", label: "Reference Photos", type: "image_upload", required: false },
@@ -126,6 +127,12 @@ const BASE_CATEGORIES_DB: Category[] = [
     id: 'clinical-services',
     name: 'Clinical Services',
     image: 'https://images.unsplash.com/photo-1587854692152-cbe660dbde88?auto=format&fit=crop&q=80&w=800&h=800',
+    parentId: null
+  },
+  {
+    id: 'locksmith-key-services',
+    name: 'Locksmith & Key Services',
+    image: 'https://images.unsplash.com/photo-1609770231080-e321deccc34c?auto=format&fit=crop&q=80&w=800&h=800',
     parentId: null
   },
   {
@@ -262,6 +269,11 @@ const BASE_CATEGORIES_DB: Category[] = [
   { id: 'hospital-labs', name: 'Hospital Labs', parentId: 'clinical-services', formSchema: hospitalLabsSchema },
   { id: 'pharmacies', name: 'Pharmacies', parentId: 'clinical-services', formSchema: pharmaciesSchema },
 
+  // Subcategories - Locksmith & Key Services (locksmiths fulfil buyer key/lock
+  // requests; the buyer's photo of the key/lock/vehicle helps identify the
+  // right blank — see schemas/keyServices.ts)
+  { id: 'key-replacement', name: 'Key Replacement', parentId: 'locksmith-key-services', formSchema: keyReplacementSchema },
+
   // Subcategories - Apartments & Housing (tenure-split: a monthly lease, a
   // furnished short stay, and a student room are three different landlord
   // conversations; unit SIZE is a field inside each form)
@@ -285,7 +297,7 @@ export type CategoryNature = 'PRODUCT' | 'SERVICE' | 'BOTH';
 
 export const getCategoryNature = (categoryId: string): CategoryNature => {
   const productParents = ['fashion', 'groceries', 'beauty', 'home-decor', 'it-products', 'electronics', 'furniture'];
-  const serviceParents = ['entertainment', 'events', 'telecommunications', 'it-services', 'drilling-services', 'clinical-services', 'apartments', 'loans', 'pastry-bakery'];
+  const serviceParents = ['entertainment', 'events', 'telecommunications', 'it-services', 'drilling-services', 'clinical-services', 'locksmith-key-services', 'apartments', 'loans', 'pastry-bakery'];
   
   const category = CATEGORIES_DB.find(c => c.id === categoryId);
   if (!category) return 'BOTH';

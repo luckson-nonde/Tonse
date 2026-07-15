@@ -1106,6 +1106,17 @@ export const ARCHETYPE_CONFIG: Record<string, ArchetypeConfig> = {
       "leadTime"
     ]
   },
+  "key-replacement": {
+    "categoryName": "Key Replacement",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "quantity": "unitPrice",
+      "duration": "rate"
+    },
+    "requiredAdditions": [
+      "availabilityDate"
+    ]
+  },
   "long-term-rentals": {
     "categoryName": "Long-Term Rentals",
     "archetype": "SERVICE",
