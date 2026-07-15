@@ -255,6 +255,21 @@ export const adminService = {
     return res.data ?? null;
   },
 
+  // ───── Billing / Subscriptions (primary admin only) ────────────────────────
+
+  async getBillingSettings(): Promise<AdminBillingSettings | null> {
+    const res = await apiClient.get<AdminBillingSettings>('/admin/billing-settings');
+    return res.data ?? null;
+  },
+
+  /** Partial update — only the fields present are changed. Audit-logged server-side. */
+  async updateBillingSettings(
+    payload: UpdateBillingSettingsInput
+  ): Promise<AdminBillingSettings | null> {
+    const res = await apiClient.patch<AdminBillingSettings>('/admin/billing-settings', payload);
+    return res.data ?? null;
+  },
+
   // ───── Promoter programme (milestones + oversight) ────────────────────────
 
   async getMilestones(): Promise<AdminMilestone[]> {
@@ -375,6 +390,22 @@ export interface PromoterInvite {
   /** null ⇒ key still comes from the env fallback, never rotated in the UI. */
   rotatedAt: string | null;
 }
+
+/** Platform monetization settings + live subscriber count (Subscriptions tab). */
+export interface AdminBillingSettings {
+  subscriptionsEnabled: boolean;
+  quoteTiers: { count: number; price: number }[];
+  targetedInquiryFee: number;
+  monthlyFee: number;
+  activeSubscriberCount: number;
+}
+
+export type UpdateBillingSettingsInput = Partial<
+  Pick<
+    AdminBillingSettings,
+    'subscriptionsEnabled' | 'quoteTiers' | 'targetedInquiryFee' | 'monthlyFee'
+  >
+>;
 
 export interface AdminMilestone {
   id: string;

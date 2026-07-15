@@ -28,6 +28,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { CollectionModule } from './modules/collection/collection.module';
 import { LoanModule } from './modules/loans/loans.module';
+import { BillingModule } from './modules/billing/billing.module';
 
 // Common
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -84,6 +85,7 @@ import promoterConfig from './config/promoter.config';
     ReviewsModule,
     CollectionModule,
     LoanModule,
+    BillingModule,
   ],
   providers: [
     {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Check,
   Navigation,
@@ -30,6 +30,7 @@ import {
   Landmark,
   Coins,
 } from 'lucide-react';
+import { getBillingSettings, type BillingSettingsPublic } from '../services/api/billingService';
 
 export type CategoryType = 'PRODUCTS' | 'SERVICES' | 'VENUES' | 'LABOR';
 
@@ -49,6 +50,12 @@ interface InquiryPreferencesProps {
 
 // Tiered pricing for the quote-count cap. Buyer pays the fee; system auto-closes
 // the inquiry once the chosen number of quotes has landed.
+// The COUNTS are the platform invariant; the PRICES are admin-editable
+// (billing_settings.quoteTiers, fetched on mount) with these as the offline
+// fallback — a settings fetch hiccup must fall back to paid behaviour, never
+// accidentally waive fees. When the admin turns monetization OFF, every fee
+// on this screen renders FREE and handleNext emits quoteFee: 0 (which makes
+// BuyerDashboard skip the payment step entirely).
 const QUOTE_COUNT_TIERS = [
   { count: 5,  price: 10 },
   { count: 10, price: 15 },
@@ -59,10 +66,6 @@ const QUOTE_COUNT_TIERS = [
   { count: 60, price: 40 },
   { count: 70, price: 45 },
 ];
-
-// Reduced tiers for chain-store targeting — more than ~10 quotes from branches of
-// one chain is rarely useful.
-const CHAIN_QUOTE_TIERS = QUOTE_COUNT_TIERS.slice(0, 3); // 5 / 10 / 20
 
 const PREFERENCES_CONFIG = {
   PRODUCTS: {
@@ -771,6 +774,39 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
   const [validity,       setValidity]       = useState<string>(config.section3.options[0].id);
   const [quoteCount,     setQuoteCount]     = useState<number>(QUOTE_COUNT_TIERS[0].count);
 
+  // Admin-set monetization settings (master switch + tier prices). null while
+  // loading — every derived value below falls back to the paid hardcoded
+  // defaults until the fetch lands, so the screen never flashes FREE by
+  // accident.
+  const [billing, setBilling] = useState<BillingSettingsPublic | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getBillingSettings().then((s) => {
+      if (!cancelled) setBilling(s);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const subsEnabled = billing?.subscriptionsEnabled ?? true;
+  const thisShopFee = billing?.targetedInquiryFee ?? 10;
+  // Counts are the platform invariant — graft admin prices onto the fixed
+  // counts (match by count) so a malformed settings row can never break the
+  // picker or leave quoteCount pointing at a missing tier.
+  const priceTiers = useMemo(() => {
+    const remote = billing?.quoteTiers;
+    if (!Array.isArray(remote) || remote.length === 0) return QUOTE_COUNT_TIERS;
+    return QUOTE_COUNT_TIERS.map((tier) => {
+      const match = remote.find((r) => Number(r?.count) === tier.count);
+      const price = Number(match?.price);
+      return Number.isFinite(price) && price >= 0 ? { count: tier.count, price } : tier;
+    });
+  }, [billing]);
+  // Reduced tiers for chain-store targeting — more than ~10 quotes from
+  // branches of one chain is rarely useful.
+  const chainTiers = priceTiers.slice(0, 3); // 5 / 10 / 20
+
   // Reset when categoryType or categoryKey changes (preserves targeted defaults)
   useEffect(() => {
     const cfg = resolveConfig(categoryType, categoryKey);
@@ -785,15 +821,15 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
   // reduced tier set.
   useEffect(() => {
     if (isTargeted && targetOption === 'chain') {
-      if (!CHAIN_QUOTE_TIERS.find((t) => t.count === quoteCount)) {
-        setQuoteCount(CHAIN_QUOTE_TIERS[0].count);
+      if (!chainTiers.find((t) => t.count === quoteCount)) {
+        setQuoteCount(chainTiers[0].count);
       }
     }
-  }, [targetOption, isTargeted, quoteCount]);
+  }, [targetOption, isTargeted, quoteCount, chainTiers]);
 
   // "This Shop Only" always = 1 quote at minimum fee.
   const isThisShopOnly = isTargeted && targetOption === 'this_shop';
-  const activeTiers    = isTargeted ? CHAIN_QUOTE_TIERS : QUOTE_COUNT_TIERS;
+  const activeTiers    = isTargeted ? chainTiers : priceTiers;
   const selectedTier   = activeTiers.find((t) => t.count === quoteCount) ?? activeTiers[0];
 
   const handleNext = () => {
@@ -801,8 +837,9 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
       targetOption,
       quoteParameter,
       validity,
-      quoteCount:  isThisShopOnly ? 1              : quoteCount,
-      quoteFee:    isThisShopOnly ? 10             : selectedTier.price,
+      quoteCount:  isThisShopOnly ? 1 : quoteCount,
+      // quoteFee 0 = monetization OFF — BuyerDashboard skips the payment step.
+      quoteFee:    subsEnabled ? (isThisShopOnly ? thisShopFee : selectedTier.price) : 0,
     });
   };
 
@@ -1044,7 +1081,9 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-[15px] font-black text-[#C9973A]">K10</p>
+                      <p className="text-[15px] font-black text-[#C9973A]">
+                        {subsEnabled ? `K${thisShopFee}` : 'FREE'}
+                      </p>
                       <p className="text-[9px] font-bold uppercase tracking-widest text-[#94a3b8]">Service fee</p>
                     </div>
                   </div>
@@ -1087,7 +1126,7 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
                               {nounPlural}
                             </span>
                             <span className={`text-[12px] font-black mt-1 transition-colors ${isSelected ? 'text-[#C9973A]' : 'text-[#94a3b8]'}`}>
-                              K{tier.price}
+                              {subsEnabled ? `K${tier.price}` : 'FREE'}
                             </span>
                           </button>
                         );
@@ -1099,7 +1138,7 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
                         <span className="font-black text-[#1a1a2e]">{selectedTier.count} {nounPlural}</span>
                       </p>
                       <p className="text-[12px] font-black text-[#C9973A] shrink-0">
-                        Service fee: K{selectedTier.price}
+                        Service fee: {subsEnabled ? `K${selectedTier.price}` : 'FREE'}
                       </p>
                     </div>
                   </>
@@ -1145,7 +1184,8 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
                 >
                   <span className="text-[15px] font-bold leading-none">Confirm &amp; Continue</span>
                   <span className="text-[9px] font-bold uppercase tracking-[0.1em] opacity-70">
-                    Finalize Inquiry Preferences · K{isThisShopOnly ? 10 : selectedTier.price}
+                    Finalize Inquiry Preferences ·{' '}
+                    {subsEnabled ? `K${isThisShopOnly ? thisShopFee : selectedTier.price}` : 'FREE'}
                   </span>
                 </button>
               </div>

@@ -46,11 +46,13 @@ import {
   KeyRound,
   Copy,
   Flag,
+  CreditCard,
 } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
 import { ADMIN_PERMISSIONS } from '../../utils/rbac';
 import TeamManagersView from '../../components/admin/TeamManagersView';
 import ReportsView from '../../components/admin/ReportsView';
+import SubscriptionManagerView from '../../components/admin/SubscriptionManagerView';
 // StatTile / FunnelCard / Switch were extracted to DashboardPrimitives so the
 // promoter dashboard shares them — same components, zero behavior change.
 import { StatTile, FunnelCard, Switch } from '../../components/admin/DashboardPrimitives';
@@ -77,6 +79,7 @@ type AdminTab =
   | 'verifications'
   | 'reports'
   | 'categories'
+  | 'subscriptions'
   | 'milestones'
   | 'inquiries'
   | 'quotes'
@@ -106,6 +109,7 @@ const TABS: {
   },
   { id: 'reports', label: 'Reports', icon: Flag, permission: ADMIN_PERMISSIONS.REPORTS },
   { id: 'categories', label: 'Category Control', icon: SlidersHorizontal },
+  { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
   { id: 'milestones', label: 'Milestones', icon: Sparkles },
   { id: 'inquiries', label: 'Inquiries', icon: MessageSquare },
   { id: 'quotes', label: 'Quotes', icon: FileText },
@@ -232,6 +236,7 @@ export default function AdminDashboard() {
             {activeTab === 'verifications' && tabVisible && <VerificationsView />}
             {activeTab === 'reports' && tabVisible && <ReportsView />}
             {activeTab === 'categories' && tabVisible && <CategoryControlView />}
+            {activeTab === 'subscriptions' && tabVisible && <SubscriptionManagerView />}
             {activeTab === 'milestones' && tabVisible && <MilestonesView />}
             {activeTab === 'inquiries' && tabVisible && <InquiriesView />}
             {activeTab === 'quotes' && tabVisible && <QuotesView />}
@@ -2862,7 +2867,23 @@ function ReviewDrawer({
 
               <ReviewSection title="Location" eyebrow="Where" icon={ImageIcon}>
                 <ReviewGrid>
-                  <ReviewField label="Location" value={(user as any).location} />
+                  {/* Sellers carry a single `location` string; buyer profiles
+                      store province/city/area instead — compose those when
+                      no location string exists (Set dedupes city==province). */}
+                  <ReviewField
+                    label="Location"
+                    value={
+                      (user as any).location ||
+                      Array.from(
+                        new Set(
+                          [meta.area, meta.city, meta.province]
+                            .filter(Boolean)
+                            .map((s: any) => String(s).trim())
+                        )
+                      ).join(', ') ||
+                      null
+                    }
+                  />
                   <ReviewField
                     label="Coordinates"
                     value={

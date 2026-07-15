@@ -374,7 +374,7 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
                         : 'bg-[#f1f5f9] text-[#cbd5e1] cursor-not-allowed'
                     }`}
                   >
-                    Confirm & Continue
+                    Continue
                   </button>
                 </div>
               </div>

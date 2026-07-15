@@ -16,7 +16,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 
-export type InquiryPaymentMethod = 'mobile' | 'card' | 'virtual';
+// 'free' never renders this screen — BuyerDashboard synthesizes it when the
+// admin has monetization switched off and the fee is 0.
+export type InquiryPaymentMethod = 'mobile' | 'card' | 'virtual' | 'free';
 
 export interface InquiryPaymentResult {
   method: InquiryPaymentMethod;

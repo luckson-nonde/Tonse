@@ -17,6 +17,8 @@ import {
   Stethoscope,
   Building2,
   Croissant,
+  HardHat,
+  Tractor,
   Box,
   type LucideIcon,
 } from 'lucide-react';
@@ -53,6 +55,9 @@ export const CATEGORY_META: Record<string, CategoryMeta> = {
   'clinical-services':   { icon: Stethoscope,    accent: '#3FA98B', tagline: 'Lab tests, medication, prescriptions' },
   apartments:            { icon: Building2,      accent: '#8E6FD8', tagline: 'Rentals, short stay, boarding' },
   'pastry-bakery':       { icon: Croissant,      accent: '#E8884B', tagline: 'Custom cakes, bread, pastries' },
+  // Synthetic buyer masters (BuyerCategoryPicker) — not in BASE_CATEGORIES_DB.
+  labour:                { icon: HardHat,        accent: '#D9822B', tagline: 'Trades, workers, crews for hire' },
+  'machinery-hire':      { icon: Tractor,        accent: '#6B7280', tagline: 'Excavators, cranes, trucks' },
 };
 
 export const FALLBACK_META: CategoryMeta = {
@@ -152,6 +157,15 @@ for (const [path, url] of Object.entries(SPECIALTY_ART)) {
   SPECIALTY_BY_KEY[key] = url;
 }
 
+// The two synthetic buyer masters (Labour & Skills / Heavy Machinery for
+// Hire, injected by BuyerCategoryPicker) reuse seller-onboarding artwork
+// instead of shipping duplicate binaries: the General Labourer trade photo
+// and the Excavator equipment photo already bundled for the Choose-Trade /
+// Select-Machinery screens. `??=` keeps the drop contract — a real
+// categories/labour.webp or machinery-hire.webp drop still wins.
+ART_BY_ID['labour'] ??= SPECIALTY_BY_KEY['general-labourer'];
+ART_BY_ID['machinery-hire'] ??= SPECIALTY_BY_KEY['excavator'];
+
 export const getSpecialtyPreview = (
   stem: string,
   state: SpecialtyState,
@@ -179,6 +193,40 @@ export const getSpecialtyImage = (stem: string): string | undefined =>
  */
 export const getLabourImage = (id: string): string | undefined =>
   SPECIALTY_BY_KEY[normalizeSpecialtyKey(id)];
+
+/**
+ * Buyer subcategory-card image — the buyer picker reuses the SAME artwork
+ * the seller/provider registration shows for that entity (specialty
+ * folder, same resolver), so both sides of the marketplace see one visual
+ * language:
+ *   - labour trades / machinery equipment → the Choose-Trade photo,
+ *   - catalog `-buy`/`-repair` variants (electronics) → the matching
+ *     Sell/Repair specialty preview,
+ *   - single-variant subs (construction, automotive, services, …) → the
+ *     bare `<id>.webp` specialty image.
+ * Missing artwork ⇒ undefined ⇒ the card keeps its icon chip.
+ */
+export const getBuyerSubImage = (sub: {
+  id: string;
+  parentId?: string | null;
+  type?: string;
+}): string | undefined => {
+  if (sub.parentId === 'labour' || sub.parentId === 'machinery-hire') {
+    return getLabourImage(sub.id);
+  }
+  const stem = sub.id.replace(/-(buy|repair)$/i, '');
+  if (sub.type === 'repair') {
+    return (
+      getSpecialtyPreview(stem, 'repair') ??
+      getSpecialtyPreview(stem, 'both') ??
+      getSpecialtyImage(stem)
+    );
+  }
+  if (sub.type === 'buy') {
+    return getSpecialtyPreview(stem, 'sell') ?? getSpecialtyImage(stem);
+  }
+  return SPECIALTY_BY_KEY[normalizeSpecialtyKey(sub.id)] ?? getSpecialtyImage(stem);
+};
 
 /**
  * Labour TRACK image (Choose-a-track screen, Skilled Labour flow). The six

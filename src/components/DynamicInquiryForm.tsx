@@ -778,7 +778,7 @@ export default function DynamicInquiryForm({
   return (
     <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto w-full min-h-screen bg-[#f5f2ed]">
       {/* Mobile-only Header */}
-      <div className="md:hidden sticky top-0 z-30 px-4 pt-4 pb-5 bg-[#f5f2ed]">
+      <div className="md:hidden sticky top-0 z-30 px-0 pt-4 pb-5 bg-[#f5f2ed]">
         <div className="flex items-center gap-3">
           <motion.button
             whileTap={{ scale: 0.92 }}
@@ -804,7 +804,7 @@ export default function DynamicInquiryForm({
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(onFormSubmit)} className="p-4 md:p-8 lg:p-10 xl:p-12">
+      <form onSubmit={handleSubmit(onFormSubmit)} className="px-0 py-4 md:p-8 lg:p-10 xl:p-12">
         <div className="flex flex-col md:flex-row gap-8 lg:gap-16 items-start">
           {/* Desktop Left-side Context - Sticky */}
           <div className="hidden md:flex flex-col gap-8 w-full md:w-[320px] lg:w-[400px] shrink-0 sticky top-12">
@@ -906,7 +906,7 @@ export default function DynamicInquiryForm({
             animate={{ opacity: 1, x: 0 }}
             className="flex-1 w-full space-y-8"
           >
-            <div className="bg-white border border-[#e8e0d0]/60 rounded-[28px] p-6 md:p-10 xl:p-12 shadow-[0_4px_24px_-8px_rgba(26,26,46,0.08)]">
+            <div className="bg-white border border-[#e8e0d0]/60 rounded-[28px] p-4 sm:p-6 md:p-10 xl:p-12 shadow-[0_4px_24px_-8px_rgba(26,26,46,0.08)]">
               {/* Two-column max — forms read better when each field has
                   real horizontal room. Going wider (3-4 columns) makes
                   labels feel cramped and bureaucratic; capped at 2 the

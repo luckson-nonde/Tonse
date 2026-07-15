@@ -36,6 +36,7 @@ import {
 import Logo from './Logo';
 import ConfirmModal from './ConfirmModal';
 import BuyerVerificationBanner from './BuyerVerificationBanner';
+import SubscriptionPaywall from './SubscriptionPaywall';
 import DashboardCalendar, { CalendarTone, CounterCard } from './DashboardCalendar';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useDashboard } from '../DashboardContext';
@@ -800,6 +801,9 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[#f5f2ed] noise-bg flex relative font-sans">
+      {/* Full-screen monthly-subscription wall for shops — self-gating, renders
+          nothing for buyers/admins or while monetization is switched off. */}
+      <SubscriptionPaywall />
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div

@@ -334,7 +334,7 @@ export default function DynamicAccountRenderer({
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           whileHover={{ y: -2 }}
-          className="bg-gradient-to-br from-white via-brand-white to-slate-50 p-12 rounded-3xl border-2 border-brand-gold/30 shadow-premium-lg hover:shadow-premium-xl transition-all duration-300 relative overflow-hidden group"
+          className="bg-gradient-to-br from-white via-brand-white to-slate-50 p-6 sm:p-12 rounded-3xl border-2 border-brand-gold/30 shadow-premium-lg hover:shadow-premium-xl transition-all duration-300 relative overflow-hidden group"
         >
           <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-brand-gold/15 via-brand-gold/8 to-transparent rounded-bl-full z-0 opacity-50 group-hover:opacity-70 group-hover:scale-110 transition-all duration-500 pointer-events-none"></div>
           <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-gradient-to-tr from-brand-gold/8 to-transparent rounded-tr-full z-0 opacity-40 pointer-events-none"></div>
@@ -350,10 +350,13 @@ export default function DynamicAccountRenderer({
               Create a new inquiry to receive tailored quotes from our network of verified
               providers.
             </p>
-            <div className="flex flex-wrap gap-4">
+            {/* One line even on mobile (no wrap): each action gets flex-1 so
+                the pair renders at matching sizes; desktop keeps auto-width. */}
+            <div className="flex flex-row gap-3 sm:gap-4">
               {viewSchema.actions?.map((action, idx) => (
                 <motion.div
                   key={uniqueKey('action', action.id, idx)}
+                  className="flex-1 sm:flex-initial min-w-0"
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
@@ -363,13 +366,13 @@ export default function DynamicAccountRenderer({
                   <Button
                     variant={action.variant}
                     onClick={() => onAction(action.id)}
-                    className={`px-8 py-3.5 flex items-center gap-2 font-medium rounded-2xl transition-all duration-300 shadow-premium ${
+                    className={`w-full justify-center whitespace-nowrap px-2 sm:px-8 py-3.5 flex items-center gap-1.5 sm:gap-2 font-medium text-[13px] sm:text-base rounded-2xl transition-all duration-300 shadow-premium ${
                       action.variant === 'primary'
                         ? 'bg-gradient-to-r from-brand-gold to-brand-accent hover:shadow-gold-glow text-white'
                         : 'border-2 border-brand-gold/40 text-brand-gold hover:border-brand-gold hover:bg-brand-gold/8 hover:shadow-premium-md'
                     }`}
                   >
-                    {renderIcon(action.icon, 'w-5 h-5')}
+                    {renderIcon(action.icon, 'w-4 h-4 sm:w-5 sm:h-5 shrink-0')}
                     {action.label}
                   </Button>
                 </motion.div>
@@ -547,7 +550,7 @@ export default function DynamicAccountRenderer({
               );
             })
           ) : (
-            <div className="bg-white p-12 sm:p-20 rounded-4xl border border-slate-200 shadow-premium flex flex-col items-center justify-center text-center min-h-[60vh] animate-in fade-in duration-700">
+            <div className="bg-white p-6 sm:p-20 rounded-4xl border border-slate-200 shadow-premium flex flex-col items-center justify-center text-center min-h-[60vh] animate-in fade-in duration-700">
               <div className="relative mb-10">
                 <div className="absolute inset-0 bg-brand-gold/5 rounded-full blur-3xl scale-150 animate-pulse"></div>
                 <img 
@@ -566,14 +569,26 @@ export default function DynamicAccountRenderer({
                  view === 'orders' ? 'No completed orders yet.' :
                  'There is no data to display here yet.'}
               </p>
-              {viewSchema.actions?.[0] && (
-                <Button 
-                  onClick={() => onAction(viewSchema.actions![0].id)}
-                  className="px-12 py-4 !bg-brand-dark hover:!bg-[#1e3a8a] !text-white rounded-full font-bold text-lg shadow-xl shadow-brand-dark/10 hover:shadow-[#1e3a8a]/20 hover:-translate-y-1 transition-all duration-300 flex items-center gap-3"
-                >
-                  {renderIcon(viewSchema.actions![0].icon || 'Plus', 'w-5 h-5')}
-                  {viewSchema.actions![0].label}
-                </Button>
+              {/* All schema actions, side by side on ONE line even on mobile.
+                  flex-1 on every button keeps the pair identically sized;
+                  whitespace-nowrap stops labels wrapping inside the pills. */}
+              {(viewSchema.actions?.length ?? 0) > 0 && (
+                <div className="flex flex-row items-stretch justify-center gap-3 w-full max-w-md">
+                  {viewSchema.actions!.map((action, idx) => (
+                    <Button
+                      key={uniqueKey('empty-action', action.id, idx)}
+                      onClick={() => onAction(action.id)}
+                      className={`flex-1 min-w-0 px-2 sm:px-8 py-3.5 sm:py-4 rounded-full font-bold text-[13px] sm:text-base whitespace-nowrap hover:-translate-y-1 transition-all duration-300 flex items-center justify-center gap-1.5 sm:gap-2 ${
+                        action.variant === 'secondary'
+                          ? '!bg-brand-gold hover:!bg-brand-accent !text-white shadow-xl shadow-brand-gold/15 hover:shadow-brand-gold/25'
+                          : '!bg-brand-dark hover:!bg-[#1e3a8a] !text-white shadow-xl shadow-brand-dark/10 hover:shadow-[#1e3a8a]/20'
+                      }`}
+                    >
+                      {renderIcon(action.icon || 'Plus', 'w-4 h-4 sm:w-5 sm:h-5 shrink-0')}
+                      {action.label}
+                    </Button>
+                  ))}
+                </div>
               )}
             </div>
           )}

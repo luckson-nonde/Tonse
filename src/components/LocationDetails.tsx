@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   MapPin,
   ChevronDown,
@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Check,
   Store,
+  Loader2,
 } from 'lucide-react';
 
 interface LocationDetailsProps {
@@ -182,6 +183,52 @@ function isInZambia(lat: number, lng: number): boolean {
   );
 }
 
+interface ZambiaAddressMatch {
+  province: string | null;
+  city: string | null;
+  rawLocality: string;
+  rawState: string;
+}
+
+/**
+ * Match a Nominatim `address` object (identical shape from /reverse and
+ * /search) against ZAMBIA_DATA so results populate the province/city
+ * selects with values they actually recognise. Shared by reverseGeocode
+ * (GPS capture) and forwardGeocode (Area/Landmark search).
+ */
+function matchZambiaAddress(addr: any): ZambiaAddressMatch {
+  // Province: Nominatim returns "Lusaka Province" — strip the suffix.
+  const stateRaw: string = (addr?.state || '').toString();
+  const stateClean = stateRaw.replace(/\s*Province\s*$/i, '').trim();
+  const provinceMatch =
+    Object.keys(ZAMBIA_DATA).find((p) => p.toLowerCase() === stateClean.toLowerCase()) ?? null;
+
+  // City: try every locality field Nominatim might fill, in priority order.
+  let cityMatch: string | null = null;
+  let rawLocality = '';
+  if (provinceMatch) {
+    const candidates: string[] = [
+      addr?.city,
+      addr?.town,
+      addr?.village,
+      addr?.municipality,
+      addr?.suburb,
+      (addr?.county || '').replace(/\s*District\s*$/i, '').trim(),
+    ].filter(Boolean);
+    rawLocality = candidates[0] || '';
+    for (const candidate of candidates) {
+      const m = ZAMBIA_DATA[provinceMatch].find(
+        (c) => c.toLowerCase() === candidate.toLowerCase()
+      );
+      if (m) {
+        cityMatch = m;
+        break;
+      }
+    }
+  }
+  return { province: provinceMatch, city: cityMatch, rawLocality, rawState: stateClean };
+}
+
 interface ResolvedLocation {
   province: string | null;
   city: string | null;
@@ -209,36 +256,8 @@ async function reverseGeocode(lat: number, lng: number): Promise<ResolvedLocatio
     if (!data?.address || data.address.country_code !== 'zm') return null;
 
     const addr = data.address;
-
-    // Province: Nominatim returns "Lusaka Province" — strip the suffix.
-    const stateRaw: string = (addr.state || '').toString();
-    const stateClean = stateRaw.replace(/\s*Province\s*$/i, '').trim();
-    const provinceMatch =
-      Object.keys(ZAMBIA_DATA).find((p) => p.toLowerCase() === stateClean.toLowerCase()) ?? null;
-
-    // City: try every locality field Nominatim might fill, in priority order.
-    let cityMatch: string | null = null;
-    let rawLocality = '';
-    if (provinceMatch) {
-      const candidates: string[] = [
-        addr.city,
-        addr.town,
-        addr.village,
-        addr.municipality,
-        addr.suburb,
-        (addr.county || '').replace(/\s*District\s*$/i, '').trim(),
-      ].filter(Boolean);
-      rawLocality = candidates[0] || '';
-      for (const candidate of candidates) {
-        const m = ZAMBIA_DATA[provinceMatch].find(
-          (c) => c.toLowerCase() === candidate.toLowerCase()
-        );
-        if (m) {
-          cityMatch = m;
-          break;
-        }
-      }
-    }
+    const { province: provinceMatch, city: cityMatch, rawLocality, rawState } =
+      matchZambiaAddress(addr);
 
     const address = [addr.road, addr.suburb || addr.neighbourhood]
       .filter(Boolean)
@@ -249,11 +268,66 @@ async function reverseGeocode(lat: number, lng: number): Promise<ResolvedLocatio
       city: cityMatch,
       address,
       rawLocality,
-      rawState: stateClean,
+      rawState,
     };
   } catch (err) {
     console.warn('Reverse geocode failed:', err);
     return null;
+  }
+}
+
+export interface GeocodeSuggestion {
+  id: string;
+  name: string;
+  displayName: string;
+  lat: number;
+  lon: number;
+  province: string | null;
+  city: string | null;
+}
+
+/**
+ * Forward-geocode a free-text query ("Airport", "Manda Hill", …) to a
+ * short list of Zambian place candidates via Nominatim's /search endpoint.
+ * This is what makes the Area/Landmark field the PRIMARY way to set the
+ * map pin: the buyer describes WHERE they want the product/service found,
+ * and picking a result pins THAT place — not the device's GPS.
+ *
+ * Callers must pass an AbortController signal and treat AbortError as
+ * "no results yet" so a fast typist's stale requests never clobber a
+ * later, more specific query.
+ */
+async function forwardGeocode(query: string, signal?: AbortSignal): Promise<GeocodeSuggestion[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 3) return [];
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&countrycodes=zm&accept-language=en&q=${encodeURIComponent(trimmed)}`;
+    const response = await fetch(url, { headers: { Accept: 'application/json' }, signal });
+    if (!response.ok) return [];
+    const data = await response.json();
+    if (!Array.isArray(data)) return [];
+
+    return data
+      .filter((r: any) => r?.address?.country_code === 'zm')
+      .map((r: any): GeocodeSuggestion => {
+        const { province, city } = matchZambiaAddress(r.address);
+        const displayName: string = r.display_name || '';
+        const name: string = r.name || displayName.split(',')[0]?.trim() || trimmed;
+        return {
+          id: String(r.place_id ?? `${r.lat},${r.lon}`),
+          name,
+          displayName,
+          lat: Number(r.lat),
+          lon: Number(r.lon),
+          province,
+          city,
+        };
+      })
+      .filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lon));
+  } catch (err) {
+    if ((err as any)?.name === 'AbortError') return [];
+    console.warn('Forward geocode failed:', err);
+    return [];
   }
 }
 
@@ -283,6 +357,23 @@ export default function LocationDetails({
   const [geoError, setGeoError] = useState<string | null>(null);
   const [resolvedNote, setResolvedNote] = useState<string | null>(null);
 
+  // Area/Landmark search-as-you-type — the PRIMARY way to set the map pin:
+  // this screen is about WHERE the buyer wants the product/service found,
+  // not where their device is. Device GPS (Section 02) stays available as
+  // a secondary/override option.
+  const [suggestions, setSuggestions] = useState<GeocodeSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  // Avoids a "No matches" flash during the debounce wait — only true once
+  // a search for the CURRENT text has actually returned.
+  const [hasSearched, setHasSearched] = useState(false);
+  // Which source produced the current pin — drives "GPS Pinned" vs
+  // "Location Pinned" wording and the GPS button label.
+  const [pinSource, setPinSource] = useState<'gps' | 'search' | null>(null);
+  const searchTimeoutRef = useRef<number | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const searchReqIdRef = useRef(0);
+
   // GPS coordinates are an OPTIONAL refinement on top of province + city.
   // The form always exposes the GPS toggle so the user can choose to pin
   // a precise point — useful even on desktops where the underlying API
@@ -297,6 +388,75 @@ export default function LocationDetails({
   const handleProvinceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setProvince(e.target.value);
     setCity(''); // Reset city when province changes
+  };
+
+  const runAddressSearch = async (q: string) => {
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+    const reqId = ++searchReqIdRef.current;
+    setIsSearching(true);
+    const results = await forwardGeocode(q, controller.signal);
+    if (reqId !== searchReqIdRef.current) return; // superseded by a later keystroke
+    setIsSearching(false);
+    setHasSearched(true);
+    setSuggestions(results);
+  };
+
+  // Debounce lives in the change handler, NOT a useEffect on `address` —
+  // GPS capture and suggestion-pick both call setAddress directly and must
+  // never re-trigger a search of their own output.
+  const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setAddress(value);
+    setShowSuggestions(true);
+
+    if (searchTimeoutRef.current !== null) {
+      window.clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
+
+    const trimmed = value.trim();
+    setHasSearched(false); // new cycle — no stale "No matches" while we wait
+    if (trimmed.length < 3) {
+      searchAbortRef.current?.abort();
+      searchReqIdRef.current += 1; // invalidate any in-flight response
+      setSuggestions([]);
+      setIsSearching(false);
+      return;
+    }
+
+    searchTimeoutRef.current = window.setTimeout(() => runAddressSearch(trimmed), 400);
+  };
+
+  const handlePickSuggestion = (s: GeocodeSuggestion) => {
+    if (searchTimeoutRef.current !== null) {
+      window.clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
+    searchAbortRef.current?.abort();
+
+    setAddress(s.name);
+    setLatitude(s.lat);
+    setLongitude(s.lon);
+    // A place pin from search isn't a GPS fix — clear stale accuracy so
+    // the accuracy chip / "no GPS chip" warning don't render for it.
+    setAccuracyMeters(undefined);
+    setGeoError(null);
+    setPinSource('search');
+    if (s.province) setProvince(s.province);
+    if (s.city) setCity(s.city);
+    setResolvedNote(
+      s.province && s.city
+        ? `Pinned: ${s.name}, ${s.city}`
+        : s.province
+          ? `Pinned: ${s.name}, ${s.province} Province — confirm city manually`
+          : `Pinned: ${s.name} — confirm province & city manually`
+    );
+
+    setSuggestions([]);
+    setHasSearched(false);
+    setShowSuggestions(false);
   };
 
   /**
@@ -327,6 +487,7 @@ export default function LocationDetails({
     setAccuracyMeters(undefined);
     setLatitude(undefined);
     setLongitude(undefined);
+    setPinSource(null);
 
     if (!navigator.geolocation) {
       setGeoError('Geolocation is not supported by your browser.');
@@ -376,6 +537,7 @@ export default function LocationDetails({
       setLongitude(lng);
       setAccuracyMeters(accuracy);
       setIsLocating(false);
+      setPinSource('gps');
 
       // Reverse-geocode and auto-fill the manual fields. The actual select
       // values stay populated even if the user switches back to Manual mode,
@@ -594,7 +756,12 @@ export default function LocationDetails({
         </div>
       </div>
 
-      {/* Address — always visible, optional. */}
+      {/* Area / Landmark — the PRIMARY driver of the pin. This screen is
+          about WHERE the buyer wants the product/service found, so as
+          they type we search OpenStreetMap for matching Zambian places;
+          picking a suggestion pins THAT place's coordinates and
+          auto-fills province/city. Device GPS (Section 02 below) is a
+          secondary way to set the pin instead. */}
       <div className="relative w-full">
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-20">
@@ -603,12 +770,56 @@ export default function LocationDetails({
           <input
             type="text"
             value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Street, building, landmark"
-            className="block w-full pl-[52px] pr-4 h-[58px] bg-brand-white border border-[#e8e0d0] rounded-2xl text-[15px] text-brand-dark shadow-[inset_0_1px_2px_rgba(26,22,18,0.04)] hover:border-[#d6c8a8] focus:border-[#C9973A] focus:shadow-[0_0_0_4px_rgba(201,151,58,0.1),inset_0_1px_2px_rgba(26,22,18,0.02)] outline-none transition-all duration-200 font-medium placeholder:text-[#1a1612]/30"
+            onChange={handleAddressChange}
+            onFocus={() => {
+              if (suggestions.length > 0 || hasSearched) setShowSuggestions(true);
+            }}
+            onBlur={() => {
+              window.setTimeout(() => setShowSuggestions(false), 150);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setShowSuggestions(false);
+            }}
+            autoComplete="off"
+            placeholder="e.g. Airport, Manda Hill, a market or landmark…"
+            className="block w-full pl-[52px] pr-12 h-[58px] bg-brand-white border border-[#e8e0d0] rounded-2xl text-[15px] text-brand-dark shadow-[inset_0_1px_2px_rgba(26,22,18,0.04)] hover:border-[#d6c8a8] focus:border-[#C9973A] focus:shadow-[0_0_0_4px_rgba(201,151,58,0.1),inset_0_1px_2px_rgba(26,22,18,0.02)] outline-none transition-all duration-200 font-medium placeholder:text-[#1a1612]/30"
           />
-          <label className={floatingLabel}>Address (Optional)</label>
+          {isSearching && (
+            <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none z-20">
+              <Loader2 className="w-4 h-4 text-[#C9973A] animate-spin" />
+            </div>
+          )}
+          <label className={floatingLabel}>Area / Landmark</label>
+
+          {showSuggestions &&
+            (suggestions.length > 0 ||
+              (hasSearched && !isSearching && suggestions.length === 0)) && (
+              <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 bg-white border border-slate-100 rounded-xl shadow-lg overflow-hidden">
+                {suggestions.length > 0 ? (
+                  suggestions.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handlePickSuggestion(s)}
+                      className="w-full text-left px-4 py-2.5 hover:bg-[#faf6ee] transition-colors border-b border-slate-50 last:border-b-0 cursor-pointer"
+                    >
+                      <p className="text-[13px] font-bold text-[#1a1612] truncate">{s.name}</p>
+                      <p className="text-[11px] text-slate-400 truncate">{s.displayName}</p>
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-4 py-3 text-[12px] text-[#1a1612]/45">
+                    No matches — try a different spelling, or keep typing.
+                  </p>
+                )}
+              </div>
+            )}
         </div>
+        <p className="text-[11px] text-[#1a1612]/50 mt-1.5 ml-1 leading-snug">
+          The most important field — search the area, market or landmark where you need this,
+          then pick a result to set the map pin.
+        </p>
       </div>
 
       {/* Section 02 — Pin location. Inline GPS picker on the same
@@ -666,9 +877,11 @@ export default function LocationDetails({
                     : geoError
                       ? 'GPS Issue'
                       : hasCoords
-                        ? 'GPS Pinned'
+                        ? pinSource === 'gps'
+                          ? 'GPS Pinned'
+                          : 'Location Pinned'
                         : showRadius
-                          ? 'Pinpoint your location'
+                          ? 'Pinpoint the location'
                           : 'Where exactly are you?'}
               </p>
               {!isLocating && accuracyMeters !== undefined && (
@@ -705,7 +918,9 @@ export default function LocationDetails({
             {!isLocating && resolvedNote && hasCoords && (
               <p className="text-[11px] text-emerald-700 mt-1 leading-snug">
                 <Check className="w-3 h-3 inline mr-1" strokeWidth={3} />
-                Auto-filled: {resolvedNote}
+                {/* Search notes are already phrased "Pinned: …" — only GPS
+                    fills keep the historical "Auto-filled:" prefix. */}
+                {pinSource === 'gps' ? `Auto-filled: ${resolvedNote}` : resolvedNote}
               </p>
             )}
 
@@ -741,7 +956,13 @@ export default function LocationDetails({
                 !showRadius && !hasCoords ? 'text-white' : 'text-[#C9973A]'
               }`}
             />
-            {isLocating ? 'Scanning' : hasCoords ? 'Re-scan' : 'Capture My GPS'}
+            {isLocating
+              ? 'Scanning'
+              : hasCoords
+                ? pinSource === 'gps'
+                  ? 'Re-scan'
+                  : 'Use GPS Instead'
+                : 'Capture My GPS'}
           </button>
         </div>
       </div>

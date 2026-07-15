@@ -12,6 +12,8 @@ import { CreateMilestoneDto } from '../referrals/dto/create-milestone.dto';
 import { UpdateMilestoneDto } from '../referrals/dto/update-milestone.dto';
 import { ReportsService } from '../reports/reports.service';
 import { ResolveReportDto } from '../reports/dto/resolve-report.dto';
+import { BillingService } from '../billing/billing.service';
+import { UpdateBillingSettingsDto } from '../billing/dto/update-billing-settings.dto';
 
 /**
  * Acting-admin identity, threaded from req.user by the controller so
@@ -35,7 +37,8 @@ export class AdminService {
     private readonly categoriesService: CategoriesService,
     private readonly milestonesService: MilestonesService,
     private readonly promotersService: PromotersService,
-    private readonly reportsService: ReportsService
+    private readonly reportsService: ReportsService,
+    private readonly billingService: BillingService
   ) {}
 
   /**
@@ -437,6 +440,32 @@ export class AdminService {
         this.logger.warn(`Audit log for category toggle failed: ${e?.message ?? e}`)
       );
     return category;
+  }
+
+  // ───── Billing / Subscriptions ──────────────────────────────────────────
+  // Same composition pattern as category control: BillingModule owns the
+  // logic (singleton settings row + shop subscriptions); AdminService fronts
+  // it behind the class-wide ADMIN guard and writes the audit trail.
+
+  async getBillingSettingsForAdmin() {
+    const [settings, activeSubscriberCount] = await Promise.all([
+      this.billingService.getSettingsPublic(),
+      this.billingService.countActiveSubscribers(),
+    ]);
+    return { ...settings, activeSubscriberCount };
+  }
+
+  async updateBillingSettings(dto: UpdateBillingSettingsDto, actingAdmin?: ActingAdmin) {
+    const settings = await this.billingService.updateSettings(dto);
+    await this.auditAdminAction({
+      action: 'BILLING_SETTINGS_UPDATED',
+      entityType: 'BILLING_SETTINGS',
+      entityId: settings.id,
+      actingAdmin,
+      status: settings.subscriptionsEnabled ? 'ENABLED' : 'DISABLED',
+      details: `Monetization settings changed: ${JSON.stringify(dto)}`,
+    });
+    return this.getBillingSettingsForAdmin();
   }
 
   // ───── Promoter programme (milestones + oversight) ──────────────────────

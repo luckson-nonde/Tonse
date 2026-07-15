@@ -19,6 +19,7 @@ import { UpdateMilestoneDto } from '../referrals/dto/update-milestone.dto';
 import { CreateAdminManagerDto } from './dto/create-admin-manager.dto';
 import { UpdateAdminManagerDto } from './dto/update-admin-manager.dto';
 import { ResolveReportDto } from '../reports/dto/resolve-report.dto';
+import { UpdateBillingSettingsDto } from '../billing/dto/update-billing-settings.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AdminPermissionsGuard } from '../auth/guards/admin-permissions.guard';
@@ -170,6 +171,21 @@ export class AdminController {
     @Body() body: { isActive: boolean }
   ) {
     return this.adminService.setCategoryActive(id, !!body?.isActive);
+  }
+
+  // ───── Billing / Subscriptions (undecorated ⇒ primary-admin-only) ───────
+
+  @Get('billing-settings')
+  async getBillingSettings() {
+    return this.adminService.getBillingSettingsForAdmin();
+  }
+
+  @Patch('billing-settings')
+  async updateBillingSettings(
+    @Request() req: any,
+    @Body() dto: UpdateBillingSettingsDto,
+  ) {
+    return this.adminService.updateBillingSettings(dto, this.actor(req));
   }
 
   // ───── Promoter programme (milestones + oversight) ──────────────────────

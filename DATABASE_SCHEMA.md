@@ -1,6 +1,6 @@
 # Database Schema (Canonical)
 
-> **Single source of truth.** This document is generated directly from the TypeORM entity definitions in `backend/src/modules/**/entities/*.entity.ts` as of **2026-07-02**. Do not hand-edit table shapes elsewhere — if the schema changes, update the entities first, then regenerate this doc.
+> **Single source of truth.** This document is generated directly from the TypeORM entity definitions in `backend/src/modules/**/entities/*.entity.ts` as of **2026-07-14**. Do not hand-edit table shapes elsewhere — if the schema changes, update the entities first, then regenerate this doc.
 >
 > **Schema creation:** The database schema is created via TypeORM's `synchronize` option, not via migrations. `backend/src/config/database.config.ts`: `synchronize: process.env.DB_SYNCHRONIZE === 'true'`. This is wired into `TypeOrmModule.forRootAsync` in `app.module.ts`. When `DB_SYNCHRONIZE=true`, TypeORM auto-generates/updates tables from entity metadata on boot.
 >
@@ -499,6 +499,43 @@ Indexes: `idx_payments_user_id` (userId) · `idx_payments_status` (status) · `i
 Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`)
 
 > Note: `payments` keys off `userId` only — there is **no** `orderId` FK column on the entity (contrary to older docs).
+
+---
+
+### Module: Billing
+
+#### `billing_settings`
+Entity file: `backend/src/modules/billing/entities/billing-settings.entity.ts`
+
+Single-row (get-or-create) platform monetization settings — same pattern as `promoter_settings` — admin-edited from the "Subscriptions" tab (`GET/PATCH /admin/billing-settings`, primary-admin-only). `subscriptionsEnabled` is the master switch for the whole monetization layer: OFF ⇒ buyers publish inquiries free AND shops owe no monthly fee (no paywall). `quoteTiers` seeds from the same 8 tiers `InquiryPreferences.tsx` used to hardcode; only `price` is admin-editable, `count` stays fixed. `quoteTiers` deliberately has **no db-level default** (json defaults are unreliable under `synchronize`) — `BillingService.getOrCreateSettings()` populates it when the row is first created.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| subscriptionsEnabled | boolean | NO | `false` | master monetization ON/OFF |
+| quoteTiers | json | YES | — | `[{count, price}]` ×8, buyer quotation-fee tiers |
+| targetedInquiryFee | decimal(10,2) | NO | `10` | "This Shop Only" flat fee |
+| monthlyFee | decimal(10,2) | NO | `100` | shop monthly subscription |
+| createdAt | timestamp | NO | — | `@CreateDateColumn()` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn()` |
+
+#### `shop_subscriptions`
+Entity file: `backend/src/modules/billing/entities/shop-subscription.entity.ts`
+
+One row per shop **owner** (`userId` = `parentProviderId ?? user.id` — staff resolve to, and may pay for, the owner's row). `paidUntil` null or in the past = not paying: `SubscriptionPaywall` blocks the SELLER/SERVICE_PROVIDER dashboard while `billing_settings.subscriptionsEnabled` is true. `POST /billing/subscription/pay` (simulated) extends `paidUntil` from `max(now, paidUntil)` by 30 days and writes a `payments` row (`type: PAYMENT`, `status: SUCCESS`, `metadata.kind: 'SHOP_SUBSCRIPTION'`) so renewals surface in the admin Financial tab.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| userId | uuid | NO | — | owner user id, unique |
+| paidUntil | timestamp | YES | — | |
+| lastAmount | decimal(10,2) | YES | — | last renewal charge, display only |
+| createdAt | timestamp | NO | — | `@CreateDateColumn()` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn()` |
+
+Indexes: `idx_shop_subscriptions_user` (userId, unique)
+
+Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`, `onDelete: CASCADE`)
 
 ---
 

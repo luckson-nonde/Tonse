@@ -14,6 +14,7 @@ import { AuditModule } from '../audit/audit.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { ReferralsModule } from '../referrals/referrals.module';
 import { ReportsModule } from '../reports/reports.module';
+import { BillingModule } from '../billing/billing.module';
 
 @Module({
   imports: [
@@ -31,6 +32,8 @@ import { ReportsModule } from '../reports/reports.module';
     ReferralsModule,
     // User-submitted complaints, reviewed under /admin/reports*.
     ReportsModule,
+    // Platform monetization switch + prices (Subscriptions tab).
+    BillingModule,
   ],
   providers: [AdminService, AdminManagerService],
   controllers: [AdminController],

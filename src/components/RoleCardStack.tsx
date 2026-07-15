@@ -62,33 +62,37 @@ export default function RoleCardStack({ banners, onSelect }: RoleCardStackProps)
             key={b.id}
             className="group bg-white rounded-3xl overflow-hidden shadow-[0_18px_40px_-24px_rgba(10,25,49,0.35)] hover:shadow-[0_24px_48px_-22px_rgba(10,25,49,0.45)] lg:hover:-translate-y-0.5 transition-all duration-300 ease-in-out"
           >
-            {/* Composed 60/40 card at EVERY width — the photo column crops
-                the artwork to its photographic half (object-right), so the
-                copy baked into the banner file never duplicates the card's
-                own text. Phones get the same clean composition as desktop,
-                just scaled down. */}
-            <div className="grid grid-cols-[3fr_2fr]">
-              {/* Text column — typography + value props + CTA */}
-              <div className="p-4 sm:p-6 flex flex-col items-start">
-                <span className="px-2.5 py-1 rounded-full bg-[#C9973A]/10 text-[#C9973A] text-[9px] font-black uppercase tracking-[0.18em]">
+            {/* Responsive composition. Phones STACK (flex-col-reverse ⇒ the
+                photo banner sits on top, full-width copy below) so the text
+                finally gets the card's full width and reads cleanly. At sm+
+                the card reverts to the composed 60/40 side-by-side (copy left,
+                photo right). Either way the photo is cropped to its
+                photographic side (object-right) so the copy baked into the
+                banner file never duplicates the card's own text — on the
+                stacked banner that means a tall-ish squarish crop. DOM order is
+                [copy, photo]; flex-col-reverse flips it visually on mobile. */}
+            <div className="flex flex-col-reverse sm:grid sm:grid-cols-[3fr_2fr]">
+              {/* Copy column — typography + value props + CTA */}
+              <div className="p-5 sm:p-6 flex flex-col items-start">
+                <span className="px-2.5 py-1 rounded-full bg-[#C9973A]/10 text-[#C9973A] text-[10px] sm:text-[9px] font-black uppercase tracking-[0.18em]">
                   {b.eyebrow}
                 </span>
-                <h3 className="font-serif text-[18px] sm:text-[22px] font-bold text-[#0A1931] leading-[1.2] mt-3">
+                <h3 className="font-serif text-[24px] sm:text-[22px] font-bold text-[#0A1931] leading-[1.15] sm:leading-[1.2] mt-3">
                   {b.headline}
                 </h3>
-                <p className="text-[11px] sm:text-[12px] text-[#1a1612]/60 leading-relaxed mt-2">
+                <p className="text-[13px] sm:text-[12px] text-[#1a1612]/65 sm:text-[#1a1612]/60 leading-relaxed mt-2">
                   {b.description}
                 </p>
 
-                <div className="grid grid-cols-3 gap-2 w-full mt-4 sm:flex sm:flex-wrap sm:items-start sm:gap-x-3 sm:gap-y-2 sm:w-auto">
+                <div className="grid grid-cols-3 gap-2 w-full mt-5 sm:mt-4 sm:flex sm:flex-wrap sm:items-start sm:gap-x-3 sm:gap-y-2 sm:w-auto">
                   {b.valueProps.map((vp) => {
                     const Icon = vp.icon;
                     return (
                       <div key={vp.label} className="flex flex-col items-center text-center sm:w-14">
-                        <div className="w-9 h-9 rounded-full bg-[#fdf6e9] text-[#C9973A] flex items-center justify-center shadow-[inset_0_1px_2px_rgba(201,151,58,0.3)]">
-                          <Icon className="w-4 h-4" strokeWidth={2} />
+                        <div className="w-11 h-11 sm:w-9 sm:h-9 rounded-full bg-[#fdf6e9] text-[#C9973A] flex items-center justify-center shadow-[inset_0_1px_2px_rgba(201,151,58,0.3)]">
+                          <Icon className="w-5 h-5 sm:w-4 sm:h-4" strokeWidth={2} />
                         </div>
-                        <span className="text-[9px] font-semibold text-[#1a1612]/55 leading-tight mt-1.5">
+                        <span className="text-[11px] sm:text-[9px] font-semibold text-[#1a1612]/60 sm:text-[#1a1612]/55 leading-tight mt-1.5">
                           {vp.label}
                         </span>
                       </div>
@@ -99,24 +103,26 @@ export default function RoleCardStack({ banners, onSelect }: RoleCardStackProps)
                 <button
                   type="button"
                   onClick={() => onSelect(b.id)}
-                  className="mt-5 w-full sm:w-auto px-6 h-12 sm:h-11 rounded-full bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white text-[11px] font-black uppercase tracking-[0.18em] flex items-center justify-center gap-2 whitespace-nowrap shadow-lg shadow-[#C9973A]/25 transition-all duration-300 ease-in-out hover:from-[#C9973A] hover:to-[#B08432] lg:hover:scale-[1.02] lg:active:scale-[0.98]"
+                  className="mt-6 sm:mt-5 w-full sm:w-auto px-6 h-12 sm:h-11 rounded-full bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white text-[12px] sm:text-[11px] font-black uppercase tracking-[0.18em] flex items-center justify-center gap-2 whitespace-nowrap shadow-lg shadow-[#C9973A]/25 transition-all duration-300 ease-in-out hover:from-[#C9973A] hover:to-[#B08432] lg:hover:scale-[1.02] lg:active:scale-[0.98]"
                 >
                   {b.cta}
                   <span className="text-sm leading-none">→</span>
                 </button>
               </div>
 
-              {/* Right 40% — photography, rounded + inset in the card */}
+              {/* Photo — full-width banner on mobile (top, via flex-col-reverse),
+                  inset right 40% at sm+. object-right keeps the crop on the
+                  photographic half at both sizes. */}
               <button
                 type="button"
                 onClick={() => onSelect(b.id)}
                 aria-label={`${b.headline} — ${b.cta}`}
-                className="relative h-full p-3 pl-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 rounded-r-3xl"
+                className="relative block w-full sm:h-full sm:p-3 sm:pl-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 sm:rounded-r-3xl"
               >
                 <img
                   src={photo}
                   alt={b.headline}
-                  className="w-full h-full min-h-[180px] sm:min-h-[200px] object-cover object-right rounded-2xl transition-transform duration-300 ease-in-out lg:group-hover:scale-[1.01]"
+                  className="w-full aspect-[9/10] object-cover object-right sm:aspect-auto sm:h-full sm:min-h-[200px] sm:rounded-2xl transition-transform duration-300 ease-in-out lg:group-hover:scale-[1.01]"
                 />
               </button>
             </div>

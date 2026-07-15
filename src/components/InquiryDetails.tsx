@@ -289,30 +289,21 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                     return null;
                   }
 
+                  // Match image files by EXTENSION, not protocol — uploads are
+                  // stored as relative paths ("/api/uploads/…jpg"), so an
+                  // http-only test dropped them to raw text.
+                  const looksLikeImage = (u: string) =>
+                    /\.(jpe?g|png|gif|webp)(\?|$)/i.test(u.trim());
                   let imageUrls: string[] = [];
-
-                  // Handle both arrays and strings containing URLs
                   if (Array.isArray(value)) {
-                    // If it's an array, filter for image URLs
                     imageUrls = value.filter(
-                      (url) =>
-                        typeof url === 'string' &&
-                        /https?:\/\/[^\s,"'`]+?\.(jpg|jpeg|png|gif|webp)/i.test(url)
+                      (url) => typeof url === 'string' && looksLikeImage(url),
                     );
-                  } else if (typeof value === 'string' && value.includes('http')) {
-                    // Try to extract image URLs with improved regex
-                    const urlPattern = /https?:\/\/[^\s,"'`]+?\.(jpg|jpeg|png|gif|webp)/gi;
-                    const matches = value.match(urlPattern);
-
-                    if (matches && matches.length > 0) {
-                      imageUrls = matches;
-                    } else if (value.includes(',')) {
-                      // Fallback: split by comma if regex didn't work
-                      imageUrls = value
-                        .split(',')
-                        .map((u) => u.trim())
-                        .filter((u) => u.startsWith('http'));
-                    }
+                  } else if (typeof value === 'string') {
+                    const parts = value.includes(',')
+                      ? value.split(',').map((u) => u.trim())
+                      : [value.trim()];
+                    imageUrls = parts.filter(looksLikeImage);
                   }
 
                   if (imageUrls.length > 0) {

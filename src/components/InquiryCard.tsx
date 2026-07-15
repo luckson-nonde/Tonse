@@ -127,6 +127,21 @@ export default function InquiryCard({
     return String(value);
   };
 
+  // Image attachments: the schema types these fields `image_upload` and stores
+  // an array (or single string) of upload paths. Fall back to an extension
+  // sniff when the schema is missing so a stray image url still renders as a
+  // picture instead of the raw "/api/uploads/…jpg" text.
+  const getType = (key: string) => schema.find((f) => f.name === key)?.type;
+  const asImageUrls = (value: any): string[] =>
+    (Array.isArray(value) ? value : [value]).filter(
+      (u) => typeof u === 'string' && u.trim(),
+    );
+  const isImageField = (key: string, value: any) => {
+    if (getType(key) === 'image_upload') return true;
+    const urls = asImageUrls(value);
+    return urls.length > 0 && urls.every((u) => /\.(jpe?g|png|gif|webp)(\?|$)/i.test(u));
+  };
+
   return (
     <div
       className={`bg-[#fdfaf6] rounded-3xl border border-slate-200 border-t-4 ${borderColors[state]} shadow-sm overflow-hidden flex flex-col`}
@@ -199,6 +214,39 @@ export default function InquiryCard({
 
         <div className="grid grid-cols-2 gap-3 mb-6">
           {displayAttributes.map(([key, value]) => {
+            // Image attachments render as a thumbnail grid (tap to open the
+            // full file in a new tab) instead of printing the raw upload path.
+            if (isImageField(key, value)) {
+              const urls = asImageUrls(value);
+              if (urls.length === 0) return null;
+              return (
+                <div key={key} className="col-span-2 bg-[#f4efe8] rounded-xl p-3">
+                  <p className="text-[10px] font-bold text-slate-400 tracking-wider uppercase font-sans mb-2">
+                    {getLabel(key)}
+                  </p>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    {urls.map((url, idx) => (
+                      <a
+                        key={`${url}-${idx}`}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 bg-white block transition-shadow hover:shadow-md"
+                      >
+                        <img
+                          src={url}
+                          alt={`${getLabel(key)} ${idx + 1}`}
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
             const isLongText = typeof value === 'string' && value.length > 30;
             return (
               <div
@@ -304,60 +352,54 @@ export default function InquiryCard({
         )}
       </div>
 
-      <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-white">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-3">
-            {state === 'quoted' ? (
-              <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-full">
-                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-                <span className="text-sm font-bold text-blue-700 font-sans">
-                  {quoteCount} {isLoan ? (quoteCount === 1 ? 'Offer' : 'Offers') : 'Quotes'} Received
-                </span>
-              </div>
-            ) : (
-              <div className="text-xs font-medium text-slate-400 font-sans flex items-center gap-2">
-                {state === 'open' && (
-                  <>
-                    <Clock className="w-3.5 h-3.5" />
-                    {new Date(inquiry.createdAt).toLocaleDateString()}
-                  </>
-                )}
-                <span className="uppercase tracking-wider">
-                  IQR-{String(inquiry.id).substring(0, 3)}
-                </span>
-                {state === 'paid' && paidQuote && (
-                  <>
-                    <span>·</span>
-                    <span className="uppercase tracking-wider">
-                      QID-{String(paidQuote.id).substring(0, 3)}
-                    </span>
-                  </>
-                )}
-              </div>
-            )}
-            <div className="flex items-center gap-1 text-[11px] font-medium text-slate-400 font-sans">
-              <Eye className="w-3.5 h-3.5" />
-              {isLoan
-                ? `${views} ${views === 1 ? 'lender' : 'lenders'} viewed`
-                : views}
+      <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-100 flex items-center justify-between gap-3 bg-white">
+        {/* Meta cluster — allowed to shrink/truncate so it never squeezes the
+            action button into a wrapped two-line box on narrow cards. */}
+        <div className="flex items-center gap-2 min-w-0">
+          {state === 'quoted' ? (
+            <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-full shrink-0">
+              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+              <span className="text-[13px] font-bold text-blue-700 font-sans whitespace-nowrap">
+                {quoteCount} {isLoan ? (quoteCount === 1 ? 'Offer' : 'Offers') : 'Quotes'} Received
+              </span>
             </div>
+          ) : (
+            <div className="text-[11px] font-medium text-slate-400 font-sans flex items-center gap-1.5 min-w-0">
+              {state === 'open' && (
+                <span className="flex items-center gap-1 shrink-0">
+                  <Clock className="w-3.5 h-3.5" />
+                  {new Date(inquiry.createdAt).toLocaleDateString()}
+                </span>
+              )}
+              <span className="uppercase tracking-wider shrink-0">
+                IQR-{String(inquiry.id).substring(0, 3)}
+              </span>
+              {state === 'paid' && paidQuote && (
+                <span className="uppercase tracking-wider shrink-0">
+                  · QID-{String(paidQuote.id).substring(0, 3)}
+                </span>
+              )}
+            </div>
+          )}
+          <div className="flex items-center gap-1 text-[11px] font-medium text-slate-400 font-sans shrink-0">
+            <Eye className="w-3.5 h-3.5" />
+            {isLoan
+              ? `${views} ${views === 1 ? 'lender' : 'lenders'} viewed`
+              : views}
           </div>
         </div>
 
-        {/* `Button` defaults to variant='primary' which sets
-            `text-white`. Without `!` important on the InquiryCard's
-            text colour, both classes end up on the element and CSS
-            source order picks `text-white` — the cause of the
-            invisible button text in the original render. The same
-            applies to the variant's `bg-brand-yellow` and
-            `shadow-md`. Marking each conflicting utility `!important`
-            forces InquiryCard's intent to win deterministically. */}
+        {/* `Button` defaults to variant='primary' (text-white / bg /
+            shadow); each conflicting utility is marked `!important` so
+            InquiryCard's colour intent wins deterministically.
+            `whitespace-nowrap shrink-0` keeps the label on one line
+            instead of wrapping into a tall box on narrow cards. */}
         <Button
           onClick={onAction}
           className={
             state === 'quoted'
-              ? '!bg-[#1B3068] hover:!bg-[#142550] !text-white !shadow-none font-semibold rounded-xl px-5 py-2.5 text-[13px]'
-              : '!bg-white border border-slate-200 hover:!bg-slate-50 !text-slate-700 !shadow-none font-semibold rounded-xl px-5 py-2.5 text-[13px]'
+              ? '!bg-[#1B3068] hover:!bg-[#142550] !text-white !shadow-none font-semibold rounded-xl px-4 py-2 text-[12px] whitespace-nowrap shrink-0'
+              : '!bg-white border border-slate-200 hover:!bg-slate-50 !text-slate-700 !shadow-none font-semibold rounded-xl px-4 py-2 text-[12px] whitespace-nowrap shrink-0'
           }
         >
           {state === 'open' && 'View Details'}

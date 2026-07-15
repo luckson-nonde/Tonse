@@ -15,6 +15,7 @@ import {
   ShoppingBasket,
   CheckCircle2,
 } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { authService } from '../services/auth/authService';
@@ -231,6 +232,18 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
     }
   };
 
+  // Lock body scroll while the PIN overlay is up — it's a full-screen lock
+  // screen, nothing behind it should scroll or peek through.
+  const pinLocked = !isPinVerified && showPinModal;
+  useEffect(() => {
+    if (!pinLocked) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [pinLocked]);
+
   if (!isPinVerified && showPinModal) {
     const headerLabel = isCreatingPin
       ? creationStep === 'enter'
@@ -248,14 +261,14 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
         : 'Re-enter the same 4 digits so a typo doesn’t lock you out.'
       : 'Enter your 4-digit PIN to unlock your virtual account.';
 
-    return (
-      <div
-        className={
-          isInsideDashboard
-            ? 'w-full py-12 flex flex-col items-center justify-center'
-            : 'min-h-screen bg-gradient-to-b from-[#f5f2ed] to-[#ece4d4] flex flex-col items-center justify-center p-4'
-        }
-      >
+    // Full-screen lock overlay. Portaled to <body> so it escapes the
+    // dashboard's <main> AND the framer-motion PageTransition transforms
+    // (a transformed ancestor would otherwise contain `position: fixed` and
+    // stop it covering the top/bottom nav bars). z-[9999] clears the header
+    // (z-50), bottom tab bar (z-110) and sidebar (z-199); the opaque cream
+    // gradient hides the shell entirely — a true lock screen.
+    return createPortal(
+      <div className="fixed inset-0 z-[9999] bg-gradient-to-b from-[#f5f2ed] to-[#ece4d4] flex flex-col items-center justify-center p-4 overflow-y-auto">
         <div className="w-full max-w-md bg-brand-white rounded-[28px] p-6 md:p-8 shadow-[0_24px_60px_-30px_rgba(26,22,18,0.25)] border border-[#e8e0d0] text-center relative overflow-hidden">
           {/* Soft gold glow behind the lock icon */}
           <div
@@ -360,7 +373,8 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
             </button>
           )}
         </div>
-      </div>
+      </div>,
+      document.body,
     );
   }
 

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Store, X } from 'lucide-react';
+import { Store, X, Loader2 } from 'lucide-react';
 import PageTransition from '../components/PageTransition';
 import { useAuth } from '../AuthContext';
 import { useDashboard } from '../DashboardContext';
@@ -37,6 +37,30 @@ import BrowseShopsView from '../components/BrowseShopsView';
 import ShopProfileView from '../components/ShopProfileView';
 import RateShopModal from '../components/RateShopModal';
 import type { ShopResult } from '../services/api/shopService';
+
+/**
+ * Rendered in place of the payment screen when the admin has monetization
+ * switched OFF (preferences.quoteFee === 0): fires the normal
+ * handlePaymentComplete path once with a zero-amount 'free' receipt so the
+ * inquiry publishes immediately with the downstream shape unchanged.
+ * The useRef guard matters — StrictMode double-invokes effects in dev and
+ * handlePaymentComplete has no re-entrancy guard, so an unguarded effect
+ * would publish the inquiry twice.
+ */
+function FreeInquiryAutoPublish({ onReady }: { onReady: () => void }) {
+  const fired = React.useRef(false);
+  useEffect(() => {
+    if (fired.current) return;
+    fired.current = true;
+    onReady();
+  }, [onReady]);
+  return (
+    <div className="flex flex-col items-center justify-center py-24 gap-3 text-slate-400">
+      <Loader2 className="w-6 h-6 animate-spin text-[#C9973A]" />
+      <p className="text-[11px] font-bold uppercase tracking-widest">Publishing your inquiry…</p>
+    </div>
+  );
+}
 
 export default function BuyerDashboard() {
   const { user, updateUser } = useAuth();
@@ -653,7 +677,14 @@ export default function BuyerDashboard() {
         description,
         items: JSON.stringify([]),
         categoryIds,
-        location: `${locationData.city}, ${locationData.province}`,
+        // Lead with the typed Area/Landmark (the specific place the buyer
+        // wants this fulfilled) — providers see it on the lead card. Falls
+        // back to "city, province" when no area was set. Backend caps the
+        // column at 255.
+        location: [locationData.address, locationData.city, locationData.province]
+          .filter(Boolean)
+          .join(', ')
+          .slice(0, 255),
         province: locationData.province,
         city: locationData.city,
         status: 'OPEN',
@@ -840,6 +871,16 @@ export default function BuyerDashboard() {
       case 'inquiry-payment': {
         const fee = Number(pendingInquiry.preferences?.quoteFee ?? 10);
         const quoteCount = Number(pendingInquiry.preferences?.quoteCount ?? 5);
+        if (fee <= 0) {
+          // Monetization is OFF — no service fee to collect. Publish straight
+          // through the same completion path so preferences.payment keeps its
+          // shape ({method:'free', amount:0}) for lead cards and receipts.
+          return (
+            <FreeInquiryAutoPublish
+              onReady={() => handlePaymentComplete({ method: 'free', amount: 0 })}
+            />
+          );
+        }
         return (
           <InquiryPayment
             amount={fee}
