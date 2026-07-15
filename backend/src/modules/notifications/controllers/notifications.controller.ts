@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Patch,
+  Post,
   Param,
   Body,
   Query,
@@ -14,7 +15,9 @@ import { Observable, interval, map, merge } from 'rxjs';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { SkipTransform } from '../../../common/decorators/skip-transform.decorator';
 import { NotificationsService, StreamMessage } from '../notifications.service';
+import { PushService } from '../push.service';
 import { UpdateNotificationStatusDto } from '../dto/update-notification-status.dto';
+import { PushSubscribeDto } from '../dto/push-subscribe.dto';
 
 interface AuthenticatedRequest extends ExpressRequest {
   user?: { id: string; email: string; role: string };
@@ -23,7 +26,10 @@ interface AuthenticatedRequest extends ExpressRequest {
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
 export class NotificationsController {
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    private readonly pushService: PushService,
+  ) {}
 
   /**
    * The live dispatch stream. Auth: EventSource can't set headers, so the
@@ -71,6 +77,18 @@ export class NotificationsController {
   @Patch('mark-all-read')
   markAllRead(@Request() req: AuthenticatedRequest) {
     return this.notificationsService.markAllRead(req.user!.id);
+  }
+
+  /** Register this browser/device for background Web Push. */
+  @Post('push/subscribe')
+  subscribePush(@Body() dto: PushSubscribeDto, @Request() req: AuthenticatedRequest) {
+    return this.pushService.save(req.user!.id, dto, req.headers['user-agent']);
+  }
+
+  /** Forget this device's push subscription (called on logout). */
+  @Post('push/unsubscribe')
+  unsubscribePush(@Body('endpoint') endpoint: string, @Request() req: AuthenticatedRequest) {
+    return this.pushService.remove(req.user!.id, endpoint);
   }
 
   /** Provider Accept (ACKNOWLEDGED) / Decline (DECLINED) on a NEW_LEAD.

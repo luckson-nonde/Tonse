@@ -6,6 +6,7 @@ import {
   Query,
   UseGuards,
   Request,
+  ForbiddenException,
 } from '@nestjs/common';
 import { Request as ExpressRequest } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -39,6 +40,13 @@ export class CollectionController {
 
   /** The shop whose parcels this caller acts on (owner, or a staff's owner). */
   private shopId(req: AuthenticatedRequest): string {
+    // SECURITY: PermissionsGuard treats any account WITHOUT a parentProviderId
+    // as an "owner" and bypasses MANAGE_COLLECTIONS — which includes BUYERS.
+    // Same gap LoanController.lenderId() closes; mirrored here since only
+    // sellers/service-providers run a collection desk.
+    if (req.user?.role !== 'SELLER' && req.user?.role !== 'SERVICE_PROVIDER') {
+      throw new ForbiddenException('Only shops can access the collection desk');
+    }
     return req.user.parentProviderId ?? req.user.id;
   }
 

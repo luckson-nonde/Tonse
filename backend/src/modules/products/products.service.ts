@@ -4,6 +4,9 @@ import { Repository } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { resolveSortField, resolveSortOrder } from '../../utils/safe-sort.util';
+
+const SORTABLE_FIELDS = ['createdAt', 'updatedAt', 'price', 'name', 'stock', 'viewCount', 'rating', 'reviewCount'] as const;
 
 @Injectable()
 export class ProductsService {
@@ -49,8 +52,8 @@ export class ProductsService {
     const limit = parseInt(filters.limit) || 10;
     queryBuilder.skip((page - 1) * limit).take(limit);
 
-    const sortField = filters.sort || 'createdAt';
-    const sortOrder = filters.order || 'DESC';
+    const sortField = resolveSortField(filters.sort, SORTABLE_FIELDS, 'createdAt');
+    const sortOrder = resolveSortOrder(filters.order);
     queryBuilder.orderBy(`product.${sortField}`, sortOrder);
 
     const [data, total] = await queryBuilder.getManyAndCount();

@@ -6,9 +6,14 @@ import {
   IsNumber,
   IsBoolean,
   IsEnum,
+  IsArray,
+  IsObject,
+  ValidateNested,
   MinLength,
   MaxLength,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ItemPriceDto, BuyerContactDto, DeliveryDto } from './quote-nested.dto';
 
 export class CreateQuoteDto {
   @IsUUID()
@@ -65,18 +70,26 @@ export class CreateQuoteDto {
   isRead?: boolean = false;
 
   @IsOptional()
-  itemPrices?: any;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ItemPriceDto)
+  itemPrices?: ItemPriceDto[];
 
   @IsOptional()
-  buyerContact?: any;
+  @ValidateNested()
+  @Type(() => BuyerContactDto)
+  buyerContact?: BuyerContactDto;
 
   @IsOptional()
   @IsString()
   @MaxLength(50)
   collectionCode?: string;
 
+  // Shape not yet populated by any current producer — kept permissive
+  // rather than modeled, to avoid breaking a not-yet-found caller.
   @IsOptional()
-  requirements?: any;
+  @IsArray()
+  requirements?: Record<string, any>[];
 
   @IsOptional()
   @IsUUID()
@@ -95,15 +108,21 @@ export class CreateQuoteDto {
   @IsNumber()
   cleaningFee?: number;
 
+  // Genuinely open-ended: category-driven dynamic form data (per-category
+  // schema, see src/services/categories/schemas/), plus loan terms when
+  // condition === 'LOAN'. @IsObject() at least rejects a non-object payload.
   @IsOptional()
-  dynamicFields?: any;
+  @IsObject()
+  dynamicFields?: Record<string, any>;
 
   @IsOptional()
   @IsEnum(['EXPRESS', 'STANDARD'])
   processType?: string = 'STANDARD';
 
   @IsOptional()
-  delivery?: any;
+  @ValidateNested()
+  @Type(() => DeliveryDto)
+  delivery?: DeliveryDto;
 
   @IsOptional()
   @IsString()

@@ -13,6 +13,7 @@ import { UserEmail } from '../users/entities/user-email.entity';
 import { UsersService } from '../users/users.service';
 import { UserDisplayIdUtil } from '../../utils/user-display-id.util';
 import { generatePassword } from '../../utils/generate-password.util';
+import { BCRYPT_SALT_ROUNDS } from '../../common/constants/security';
 import { CreateTeamMemberDto } from './dto/create-team-member.dto';
 import { UpdateTeamMemberDto } from './dto/update-team-member.dto';
 import { AuditService } from '../audit/audit.service';
@@ -65,7 +66,7 @@ export class TeamService {
 
     const plainPassword = dto.password || generatePassword();
     const generated = !dto.password;
-    const passwordHash = await bcrypt.hash(plainPassword, 10);
+    const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_SALT_ROUNDS);
 
     // Auth row first. Staff inherits parent's role so existing RBAC
     // (which keys off `role`) keeps working — staff is signalled by

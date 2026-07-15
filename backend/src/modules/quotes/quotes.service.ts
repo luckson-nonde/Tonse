@@ -9,6 +9,9 @@ import { Inquiry } from '../inquiries/entities/inquiry.entity';
 import { MatchingService } from '../inquiries/services/matching.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { FunnelTrackingService } from '../referrals/services/funnel-tracking.service';
+import { resolveSortField, resolveSortOrder } from '../../utils/safe-sort.util';
+
+const SORTABLE_FIELDS = ['createdAt', 'updatedAt', 'price', 'status', 'expiryDuration'] as const;
 
 @Injectable()
 export class QuotesService {
@@ -214,8 +217,8 @@ export class QuotesService {
     const limit = parseInt(filters.limit) || 10;
     queryBuilder.skip((page - 1) * limit).take(limit);
 
-    const sortField = filters.sort || 'createdAt';
-    const sortOrder = filters.order || 'DESC';
+    const sortField = resolveSortField(filters.sort, SORTABLE_FIELDS, 'createdAt');
+    const sortOrder = resolveSortOrder(filters.order);
     queryBuilder.orderBy(`quote.${sortField}`, sortOrder);
 
     const [data, total] = await queryBuilder.getManyAndCount();

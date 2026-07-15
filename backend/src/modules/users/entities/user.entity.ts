@@ -35,6 +35,7 @@ import { IdentityAudit } from '../../identity-audit/entities/identity-audit.enti
 @Index('idx_users_role', ['role'])
 @Index('idx_users_created_at', ['createdAt'])
 @Index('idx_users_updated_at', ['updatedAt'])
+@Index('idx_users_password_reset_token_hash', ['passwordResetTokenHash'])
 export class User {
   /**
    * System Identifier (UUID)
@@ -45,13 +46,19 @@ export class User {
   /**
    * National Registration Card Number (Immutable Anchor)
    * Links user to real-world identity, prevents duplicate accounts.
+   * select:false — a Zambian national ID must never ride along on a default
+   * find()/findOne()/createQueryBuilder() read. Callers that legitimately
+   * need it (auth token claims, admin identity verification) fetch it
+   * explicitly via UsersService.findByIdWithNrc().
    */
   @Column({
     type: 'varchar',
     length: 50,
     unique: true,
     nullable: true,
+    select: false,
   })
+  @Exclude({ toPlainOnly: true })
   nrcNumber: string;
 
   /**
@@ -78,6 +85,22 @@ export class User {
   @Column({ type: 'varchar', length: 500, nullable: true, select: false })
   @Exclude({ toPlainOnly: true })
   refreshToken: string;
+
+  /**
+   * Password-reset token — a sha256 hash of the single-use token sent to
+   * the user, never the raw token itself (mirrors "never store the
+   * secret, store what you can verify it against"). A high-entropy random
+   * token doesn't need bcrypt's per-hash cost the way a password/PIN
+   * does; sha256 plus the short expiry window is the standard pattern
+   * here. Cleared after a successful reset or once expired.
+   */
+  @Column({ type: 'varchar', length: 64, nullable: true, select: false })
+  @Exclude({ toPlainOnly: true })
+  passwordResetTokenHash: string | null;
+
+  @Column({ type: 'timestamp', nullable: true, select: false })
+  @Exclude({ toPlainOnly: true })
+  passwordResetTokenExpiresAt: Date | null;
 
   /**
    * Auth Role.
@@ -252,9 +275,10 @@ export class User {
    * column. select:false + @Exclude so the value never reaches the
    * wire — only `hasPin` is published via flattenWithProfile.
    *
-   * 4 chars to match the existing profile-level PIN format.
+   * Stored as a bcrypt hash, never the raw 4 digits — widened from 4 to
+   * fit a bcrypt hash (~60 chars).
    */
-  @Column({ type: 'varchar', length: 4, nullable: true, select: false })
+  @Column({ type: 'varchar', length: 100, nullable: true, select: false })
   @Exclude({ toPlainOnly: true })
   pin: string | null;
 

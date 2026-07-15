@@ -4,13 +4,15 @@
  */
 
 const LENCO_API_BASE_URL = 'https://api.lenco.co/access/v2';
-// Pull from env so the live key isn't checked into git. Falls back to
-// the original example token (which Lenco has since revoked → 401), so
-// payment calls fail loudly with a clear "Mobile money is not yet
-// configured" message rather than a generic Unauthorized.
+// No fallback key here on purpose — a payment-gateway bearer token must
+// never live in a value that ships to the browser (this file calling
+// Lenco directly from client-side code at all is itself a structural risk
+// worth revisiting: these calls belong behind the NestJS backend, which
+// would hold the real key server-side and never expose it). Without
+// LENCO_API_KEY set, the request below still runs, Lenco correctly 401s
+// it, and the existing catch surfaces "Mobile money is not yet configured".
 const LENCO_API_KEY: string =
-  (typeof process !== 'undefined' && (process as any).env?.LENCO_API_KEY) ||
-  'xo+CAiijrIy9XvZCYyhjrv0fpSAL6CfU8CgA+up1NXqK';
+  (typeof process !== 'undefined' && (process as any).env?.LENCO_API_KEY) || '';
 
 export interface LencoCollection {
   id: string;

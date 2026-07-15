@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
@@ -19,6 +20,7 @@ import { UserDisplayIdUtil } from '../../utils/user-display-id.util';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ProfileMatchingService } from './services/profile-matching.service';
 import { FunnelTrackingService } from '../referrals/services/funnel-tracking.service';
+import { BCRYPT_SALT_ROUNDS } from '../../common/constants/security';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcryptjs';
 
@@ -276,7 +278,9 @@ export class UsersService {
         .addSelect('u.pin')
         .where('u.id = :id', { id: user.id })
         .getOne();
-      return !!row?.pin && row.pin === candidate;
+      return this.checkPin(row?.pin, candidate, (hashed) =>
+        this.userRepository.update({ id: user.id }, { pin: hashed }),
+      );
     }
 
     // Owner branch: PIN lives on the active profile row.
@@ -289,7 +293,31 @@ export class UsersService {
       .addSelect('p.pin')
       .where('p.id = :id', { id: user.activeProfileId })
       .getOne();
-    return !!row?.pin && row.pin === candidate;
+    return this.checkPin(row?.pin, candidate, (hashed) =>
+      (repo as any).update({ id: user.activeProfileId }, { pin: hashed }),
+    );
+  }
+
+  /**
+   * bcrypt-compares a candidate PIN against the stored value. Stored PINs
+   * pre-dating this fix are still raw 4-digit plaintext — those are
+   * compared directly on this one read, then transparently upgraded to a
+   * bcrypt hash, so nobody is forced through a PIN reset.
+   */
+  private async checkPin(
+    stored: string | null | undefined,
+    candidate: string,
+    rehash: (hashed: string) => Promise<unknown>,
+  ): Promise<boolean> {
+    if (!stored) return false;
+    if (/^\$2[aby]\$/.test(stored)) {
+      return bcrypt.compare(candidate, stored);
+    }
+    if (stored === candidate) {
+      await rehash(await bcrypt.hash(candidate, BCRYPT_SALT_ROUNDS));
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -304,9 +332,10 @@ export class UsersService {
     }
     const user = await this.findById(userId);
     if (!user) throw new NotFoundException('User not found');
+    const hashedPin = await bcrypt.hash(pin, BCRYPT_SALT_ROUNDS);
 
     if (user.parentProviderId) {
-      await this.userRepository.update({ id: userId }, { pin });
+      await this.userRepository.update({ id: userId }, { pin: hashedPin });
       return;
     }
 
@@ -319,7 +348,7 @@ export class UsersService {
     if (!repo) {
       throw new BadRequestException('Profile type unsupported for PIN');
     }
-    await (repo as any).update({ id: user.activeProfileId }, { pin });
+    await (repo as any).update({ id: user.activeProfileId }, { pin: hashedPin });
   }
 
   /**
@@ -331,13 +360,41 @@ export class UsersService {
    * purpose: a password write deserves its own controller endpoint
    * with a tighter auth gate, not whitelist drift through UpdateUserDto.
    */
-  async changePassword(userId: string, plainPassword: string): Promise<void> {
-    if (!plainPassword || plainPassword.length < 6) {
-      throw new BadRequestException('Password must be at least 6 characters');
+  /**
+   * currentPassword is required UNLESS this is the one-time forced change
+   * right after a temp-password login (mustChangePassword=true) — that path
+   * already proved knowledge of the current password by using it to log in
+   * moments earlier. Every other caller (a normal, already-onboarded
+   * account) must supply and verify it — otherwise anyone holding a stolen
+   * access token could silently take over the account's credentials.
+   */
+  async changePassword(
+    userId: string,
+    plainPassword: string,
+    currentPassword?: string,
+    // skipCurrentPasswordCheck is for callers that already proved identity
+    // through a different channel — currently just AuthService.resetPassword,
+    // where possessing the (single-use, short-lived, just-verified) reset
+    // token IS the proof, replacing the need for the current password.
+    options?: { skipCurrentPasswordCheck?: boolean },
+  ): Promise<void> {
+    if (!plainPassword || plainPassword.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters');
     }
-    const user = await this.findById(userId);
+    const user = await this.findById(userId, true);
     if (!user) throw new NotFoundException('User not found');
-    const passwordHash = await bcrypt.hash(plainPassword, 10);
+
+    if (!user.mustChangePassword && !options?.skipCurrentPasswordCheck) {
+      if (!currentPassword) {
+        throw new BadRequestException('Current password is required');
+      }
+      const isCurrentValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isCurrentValid) {
+        throw new UnauthorizedException('Current password is incorrect');
+      }
+    }
+
+    const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_SALT_ROUNDS);
     await this.userRepository.update(
       { id: userId },
       { password: passwordHash, mustChangePassword: false },
@@ -463,6 +520,31 @@ export class UsersService {
 
   async clearRefreshToken(userId: string): Promise<void> {
     await this.userRepository.update({ id: userId }, { refreshToken: null });
+  }
+
+  async setPasswordResetToken(
+    userId: string,
+    tokenHash: string | null,
+    expiresAt: Date | null,
+  ): Promise<void> {
+    await this.userRepository.update(
+      { id: userId },
+      { passwordResetTokenHash: tokenHash, passwordResetTokenExpiresAt: expiresAt },
+    );
+  }
+
+  /**
+   * passwordResetTokenHash/-ExpiresAt are select:false — only the reset
+   * flow itself needs them, so it's the one place that explicitly
+   * re-selects them via a query builder.
+   */
+  async findByPasswordResetTokenHash(tokenHash: string): Promise<User | null> {
+    return this.userRepository
+      .createQueryBuilder('user')
+      .addSelect('user.passwordResetTokenHash')
+      .addSelect('user.passwordResetTokenExpiresAt')
+      .where('user.passwordResetTokenHash = :tokenHash', { tokenHash })
+      .getOne();
   }
 
   /**
@@ -790,6 +872,34 @@ export class UsersService {
     }
 
     return query.getOne();
+  }
+
+  /**
+   * Like findById, but also selects nrcNumber (select:false by default —
+   * see user.entity.ts). Use only for the handful of legitimate call sites
+   * that need the real NRC: auth token claims and admin identity
+   * verification. Never use this to serve a general-purpose read.
+   */
+  async findByIdWithNrc(id: string): Promise<User> {
+    return this.userRepository
+      .createQueryBuilder('user')
+      .addSelect('user.nrcNumber')
+      .where('user.id = :id', { id })
+      .getOne();
+  }
+
+  /**
+   * Like findById, but also selects refreshToken (select:false by default).
+   * Use only to verify a presented refresh token against the stored one —
+   * the whole point of storing it is to be able to reject a token that's
+   * been logged out or superseded by a later rotation.
+   */
+  async findByIdWithRefreshToken(id: string): Promise<User> {
+    return this.userRepository
+      .createQueryBuilder('user')
+      .addSelect('user.refreshToken')
+      .where('user.id = :id', { id })
+      .getOne();
   }
 
   /**

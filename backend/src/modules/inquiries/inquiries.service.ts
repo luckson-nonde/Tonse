@@ -15,6 +15,9 @@ import { CategoriesService } from '../categories/categories.service';
 import { MatchingService } from './services/matching.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { FunnelTrackingService } from '../referrals/services/funnel-tracking.service';
+import { resolveSortField, resolveSortOrder } from '../../utils/safe-sort.util';
+
+const SORTABLE_FIELDS = ['createdAt', 'updatedAt', 'title', 'status', 'viewCount', 'maxQuotes', 'responseDeadlineAt'] as const;
 
 @Injectable()
 export class InquiriesService {
@@ -259,9 +262,9 @@ export class InquiriesService {
     queryBuilder.skip(skip).take(limit);
 
     // Sorting
-    const sortField = filters.sort || 'createdAt';
-    const sortOrder = filters.order || 'DESC';
-    queryBuilder.orderBy(`inquiry.${sortField}`, sortOrder as any);
+    const sortField = resolveSortField(filters.sort, SORTABLE_FIELDS, 'createdAt');
+    const sortOrder = resolveSortOrder(filters.order);
+    queryBuilder.orderBy(`inquiry.${sortField}`, sortOrder);
 
     const [data, total] = await queryBuilder.getManyAndCount();
 

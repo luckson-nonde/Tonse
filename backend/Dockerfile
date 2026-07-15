@@ -34,6 +34,12 @@ RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --from=build /app/dist ./dist
 RUN mkdir -p public/uploads
 
+# Run as the unprivileged `node` user the base image already ships (uid
+# 1000), not root. chown happens before the USER switch so the app can
+# still write to public/uploads at runtime.
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 3001
 
 # Public, unauthenticated endpoint — good liveness probe.

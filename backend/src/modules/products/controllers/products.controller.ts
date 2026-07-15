@@ -11,6 +11,7 @@ import {
   Request,
   HttpStatus,
   HttpCode,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ProductsService } from '../products.service';
 import { CreateProductDto } from '../dto/create-product.dto';
@@ -25,6 +26,8 @@ export class ProductsController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() createProductDto: CreateProductDto, @Request() req) {
+    // ENFORCE: products are created under the caller's own seller id
+    createProductDto.sellerId = req.user.id;
     return this.productsService.create(createProductDto);
   }
 
@@ -60,6 +63,10 @@ export class ProductsController {
     @Body() updateProductDto: UpdateProductDto,
     @Request() req,
   ) {
+    const product = await this.productsService.findOne(id);
+    if (!product || product.sellerId !== req.user.id) {
+      throw new ForbiddenException('You can only update your own products');
+    }
     return this.productsService.update(id, updateProductDto);
   }
 
@@ -70,6 +77,10 @@ export class ProductsController {
     @Body() body: { quantity: number },
     @Request() req,
   ) {
+    const product = await this.productsService.findOne(id);
+    if (!product || product.sellerId !== req.user.id) {
+      throw new ForbiddenException('You can only update your own products');
+    }
     return this.productsService.updateStock(id, body.quantity);
   }
 
@@ -77,6 +88,10 @@ export class ProductsController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id') id: string, @Request() req) {
+    const product = await this.productsService.findOne(id);
+    if (!product || product.sellerId !== req.user.id) {
+      throw new ForbiddenException('You can only delete your own products');
+    }
     await this.productsService.remove(id);
   }
 }

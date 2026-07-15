@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   UseInterceptors,
+  UseGuards,
   UploadedFile,
   UploadedFiles,
   Query,
@@ -12,8 +13,10 @@ import {
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import type { Multer } from 'multer';
 import { FilesService } from './files.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('files')
+@UseGuards(JwtAuthGuard)
 export class FilesController {
   constructor(private readonly filesService: FilesService) {}
 
@@ -25,24 +28,19 @@ export class FilesController {
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file'))
   uploadFile(@UploadedFile() file: Express.Multer.File, @Query('category') category: string = 'general') {
-    console.log('Upload endpoint called. File:', file?.originalname, 'Category:', category);
-
     if (!file) {
       throw new BadRequestException('No file provided');
     }
 
     const fileUrl = this.filesService.uploadFile(file, category);
 
-    const response = {
+    return {
       success: true,
       url: fileUrl,
       filename: file.originalname,
       size: file.size,
       mimetype: file.mimetype,
     };
-
-    console.log('Sending response:', response);
-    return response;
   }
 
   /**

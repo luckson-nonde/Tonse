@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   UnauthorizedException,
   ConflictException,
   BadRequestException,
@@ -7,10 +8,14 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { UserDisplayIdUtil } from '../../utils/user-display-id.util';
+import { BCRYPT_SALT_ROUNDS } from '../../common/constants/security';
+
+const PASSWORD_RESET_TOKEN_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
  * Auth Service
@@ -19,11 +24,13 @@ import { UserDisplayIdUtil } from '../../utils/user-display-id.util';
  * - NRC verification during registration
  * - Login by NRC or email (with multiple email support)
  * - JWT token generation and refresh
- * - Account recovery via NRC lookup
+ * - Password reset via single-use, short-lived token
  * - Complete audit logging of authentication events
  */
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
@@ -106,7 +113,7 @@ export class AuthService {
     }
 
     // Hash password with bcrypt
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
     try {
       // Register user using the three-tier identity system. categoryIds
@@ -218,12 +225,15 @@ export class AuthService {
 
     // Generate tokens with enhanced claims. Email comes from the login
     // input — it's the verified address the user just authenticated with.
+    // nrcNumber is select:false on the entity (see user.entity.ts), so it
+    // must be fetched explicitly here rather than read off `user`.
+    const userWithNrc = await this.usersService.findByIdWithNrc(user.id);
     const accessToken = this.generateAccessToken(
       user.id,
       user.displayId,
       email,
       user.role,
-      user.nrcNumber
+      userWithNrc?.nrcNumber
     );
     const refreshToken = this.generateRefreshToken(user.id);
 
@@ -257,12 +267,26 @@ export class AuthService {
   }
 
   /**
-   * Refresh access token using valid refresh token
+   * Refresh access token using a valid, non-revoked refresh token.
    *
-   * Returns new access token and optionally new refresh token
+   * presentedRefreshToken is the raw token JwtRefreshStrategy pulled off
+   * the Authorization header — its signature and expiry were already
+   * verified against jwt.refreshSecret by that strategy before this method
+   * runs. What's checked here is revocation: it must still match the copy
+   * stored on the user row. logout() clears that column, and a successful
+   * refresh always rotates it (below), so a logged-out or already-used
+   * refresh token is rejected rather than silently accepted.
    */
-  async refreshToken(userId: string, ipAddress?: string, userAgent?: string) {
-    const user = await this.usersService.findById(userId);
+  async refreshToken(userId: string, presentedRefreshToken: string) {
+    // findByIdWithRefreshToken (not findById) — refreshToken is
+    // select:false on the entity by default; findByIdWithNrc below is for
+    // the token claim, which is select:false separately.
+    const userWithToken = await this.usersService.findByIdWithRefreshToken(userId);
+    if (!userWithToken || userWithToken.refreshToken !== presentedRefreshToken) {
+      throw new UnauthorizedException('Refresh token has been revoked');
+    }
+
+    const user = await this.usersService.findByIdWithNrc(userId);
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
@@ -282,9 +306,10 @@ export class AuthService {
       user.role,
       user.nrcNumber
     );
+    // Rotation: a new refresh token replaces the old one, so the token
+    // just presented can never be used again even if it leaks afterward.
     const refreshToken = this.generateRefreshToken(user.id);
 
-    // Save new refresh token
     await this.usersService.updateRefreshToken(user.id, refreshToken);
 
     return {
@@ -317,31 +342,74 @@ export class AuthService {
   }
 
   /**
-   * Account recovery via NRC lookup
+   * Request a password reset. Always returns the same generic response
+   * regardless of whether the email is registered — leaking that would
+   * turn this into an account-enumeration oracle.
    *
-   * Returns user information for password reset without exposing full NRC
+   * Delivery is simulated: the reset link is logged server-side rather
+   * than emailed, since no email/SMS provider is wired into this backend
+   * yet. Swap the logger.warn below for a real send once one is.
    */
-  async recoverAccount(nrc: string) {
-    const normalizedNrc = UserDisplayIdUtil.normalizeIdentifier(nrc);
-    const user = await this.usersService.findByNrc(normalizedNrc);
+  async requestPasswordReset(email: string): Promise<{ message: string }> {
+    const genericResponse = {
+      message: 'If an account exists for that email, a reset link has been sent.',
+    };
 
+    const user = await this.usersService.findByEmail(email);
     if (!user) {
-      // Don't reveal if NRC exists - security best practice
-      throw new BadRequestException('If account exists, recovery email will be sent');
+      return genericResponse;
     }
 
-    // In real implementation, would send recovery email here. Email lives
-    // on the active profile (Phase 3), so flatten before masking.
-    const flat = await this.usersService.flattenWithProfile(user);
-    const email: string = flat?.email || '';
-    return {
-      found: true,
-      displayId: user.displayId,
-      recoveryEmail: email
-        ? email.substring(0, email.indexOf('@') + 2) + '***.***'
-        : null,
-      message: 'Recovery email sent to your registered email address',
-    };
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
+    await this.usersService.setPasswordResetToken(user.id, tokenHash, expiresAt);
+
+    const baseUrl = this.configService.get('promoter.appBaseUrl') || 'http://localhost:3000';
+    const resetLink = `${baseUrl}/reset-password?token=${rawToken}`;
+    // SIMULATED DELIVERY — see method docstring.
+    this.logger.warn(
+      `Password reset requested for ${email}. No email provider is configured, ` +
+        `so the link is logged here instead of sent: ${resetLink} (expires in 30 min)`,
+    );
+
+    return genericResponse;
+  }
+
+  /**
+   * Consume a password-reset token: hash the presented token, look up a
+   * user whose stored hash matches and hasn't expired, set the new
+   * password, and clear the token so it can never be reused (single-use).
+   */
+  async resetPassword(rawToken: string, newPassword: string): Promise<{ message: string }> {
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const user = await this.usersService.findByPasswordResetTokenHash(tokenHash);
+
+    if (
+      !user ||
+      !user.passwordResetTokenExpiresAt ||
+      user.passwordResetTokenExpiresAt.getTime() < Date.now()
+    ) {
+      throw new BadRequestException('Reset link is invalid or has expired');
+    }
+
+    await this.usersService.changePassword(user.id, newPassword, undefined, {
+      skipCurrentPasswordCheck: true,
+    });
+    await this.usersService.setPasswordResetToken(user.id, null, null);
+    // A stolen session shouldn't survive a password reset either.
+    await this.usersService.clearRefreshToken(user.id);
+
+    await this.usersService.createAuditLog(
+      user.id,
+      'PASSWORD_CHANGED',
+      'Password reset via token',
+      { hasPassword: true },
+      { hasPassword: true, via: 'reset_token' },
+      'password',
+    );
+
+    return { message: 'Password has been reset. You can now log in with your new password.' };
   }
 
   /**

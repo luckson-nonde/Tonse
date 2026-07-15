@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Notification } from './entities/notification.entity';
+import { PushSubscription } from './entities/push-subscription.entity';
 import { Inquiry } from '../inquiries/entities/inquiry.entity';
 import { NotificationsService } from './notifications.service';
+import { PushService } from './push.service';
 import { NotificationsController } from './controllers/notifications.controller';
 
 /**
@@ -12,9 +14,9 @@ import { NotificationsController } from './controllers/notifications.controller'
  * this module to dispatch NEW_LEAD events.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Notification, Inquiry])],
-  providers: [NotificationsService],
+  imports: [TypeOrmModule.forFeature([Notification, PushSubscription, Inquiry])],
+  providers: [NotificationsService, PushService],
   controllers: [NotificationsController],
-  exports: [NotificationsService],
+  exports: [NotificationsService, PushService],
 })
 export class NotificationsModule {}

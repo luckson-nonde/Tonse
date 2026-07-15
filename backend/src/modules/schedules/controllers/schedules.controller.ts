@@ -11,6 +11,7 @@ import {
   Request,
   HttpStatus,
   HttpCode,
+  ForbiddenException,
 } from '@nestjs/common';
 import { SchedulesService } from '../schedules.service';
 import { CreateScheduleDto } from '../dto/create-schedule.dto';
@@ -25,6 +26,8 @@ export class SchedulesController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() createScheduleDto: CreateScheduleDto, @Request() req) {
+    // ENFORCE: schedule items are created under the caller's own user id
+    createScheduleDto.userId = req.user.id;
     return this.schedulesService.create(createScheduleDto);
   }
 
@@ -47,7 +50,10 @@ export class SchedulesController {
 
   @Get('user/:userId')
   @UseGuards(JwtAuthGuard)
-  async findByUser(@Param('userId') userId: string) {
+  async findByUser(@Param('userId') userId: string, @Request() req) {
+    if (userId !== req.user.id) {
+      throw new ForbiddenException('You can only view your own schedule');
+    }
     return this.schedulesService.findByUser(userId);
   }
 
@@ -57,7 +63,11 @@ export class SchedulesController {
     @Param('userId') userId: string,
     @Query('dateFrom') dateFrom: string,
     @Query('dateTo') dateTo: string,
+    @Request() req,
   ) {
+    if (userId !== req.user.id) {
+      throw new ForbiddenException('You can only view your own schedule');
+    }
     return this.schedulesService.findByDateRange(userId, new Date(dateFrom), new Date(dateTo));
   }
 
@@ -74,6 +84,10 @@ export class SchedulesController {
     @Body() updateScheduleDto: UpdateScheduleDto,
     @Request() req,
   ) {
+    const schedule = await this.schedulesService.findOne(id);
+    if (!schedule || schedule.userId !== req.user.id) {
+      throw new ForbiddenException('You can only update your own schedule');
+    }
     return this.schedulesService.update(id, updateScheduleDto);
   }
 
@@ -84,6 +98,10 @@ export class SchedulesController {
     @Body() body: { status: string },
     @Request() req,
   ) {
+    const schedule = await this.schedulesService.findOne(id);
+    if (!schedule || schedule.userId !== req.user.id) {
+      throw new ForbiddenException('You can only update your own schedule');
+    }
     return this.schedulesService.updateStatus(id, body.status);
   }
 
@@ -91,6 +109,10 @@ export class SchedulesController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id') id: string, @Request() req) {
+    const schedule = await this.schedulesService.findOne(id);
+    if (!schedule || schedule.userId !== req.user.id) {
+      throw new ForbiddenException('You can only delete your own schedule');
+    }
     await this.schedulesService.remove(id);
   }
 }

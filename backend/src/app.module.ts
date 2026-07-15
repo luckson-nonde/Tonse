@@ -1,7 +1,8 @@
-import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { ClassSerializerInterceptor, Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
 // Middleware
 import { ApiVersionMiddleware } from './common/middleware/api-version.middleware';
@@ -40,14 +41,20 @@ import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import encryptionConfig from './config/encryption.config';
 import promoterConfig from './config/promoter.config';
+import webpushConfig from './config/webpush.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
-      load: [databaseConfig, jwtConfig, encryptionConfig, promoterConfig],
+      load: [databaseConfig, jwtConfig, encryptionConfig, promoterConfig, webpushConfig],
     }),
+    // Global default: generous enough for normal browsing (dashboards
+    // firing several requests on load), tight enough to blunt scripted
+    // abuse. Individual routes (see AuthController) override this with a
+    // much tighter limit via @Throttle.
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 200 }]),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -99,6 +106,20 @@ import promoterConfig from './config/promoter.config';
     {
       provide: APP_INTERCEPTOR,
       useClass: TransformInterceptor,
+    },
+    // Second line of defense behind the entities' `select: false` columns
+    // (the real protection, already verified). This makes @Exclude()
+    // actually strip password/pin/refreshToken/etc. if a future query ever
+    // returns one of those class instances directly instead of through the
+    // existing flatten/DTO paths. Registered after TransformInterceptor so
+    // it runs on the raw controller return value, not the wrapped envelope.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ClassSerializerInterceptor,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
   ],
 })

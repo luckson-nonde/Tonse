@@ -5,9 +5,14 @@ import {
   IsNumber,
   IsBoolean,
   IsEnum,
+  IsArray,
+  IsObject,
+  ValidateNested,
   MinLength,
   MaxLength,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ItemPriceDto, BuyerContactDto, DeliveryDto } from './quote-nested.dto';
 
 export class UpdateQuoteDto {
   @IsOptional()
@@ -60,10 +65,15 @@ export class UpdateQuoteDto {
   isArchived?: boolean;
 
   @IsOptional()
-  itemPrices?: any;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ItemPriceDto)
+  itemPrices?: ItemPriceDto[];
 
   @IsOptional()
-  buyerContact?: any;
+  @ValidateNested()
+  @Type(() => BuyerContactDto)
+  buyerContact?: BuyerContactDto;
 
   @IsOptional()
   @IsString()
@@ -71,7 +81,8 @@ export class UpdateQuoteDto {
   collectionCode?: string;
 
   @IsOptional()
-  requirements?: any;
+  @IsArray()
+  requirements?: Record<string, any>[];
 
   @IsOptional()
   @IsUUID()
@@ -91,14 +102,17 @@ export class UpdateQuoteDto {
   cleaningFee?: number;
 
   @IsOptional()
-  dynamicFields?: any;
+  @IsObject()
+  dynamicFields?: Record<string, any>;
 
   @IsOptional()
   @IsEnum(['EXPRESS', 'STANDARD'])
   processType?: string;
 
   @IsOptional()
-  delivery?: any;
+  @ValidateNested()
+  @Type(() => DeliveryDto)
+  delivery?: DeliveryDto;
 
   @IsOptional()
   @IsString()

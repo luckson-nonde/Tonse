@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from './services/auth/authService';
 import { tokenManager } from './services/api/client';
+import { unsubscribePush } from './services/pushService';
 import { SubRole, EntityType } from './types';
 import { generateVirtualAccount } from './utils/financeUtils';
 
@@ -426,6 +427,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = React.useCallback(async () => {
+    // Best-effort: forget this device's push subscription so a logged-out
+    // browser stops receiving background inquiry notifications. Never blocks
+    // or fails logout.
+    await unsubscribePush().catch(() => {});
     try {
       await authService.logout();
       setUser(null);

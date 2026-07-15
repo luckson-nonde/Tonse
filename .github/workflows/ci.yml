@@ -1,0 +1,41 @@
+name: CI
+
+# Minimal typecheck + build gate — the repo had no CI at all before this.
+# Deliberately does not run `npm run lint` or backend `npm run test`, since
+# neither has been verified clean on this codebase yet; add them once they
+# pass locally rather than shipping a red CI on day one.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      # ci (not install) needs the lockfile in sync; --legacy-peer-deps
+      # matches the flag already used by run-all.sh/run-all.bat.
+      - run: npm ci --legacy-peer-deps
+      - run: npm run build
+
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - run: npm install --no-audit --no-fund
+      - run: npm run build

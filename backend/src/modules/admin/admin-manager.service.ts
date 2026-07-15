@@ -13,6 +13,7 @@ import { UserEmail } from '../users/entities/user-email.entity';
 import { UsersService } from '../users/users.service';
 import { UserDisplayIdUtil } from '../../utils/user-display-id.util';
 import { generatePassword } from '../../utils/generate-password.util';
+import { BCRYPT_SALT_ROUNDS } from '../../common/constants/security';
 import { CreateAdminManagerDto } from './dto/create-admin-manager.dto';
 import { UpdateAdminManagerDto } from './dto/update-admin-manager.dto';
 
@@ -58,7 +59,7 @@ export class AdminManagerService {
     }
 
     const plainPassword = generatePassword();
-    const passwordHash = await bcrypt.hash(plainPassword, 10);
+    const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_SALT_ROUNDS);
 
     const user = this.userRepository.create({
       password: passwordHash,

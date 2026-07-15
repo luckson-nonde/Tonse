@@ -1,10 +1,19 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Multer } from 'multer';
 
+const ALLOWED_CATEGORIES = ['general', 'inquiries', 'quotes'];
+const ALLOWED_EXTENSIONS: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
+
 @Injectable()
 export class FilesService {
+  private readonly logger = new Logger(FilesService.name);
   private readonly uploadDir = path.join(process.cwd(), 'public', 'uploads');
 
   constructor() {
@@ -22,15 +31,20 @@ export class FilesService {
       throw new BadRequestException('No file provided');
     }
 
-    console.log('Uploading file:', {
-      name: file.originalname,
-      size: file.size,
-      mime: file.mimetype,
-    });
+    // Category is interpolated into the saved filename below, so it must be
+    // restricted to a fixed set — an unvalidated value here is a path-traversal
+    // write primitive (e.g. category=../../../../somewhere).
+    if (!ALLOWED_CATEGORIES.includes(category)) {
+      throw new BadRequestException('Invalid category');
+    }
 
-    // Validate file type (images only)
-    const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!allowedMimes.includes(file.mimetype)) {
+    // Validate file type. `file.mimetype` is the client-supplied Content-Type
+    // and is not proof of actual file content, but combined with deriving the
+    // saved extension from this validated value (never from the attacker-
+    // controlled `file.originalname`) it closes off serving e.g. an uploaded
+    // .svg/.html as inline, script-executing content.
+    const ext = ALLOWED_EXTENSIONS[file.mimetype];
+    if (!ext) {
       throw new BadRequestException('Only image files are allowed (JPEG, PNG, WebP, GIF)');
     }
 
@@ -43,18 +57,14 @@ export class FilesService {
     // Generate unique filename
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 8);
-    const ext = path.extname(file.originalname);
     const filename = `${category}-${timestamp}-${random}${ext}`;
 
     // Save file to disk
     const filepath = path.join(this.uploadDir, filename);
-    console.log('Saving file to:', filepath);
     fs.writeFileSync(filepath, file.buffer);
 
     // Return URL (relative to public folder)
-    const fileUrl = `/uploads/${filename}`;
-    console.log('File uploaded successfully. URL:', fileUrl);
-    return fileUrl;
+    return `/uploads/${filename}`;
   }
 
   /**
@@ -85,7 +95,7 @@ export class FilesService {
         fs.unlinkSync(filepath);
       }
     } catch (error) {
-      console.error('Error deleting file:', error);
+      this.logger.error(`Failed to delete file: ${(error as Error).message}`);
       // Don't throw - silently fail if file doesn't exist
     }
   }

@@ -4,6 +4,9 @@ import { Repository } from 'typeorm';
 import { Schedule } from './entities/schedule.entity';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
+import { resolveSortField, resolveSortOrder } from '../../utils/safe-sort.util';
+
+const SORTABLE_FIELDS = ['createdAt', 'updatedAt', 'date', 'startTime', 'status', 'title'] as const;
 
 @Injectable()
 export class SchedulesService {
@@ -43,8 +46,8 @@ export class SchedulesService {
     const limit = parseInt(filters.limit) || 10;
     queryBuilder.skip((page - 1) * limit).take(limit);
 
-    const sortField = filters.sort || 'date';
-    const sortOrder = filters.order || 'ASC';
+    const sortField = resolveSortField(filters.sort, SORTABLE_FIELDS, 'date');
+    const sortOrder = resolveSortOrder(filters.order, 'ASC');
     queryBuilder.orderBy(`schedule.${sortField}`, sortOrder);
 
     const [data, total] = await queryBuilder.getManyAndCount();

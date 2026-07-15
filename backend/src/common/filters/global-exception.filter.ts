@@ -13,13 +13,20 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let detail = '';
 
     if (exception instanceof HttpException) {
+      // HttpException messages are intentionally client-facing (e.g.
+      // "Invalid credentials", "PIN must be exactly 4 digits") — safe to
+      // pass through as-is regardless of environment.
       status = exception.getStatus();
       const res = exception.getResponse();
       message = typeof res === 'string' ? res : (res as any).message || message;
       detail = (res as any).detail || '';
     } else if (exception instanceof Error) {
-      message = exception.message;
+      // Anything that reaches here is unexpected — a raw DB error, a bug,
+      // etc. Its .message can contain internal detail (SQL, file paths,
+      // stack-adjacent info) that must never reach the client outside dev.
       this.logger.error(exception.stack);
+      message =
+        process.env.NODE_ENV === 'production' ? 'Internal server error' : exception.message;
     }
 
     response.status(status).json({

@@ -7,6 +7,9 @@ import { Inquiry } from '../inquiries/entities/inquiry.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { FunnelTrackingService } from '../referrals/services/funnel-tracking.service';
+import { resolveSortField, resolveSortOrder } from '../../utils/safe-sort.util';
+
+const SORTABLE_FIELDS = ['createdAt', 'updatedAt', 'totalAmount', 'status', 'deliveryDate', 'orderNumber'] as const;
 
 @Injectable()
 export class OrdersService {
@@ -111,8 +114,8 @@ export class OrdersService {
     const limit = parseInt(filters.limit) || 10;
     queryBuilder.skip((page - 1) * limit).take(limit);
 
-    const sortField = filters.sort || 'createdAt';
-    const sortOrder = filters.order || 'DESC';
+    const sortField = resolveSortField(filters.sort, SORTABLE_FIELDS, 'createdAt');
+    const sortOrder = resolveSortOrder(filters.order);
     queryBuilder.orderBy(`order.${sortField}`, sortOrder);
 
     const [data, total] = await queryBuilder.getManyAndCount();

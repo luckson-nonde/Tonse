@@ -25,6 +25,7 @@ import { NestFactory } from '@nestjs/core';
 import * as bcrypt from 'bcryptjs';
 import { AppModule } from '../../app.module';
 import { UsersService } from '../../modules/users/users.service';
+import { BCRYPT_SALT_ROUNDS } from '../../common/constants/security';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? '';
@@ -68,7 +69,7 @@ async function bootstrap() {
       if (existing.role !== 'ADMIN') updates.role = 'ADMIN';
       if (!existing.isActive) updates.isActive = true;
       if (existing.verificationStatus !== 'VERIFIED') updates.verificationStatus = 'VERIFIED';
-      if (RESET_PASSWORD) updates.password = await bcrypt.hash(ADMIN_PASSWORD, 10);
+      if (RESET_PASSWORD) updates.password = await bcrypt.hash(ADMIN_PASSWORD, BCRYPT_SALT_ROUNDS);
 
       if (Object.keys(updates).length > 0) {
         await usersService.update(existing.id, updates as any);
@@ -89,7 +90,7 @@ async function bootstrap() {
 
     // Fresh registration: hash password and use the existing register flow so
     // the UserEmail row + displayId + audit trail get created consistently.
-    const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+    const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, BCRYPT_SALT_ROUNDS);
 
     const user = await usersService.register(
       ADMIN_NRC,

@@ -5,6 +5,7 @@ import { Observable, Subject } from 'rxjs';
 import { randomUUID } from 'crypto';
 import { Notification } from './entities/notification.entity';
 import { Inquiry } from '../inquiries/entities/inquiry.entity';
+import { PushService } from './push.service';
 
 /** Shape Nest's SSE serializer understands: `type` becomes the SSE `event:`
  *  line (what EventSource.addEventListener keys on), `id` the `id:` line. */
@@ -25,6 +26,14 @@ export type EphemeralType =
   | 'PROVIDER_ACCEPTED'
   | 'REFERRAL_PROGRESS'
   | 'MILESTONE_UPDATED';
+
+/** Durable event → the route the SW opens when the OS push is clicked. */
+const PUSH_ROUTE_BY_TYPE: Record<DurableType, string> = {
+  NEW_LEAD: '/provider/leads',
+  QUOTE_RECEIVED: '/buyer/my-quotes',
+  RESERVE_RELEASED: '/provider/my-quotes',
+  MILESTONE_UNLOCKED: '/promoter/dashboard',
+};
 
 /** DB enum → lowercase SSE event name (EventSource convention). */
 const SSE_EVENT_NAME: Record<DurableType | EphemeralType, string> = {
@@ -69,6 +78,7 @@ export class NotificationsService {
     // cycle, since InquiriesModule imports THIS module for dispatch).
     @InjectRepository(Inquiry)
     private readonly inquiriesRepository: Repository<Inquiry>,
+    private readonly pushService: PushService,
   ) {}
 
   // ── Stream registry ──────────────────────────────────────────────────
@@ -131,6 +141,18 @@ export class NotificationsService {
         { notificationId: row.id, title: row.title, inquiryId: row.inquiryId, quoteId: row.quoteId, ...(row.data ?? {}) },
         row.id,
       );
+
+      // Background OS notification (Web Push) — fire-and-forget, deliberately
+      // NOT awaited: a slow/unreachable push endpoint must never add latency to
+      // the live in-app dispatch above. sendToUser never throws, but guard anyway.
+      void this.pushService
+        .sendToUser(row.userId, {
+          title: row.title,
+          body: (row.data?.body as string) ?? '',
+          url: PUSH_ROUTE_BY_TYPE[type],
+          tag: type,
+        })
+        .catch((e) => this.logger.warn(`web push dispatch failed: ${e?.message}`));
     }
     return saved;
   }

@@ -245,7 +245,9 @@ export class AdminService {
   }
 
   async getUserDetail(id: string) {
-    const user = await this.usersService.findById(id);
+    // findByIdWithNrc — the Review modal is where an admin actually verifies
+    // identity, so it needs the real NRC (select:false everywhere else).
+    const user = await this.usersService.findByIdWithNrc(id);
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
     }

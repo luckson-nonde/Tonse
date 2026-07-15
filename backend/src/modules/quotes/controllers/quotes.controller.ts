@@ -17,6 +17,7 @@ import { Request as ExpressRequest } from 'express';
 import { QuotesService } from '../quotes.service';
 import { CreateQuoteDto } from '../dto/create-quote.dto';
 import { UpdateQuoteDto } from '../dto/update-quote.dto';
+import { CounterLoanOfferDto } from '../dto/counter-loan-offer.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../auth/guards/permissions.guard';
 import { RequirePermissions } from '../../auth/decorators/permissions.decorator';
@@ -200,7 +201,7 @@ export class QuotesController {
   @Patch(':id/counter')
   async counter(
     @Param('id') id: string,
-    @Body() body: any,
+    @Body() body: CounterLoanOfferDto,
     @Request() req: AuthenticatedRequest
   ) {
     const quote = await this.quotesService.findOne(id);

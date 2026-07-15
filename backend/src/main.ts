@@ -16,11 +16,15 @@ async function bootstrap() {
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+  // Security — must run BEFORE express.static. express.static ends the
+  // response directly for any matched file without calling next(), so any
+  // middleware registered after it (helmet included) never touches
+  // static/uploaded-file responses.
+  app.use(helmet());
+
   // Serve static files from public directory
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
-  // Security
-  app.use(helmet());
   app.enableCors({
     origin:
       process.env.NODE_ENV === 'production'

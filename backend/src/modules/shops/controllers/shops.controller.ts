@@ -11,6 +11,7 @@ import {
   Request,
   HttpStatus,
   HttpCode,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ShopsService } from '../shops.service';
 import { CreateShopDto } from '../dto/create-shop.dto';
@@ -25,6 +26,8 @@ export class ShopsController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() createShopDto: CreateShopDto, @Request() req) {
+    // ENFORCE: shops are created under the caller's own seller id
+    createShopDto.sellerId = req.user.id;
     return this.shopsService.create(createShopDto);
   }
 
@@ -65,9 +68,15 @@ export class ShopsController {
     @Body() updateShopDto: UpdateShopDto,
     @Request() req,
   ) {
+    const shop = await this.shopsService.findOne(id);
+    if (!shop || shop.sellerId !== req.user.id) {
+      throw new ForbiddenException('You can only update your own shop');
+    }
     return this.shopsService.update(id, updateShopDto);
   }
 
+  // follow/unfollow are legitimately performed by OTHER users on this
+  // shop (e.g. a buyer following a seller) — no ownership check here.
   @Patch(':id/follow')
   @UseGuards(JwtAuthGuard)
   async follow(@Param('id') id: string, @Request() req) {
@@ -84,6 +93,10 @@ export class ShopsController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id') id: string, @Request() req) {
+    const shop = await this.shopsService.findOne(id);
+    if (!shop || shop.sellerId !== req.user.id) {
+      throw new ForbiddenException('You can only delete your own shop');
+    }
     await this.shopsService.remove(id);
   }
 }

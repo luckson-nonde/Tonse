@@ -4,6 +4,9 @@ import { Repository } from 'typeorm';
 import { Payment } from './entities/payment.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
+import { resolveSortField, resolveSortOrder } from '../../utils/safe-sort.util';
+
+const SORTABLE_FIELDS = ['createdAt', 'updatedAt', 'amount', 'status', 'type', 'processedAt'] as const;
 
 @Injectable()
 export class PaymentsService {
@@ -48,8 +51,8 @@ export class PaymentsService {
     const limit = parseInt(filters.limit) || 10;
     queryBuilder.skip((page - 1) * limit).take(limit);
 
-    const sortField = filters.sort || 'createdAt';
-    const sortOrder = filters.order || 'DESC';
+    const sortField = resolveSortField(filters.sort, SORTABLE_FIELDS, 'createdAt');
+    const sortOrder = resolveSortOrder(filters.order);
     queryBuilder.orderBy(`payment.${sortField}`, sortOrder);
 
     const [data, total] = await queryBuilder.getManyAndCount();

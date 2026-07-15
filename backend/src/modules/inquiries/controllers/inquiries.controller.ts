@@ -170,7 +170,17 @@ export class InquiriesController {
    */
   @Get(':id/images')
   @UseGuards(JwtAuthGuard)
-  async getImages(@Param('id') inquiryId: string) {
+  async getImages(@Param('id') inquiryId: string, @Request() req: AuthenticatedRequest) {
+    // Verify inquiry ownership — matches the upload/delete routes on the
+    // same resource below.
+    const inquiry = await this.inquiriesService.findOne(inquiryId);
+    if (!inquiry) {
+      throw new NotFoundException(`Inquiry ${inquiryId} not found`);
+    }
+    if (inquiry.buyerId !== req.user.id) {
+      throw new ForbiddenException('You can only view images on your own inquiries');
+    }
+
     const images = await this.inquiryImagesService.getInquiryImages(inquiryId);
     return {
       statusCode: HttpStatus.OK,

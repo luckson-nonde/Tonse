@@ -15,6 +15,12 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { PERMISSIONS } from '../../common/constants/permissions';
 import { LoanService } from './loans.service';
+import {
+  MakeLoanOfferDto,
+  DeclineLoanDto,
+  ReviseLoanOfferDto,
+  AdvanceLoanStageDto,
+} from './dto';
 
 interface AuthenticatedRequest extends ExpressRequest {
   user?: {
@@ -58,19 +64,19 @@ export class LoanController {
   }
 
   @Post('offer')
-  makeOffer(@Body() body: any, @Request() req: AuthenticatedRequest) {
+  makeOffer(@Body() body: MakeLoanOfferDto, @Request() req: AuthenticatedRequest) {
     return this.loans.createOffer(this.lenderId(req), body);
   }
 
   @Post('decline')
-  decline(@Body() body: any, @Request() req: AuthenticatedRequest) {
+  decline(@Body() body: DeclineLoanDto, @Request() req: AuthenticatedRequest) {
     return this.loans.decline(this.lenderId(req), body);
   }
 
   @Patch('offers/:id')
   revise(
     @Param('id') id: string,
-    @Body() body: any,
+    @Body() body: ReviseLoanOfferDto,
     @Request() req: AuthenticatedRequest,
   ) {
     return this.loans.reviseOffer(this.lenderId(req), id, body);
@@ -80,9 +86,9 @@ export class LoanController {
   @Patch('offers/:id/stage')
   advanceStage(
     @Param('id') id: string,
-    @Body() body: any,
+    @Body() body: AdvanceLoanStageDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.loans.advanceStage(this.lenderId(req), id, String(body?.stage || ''));
+    return this.loans.advanceStage(this.lenderId(req), id, body.stage);
   }
 }

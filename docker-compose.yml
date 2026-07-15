@@ -1,7 +1,12 @@
 # TONSE full-stack local/demo orchestration.
 #   frontend (nginx :3000) -> backend (NestJS :3001) -> postgres :5432
 # Bring it up with:  docker compose up -d --build
-# Change every "change_me" / placeholder secret before any real deployment.
+#
+# Secrets come from a root-level `.env` file (gitignored, read automatically
+# by `docker compose` for the ${VAR} substitutions below): DB_PASSWORD,
+# JWT_SECRET, JWT_REFRESH_SECRET, ENCRYPTION_KEY, ENCRYPTION_IV,
+# PGADMIN_PASSWORD. Nothing sensitive is hardcoded in this file anymore;
+# compose will refuse to start if a required var is missing.
 
 services:
   postgres:
@@ -12,10 +17,12 @@ services:
     container_name: tonse_postgres
     environment:
       POSTGRES_USER: tonse_user
-      POSTGRES_PASSWORD: tonse_password_secure_change_me
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in a root .env file}
       POSTGRES_DB: tonse_db
     ports:
-      - '5432:5432'
+      # Loopback-only — this only needs to be reachable from the host
+      # machine (e.g. a local DB client), never from the network.
+      - '127.0.0.1:5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -36,7 +43,7 @@ services:
       DB_HOST: postgres
       DB_PORT: '5432'
       DB_USERNAME: tonse_user
-      DB_PASSWORD: tonse_password_secure_change_me
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in a root .env file}
       DB_NAME: tonse_db
       # Required: this app has no migrations for the profile tables — TypeORM
       # `synchronize` creates the schema on boot. The categories seeder also
@@ -48,13 +55,13 @@ services:
       # For a managed SSL Postgres in real prod, set this to 'production'.
       NODE_ENV: development
       PORT: '3001'
-      # --- Secrets (CHANGE THESE) ---
-      JWT_SECRET: change_me_super_secret_jwt_key
+      # --- Secrets — sourced from the root .env, never hardcoded here ---
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in a root .env file (openssl rand -base64 48)}
       JWT_EXPIRATION: '3600s'
-      JWT_REFRESH_SECRET: change_me_super_secret_refresh_key
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in a root .env file (openssl rand -base64 48)}
       JWT_REFRESH_EXPIRATION: '604800s'
-      ENCRYPTION_KEY: change_me_32_character_key_000001
-      ENCRYPTION_IV: change_me_16_char
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in a root .env file}
+      ENCRYPTION_IV: ${ENCRYPTION_IV:?Set ENCRYPTION_IV in a root .env file}
     ports:
       - '3001:3001'
     volumes:
@@ -82,9 +89,9 @@ services:
     profiles: ['tools']
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@tonse.marketplace
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?Set PGADMIN_PASSWORD in a root .env file}
     ports:
-      - '5050:80'
+      - '127.0.0.1:5050:80'
     depends_on:
       - postgres
     # From the pgAdmin UI connect to host "postgres", port 5432.

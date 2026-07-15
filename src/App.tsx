@@ -4,9 +4,11 @@ import { MotionConfig } from 'motion/react';
 import { AuthProvider, useAuth } from './AuthContext';
 import { useLiteMotion } from './hooks/useLiteMotion';
 import { DashboardProvider } from './DashboardContext';
+import { BackgroundModeProvider } from './BackgroundModeContext';
 import { CategoryAvailabilityProvider } from './services/categories/availability';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import PageTransition from './components/PageTransition';
+import FloatingHub from './components/FloatingHub';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
 import RoleSelection from './pages/RoleSelection';
@@ -124,6 +126,7 @@ export default function App() {
         <DashboardProvider>
           <CategoryAvailabilityProvider>
           <MotionConfig reducedMotion={lite ? 'always' : 'user'}>
+          <BackgroundModeProvider>
           <Router>
             <Routes>
               {/* Every route's PageTransition carries a unique static
@@ -439,7 +442,9 @@ export default function App() {
                 }
               />
             </Routes>
+            <FloatingHub />
           </Router>
+          </BackgroundModeProvider>
           </MotionConfig>
           </CategoryAvailabilityProvider>
         </DashboardProvider>

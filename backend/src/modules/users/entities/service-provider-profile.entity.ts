@@ -172,9 +172,10 @@ export class ServiceProviderProfile {
   /**
    * 4-digit security PIN — gates this profile's financial surface.
    * Lives on the profile (not the auth row). select:false + @Exclude
-   * keep it out of API responses.
+   * keep it out of API responses. Stored as a bcrypt hash, never the raw
+   * 4 digits — widened from 4 to fit a bcrypt hash (~60 chars).
    */
-  @Column({ type: 'varchar', length: 4, nullable: true, select: false })
+  @Column({ type: 'varchar', length: 100, nullable: true, select: false })
   @Exclude({ toPlainOnly: true })
   pin: string;
 

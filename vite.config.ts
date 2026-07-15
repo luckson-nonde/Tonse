@@ -2,20 +2,24 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import {defineConfig, loadEnv} from 'vite';
+import {defineConfig} from 'vite';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig(({mode}) => {
-  const env = loadEnv(mode, '.', '');
+export default defineConfig(() => {
   return {
     plugins: [
       react(),
       tailwindcss(),
     ],
+    // NOTE: no process.env.* secret injection here on purpose. This used to
+    // manually reach into loadEnv(mode, '.', '') — an empty prefix filter —
+    // to bake GEMINI_API_KEY/LENCO_API_KEY into the client bundle, which
+    // defeats Vite's VITE_-prefix convention that exists specifically to
+    // stop server secrets from reaching the browser. Only import.meta.env.VITE_*
+    // vars are safe to expose to client code; anything else belongs behind
+    // the NestJS backend, never referenced from src/.
     define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.LENCO_API_KEY': JSON.stringify(env.LENCO_API_KEY),
       'global': 'window.global',
       'globalThis': 'window.global',
       'self': 'window.global',

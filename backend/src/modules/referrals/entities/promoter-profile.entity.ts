@@ -53,12 +53,18 @@ export class PromoterProfile {
   @Column({ type: 'json', nullable: true })
   socialLinks: SocialLink[] | null;
 
-  /** Live selfie (base64 data URL) — identity proof at registration. */
-  @Column({ type: 'text', nullable: true })
+  /**
+   * Live selfie (base64 data URL) — identity proof at registration.
+   * select:false — a KYC identity photo must never ride along on a
+   * default find()/findOne() read. PromotersService.getMe() (the one
+   * legitimate consumer — a promoter viewing their own submission)
+   * explicitly re-selects it via a query builder.
+   */
+  @Column({ type: 'text', nullable: true, select: false })
   selfiePath: string | null;
 
-  /** ID document photo/scan (base64 data URL). */
-  @Column({ type: 'text', nullable: true })
+  /** ID document photo/scan (base64 data URL). Same select:false rationale. */
+  @Column({ type: 'text', nullable: true, select: false })
   idDocumentPath: string | null;
 
   @Column({

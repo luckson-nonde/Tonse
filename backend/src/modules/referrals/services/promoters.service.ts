@@ -13,6 +13,7 @@ import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { User } from '../../users/entities/user.entity';
 import { UserEmail } from '../../users/entities/user-email.entity';
+import { BCRYPT_SALT_ROUNDS } from '../../../common/constants/security';
 import { ReferralLink } from '../entities/referral-link.entity';
 import { Milestone } from '../entities/milestone.entity';
 import { EquityAward } from '../entities/equity-award.entity';
@@ -141,7 +142,15 @@ export class PromotersService {
       // No admin key AND no env fallback ⇒ the programme is switched off.
       throw new ForbiddenException('Promoter signup is not open');
     }
-    if (dto.inviteKey.trim() !== inviteKey) {
+    // Constant-time compare — a plain !== leaks how many leading characters
+    // matched via response timing. timingSafeEqual requires equal-length
+    // buffers, so the length check short-circuits first (length alone is a
+    // far smaller leak than a character-by-character one).
+    const presented = Buffer.from(dto.inviteKey.trim());
+    const expected = Buffer.from(inviteKey);
+    const keyMatches =
+      presented.length === expected.length && crypto.timingSafeEqual(presented, expected);
+    if (!keyMatches) {
       throw new ForbiddenException('Invalid invite key');
     }
 
@@ -153,7 +162,7 @@ export class PromotersService {
       );
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await bcrypt.hash(dto.password, BCRYPT_SALT_ROUNDS);
 
     const { user, link } = await this.dataSource.transaction(async (manager) => {
       // Auth row only — no NRC, no profile row (PROMOTER behaves like ADMIN:
@@ -271,9 +280,15 @@ export class PromotersService {
     // Pre-profile promoters (accounts created before the identity profile
     // shipped) resolve with null profile fields — the UI prompts them to
     // complete it.
-    const profile = await this.profilesRepository.findOne({
-      where: { userId: promoterUserId },
-    });
+    // select:false on selfiePath/idDocumentPath (see entity) — this is the
+    // one legitimate read that needs them: a promoter viewing their own
+    // submission.
+    const profile = await this.profilesRepository
+      .createQueryBuilder('p')
+      .addSelect('p.selfiePath')
+      .addSelect('p.idDocumentPath')
+      .where('p.userId = :userId', { userId: promoterUserId })
+      .getOne();
     return {
       id: promoterUserId,
       name: link.promoterName,

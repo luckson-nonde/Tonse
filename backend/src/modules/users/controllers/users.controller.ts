@@ -15,7 +15,10 @@ import {
 } from '@nestjs/common';
 import { UsersService } from '../users.service';
 import { UpdateUserDto } from '../dto/update-user.dto';
+import { ChangePasswordDto } from '../dto/change-password.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
 
 @Controller('users')
 export class UsersController {
@@ -29,13 +32,15 @@ export class UsersController {
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
   async findOne(@Param('id') id: string) {
     const user = await this.usersService.findById(id);
     return this.usersService.flattenWithProfile(user);
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   async findAll(@Query() query: any) {
     const filters = {
       role: query.role,
@@ -137,13 +142,13 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   async changePassword(
     @Param('id') id: string,
-    @Body() body: { password?: string },
+    @Body() body: ChangePasswordDto,
     @Request() req,
   ) {
     if (req.user.id !== id) {
       throw new ForbiddenException();
     }
-    await this.usersService.changePassword(id, body?.password ?? '');
+    await this.usersService.changePassword(id, body.password, body.currentPassword);
     return { success: true };
   }
 }

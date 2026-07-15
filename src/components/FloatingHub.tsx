@@ -1,0 +1,291 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { motion, useMotionValue } from 'motion/react';
+import { Minimize2, Bell, Maximize2, X, Smartphone } from 'lucide-react';
+import { useAuth } from '../AuthContext';
+import { useBackgroundMode } from '../BackgroundModeContext';
+import { useNotificationStream } from '../hooks/useNotificationStream';
+import { fetchUnreadNotificationCount } from '../services/api/notificationService';
+import {
+  getPushPermission,
+  isIosNonStandalone,
+  isPushSupported,
+  subscribePush,
+} from '../services/pushService';
+
+/**
+ * FloatingHub — the single, global "run in the background" widget.
+ *
+ * Mounted ONCE as a sibling of <Routes> (see App.tsx) so it survives every
+ * navigation and exists for EVERY role — including ADMIN and PROMOTER, which
+ * never render DashboardLayout, so a header-injected control would miss them.
+ *
+ * Two states, one affordance each — deliberately NO close button (only the
+ * slide-to-logout ends a session):
+ *   - not minimized → a small corner "Run in background" control
+ *   - minimized     → a calm scrim + a draggable bubble showing a live inquiry
+ *                     badge; click restores, drag repositions.
+ */
+
+// Pre-auth / gated routes where the widget must never appear (mirrors the
+// public routes in App.tsx). Prefix match.
+const NO_WIDGET_PREFIXES = [
+  '/login',
+  '/onboarding',
+  '/role-selection',
+  '/register',
+  '/promote',
+  '/business-verification',
+  '/seller/',
+  '/store-verification',
+  '/verification-pending',
+  '/force-password-change',
+];
+
+const PUSH_PROMPTED_KEY = 'tonse_push_prompted';
+
+/** Tiny WebAudio ping when a new inquiry lands while minimized. */
+function playPing() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(1180, ctx.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.36);
+    osc.onended = () => ctx.close().catch(() => {});
+  } catch {
+    /* audio is best-effort */
+  }
+}
+
+export default function FloatingHub() {
+  const { user } = useAuth();
+  const location = useLocation();
+  const { isMinimized, minimize, restore, bubblePosition, setBubblePosition } = useBackgroundMode();
+
+  const [unread, setUnread] = useState(0);
+  const [pulse, setPulse] = useState(false);
+  const [showPushBanner, setShowPushBanner] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+
+  const constraintsRef = useRef<HTMLDivElement>(null);
+  const draggedRef = useRef(false);
+  const x = useMotionValue(bubblePosition.x);
+  const y = useMotionValue(bubblePosition.y);
+
+  const hidden =
+    !user || NO_WIDGET_PREFIXES.some((p) => location.pathname.startsWith(p));
+
+  const refreshCount = useCallback(async () => {
+    if (!user) return;
+    const c = await fetchUnreadNotificationCount();
+    setUnread(c);
+  }, [user]);
+
+  // Badge: initial fetch + 30s poll (same cadence DashboardLayout uses).
+  useEffect(() => {
+    if (hidden) return;
+    refreshCount();
+    const id = window.setInterval(refreshCount, 30000);
+    return () => window.clearInterval(id);
+  }, [hidden, refreshCount]);
+
+  // Instant bump + chime on a live event. FloatingHub is only a badge here —
+  // the loud IncomingLeadAlert still lives in ProviderDashboard.
+  const bump = useCallback(() => {
+    setUnread((c) => c + 1);
+    setPulse(true);
+    window.setTimeout(() => setPulse(false), 2500);
+    if (isMinimized) playPing();
+  }, [isMinimized]);
+
+  useNotificationStream(hidden ? undefined : user?.id, {
+    onNewLead: bump,
+    onQuoteReceived: bump,
+    onReserveReleased: bump,
+    onMilestoneUnlocked: bump,
+    onReconnect: refreshCount,
+  });
+
+  // Logout (user → null) must dismiss the widget. AuthProvider wraps
+  // BackgroundModeProvider, so AuthContext can't call restore() itself; this
+  // watcher is the clean decoupling.
+  const prevUserRef = useRef(user);
+  useEffect(() => {
+    if (prevUserRef.current && !user) {
+      restore();
+      try {
+        localStorage.setItem('tonse_minimized', 'false');
+      } catch {
+        /* non-fatal */
+      }
+    }
+    prevUserRef.current = user;
+  }, [user, restore]);
+
+  // One-time push opt-in banner, shown the first time a user minimizes.
+  useEffect(() => {
+    if (!isMinimized || hidden) return;
+    let prompted = false;
+    try {
+      prompted = localStorage.getItem(PUSH_PROMPTED_KEY) === 'true';
+    } catch {
+      /* ignore */
+    }
+    const perm = getPushPermission();
+    if (!prompted && isPushSupported() && (perm === 'default' || isIosNonStandalone())) {
+      setShowPushBanner(true);
+    }
+  }, [isMinimized, hidden]);
+
+  const dismissPushBanner = useCallback(() => {
+    setShowPushBanner(false);
+    try {
+      localStorage.setItem(PUSH_PROMPTED_KEY, 'true');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const enablePush = useCallback(async () => {
+    setPushBusy(true);
+    await subscribePush();
+    setPushBusy(false);
+    dismissPushBanner();
+  }, [dismissPushBanner]);
+
+  if (hidden) return null;
+
+  // ── Not minimized: subtle corner control ────────────────────────────────
+  if (!isMinimized) {
+    return (
+      <button
+        type="button"
+        onClick={minimize}
+        title="Run in background"
+        aria-label="Run in background"
+        className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-[120] flex items-center gap-2 rounded-full bg-[#1B3068] px-3 py-2 text-white shadow-lg shadow-slate-900/20 ring-1 ring-white/10 transition hover:bg-[#24407f] active:scale-95"
+      >
+        <Minimize2 className="h-4 w-4" />
+        <span className="hidden sm:inline text-xs font-semibold">Background</span>
+      </button>
+    );
+  }
+
+  // ── Minimized: scrim + draggable bubble ─────────────────────────────────
+  const displayName = (user?.companyName || user?.name || 'Tonse').trim();
+  const initial = displayName.charAt(0).toUpperCase() || 'T';
+  const iosHint = isIosNonStandalone();
+
+  return (
+    <div
+      ref={constraintsRef}
+      className="fixed inset-0 z-[350] pointer-events-none"
+      aria-live="polite"
+    >
+      {/* Calm scrim — nothing is actually blocked (pointer-events-none). */}
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+
+      {/* Centered status text. */}
+      <div className="absolute inset-x-0 top-1/3 flex flex-col items-center px-6 text-center">
+        <p className="text-white/90 text-lg font-semibold drop-shadow">
+          Running in the background
+        </p>
+        <p className="text-white/70 text-sm mt-1 max-w-xs">
+          Waiting for inquiries. Tap the bubble to come back — you stay signed in until you log out.
+        </p>
+      </div>
+
+      {/* Push opt-in banner (one-time). */}
+      {showPushBanner && (
+        <div className="pointer-events-auto absolute inset-x-0 bottom-6 mx-auto flex max-w-sm items-start gap-3 rounded-2xl bg-white px-4 py-3 shadow-2xl ring-1 ring-slate-200 md:left-6 md:right-auto md:mx-0">
+          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1B3068]/10 text-[#1B3068]">
+            {iosHint ? <Smartphone className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-slate-800">
+              {iosHint ? 'Add Tonse to your Home Screen' : 'Get notified even when this tab is closed'}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {iosHint
+                ? 'On iPhone/iPad, install Tonse (Share → Add to Home Screen) to receive alerts in the background.'
+                : "We'll ping you the moment a new inquiry arrives — no need to keep this open."}
+            </p>
+            {!iosHint && (
+              <button
+                type="button"
+                onClick={enablePush}
+                disabled={pushBusy}
+                className="mt-2 rounded-lg bg-[#1B3068] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#24407f] disabled:opacity-60"
+              >
+                {pushBusy ? 'Enabling…' : 'Turn on notifications'}
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={dismissPushBanner}
+            aria-label="Dismiss"
+            className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Draggable bubble. */}
+      <motion.button
+        type="button"
+        drag
+        dragConstraints={constraintsRef}
+        dragMomentum={false}
+        dragElastic={0.04}
+        style={{ x, y }}
+        onDragStart={() => {
+          draggedRef.current = true;
+        }}
+        onDragEnd={() => {
+          setBubblePosition({ x: x.get(), y: y.get() });
+          // Let the suppressed click settle before re-enabling tap-to-restore.
+          window.setTimeout(() => {
+            draggedRef.current = false;
+          }, 0);
+        }}
+        onClick={() => {
+          if (draggedRef.current) return;
+          restore();
+        }}
+        title="Restore Tonse"
+        aria-label="Restore Tonse"
+        className="pointer-events-auto absolute bottom-6 right-6 flex h-16 w-16 cursor-grab items-center justify-center rounded-full bg-[#1B3068] text-white shadow-2xl ring-2 ring-white/20 active:cursor-grabbing"
+      >
+        <span className="font-serif text-2xl font-bold text-[#c9973a]">{initial}</span>
+
+        {/* Restore hint icon on hover. */}
+        <Maximize2 className="pointer-events-none absolute -bottom-1 -left-1 h-5 w-5 rounded-full bg-white/95 p-1 text-[#1B3068] shadow" />
+
+        {/* Live unread badge. */}
+        {unread > 0 && (
+          <span className="absolute -right-1 -top-1 flex min-w-[22px] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[11px] font-bold leading-none text-white ring-2 ring-white">
+            {unread > 99 ? '99+' : unread}
+          </span>
+        )}
+
+        {/* New-inquiry pulse. */}
+        {pulse && (
+          <span className="absolute inset-0 animate-ping rounded-full bg-[#c9973a]/50" />
+        )}
+      </motion.button>
+    </div>
+  );
+}
