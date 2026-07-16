@@ -90,6 +90,7 @@ Entity file: `backend/src/modules/users/entities/user.entity.ts`
 | password | text | NO | — | `select:false`; `@Exclude({toPlainOnly:true})` |
 | refreshToken | varchar(500) | YES | — | `select:false`; `@Exclude({toPlainOnly:true})` |
 | role | enum | NO | `BUYER` | `BUYER, SELLER, SERVICE_PROVIDER, ADMIN` |
+| name | varchar(255) | YES | — | ADMIN ONLY — every other role's name lives on its profile row; admins have no profile table, so this is the one carve-out. NULL on non-admin rows. |
 | isNrcVerified | boolean | NO | `false` | |
 | nrcDocumentPath | text | YES | — | `select:false`; `@Exclude({toPlainOnly:true})` |
 | isActive | boolean | NO | `true` | |
@@ -97,8 +98,8 @@ Entity file: `backend/src/modules/users/entities/user.entity.ts`
 | lastNrcVerificationAt | timestamp | YES | — | |
 | activeProfileId | uuid | YES | — | |
 | activeProfileType | enum | YES | — | `BUYER, SELLER, SERVICE_PROVIDER` |
-| parentProviderId | uuid | YES | — | |
-| permissions | simple-array | YES | — | |
+| parentProviderId | uuid | YES | — | Provider staff (parent = owner) OR admin "User Manager" sub-accounts (parent = primary admin) |
+| permissions | simple-array | YES | — | Provider staff codes (`MANAGE_QUOTES`, …) or admin sub-account codes (`ADMIN_USERS`, `ADMIN_VERIFICATIONS`, `ADMIN_REPORTS`) |
 | assignedArchetype | varchar(32) | YES | — | |
 | mustChangePassword | boolean | NO | `false` | |
 | isDepartmentHead | boolean | NO | `false` | |
@@ -206,7 +207,9 @@ Entity file: `backend/src/modules/users/entities/seller-profile.entity.ts`
 | email | varchar(255) | YES | — | |
 | phone | varchar(20) | YES | — | |
 | dateOfBirth | date | YES | — | |
-| profilePicture | text | YES | — | |
+| profilePicture | text | YES | — | owner's photo (shop profile page) |
+| logo | text | YES | — | business/shop logo — directory-card brand mark, distinct from profilePicture |
+| coverImage | text | YES | — | shop image on directory cards; GET /shops falls back to newest product image |
 | socialLinks | text | YES | — | |
 | subRole | varchar(50) | YES | — | `PRODUCT_SELLER` |
 | companyName | varchar(255) | YES | — | |
@@ -269,7 +272,9 @@ Entity file: `backend/src/modules/users/entities/service-provider-profile.entity
 | email | varchar(255) | YES | — | |
 | phone | varchar(20) | YES | — | |
 | dateOfBirth | date | YES | — | |
-| profilePicture | text | YES | — | |
+| profilePicture | text | YES | — | owner's photo (shop profile page) |
+| logo | text | YES | — | business logo — directory-card brand mark, distinct from profilePicture |
+| coverImage | text | YES | — | showcase image on directory cards; GET /shops falls back to newest product image |
 | socialLinks | text | YES | — | |
 | subRole | varchar(50) | YES | — | `INDIVIDUAL_PROVIDER / AGENCY_PROVIDER / SKILLED_LABOUR` |
 | labourCategory | varchar(50) | YES | — | only populated when subRole = SKILLED_LABOUR |
@@ -624,10 +629,10 @@ Entity file: `backend/src/modules/audit/entities/audit-log.entity.ts`
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
 | id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
-| userId | uuid | YES | — | |
+| userId | uuid | YES | — | target user of the action |
 | providerId | uuid | YES | — | |
-| staffId | uuid | YES | — | |
-| staffName | varchar(100) | YES | — | |
+| staffId | uuid | YES | — | actor id — provider staff, or the acting admin on moderation actions (`USER_VERIFIED/REJECTED/SUSPENDED/UNSUSPENDED`, `REPORT_RESOLVED/DISMISSED`) |
+| staffName | varchar(100) | YES | — | actor label (admin displayId on moderation actions) |
 | action | varchar(50) | NO | — | |
 | entityType | varchar(100) | NO | — | |
 | entityId | uuid | YES | — | |
@@ -645,6 +650,57 @@ Entity file: `backend/src/modules/audit/entities/audit-log.entity.ts`
 Indexes: `idx_audit_logs_user_id` (userId) · `idx_audit_logs_action` (action) · `idx_audit_logs_entity` (entityType, entityId) · `idx_audit_logs_created_at` (createdAt)
 
 Relations: none (no `@ManyToOne`/relation decorators declared — `userId`, `providerId`, `staffId`, `entityId` are loose uuid columns without FK relation metadata)
+
+---
+
+### Module: Reports (user complaints)
+
+#### `user_reports`
+User-submitted complaints against other users (buyer ↔ seller/provider). Filed via `POST /reports` (any authenticated user); reviewed under `/admin/reports*` by the primary admin or a User Manager holding `ADMIN_REPORTS`.
+Entity file: `backend/src/modules/reports/entities/user-report.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| reporterId | uuid | NO | — | filer's users.id |
+| reportedUserId | uuid | NO | — | target's users.id |
+| category | enum | NO | — | `SCAM_FRAUD, ABUSIVE_BEHAVIOR, NO_SHOW, FAKE_LISTING, PAYMENT_DISPUTE, OTHER` |
+| description | text | NO | — | |
+| contextType | enum | YES | — | `INQUIRY, QUOTE, ORDER` — surface the report was filed from |
+| contextId | uuid | YES | — | |
+| status | enum | NO | `OPEN` | `OPEN, RESOLVED, DISMISSED` |
+| resolutionNote | text | YES | — | |
+| resolvedByAdminId | uuid | YES | — | acting admin (primary or User Manager) |
+| resolvedAt | timestamp | YES | — | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn()` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn()` |
+
+Indexes: `idx_user_reports_reporter` (reporterId) · `idx_user_reports_reported` (reportedUserId) · `idx_user_reports_status` (status) · `idx_user_reports_created_at` (createdAt)
+
+Relations: none — loose uuid columns like `audit_logs`, so reports survive either party's account deletion. One OPEN report per (reporter, target) pair is enforced in `ReportsService.create()` (409 on resubmit).
+
+---
+
+### Module: Reviews (shop ratings)
+
+#### `shop_reviews`
+A buyer's rating of a shop/provider, earned through a real trade: `POST /shops/:sellerUserId/reviews` only accepts a review when the caller has an order with that provider in DELIVERED or COMPLETED status. Aggregated (AVG + COUNT) into `GET /shops` and `GET /shops/:id/profile` via a pre-grouped `review_agg` CTE (pre-aggregation matters — the shops query fans out per category).
+Entity file: `backend/src/modules/reviews/entities/shop-review.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| providerUserId | uuid | NO | — | seller's users.id (= ShopResult.sellerId, NOT the profile row id) |
+| reviewerUserId | uuid | NO | — | buyer's users.id |
+| orderId | uuid | NO | — | the qualifying order |
+| rating | int | NO | — | 1–5 |
+| comment | text | YES | — | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn()` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn()` |
+
+Indexes: `idx_shop_reviews_provider` (providerUserId) · `idx_shop_reviews_reviewer` (reviewerUserId) · `idx_shop_reviews_order` (orderId) · `idx_shop_reviews_reviewer_order_unique` (reviewerUserId, orderId — **unique**; one review per order, service catches 23505 → 409)
+
+Relations: none — loose uuid columns like `audit_logs`/`user_reports`.
 
 ---
 
@@ -671,11 +727,118 @@ Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`, `onDel
 
 ---
 
+### Module: Referrals (promoter programme)
+
+Hidden, invite-gated promoter accounts (`users.role = 'PROMOTER'`, minted only by `POST /promoter/signup` — the public register DTO rejects the role). PROMOTER users carry **no profile row**; their name/email/phone are denormalized onto `referral_links`.
+
+#### `referral_links`
+Entity file: `backend/src/modules/referrals/entities/referral-link.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| promoterUserId | uuid | NO | — | 1:1 with the PROMOTER user |
+| code | varchar(20) | NO | — | unique shareable code, `REF-XXXXXXXX` (`ReferralCodeUtil`, 32-char unambiguous charset) |
+| promoterName | varchar(255) | NO | — | denormalized (no profile row exists) |
+| promoterEmail | varchar(255) | NO | — | denormalized |
+| promoterPhone | varchar(20) | YES | — | |
+| isActive | boolean | NO | `true` | inactive codes stop capturing NEW conversions |
+| createdAt / updatedAt | timestamp | NO | — | |
+
+Indexes: `idx_referral_links_code` (code, unique) · `idx_referral_links_promoter` (promoterUserId, unique)
+
+Relations: ManyToOne → `users` (promoterUserId, `onDelete: CASCADE`)
+
+#### `conversions`
+Entity file: `backend/src/modules/referrals/entities/conversion.entity.ts`
+
+One row per referred user; `funnelStage` is monotonic (guarded UPDATE in `FunnelTrackingService.advanceStage`). The two `*AdvancedAt` timestamps are independent — a referred provider can jump `registration → trade_complete` with `inquiryAdvancedAt` staying NULL. Milestone counting reads the timestamps, not the coarse stage.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| referralLinkId | uuid | NO | — | FK → referral_links, CASCADE |
+| promoterUserId | uuid | NO | — | denormalized from the link at insert |
+| referredUserId | uuid | NO | — | **UNIQUE** — a user is referred exactly once |
+| funnelStage | enum | NO | `'registration'` | `registration`, `inquiry`, `trade_complete` |
+| inquiryAdvancedAt | timestamp | YES | — | set once, first own inquiry |
+| tradeCompleteAdvancedAt | timestamp | YES | — | set once, first completed trade (order or quote path) |
+| firstInquiryId | uuid | YES | — | audit |
+| firstTradeSource | json | YES | — | audit, `{ type: 'order'\|'quote', id }` |
+| createdAt / updatedAt | timestamp | NO | — | createdAt doubles as registeredAt |
+
+Indexes: `idx_conversions_referred_user` (referredUserId, unique) · `idx_conversions_referral_link` (referralLinkId) · `idx_conversions_promoter_stage` (promoterUserId, funnelStage)
+
+#### `milestones`
+Entity file: `backend/src/modules/referrals/entities/milestone.entity.ts`
+
+Admin-configured global goals (CRUD under `/admin/milestones`). Every mutation triggers a retro-award sweep + `MILESTONE_UPDATED` SSE broadcast.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| title | varchar(255) | NO | — | |
+| targetStage | enum | NO | — | `inquiry`, `trade_complete` (never `registration`) |
+| requiredCount | int | NO | — | DTO-validated ≥ 1 |
+| equitySharesReward | decimal(12,2) | NO | — | |
+| isActive | boolean | NO | `true` | |
+| createdAt / updatedAt | timestamp | NO | — | |
+
+Indexes: `idx_milestones_target_stage` (targetStage) · `idx_milestones_active` (isActive)
+
+#### `promoter_profiles`
+Entity file: `backend/src/modules/referrals/entities/promoter-profile.entity.ts`
+
+1:1 identity profile captured AT SIGNUP (the invite key proves access, not identity): bio, the social platforms the artist runs, an ID document and a live selfie. Admin reviews via `GET /admin/promoters/:id` + `PATCH /admin/promoters/:id/verification`; identity re-uploads reset status to PENDING.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| userId | uuid | NO | — | unique, FK → users CASCADE |
+| bio | text | YES | — | |
+| socialLinks | json | YES | — | `[{ platform, url, handle? }]` — ≥1 required at signup |
+| selfiePath | text | YES | — | base64 data URL (live selfie) |
+| idDocumentPath | text | YES | — | base64 data URL (NRC/passport/licence) |
+| verificationStatus | enum | NO | `'PENDING'` | `PENDING`, `VERIFIED`, `REJECTED` |
+| rejectionReason | varchar(500) | YES | — | shown to the promoter on rejection |
+| createdAt / updatedAt | timestamp | NO | — | |
+
+Indexes: `idx_promoter_profiles_user` (userId, unique) · `idx_promoter_profiles_verification` (verificationStatus)
+
+#### `promoter_settings`
+Entity file: `backend/src/modules/referrals/entities/promoter-setting.entity.ts`
+
+Single-row (get-or-create) programme settings. Holds the **admin-managed invite key** (rotated from the admin Milestones tab via `POST /admin/promoter-invite/rotate`, format `TONSE-XXXXX-XXXXX`). Stored plaintext deliberately — it's a shared distribution secret the admin must read back, not a verify-only credential. When no row exists, `PROMOTER_INVITE_KEY` from the env is the fallback; neither ⇒ signup disabled.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| inviteKey | varchar(64) | NO | — | current gate for POST /promoter/signup |
+| createdAt / updatedAt | timestamp | NO | — | updatedAt = last rotation |
+
+#### `equity_awards`
+Entity file: `backend/src/modules/referrals/entities/equity-award.entity.ts`
+
+Simulated equity ledger — no payment/legal integration. `UNIQUE(promoterUserId, milestoneId)` IS the concurrency model: concurrent qualifiers both attempt the INSERT, the loser's `23505` is swallowed, exactly one award ever lands. `sharesAwarded` snapshots the reward at award time.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| promoterUserId | uuid | NO | — | FK → users, CASCADE |
+| milestoneId | uuid | NO | — | FK → milestones, **RESTRICT** — paid-out milestones can't be deleted (admin DELETE 409s: deactivate instead) |
+| sharesAwarded | decimal(12,2) | NO | — | snapshot |
+| countAtAward | int | NO | — | audit |
+| createdAt | timestamp | NO | — | doubles as awardedAt |
+
+Constraints/Indexes: `uq_equity_awards_promoter_milestone` (promoterUserId, milestoneId, unique) · `idx_equity_awards_promoter` (promoterUserId)
+
+---
+
 ## 4. Enums Reference
 
 | Enum (owning table.column) | Values |
 |---|---|
-| `users.role` | `BUYER`, `SELLER`, `SERVICE_PROVIDER`, `ADMIN` |
+| `users.role` | `BUYER`, `SELLER`, `SERVICE_PROVIDER`, `ADMIN`, `PROMOTER` |
 | `users.activeProfileType` | `BUYER`, `SELLER`, `SERVICE_PROVIDER` |
 | `users.departmentAutonomy` | `INDEPENDENT`, `MANAGED` |
 | `user_emails.verificationStatus` | `NOT_VERIFIED`, `VERIFICATION_SENT`, `VERIFIED` |
@@ -700,6 +863,10 @@ Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`, `onDel
 | `categories.archetype` | `RETAIL`, `RENTAL`, `BOOKING`, `LABOUR`, `REPAIR`, `SERVICE`, `EVENTS`, `ENTERTAINMENT`, `WHOLESALE` |
 | `categories.nature` | `PRODUCT`, `SERVICE`, `BOTH` |
 | `categories.actionVariant` | `BUY_NEW`, `REPAIR` |
+| `notifications.type` | `NEW_LEAD`, `QUOTE_RECEIVED`, `RESERVE_RELEASED`, `MILESTONE_UNLOCKED` |
+| `conversions.funnelStage` | `registration`, `inquiry`, `trade_complete` |
+| `milestones.targetStage` | `inquiry`, `trade_complete` |
+| `promoter_profiles.verificationStatus` | `PENDING`, `VERIFIED`, `REJECTED` |
 
 ---
 
@@ -727,11 +894,11 @@ Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`, `onDel
 | `NODE_ENV` | — | `production` enables `ssl: { rejectUnauthorized: false }` |
 | `ENCRYPTION_KEY` | `your_32_character_key_here_1234` | Key for (currently unused) `EncryptionService` |
 | `ENCRYPTION_IV` | `your_16_character_iv` | IV for (currently unused) `EncryptionService` |
+| `PROMOTER_INVITE_KEY` | — (unset ⇒ signup hard-disabled) | Gates `POST /promoter/signup`; shared privately with NDA'd artists |
+| `PROMOTER_APP_BASE_URL` | `http://localhost:5173` | Frontend origin used to build shareable referral URLs |
 
 ### Seed data
-`backend/src/database/seeds/seed.ts` (run via `npm run seed`) creates exactly **one row** — a platform root ADMIN user. It is idempotent: it looks up an existing user by `ADMIN_EMAIL`; if found, it upgrades role to `ADMIN` and sets `isActive=true`, `verificationStatus='VERIFIED'` only where different (no password reset on re-run). If not found, it hashes `ADMIN_PASSWORD` with bcryptjs, registers with a placeholder NRC, then patches `verificationStatus` to `VERIFIED` and `isActive=true`. No other tables (categories, products, etc.) are seeded by this script.
-
-> ⚠️ Security note: the seed logs plaintext admin credentials to the console and ships hardcoded default admin credentials — replace `ADMIN_EMAIL`/`ADMIN_PASSWORD` via environment before any non-local deployment.
+`backend/src/database/seeds/seed.ts` (run via `npm run seed`) creates exactly **one row** — a platform root ADMIN user. Credentials come from environment variables (`ADMIN_EMAIL`/`ADMIN_PASSWORD` required, `ADMIN_NAME`/`ADMIN_PHONE`/`ADMIN_NRC` optional) loaded from the gitignored `backend/.env`; the script exits with an error if email/password are unset or the password is under 8 characters, and it never logs the plaintext password. It is idempotent: it looks up an existing user by `ADMIN_EMAIL`; if found, it upgrades role to `ADMIN` and sets `isActive=true`, `verificationStatus='VERIFIED'` only where different — the password is only rotated (re-hashed from the current `ADMIN_PASSWORD`) when run as `npm run seed -- --reset-password`. If not found, it hashes `ADMIN_PASSWORD` with bcryptjs, registers with a placeholder NRC, then patches `verificationStatus` to `VERIFIED` and `isActive=true`. No other tables (categories, products, etc.) are seeded by this script.
 
 ---
 

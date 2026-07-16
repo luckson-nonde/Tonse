@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShoppingBag,
   Store,
@@ -18,6 +18,7 @@ import {
   Laptop,
   User,
   Building2,
+  Briefcase,
   Package,
   Settings,
   Layers,
@@ -40,6 +41,9 @@ import { useCategoryAvailability } from '../services/categories/availability';
 import CategorySelection from '../components/CategorySelection';
 import RoleCardStack, { type RoleBanner } from '../components/RoleCardStack';
 import BuyerAccountCards from '../components/BuyerAccountCards';
+import { normalizeSpecialtyKey } from '../components/buyer/categoryMeta';
+import { useLiteMotion } from '../hooks/useLiteMotion';
+import { nudgeRepaint } from '../utils/forceRepaint';
 
 // ─── Tier-1 role-card config ────────────────────────────────────────
 // Each entry renders as one composed 60/40 card in the vertical stack.
@@ -94,6 +98,25 @@ const ROLE_BANNERS: RoleBanner[] = [
 ];
 
 
+
+// ─── Company position artwork ("Your Position" step) ────────────────
+// Photos live in src/assets/images/onboarding/company onboarding/, named for
+// the position LABEL ("Procurement Officer.webp", "Manager  Owner.webp"). Keyed
+// via the shared `normalizeSpecialtyKey`, so "/"→space and "&" collapse to the
+// card title with no rename ("Manager / Owner" → `manager-owner`). Missing ⇒
+// the position card keeps its icon chip.
+const POSITION_ART = import.meta.glob(
+  '../assets/images/onboarding/company onboarding/*.{png,jpg,jpeg,webp}',
+  { eager: true, import: 'default' },
+) as Record<string, string>;
+
+const POSITION_BY_KEY: Record<string, string> = {};
+for (const [path, url] of Object.entries(POSITION_ART)) {
+  POSITION_BY_KEY[normalizeSpecialtyKey(path.split('/').pop()!)] = url;
+}
+
+const getPositionImage = (title: string): string | undefined =>
+  POSITION_BY_KEY[normalizeSpecialtyKey(title)];
 
 interface RoleOption {
   id: string;
@@ -191,27 +214,23 @@ const sellerSubRoles: RoleOption[] = [
   },
 ];
 
-// SERVICE_PROVIDER tier-2: businesses that book/rent/perform/fix.
-// Three shapes by company structure, not by what they offer (categories
-// in tier 3 narrow that down).
+// SERVICE_PROVIDER tier-2: two kinds of provider —
+//   Service  → books/rents/performs/fixes (solo pro OR agency; identical
+//              downstream, so they're one option). Sees service categories.
+//   Skilled Labour → tradespeople. Goes straight to the trade picker.
+// Tier 3 shows each its own category set (see categoryFilter below).
 const serviceProviderSubRoles: RoleOption[] = [
   {
     id: 'INDIVIDUAL_PROVIDER',
-    eyebrow: 'Solo · Practitioner',
-    title: 'Solo',
-    description: 'Independent professional — DJ, photographer, planner, consultant.',
-    icon: User,
+    eyebrow: 'Service · Professional',
+    title: 'Service',
+    description: 'Solo pro or agency — repairs, events, entertainment, IT, consulting.',
+    icon: Briefcase,
     subRole: 'INDIVIDUAL_PROVIDER',
   },
   {
-    id: 'AGENCY_PROVIDER',
-    eyebrow: 'Agency · Multi-team',
-    title: 'Agency',
-    description: 'Multi-person service business — event company, repair shop, catering co.',
-    icon: Building2,
-    subRole: 'AGENCY_PROVIDER',
-  },
-  {
+    // Lender (loan company) — Agency stays merged into "Service" (retired as
+    // a separate card in this lineage); LENDER is the one genuinely new shape.
     id: 'LENDER',
     eyebrow: 'Finance · Lender',
     title: 'Loan Provider',
@@ -221,11 +240,19 @@ const serviceProviderSubRoles: RoleOption[] = [
   },
   {
     id: 'SKILLED_LABOUR',
-    eyebrow: 'Trade · Skilled Labour',
-    title: 'Skilled Labour',
+    eyebrow: 'Trade · Hands-on',
+    title: 'Labour',
     description: 'Tradesperson — carpenter, welder, plumber, electrician.',
     icon: Wrench,
     subRole: 'SKILLED_LABOUR',
+  },
+  {
+    id: 'MACHINERY_HIRE',
+    eyebrow: 'Equipment · Hire',
+    title: 'Heavy Machinery for Hire',
+    description: 'Rent out plant & equipment — excavators, cranes, tippers, generators.',
+    icon: Truck,
+    subRole: 'MACHINERY_HIRE',
   },
 ];
 
@@ -241,7 +268,36 @@ export default function RoleSelection() {
   const [isCompanyExpanded, setIsCompanyExpanded] = useState(false);
   const [isViewingSubcategories, setIsViewingSubcategories] = useState(false);
   const navigate = useNavigate();
+  // Promoter referral attribution: a shared link lands here as
+  // /role-selection?ref=REF-XXXXXXXX. Carry the code through every hop to
+  // /register so it reaches the backend with the account creation itself.
+  const [searchParams] = useSearchParams();
+  const referralCode = searchParams.get('ref') || '';
+  const refSuffix = referralCode ? `&ref=${encodeURIComponent(referralCode)}` : '';
 
+  // Android-GPU ghosting guard (see useLiteMotion.ts). On touch devices the
+  // tier slides are stripped entirely — prop ABSENCE (not duration:0) is what
+  // makes AnimatePresence mode="wait" unmount the outgoing tier synchronously,
+  // guaranteeing exactly one tier subtree in the DOM at any moment. NB: this
+  // relies on every nested motion element keeping its own AnimatePresence
+  // wrapper (true today); a bare motion.* with an `exit` prop directly inside
+  // a tier div would re-introduce an exit wait.
+  const lite = useLiteMotion();
+  const slide = (dir: number) =>
+    lite
+      ? {}
+      : {
+          initial: { x: dir * 20, opacity: 0 },
+          animate: { x: 0, opacity: 1 },
+          exit: { x: dir * 20, opacity: 0 },
+        };
+
+  // Belt-and-braces: after each step swap, force the compositor to re-raster
+  // the wizard region so stale tiles from the previous step can't survive.
+  const tierWrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    nudgeRepaint(tierWrapRef.current);
+  }, [tier]);
 
   const handleSubRoleSelect = (subRole: SubRole) => {
     if (subRole === 'COMPANY_BUYER') {
@@ -277,12 +333,13 @@ export default function RoleSelection() {
     if (
       selectedSubRole === 'INDIVIDUAL_PROVIDER' ||
       selectedSubRole === 'AGENCY_PROVIDER' ||
-      selectedSubRole === 'SKILLED_LABOUR'
+      selectedSubRole === 'SKILLED_LABOUR' ||
+      selectedSubRole === 'MACHINERY_HIRE'
     ) {
-      return rootCategories.filter((c) => {
-        const nature = getCategoryNature(c.id);
-        return nature === 'SERVICE' || nature === 'BOTH';
-      });
+      // Services + labour only — pure-SERVICE categories. BOTH-nature
+      // categories (Automotive, Agriculture) are product catalogs that belong
+      // to the seller flow, so they're excluded here to avoid repeats.
+      return rootCategories.filter((c) => getCategoryNature(c.id) === 'SERVICE');
     }
     return rootCategories;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -303,7 +360,7 @@ export default function RoleSelection() {
       if (masterRole === 'SELLER' || masterRole === 'SERVICE_PROVIDER') {
         setTier(3);
       } else {
-        navigate(`/register?role=${masterRole}&subRole=${selectedSubRole}`);
+        navigate(`/register?role=${masterRole}&subRole=${selectedSubRole}${refSuffix}`);
       }
     } else if (tier === 3 && selectedCategories.length > 0) {
       // selectedCategories is now an array of stable category IDs
@@ -313,7 +370,7 @@ export default function RoleSelection() {
       // ({ categoryIds: [...] }).
       const categoryIdsParam = selectedCategories.join(',');
       navigate(
-        `/register?role=${masterRole}&subRole=${selectedSubRole}&categoryIds=${categoryIdsParam}`
+        `/register?role=${masterRole}&subRole=${selectedSubRole}&categoryIds=${categoryIdsParam}${refSuffix}`
       );
     }
   };
@@ -328,17 +385,32 @@ export default function RoleSelection() {
         setSelectedSubRole(null);
       }
     } else if (tier === 3) {
+      // Returning to the specialist step: also clear the subcategory-view flag
+      // the tier-3 child pushed up, so it can't strand `true` and blank the
+      // tier-2 header/Continue button.
       setTier(2);
+      setIsViewingSubcategories(false);
     }
   };
 
+  // `isViewingSubcategories` is a tier-3-only concept, pushed up from the
+  // CategorySelection child. Because the child unmounts on some back paths
+  // without ever pushing `false`, a stale `true` could leak into tier 2 and
+  // blank the header + hide the Continue button. Gate every read behind
+  // `tier === 3` so a stale value is inert everywhere else.
+  const inSubcategoryView = tier === 3 && isViewingSubcategories;
 
   return (
     <AuthSplitLayout
+      stickyHeader={tier === 3}
       title={
-        isViewingSubcategories
+        inSubcategoryView
           ? tier === 3 && (masterRole === 'SELLER' || masterRole === 'SERVICE_PROVIDER')
-            ? 'Choose Specialty'
+            ? selectedSubRole === 'SKILLED_LABOUR'
+              ? 'Choose Your Trade'
+              : selectedSubRole === 'MACHINERY_HIRE'
+                ? 'Select Machinery'
+                : 'Choose Specialty'
             : null
           : tier === 1
             ? 'Select Your Role'
@@ -353,9 +425,15 @@ export default function RoleSelection() {
               : 'Business Categories'
       }
       subtitle={
-        isViewingSubcategories
+        inSubcategoryView
           ? tier === 3 && (masterRole === 'SELLER' || masterRole === 'SERVICE_PROVIDER')
-            ? <span className="text-[#1a1612]/60">Pick exactly what you sell or repair</span>
+            ? <span className="text-[#1a1612]/60">
+                {selectedSubRole === 'SKILLED_LABOUR'
+                  ? 'Pick the trade you specialise in'
+                  : selectedSubRole === 'MACHINERY_HIRE'
+                    ? 'Pick the equipment you hire out'
+                    : 'Pick exactly what you sell or repair'}
+              </span>
             : null
           : <span className="text-[#1a1612]/60">
               {tier === 1
@@ -371,16 +449,15 @@ export default function RoleSelection() {
                   : 'Select the categories that best describe your business.'}
             </span>
       }
-      onBack={isViewingSubcategories ? undefined : (tier > 1 ? handleBack : () => navigate('/login'))}
+      onBack={inSubcategoryView ? undefined : (tier > 1 ? handleBack : () => navigate('/login'))}
     >
-      <div className="relative overflow-hidden min-h-[240px] lg:min-h-100">
+      <div ref={tierWrapRef} className="relative overflow-hidden min-h-[240px] lg:min-h-100">
         <AnimatePresence mode="wait">
           {tier === 1 ? (
             <motion.div
               key="tier1"
-              initial={{ x: -20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -20, opacity: 0 }}
+              data-tier-panel="1"
+              {...slide(-1)}
               // Constrained column: the 16:9 artwork stays elegant on wide
               // panes (aspect-ratio sizing — never height-cropped).
               className="flex flex-col w-full max-w-[520px] mx-auto"
@@ -400,9 +477,8 @@ export default function RoleSelection() {
           ) : tier === 2 ? (
             <motion.div
               key="tier2"
-              initial={{ x: 20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 20, opacity: 0 }}
+              data-tier-panel="2"
+              {...slide(1)}
               className="space-y-4"
             >
               <AnimatePresence mode="popLayout">
@@ -413,7 +489,7 @@ export default function RoleSelection() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
-                    className="group relative p-4 pl-5 rounded-2xl border border-[#C9973A]/40 bg-white shadow-[0_6px_18px_-14px_rgba(201,151,58,0.3)] text-left flex items-center gap-3 mb-3"
+                    className="group relative p-4 pl-5 rounded-2xl border border-[#E9D5B0] bg-white shadow-[0_6px_18px_-14px_rgba(201,151,58,0.3)] text-left flex items-center gap-3 mb-3"
                   >
                     <div className="absolute left-0 top-3 bottom-3 w-[2px] bg-[#C9973A] rounded-full" />
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-[#C9973A] text-white">
@@ -447,7 +523,10 @@ export default function RoleSelection() {
                   : masterRole === 'SERVICE_PROVIDER'
                     ? serviceProviderSubRoles
                     : sellerSubRoles;
-                const isStacked = items.length <= 2;
+                // Provider menu stays a vertical stack even at 3 cards (Service /
+                // Labour / Heavy Machinery) — the large stacked cards read better
+                // than a 2-col grid with an orphaned third card.
+                const isStacked = items.length <= 2 || masterRole === 'SERVICE_PROVIDER';
                 return (
                   <div
                     className={
@@ -460,6 +539,61 @@ export default function RoleSelection() {
                       {items.map((option) => {
                         const isSelected = selectedSubRole === option.subRole;
                         const Icon = option.icon;
+                        const positionImg = getPositionImage(option.title);
+
+                        // Photo-led card — company positions ship a 16:9 scene
+                        // photo (Procurement / Secretary / Receptionist /
+                        // Manager). Same image-top DNA as the labour trade
+                        // cards. Roles without art (seller/provider) fall
+                        // through to the icon-chip row below.
+                        if (positionImg) {
+                          return (
+                            <motion.button
+                              type="button"
+                              layoutId={option.id}
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.95 }}
+                              key={option.id}
+                              onClick={() => handleSubRoleSelect(option.subRole)}
+                              aria-pressed={isSelected}
+                              className={`group relative flex flex-col overflow-hidden rounded-2xl border text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-white ${
+                                isSelected
+                                  ? 'border-[#C9973A] bg-white shadow-[0_8px_28px_-14px_rgba(201,151,58,0.45)]'
+                                  : 'border-[#e8e4dc] bg-white hover:border-[#E9D5B0] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)]'
+                              }`}
+                            >
+                              <div className="relative aspect-video overflow-hidden bg-[#f5f2ee]">
+                                <img
+                                  src={positionImg}
+                                  alt={option.title}
+                                  loading="lazy"
+                                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out lg:group-hover:scale-[1.04]"
+                                />
+                                {isSelected && (
+                                  <div className="absolute top-2.5 right-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-[#C9973A] text-white shadow-md shadow-[#C9973A]/30">
+                                    <Check className="h-3 w-3" strokeWidth={3} />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="p-4">
+                                <p className="mb-1 text-[9px] font-black uppercase tracking-[0.18em] text-[#C9973A]">
+                                  {option.eyebrow}
+                                </p>
+                                <h3
+                                  className={`text-[15px] font-bold leading-tight transition-colors ${
+                                    isSelected ? 'text-[#1a1612]' : 'text-[#1a1612]/85'
+                                  }`}
+                                >
+                                  {option.title}
+                                </h3>
+                                <p className="mt-0.5 text-[12px] leading-snug text-[#1a1612]/55">
+                                  {option.description}
+                                </p>
+                              </div>
+                            </motion.button>
+                          );
+                        }
 
                         return (
                           <motion.button
@@ -478,7 +612,7 @@ export default function RoleSelection() {
                             } focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-white ${
                               isSelected
                                 ? 'border-[#C9973A] bg-white shadow-[0_8px_28px_-14px_rgba(201,151,58,0.45)]'
-                                : 'border-[#e8e4dc] bg-white hover:border-[#C9973A]/40 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)]'
+                                : 'border-[#e8e4dc] bg-white hover:border-[#E9D5B0] hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-16px_rgba(26,22,18,0.15)]'
                             }`}
                           >
                             <div
@@ -546,9 +680,8 @@ export default function RoleSelection() {
           ) : (
             <motion.div
               key="tier3"
-              initial={{ x: 20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 20, opacity: 0 }}
+              data-tier-panel="3"
+              {...slide(1)}
               className="space-y-4"
             >
               <div className="h-full min-h-100">
@@ -566,23 +699,40 @@ export default function RoleSelection() {
                       : undefined
                   }
                   categoryFilter={(cat) => {
+                    // Each provider type sees only its own group. The synthetic
+                    // "Labour & Skills" tile (cat.id === 'labour') is the trade
+                    // picker's entry point.
                     const nature = getCategoryNature(cat.id);
+                    if (masterRole === 'SERVICE_PROVIDER') {
+                      // Skilled Labour → only the trade picker.
+                      if (selectedSubRole === 'SKILLED_LABOUR') return cat.id === 'labour';
+                      // Machinery Hire → nothing in the master grid; autoMachinery
+                      // drills straight into the equipment list.
+                      if (selectedSubRole === 'MACHINERY_HIRE') return false;
+                      // Lender → only the Loans catalog (loan types are its
+                      // "specialties"); other providers never see the tile.
+                      if (selectedSubRole === 'LENDER') return cat.id === 'loans';
+                      // Service → pure-service categories, no Labour tile, no
+                      // Loans tile, no BOTH-nature product categories
+                      // (Automotive, Agriculture).
+                      return cat.id !== 'labour' && cat.id !== 'loans' && nature === 'SERVICE';
+                    }
+                    // Seller — Labour never applies here.
+                    if (cat.id === 'labour') return false;
                     if (selectedSubRole === 'PRODUCT_SELLER') {
                       return nature === 'PRODUCT' || nature === 'BOTH';
-                    }
-                    if (selectedSubRole === 'LENDER') {
-                      return cat.id === 'loans';
-                    }
-                    if (
-                      selectedSubRole === 'INDIVIDUAL_PROVIDER' ||
-                      selectedSubRole === 'AGENCY_PROVIDER' ||
-                      selectedSubRole === 'SKILLED_LABOUR'
-                    ) {
-                      return nature === 'SERVICE' || nature === 'BOTH';
                     }
                     return true;
                   }}
                   onSubcategoryViewChange={setIsViewingSubcategories}
+                  autoLabour={selectedSubRole === 'SKILLED_LABOUR'}
+                  autoMachinery={selectedSubRole === 'MACHINERY_HIRE'}
+                  onBack={() => {
+                    // Labour trade-picker's Back unmounts this child; clear the
+                    // subcategory-view flag it pushed so tier 2 renders cleanly.
+                    setTier(2);
+                    setIsViewingSubcategories(false);
+                  }}
                 />
               </div>
             </motion.div>
@@ -600,7 +750,7 @@ export default function RoleSelection() {
         // Tier-1 renders its own Continue inline (right under the carousel
         // dots) so the teaser sections can sit below it — skip the shared one.
         const showButton =
-          tier !== 1 && (!isViewingSubcategories || (tier === 3 && isSpecialist));
+          tier !== 1 && (!inSubcategoryView || (tier === 3 && isSpecialist));
         if (!showButton) return null;
 
         // For specialists in tier-3, require at least one sub-category to be
@@ -610,8 +760,15 @@ export default function RoleSelection() {
         // one specialty". This rule is suffix-agnostic, so it works for
         // categories whose subs carry a variant ("Mobile Phones (Repair)")
         // and ones whose subs don't ("MCs & Hosts", "Event Catering").
+        // Labour trades AND machinery items carry no master pseudo-entry
+        // (CategorySelection emits just the ids), so one pick is enough; other
+        // specialists need the master + ≥1 sub (length >= 2).
+        const isLabourSelection =
+          selectedSubRole === 'SKILLED_LABOUR' || selectedSubRole === 'MACHINERY_HIRE';
         const specialistHasSubPicked =
-          tier === 3 && isSpecialist && selectedCategories.length >= 2;
+          tier === 3 &&
+          isSpecialist &&
+          (isLabourSelection ? selectedCategories.length >= 1 : selectedCategories.length >= 2);
 
         const disabled =
           tier === 1
@@ -627,13 +784,13 @@ export default function RoleSelection() {
             <Button
               onClick={handleContinue}
               disabled={disabled}
-              className="w-full h-[58px] shadow-[0_12px_28px_-8px_rgba(201,151,58,0.4)] disabled:from-[#e8e4dc] disabled:to-[#e0dccf] disabled:text-[#1a1612]/30 disabled:shadow-none disabled:cursor-not-allowed text-[13px] font-sans font-bold text-white bg-gradient-to-b from-[#D5A547] to-[#C9973A] hover:from-[#C9973A] hover:to-[#B08432] transition-all active:scale-[0.98] rounded-2xl uppercase tracking-[0.22em] flex justify-center items-center gap-2"
+              className="w-full h-[58px] shadow-[0_12px_28px_-8px_rgba(201,151,58,0.4)] disabled:from-[#e8e4dc] disabled:to-[#e0dccf] disabled:text-[#1a1612]/30 disabled:shadow-none disabled:cursor-not-allowed text-[13px] font-sans font-bold text-white bg-gradient-to-b from-[#D5A547] to-[#C9973A] hover:from-[#C9973A] hover:to-[#B08432] transition-all lg:active:scale-[0.98] rounded-2xl uppercase tracking-[0.22em] flex justify-center items-center gap-2"
             >
               {tier === 1
                 ? 'Next Step'
                 : tier === 2
                   ? 'Continue'
-                  : isViewingSubcategories && isSpecialist
+                  : inSubcategoryView && isSpecialist
                     ? 'Initialize Membership'
                     : 'Continue'}
               <span className="text-base leading-none">→</span>

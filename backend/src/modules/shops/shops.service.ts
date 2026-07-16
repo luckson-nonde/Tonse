@@ -89,7 +89,14 @@ export class ShopsService {
           END                                                        AS location,
           sp.city,
           sp.province,
-          sp."profilePicture"                                        AS logo,
+          -- Browse cards are BUSINESS-branded only: sp.logo is the shop's
+          -- brand mark (uploaded in account settings). profilePicture is
+          -- the OWNER'S photo and belongs on the shop profile page
+          -- (findProfile), never here. Card falls back to a monogram
+          -- when no logo has been uploaded yet.
+          sp.logo                                                    AS logo,
+          sp."coverImage"                                            AS cover_image,
+          sp."verificationStatus"::text                              AS verification_status,
           sp."createdAt",
           'SELLER'                                                   AS shop_type
         FROM users u
@@ -111,7 +118,9 @@ export class ShopsService {
           END                                                          AS location,
           spp.city,
           spp.province,
-          spp."profilePicture"                                         AS logo,
+          spp.logo                                                     AS logo,
+          spp."coverImage"                                             AS cover_image,
+          spp."verificationStatus"::text                               AS verification_status,
           spp."createdAt",
           'SERVICE_PROVIDER'                                           AS shop_type
         FROM users u
@@ -124,6 +133,19 @@ export class ShopsService {
         UNION ALL
         SELECT "serviceProviderProfileId" AS profile_id, "categoryId" AS category_id
           FROM service_provider_profile_categories
+      ),
+      review_agg AS (
+        -- Pre-aggregated BEFORE joining: a naive LEFT JOIN shop_reviews in
+        -- the grouped query below would fan out per category row and
+        -- corrupt COUNT. ::float8 / ::int casts are load-bearing — pg
+        -- returns numeric/bigint as strings and the frontend calls
+        -- shop.rating.toFixed(1).
+        SELECT
+          sr."providerUserId"                       AS provider_user_id,
+          ROUND(AVG(sr.rating)::numeric, 2)::float8 AS avg_rating,
+          COUNT(*)::int                             AS review_count
+        FROM shop_reviews sr
+        GROUP BY sr."providerUserId"
       )
     `;
 
@@ -138,12 +160,14 @@ export class ShopsService {
         p.location,
         p.city,
         p.province,
-        0                                                                     AS rating,
-        0                                                                     AS "reviewCount",
+        COALESCE(MAX(ra.avg_rating), 0)                                       AS rating,
+        COALESCE(MAX(ra.review_count), 0)::int                                AS "reviewCount",
         0                                                                     AS "followerCount",
         TRUE                                                                  AS "isActive",
         p."createdAt",
         p.shop_type                                                           AS "shopType",
+        p.verification_status                                                 AS "verificationStatus",
+        COALESCE(p.cover_image, MAX(cov.first_image))                         AS "coverImage",
         COALESCE(
           array_agg(DISTINCT cj.category_id) FILTER (WHERE cj.category_id IS NOT NULL),
           '{}'
@@ -151,15 +175,30 @@ export class ShopsService {
         COALESCE(
           array_agg(DISTINCT c.name) FILTER (WHERE c.name IS NOT NULL),
           '{}'
-        )                                                                     AS "categoryNames"
+        )                                                                     AS "categoryNames",
+        COALESCE(
+          array_agg(DISTINCT c.archetype::text) FILTER (WHERE c.archetype IS NOT NULL),
+          '{}'
+        )                                                                     AS archetypes
       FROM providers p
       LEFT JOIN cat_junctions   cj ON cj.profile_id = p.profile_id
       LEFT JOIN categories       c  ON c.id          = cj.category_id
+      LEFT JOIN review_agg      ra ON ra.provider_user_id = p.seller_id
+      LEFT JOIN LATERAL (
+        SELECT split_part(pr.images, ',', 1) AS first_image
+        FROM products pr
+        WHERE pr."sellerId" = p.seller_id
+          AND pr."isActive" = true
+          AND pr.images IS NOT NULL AND pr.images <> ''
+        ORDER BY pr."createdAt" DESC
+        LIMIT 1
+      ) cov ON true
       WHERE 1=1
       ${searchClause}
       ${categoryClause}
       GROUP BY p.profile_id, p.seller_id, p.display_name, p.location,
-               p.city, p.province, p.logo, p."createdAt", p.shop_type
+               p.city, p.province, p.logo, p.cover_image, p."createdAt",
+               p.shop_type, p.verification_status
       ORDER BY p."createdAt" DESC
       LIMIT $${limitIdx} OFFSET $${offsetIdx}
     `;
@@ -252,6 +291,16 @@ export class ShopsService {
         UNION ALL
         SELECT "serviceProviderProfileId" AS profile_id, "categoryId" AS category_id
           FROM service_provider_profile_categories
+      ),
+      review_agg AS (
+        -- Same shape as findAll's: pre-aggregated so the category fan-out
+        -- can't corrupt COUNT; casts keep pg from returning strings.
+        SELECT
+          sr."providerUserId"                       AS provider_user_id,
+          ROUND(AVG(sr.rating)::numeric, 2)::float8 AS avg_rating,
+          COUNT(*)::int                             AS review_count
+        FROM shop_reviews sr
+        GROUP BY sr."providerUserId"
       )
       SELECT
         p.profile_id                                                   AS id,
@@ -279,6 +328,8 @@ export class ShopsService {
         p.sub_role                                                     AS "subRole",
         p.created_at                                                   AS "createdAt",
         p.shop_type                                                    AS "shopType",
+        COALESCE(MAX(ra.avg_rating), 0)                                AS rating,
+        COALESCE(MAX(ra.review_count), 0)::int                         AS "reviewCount",
         COALESCE(
           array_agg(DISTINCT cj.category_id) FILTER (WHERE cj.category_id IS NOT NULL),
           '{}'
@@ -290,6 +341,7 @@ export class ShopsService {
       FROM profile_data p
       LEFT JOIN cat_junctions cj ON cj.profile_id = p.profile_id
       LEFT JOIN categories     c  ON c.id          = cj.category_id
+      LEFT JOIN review_agg    ra ON ra.provider_user_id = p.seller_id
       GROUP BY p.profile_id, p.seller_id, p.display_name, p.company_name,
                p.personal_name, p.email, p.phone, p.logo, p.city, p.province,
                p.area, p.social_links, p.verification_status, p.verified_at,

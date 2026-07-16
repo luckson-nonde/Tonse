@@ -60,41 +60,23 @@ export default function RoleCardStack({ banners, onSelect }: RoleCardStackProps)
         return (
           <div
             key={b.id}
-            className="group bg-white rounded-3xl overflow-hidden shadow-[0_18px_40px_-24px_rgba(10,25,49,0.35)] hover:shadow-[0_24px_48px_-22px_rgba(10,25,49,0.45)] hover:-translate-y-0.5 transition-all duration-300 ease-in-out"
+            className="group bg-white rounded-3xl overflow-hidden shadow-[0_18px_40px_-24px_rgba(10,25,49,0.35)] hover:shadow-[0_24px_48px_-22px_rgba(10,25,49,0.45)] lg:hover:-translate-y-0.5 transition-all duration-300 ease-in-out"
           >
-            {/* Mobile + artwork: the banner IS the card — headline, copy,
-                badges and CTA are baked into the image, so composing them
-                again below would duplicate every detail. */}
-            {art && (
-              <button
-                type="button"
-                onClick={() => onSelect(b.id)}
-                aria-label={`${b.headline} — ${b.cta}`}
-                className="sm:hidden block w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60"
-              >
-                <img
-                  src={art}
-                  alt={b.headline}
-                  className="w-full aspect-video object-cover"
-                />
-              </button>
-            )}
-
-            {/* Composed 60/40 card — always on sm+ (photo side crops to the
-                photographic half, no text duplication). On mobile it renders
-                ONLY when no artwork exists (stacked: photo top, text below). */}
-            <div
-              className={`${art ? 'hidden sm:grid' : 'flex flex-col-reverse sm:grid'} sm:grid-cols-[3fr_2fr]`}
-            >
+            {/* Composed 60/40 card at EVERY width — the photo column crops
+                the artwork to its photographic half (object-right), so the
+                copy baked into the banner file never duplicates the card's
+                own text. Phones get the same clean composition as desktop,
+                just scaled down. */}
+            <div className="grid grid-cols-[3fr_2fr]">
               {/* Text column — typography + value props + CTA */}
-              <div className="p-5 pt-3 sm:p-6 flex flex-col items-start">
+              <div className="p-4 sm:p-6 flex flex-col items-start">
                 <span className="px-2.5 py-1 rounded-full bg-[#C9973A]/10 text-[#C9973A] text-[9px] font-black uppercase tracking-[0.18em]">
                   {b.eyebrow}
                 </span>
-                <h3 className="font-serif text-[20px] sm:text-[22px] font-bold text-[#0A1931] leading-[1.2] mt-3">
+                <h3 className="font-serif text-[18px] sm:text-[22px] font-bold text-[#0A1931] leading-[1.2] mt-3">
                   {b.headline}
                 </h3>
-                <p className="text-[12px] text-[#1a1612]/60 leading-relaxed mt-2">
+                <p className="text-[11px] sm:text-[12px] text-[#1a1612]/60 leading-relaxed mt-2">
                   {b.description}
                 </p>
 
@@ -117,7 +99,7 @@ export default function RoleCardStack({ banners, onSelect }: RoleCardStackProps)
                 <button
                   type="button"
                   onClick={() => onSelect(b.id)}
-                  className="mt-5 w-full sm:w-auto px-6 h-12 sm:h-11 rounded-full bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white text-[11px] font-black uppercase tracking-[0.18em] flex items-center justify-center gap-2 whitespace-nowrap shadow-lg shadow-[#C9973A]/25 transition-all duration-300 ease-in-out hover:from-[#C9973A] hover:to-[#B08432] hover:scale-[1.02] active:scale-[0.98]"
+                  className="mt-5 w-full sm:w-auto px-6 h-12 sm:h-11 rounded-full bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white text-[11px] font-black uppercase tracking-[0.18em] flex items-center justify-center gap-2 whitespace-nowrap shadow-lg shadow-[#C9973A]/25 transition-all duration-300 ease-in-out hover:from-[#C9973A] hover:to-[#B08432] lg:hover:scale-[1.02] lg:active:scale-[0.98]"
                 >
                   {b.cta}
                   <span className="text-sm leading-none">→</span>
@@ -129,12 +111,12 @@ export default function RoleCardStack({ banners, onSelect }: RoleCardStackProps)
                 type="button"
                 onClick={() => onSelect(b.id)}
                 aria-label={`${b.headline} — ${b.cta}`}
-                className="relative h-44 sm:h-full p-3 sm:pl-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 rounded-t-3xl sm:rounded-r-3xl sm:rounded-tl-none"
+                className="relative h-full p-3 pl-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-2 rounded-r-3xl"
               >
                 <img
                   src={photo}
                   alt={b.headline}
-                  className="w-full h-full sm:min-h-[200px] object-cover object-[70%_center] sm:object-right rounded-2xl transition-transform duration-300 ease-in-out group-hover:scale-[1.01]"
+                  className="w-full h-full min-h-[180px] sm:min-h-[200px] object-cover object-right rounded-2xl transition-transform duration-300 ease-in-out lg:group-hover:scale-[1.01]"
                 />
               </button>
             </div>

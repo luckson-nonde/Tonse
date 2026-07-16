@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
+import { usePageTransitionProps } from './PageTransition';
 import defaultEmptyImage from '../assets/images/empty-states/owl_reading.png';
 import {
   LayoutDashboard,
@@ -103,6 +104,7 @@ export default function DynamicAccountRenderer({
   user,
 }: DynamicAccountRendererProps) {
   const viewSchema = schema.views[view];
+  const pageTransitionProps = usePageTransitionProps();
 
   if (!viewSchema) {
     return (
@@ -491,6 +493,7 @@ export default function DynamicAccountRenderer({
                     state={item.status?.toLowerCase() || 'open'}
                     onAction={() => onAction('view_details', item)}
                     onDelete={() => onAction('delete_inquiry', item)}
+                    onReleaseReserve={() => onAction('release_reserve', item)}
                   />
                 );
               }
@@ -526,6 +529,12 @@ export default function DynamicAccountRenderer({
                     paidQuote={item.paidQuote}
                     onAction={() => onAction('view_order', item)}
                     onDelete={() => onAction('delete_inquiry', item)}
+                    onRate={
+                      (item as any).sellerId
+                        ? () => onAction('rate_shop', item)
+                        : undefined
+                    }
+                    alreadyRated={(item as any).alreadyRated}
                   />
                 );
               }
@@ -754,13 +763,7 @@ export default function DynamicAccountRenderer({
   };
 
   return (
-    <motion.div
-      key={view}
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      className="w-full"
-    >
+    <motion.div key={view} data-page-transition className="w-full" {...pageTransitionProps}>
       {renderContent()}
     </motion.div>
   );

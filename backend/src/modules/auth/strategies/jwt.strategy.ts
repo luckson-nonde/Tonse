@@ -11,7 +11,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private usersService: UsersService
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      // Header first (every normal API call). The query-param fallback exists
+      // for ONE consumer: the SSE stream (GET /notifications/stream?token=…) —
+      // native EventSource cannot set an Authorization header. Tokens in URLs
+      // land in server logs, so nothing else should ever use the fallback.
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        (req) => (req?.query?.token as string) ?? null,
+      ]),
       ignoreExpiration: false,
       secretOrKey: configService.get('jwt.secret'),
     });
@@ -38,10 +45,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // payload already carries the email claim from sign-in / refresh, so use
     // it directly — avoids an extra DB hit per authenticated request.
     //
-    // parentProviderId + permissions are needed by PermissionsGuard (staff
-    // scoping, e.g. the Collection Officer) and by the /collection routes'
-    // act-as-parent resolution. `user` is the full row from findById, so this
-    // is free.
+    // parentProviderId + permissions ride along for AdminPermissionsGuard
+    // (restricted sub-admin routes) and PermissionsGuard (staff scoping, e.g.
+    // the Collection Officer + /collection act-as-parent resolution). They
+    // come from the user row loaded above, so they're DB-fresh on every
+    // request — permission edits and revocations apply immediately, no token
+    // refresh needed.
     return {
       id: user.id,
       email: payload.email,

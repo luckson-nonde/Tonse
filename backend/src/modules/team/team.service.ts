@@ -12,6 +12,7 @@ import { User } from '../users/entities/user.entity';
 import { UserEmail } from '../users/entities/user-email.entity';
 import { UsersService } from '../users/users.service';
 import { UserDisplayIdUtil } from '../../utils/user-display-id.util';
+import { generatePassword } from '../../utils/generate-password.util';
 import { CreateTeamMemberDto } from './dto/create-team-member.dto';
 import { UpdateTeamMemberDto } from './dto/update-team-member.dto';
 import { AuditService } from '../audit/audit.service';
@@ -62,7 +63,7 @@ export class TeamService {
       throw new ConflictException(`Email ${dto.email} is already registered`);
     }
 
-    const plainPassword = dto.password || this.generatePassword();
+    const plainPassword = dto.password || generatePassword();
     const generated = !dto.password;
     const passwordHash = await bcrypt.hash(plainPassword, 10);
 
@@ -276,15 +277,5 @@ export class TeamService {
       `team.remove: parent=${parentProvider.id} removed staff=${staffId}`,
     );
     return { success: true };
-  }
-
-  private generatePassword(): string {
-    const chars =
-      'ABCDEFGHIJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-    let pwd = '';
-    for (let i = 0; i < 12; i++) {
-      pwd += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return pwd;
   }
 }

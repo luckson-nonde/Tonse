@@ -101,6 +101,10 @@ export default function Register() {
     const categoryIdsParam =
       searchParams.get('categoryIds') || searchParams.get('categories');
     const initialCategories = categoryIdsParam ? categoryIdsParam.split(',') : [];
+    // Promoter referral attribution — carried from the shared link through
+    // RoleSelection. Persisted in the draft so a mid-wizard refresh (which
+    // keeps the URL, but belt-and-braces) can't lose it.
+    const initialReferralCode = searchParams.get('ref') || undefined;
 
     // ── Persistent onboarding draft ──────────────────────────────────
     // The whole wizard reads/writes ONE localStorage-backed draft, so it
@@ -111,6 +115,7 @@ export default function Register() {
       role,
       subRole,
       categoryIds: initialCategories,
+      referralCode: initialReferralCode,
     });
 
     // Same-named accessors + setters so the JSX below reads like plain
@@ -454,7 +459,8 @@ export default function Register() {
             logo,
             dob,
             extraProfile,
-            nrcDocumentPayload
+            nrcDocumentPayload,
+            draft.referralCode
           );
         }
 

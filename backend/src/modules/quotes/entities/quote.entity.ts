@@ -140,6 +140,20 @@ export class Quote {
   @Column({ type: 'uuid', nullable: true })
   parentQuoteId: string;
 
+  /**
+   * Overflow-reserve tier. The first `inquiry.maxQuotes` quotes land as
+   * PRIMARY (visible to the buyer immediately); the next `maxQuotes` land
+   * as RESERVE — captured but hidden until the buyer releases them
+   * (explicitly, or automatically when every PRIMARY quote is rejected).
+   * Past PRIMARY + RESERVE capacity, quote creation 409s.
+   */
+  @Column({
+    type: 'enum',
+    enum: ['PRIMARY', 'RESERVE'],
+    default: 'PRIMARY',
+  })
+  slotTier: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

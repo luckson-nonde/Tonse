@@ -3,6 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Opt out of Chrome/OEM "auto dark" web-content darkening. The design is
+         light-only (cream/gold/navy); forced inversion on budget Android GPUs
+         (Tecno/Infinix HiOS + Mali) mis-rasterizes into black boxes and smeared
+         text — the Choose-Specialty corruption. "only light" is the standard
+         signal that auto-darkening must leave this document alone. -->
+    <meta name="color-scheme" content="only light" />
     <title>TONSE Marketplace</title>
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

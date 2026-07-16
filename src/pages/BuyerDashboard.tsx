@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'motion/react';
 import { Store, X } from 'lucide-react';
+import PageTransition from '../components/PageTransition';
 import { useAuth } from '../AuthContext';
 import { useDashboard } from '../DashboardContext';
 import {
@@ -11,7 +11,9 @@ import {
   type CreateInquiryPayload,
 } from '../services/api/inquiryService';
 import { useUserInquiries, notifyInquiriesChanged } from '../hooks/useInquiries';
-import { useUserQuotes } from '../hooks/useQuotes';
+import { useUserQuotes, notifyQuotesChanged } from '../hooks/useQuotes';
+import { useNotificationStream } from '../hooks/useNotificationStream';
+import { releaseReserveQuotes } from '../services/api/notificationService';
 import { markQuoteAsRead, archiveQuote, deleteQuote, updateQuoteStatus } from '../services/api/quoteService';
 import { createOrder, fetchBuyerOrders, type OrderRecord } from '../services/api/orderService';
 import { isActiveInquiry, isActiveQuote } from '../services/lifecycleFilters';
@@ -33,6 +35,7 @@ import { getLabourInquirySchema } from '../services/labourSchemaRegistry';
 import FinancialPage from './FinancialPage';
 import BrowseShopsView from '../components/BrowseShopsView';
 import ShopProfileView from '../components/ShopProfileView';
+import RateShopModal from '../components/RateShopModal';
 import type { ShopResult } from '../services/api/shopService';
 
 export default function BuyerDashboard() {
@@ -84,6 +87,23 @@ export default function BuyerDashboard() {
   // Fetch quotes from PostgreSQL backend (NO IndexedDB)
   const { quotes, loading: quotesLoading, refresh: refreshQuotes } = useUserQuotes(user?.id);
 
+  // ── Live dispatch stream (buyer side) ────────────────────────────────
+  // quote_received / reserve-release → instant refetch via the event buses
+  // (which also resync DashboardLayout's badge counters); provider_accepted
+  // ticks the "X providers accepted" chip by refetching the hydrated
+  // inquiry rows. The 30s polls remain the degraded fallback.
+  useNotificationStream(user?.id, {
+    onQuoteReceived: () => {
+      notifyQuotesChanged();
+      notifyInquiriesChanged();
+    },
+    onProviderAccepted: () => notifyInquiriesChanged(),
+    onReconnect: () => {
+      notifyQuotesChanged();
+      notifyInquiriesChanged();
+    },
+  });
+
   const [backendOrders, setBackendOrders] = useState<OrderRecord[]>([]);
   const [ordersRefreshKey, setOrdersRefreshKey] = useState(0);
   const refreshOrders = () => setOrdersRefreshKey((k) => k + 1);
@@ -96,6 +116,17 @@ export default function BuyerDashboard() {
       .catch(() => { if (!cancelled) setBackendOrders([]); });
     return () => { cancelled = true; };
   }, [user?.id, ordersRefreshKey]);
+
+  // Orders this buyer has already rated this session — flips the order
+  // card's "Rate this shop" button into a quiet "Rated" state without a
+  // refetch. (The server enforces one-review-per-order regardless.)
+  const [ratedOrderIds, setRatedOrderIds] = useState<Set<string>>(new Set());
+  // Target of the rate-shop modal; sellerId is the provider's users.id.
+  const [ratingTarget, setRatingTarget] = useState<{
+    sellerId: string;
+    sellerName?: string;
+    orderId: string;
+  } | null>(null);
 
   // Order History list: every backend Order, hydrated with its quote +
   // inquiry data so InquiryCard renders correctly. Falls back to the
@@ -118,9 +149,13 @@ export default function BuyerDashboard() {
         },
         orderId: o.id,
         orderStatus: o.status,
+        // Rate-this-shop target: the seller's users.id + display name.
+        sellerId: o.sellerId,
+        sellerName: o.seller?.businessName || o.seller?.fullName,
+        alreadyRated: ratedOrderIds.has(o.id),
       };
     });
-  }, [backendOrders, quotes, inquiries]);
+  }, [backendOrders, quotes, inquiries, ratedOrderIds]);
 
 
   // TODO: Transactions endpoint not yet implemented on backend
@@ -335,6 +370,15 @@ export default function BuyerDashboard() {
         // doesn't keep popping the modal.
         setAutoPayQuoteId(null);
         break;
+      case 'rate_shop':
+        if (payload?.sellerId && payload?.orderId) {
+          setRatingTarget({
+            sellerId: payload.sellerId,
+            sellerName: payload.sellerName,
+            orderId: payload.orderId,
+          });
+        }
+        break;
       case 'view_order':
         if (payload?.id) {
           setSelectedOrderId(payload.id);
@@ -350,6 +394,22 @@ export default function BuyerDashboard() {
             refreshQuotes();
           } catch (error) {
             console.error('Failed to archive quote:', error);
+          }
+        }
+        break;
+      case 'release_reserve':
+        // "Didn't find what I needed in the first batch" — surface the
+        // reserved (overflow) quotes. Reserve providers get notified their
+        // quote is now in play; the quotes list refreshes with the batch.
+        if (payload?.id) {
+          try {
+            await releaseReserveQuotes(String(payload.id));
+            notifyQuotesChanged();
+            notifyInquiriesChanged();
+            refreshQuotes();
+            refreshInquiries();
+          } catch (error: any) {
+            alert(error?.message || 'Failed to release reserved quotes.');
           }
         }
         break;
@@ -608,6 +668,14 @@ export default function BuyerDashboard() {
         ...(pendingInquiry.targetedShop && {
           targetedProviderId: pendingInquiry.targetedShop.sellerId,
         }),
+        // Labour / machinery-hire context — matching rides categoryIds,
+        // but the lead's identity (labour vs equipment hire) drives the
+        // provider-side card copy and the quote-form template (HIRE).
+        ...(isLabour && {
+          isLabour: true,
+          labourGroup: pendingInquiry.labourGroup,
+          labourSubType: pendingInquiry.categoryId,
+        }),
       };
 
       await createInquiry(inquiryData);
@@ -667,7 +735,17 @@ export default function BuyerDashboard() {
         let schema: any[] = [];
         if (isLabour) {
           const labourSchema = getLabourInquirySchema(pendingInquiry.inquirySchemaKey || 'generic');
-          schema = labourSchema?.fields || [];
+          // LabourInquiryField keys its fields `id`; DynamicInquiryForm
+          // renders by `name` and SKIPS nameless fields — without this
+          // adapter every labour/machinery form rendered empty.
+          schema = (labourSchema?.fields || []).map((f) => ({
+            name: f.id,
+            label: f.label,
+            type: f.type,
+            required: f.required,
+            placeholder: f.placeholder,
+            options: f.options,
+          }));
         } else {
           // pendingInquiry.categories[0] is the stable category ID
           // (e.g. 'mobile-phones-repair'), not the display name. The
@@ -856,34 +934,37 @@ export default function BuyerDashboard() {
           }}
           onCancel={() => setQuoteToDelete(null)}
         />
-        <AnimatePresence mode="wait">
-          {isFlowTab ? (
-            <motion.div
-              key="flow"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-            >
-              {renderInquiryFlow()}
-            </motion.div>
-          ) : (
-            <DynamicAccountRenderer
-              key={activeTab}
-              schema={MASTER_BUYER_ACCOUNT_SCHEMA}
-              view={
-                activeTab === 'home'
-                  ? 'dashboard'
-                  : activeTab === 'inquiries' && selectedInquiryId
-                    ? 'inquiry_details'
-                    : activeTab
-              }
-              data={dashboardData}
-              onAction={handleAction}
-              onNavigate={handleTabChange}
-              user={user}
-            />
-          )}
-        </AnimatePresence>
+        {isFlowTab ? (
+          <PageTransition transitionKey="flow">{renderInquiryFlow()}</PageTransition>
+        ) : (
+          <DynamicAccountRenderer
+            key={activeTab}
+            schema={MASTER_BUYER_ACCOUNT_SCHEMA}
+            view={
+              activeTab === 'home'
+                ? 'dashboard'
+                : activeTab === 'inquiries' && selectedInquiryId
+                  ? 'inquiry_details'
+                  : activeTab
+            }
+            data={dashboardData}
+            onAction={handleAction}
+            onNavigate={handleTabChange}
+            user={user}
+          />
+        )}
+
+        {ratingTarget && (
+          <RateShopModal
+            sellerUserId={ratingTarget.sellerId}
+            sellerName={ratingTarget.sellerName}
+            orderId={ratingTarget.orderId}
+            onSubmitted={() =>
+              setRatedOrderIds((prev) => new Set(prev).add(ratingTarget.orderId))
+            }
+            onClose={() => setRatingTarget(null)}
+          />
+        )}
       </div>
     </DashboardLayout>
   );

@@ -2,6 +2,12 @@ import { resolveSchemaForUser } from '../services/mergeAccountSchemas';
 import { NavigationItem } from '../services/accountSchemaTypes';
 import { useActiveProfileContext } from '../hooks/useActiveProfileContext';
 import {
+  fetchMyNotifications,
+  fetchUnreadNotificationCount,
+  markAllNotificationsRead,
+  type NotificationRecord,
+} from '../services/api/notificationService';
+import {
   Menu,
   Bell,
   Home,
@@ -29,6 +35,7 @@ import {
 } from 'lucide-react';
 import Logo from './Logo';
 import ConfirmModal from './ConfirmModal';
+import BuyerVerificationBanner from './BuyerVerificationBanner';
 import DashboardCalendar, { CalendarTone, CounterCard } from './DashboardCalendar';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useDashboard } from '../DashboardContext';
@@ -41,7 +48,7 @@ import {
   BusinessType,
 } from '../services/categories';
 import { useAuth } from '../AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useUserInquiries, useMatchedLeads } from '../hooks/useInquiries';
 import { useUserQuotes } from '../hooks/useQuotes';
@@ -270,11 +277,29 @@ export default function DashboardLayout({
   const navigate = useNavigate();
   const { activeTab: internalActiveTab, setActiveTab } = useDashboard();
   const activeTab = externalActiveTab ?? internalActiveTab;
+
+  // <main> is the scroll container and this layout is REUSED across sibling
+  // routes (React Router keeps same-typed elements mounted), so scrollTop
+  // survives view changes — a new view entering mid-scroll clamps/jumps.
+  // Every view change starts at the top, like a real page navigation.
+  const mainRef = React.useRef<HTMLElement>(null);
+  const { pathname } = useLocation();
+  React.useEffect(() => {
+    mainRef.current?.scrollTo(0, 0);
+  }, [pathname, activeTab]);
+
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+
+  // ── Real notifications (Uber-dispatch Tier-1 rows) ───────────────────
+  // Unread badge polls lightly (~30s; deliberately not a second SSE
+  // stream); the list itself loads when the panel opens. "Mark all read"
+  // zeroes the badge server-side + locally.
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifItems, setNotifItems] = useState<NotificationRecord[]>([]);
 
   const [notificationCounts, setNotificationCounts] = useState<{
     inquiries: number;
@@ -293,6 +318,37 @@ export default function DashboardLayout({
   useEffect(() => {
     setNotificationCounts((prev) => ({ ...prev, inquiries: 0, quotes: 0 }));
   }, [user]);
+
+  // Unread-notification badge poll (light; SSE handles the loud alerts).
+  useEffect(() => {
+    if (!user?.id) {
+      setUnreadCount(0);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      const count = await fetchUnreadNotificationCount();
+      if (!cancelled) setUnreadCount(count);
+    };
+    load();
+    const interval = setInterval(load, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [user?.id]);
+
+  // Panel contents load on open (fresh every time — cheap, bounded list).
+  useEffect(() => {
+    if (!isNotificationPanelOpen || !user?.id) return;
+    let cancelled = false;
+    fetchMyNotifications(30).then((rows) => {
+      if (!cancelled) setNotifItems(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isNotificationPanelOpen, user?.id]);
 
   // Sidebar notification badges. Counts are TOTALS per surface — not
   // lifecycle-filtered — so when an inquiry advances OPEN → QUOTED → PAID
@@ -634,9 +690,10 @@ export default function DashboardLayout({
       case 'inquiries':
         return 'MY INQUIRIES';
       case 'create-inquiry':
-        // Neutral — this step serves every category (loans, products, services,
-        // events). The form itself shows the specific category header.
-        return 'REQUEST DETAILS';
+        // Category-neutral: this tab hosts every request type (goods,
+        // services, labour trades, machinery hire, loans) — the form itself
+        // shows the specific category header.
+        return 'NEW REQUEST';
       case 'inquiry-items':
         return 'ITEM LIST';
       case 'category-selection':
@@ -1067,7 +1124,11 @@ export default function DashboardLayout({
                     className="w-10 h-10 bg-transparent flex items-center justify-center text-brand-dark hover:bg-slate-50 transition-colors relative rounded-full"
                   >
                     <Bell className="w-4.5 h-4.5 stroke-[1.8]" />
-                    <span className="absolute top-2.75 right-2.75 w-1.5 h-1.5 bg-[#C9973A] rounded-full"></span>
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 min-w-4.5 h-4.5 px-1 bg-brand-error text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1076,7 +1137,11 @@ export default function DashboardLayout({
         )}
 
         <div className="flex flex-1 overflow-hidden">
-          <main className="flex-1 px-4 sm:px-5 pt-4 sm:pt-6 pb-24 md:pb-8 relative overflow-x-hidden overflow-y-auto">
+          <main
+            ref={mainRef}
+            className="flex-1 px-4 sm:px-5 pt-4 sm:pt-6 pb-24 md:pb-8 relative overflow-x-hidden overflow-y-auto"
+          >
+            <BuyerVerificationBanner />
             {children}
           </main>
 
@@ -1324,78 +1389,88 @@ export default function DashboardLayout({
                     <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                       Recent
                     </span>
-                    <button className="text-[11px] font-bold text-[#C9973A] uppercase tracking-wider hover:underline">
+                    <button
+                      onClick={() => {
+                        markAllNotificationsRead();
+                        setUnreadCount(0);
+                        setNotifItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
+                      }}
+                      className="text-[11px] font-bold text-[#C9973A] uppercase tracking-wider hover:underline"
+                    >
                       Mark all read
                     </button>
                   </div>
 
-                  {/* Notification Items */}
-                  <div className="p-4 rounded-2xl bg-brand-white border border-[#C9973A]/10 hover:border-[#C9973A]/30 transition-all cursor-pointer group">
-                    <div className="flex gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-[#C9973A]/10 flex items-center justify-center shrink-0 text-xl">
-                        💬
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start mb-1">
-                          <p className="text-sm font-bold text-brand-dark">New Quote Received</p>
-                          <span className="text-[10px] font-bold text-[#C9973A]">2m</span>
-                        </div>
-                        <p className="text-xs text-[#64748b] leading-relaxed">
-                          SolarTech Zambia sent a quote for your "50 Solar Panels" inquiry.
-                        </p>
-                        <div className="mt-3 flex items-center gap-2">
-                          <button className="text-[10px] font-bold text-[#C9973A] uppercase tracking-wider px-3 py-1.5 bg-white border border-[#C9973A]/20 rounded-lg hover:bg-[#C9973A] hover:text-white transition-all">
-                            View Quote
-                          </button>
-                        </div>
-                      </div>
+                  {/* Real Tier-1 notification rows (NEW_LEAD / QUOTE_RECEIVED /
+                      RESERVE_RELEASED), newest first. */}
+                  {notifItems.length === 0 && (
+                    <div className="p-8 text-center text-sm text-slate-400 font-medium">
+                      No notifications yet — new requests and quotes land here.
                     </div>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-white border border-slate-100 hover:border-[#C9973A]/20 transition-all cursor-pointer group">
-                    <div className="flex gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center shrink-0 text-xl">
-                        ⏳
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start mb-1">
-                          <p className="text-sm font-bold text-brand-dark">Inquiry Expiring Soon</p>
-                          <span className="text-[10px] font-bold text-slate-400">1h</span>
+                  )}
+                  {notifItems.map((n) => {
+                    const icon =
+                      n.type === 'NEW_LEAD' ? '📣' : n.type === 'RESERVE_RELEASED' ? '✅' : '💬';
+                    const heading =
+                      n.type === 'NEW_LEAD'
+                        ? 'New Request'
+                        : n.type === 'RESERVE_RELEASED'
+                          ? 'Reserve Quote Released'
+                          : 'Quote Received';
+                    const ageMs = Date.now() - new Date(n.createdAt).getTime();
+                    const age =
+                      ageMs < 60_000
+                        ? 'now'
+                        : ageMs < 3_600_000
+                          ? `${Math.floor(ageMs / 60_000)}m`
+                          : ageMs < 86_400_000
+                            ? `${Math.floor(ageMs / 3_600_000)}h`
+                            : `${Math.floor(ageMs / 86_400_000)}d`;
+                    return (
+                      <div
+                        key={n.id}
+                        className={`p-4 rounded-2xl transition-all group ${
+                          n.isRead
+                            ? 'bg-white border border-slate-100 hover:border-[#C9973A]/20'
+                            : 'bg-brand-white border border-[#C9973A]/10 hover:border-[#C9973A]/30'
+                        }`}
+                      >
+                        <div className="flex gap-4">
+                          <div
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-xl ${
+                              n.isRead ? 'bg-slate-50' : 'bg-[#C9973A]/10'
+                            }`}
+                          >
+                            {icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-start mb-1 gap-2">
+                              <p className="text-sm font-bold text-brand-dark">{heading}</p>
+                              <span
+                                className={`text-[10px] font-bold shrink-0 ${
+                                  n.isRead ? 'text-slate-400' : 'text-[#C9973A]'
+                                }`}
+                              >
+                                {age}
+                              </span>
+                            </div>
+                            <p className="text-xs text-[#64748b] leading-relaxed break-words">
+                              {n.title}
+                            </p>
+                            {n.type === 'NEW_LEAD' && n.status !== 'PENDING' && (
+                              <p
+                                className={`mt-1.5 text-[10px] font-bold uppercase tracking-wider ${
+                                  n.status === 'ACKNOWLEDGED' ? 'text-emerald-600' : 'text-slate-400'
+                                }`}
+                              >
+                                {n.status === 'ACKNOWLEDGED' ? 'Accepted' : 'Declined'}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-xs text-[#64748b] leading-relaxed">
-                          Your inquiry for "Office Laptops" expires in 24 hours.
-                        </p>
-                        <div className="mt-3 flex items-center gap-2">
-                          <button className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg hover:bg-slate-100 transition-all">
-                            Extend
-                          </button>
-                        </div>
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-white border border-slate-100 hover:border-[#C9973A]/20 transition-all cursor-pointer group">
-                    <div className="flex gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center shrink-0 text-xl">
-                        📦
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start mb-1">
-                          <p className="text-sm font-bold text-brand-dark">Order Dispatched</p>
-                          <span className="text-[10px] font-bold text-slate-400">3h</span>
-                        </div>
-                        <p className="text-xs text-[#64748b] leading-relaxed">
-                          Your order #ORD-7721 has been dispatched by the supplier.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-6 border-t border-slate-100 bg-brand-white">
-                  <button className="w-full py-4 bg-brand-dark text-white rounded-2xl font-bold text-sm hover:bg-brand-navy-dark transition-all shadow-lg shadow-slate-200 uppercase tracking-widest">
-                    View All Activity
-                  </button>
+                    );
+                  })}
                 </div>
               </motion.div>
             </>

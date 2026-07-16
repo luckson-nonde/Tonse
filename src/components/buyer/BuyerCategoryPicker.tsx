@@ -2,17 +2,42 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CATEGORIES_DB, type Category } from '../../services/categories';
 import { useCategoryAvailability } from '../../services/categories/availability';
+import { LABOUR_CATEGORIES } from '../../services/labourCategories';
 import MasterCategoryScreen from './MasterCategoryScreen';
 import SubcategoryScreen from './SubcategoryScreen';
 import { useLayoutPreference } from './useLayoutPreference';
 
+/**
+ * Labour / machinery-hire selection payload — mirrors the shape
+ * CategorySelection.handleLabourSubTypeSelect used to emit, which
+ * BuyerDashboard.handleInquiryComplete already understands (its
+ * `selectedCategories.isLabour` branch). Carrying `inquirySchemaKey`
+ * is what routes the create-inquiry step to the per-trade (or
+ * machinery-hire) form instead of a catalog schema.
+ */
+export interface LabourSelection {
+  isLabour: true;
+  labourGroup: string;
+  category: string;
+  categoryId: string;
+  inquirySchemaKey: string;
+}
+
+// Synthetic masters injected next to the CATEGORIES_DB roots: buyers hire
+// PEOPLE (labour trades) and EQUIPMENT (machinery) through the same picker
+// they buy goods/services in. Ids match the backend `categories` rows
+// (seeded from labourCategories.ts), so admin category-control applies.
+const SYNTHETIC_MASTERS: Category[] = [
+  { id: 'labour', name: 'Labour & Skills', parentId: null } as Category,
+  { id: 'machinery-hire', name: 'Heavy Machinery for Hire', parentId: null } as Category,
+];
+
 interface Props {
-  /** Called when the buyer picks a subcategory. Payload matches the
-   *  existing CategorySelection contract: an array of category IDs that
-   *  BuyerDashboard.handleInquiryComplete writes into
-   *  pendingInquiry.categories. Single-select drill-down — picking a sub
-   *  immediately advances the parent flow to the next step. */
-  onComplete: (selectedCategoryIds: string[]) => void;
+  /** Called when the buyer picks a subcategory. Catalog picks emit an
+   *  array of category IDs (the existing CategorySelection contract);
+   *  labour/machinery picks emit a LabourSelection object. Both shapes
+   *  land in BuyerDashboard.handleInquiryComplete unchanged. */
+  onComplete: (selection: string[] | LabourSelection) => void;
   onBack: () => void;
   /** Targeted-shop flow: skip the master grid, mount directly on the
    *  subcategory screen for this master and hide the back-to-master
@@ -27,7 +52,10 @@ export default function BuyerCategoryPicker({ onComplete, onBack, preselectedPar
   // Admin category control: hide any master/subcategory switched off (a sub
   // whose parent is off is also effectively unavailable).
   const masters = useMemo(
-    () => CATEGORIES_DB.filter((c) => c.parentId === null && isAvailable(c.id)),
+    () => [
+      ...CATEGORIES_DB.filter((c) => c.parentId === null && isAvailable(c.id)),
+      ...SYNTHETIC_MASTERS.filter((m) => isAvailable(m.id)),
+    ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [disabledIds],
   );
@@ -35,6 +63,18 @@ export default function BuyerCategoryPicker({ onComplete, onBack, preselectedPar
     const map: Record<string, Category[]> = {};
     for (const c of CATEGORIES_DB) {
       if (c.parentId && isAvailable(c.id)) (map[c.parentId] ||= []).push(c);
+    }
+    // Labour trades + machinery equipment as Category-shaped subs of the
+    // synthetic masters. Trades keep their taxonomy order; each id also
+    // exists in the backend categories table, so availability applies.
+    for (const entry of LABOUR_CATEGORIES) {
+      const masterId = entry.category === 'MACHINERY_HIRE' ? 'machinery-hire' : 'labour';
+      if (!isAvailable(entry.id)) continue;
+      (map[masterId] ||= []).push({
+        id: entry.id,
+        name: entry.label,
+        parentId: masterId,
+      } as Category);
     }
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -63,6 +103,22 @@ export default function BuyerCategoryPicker({ onComplete, onBack, preselectedPar
   }, [preselectedParentId, masters]);
 
   const pickSub = (sub: Category) => {
+    // Labour / machinery picks carry their full context (group, schema
+    // key) so the create-inquiry step renders the right form — the
+    // per-trade labour schema or the machinery-hire schema.
+    if (sub.parentId === 'labour' || sub.parentId === 'machinery-hire') {
+      const entry = LABOUR_CATEGORIES.find((c) => c.id === sub.id);
+      if (entry) {
+        onComplete({
+          isLabour: true,
+          labourGroup: entry.category,
+          category: entry.label,
+          categoryId: entry.id,
+          inquirySchemaKey: entry.inquirySchemaKey,
+        });
+        return;
+      }
+    }
     onComplete([sub.id]);
   };
 

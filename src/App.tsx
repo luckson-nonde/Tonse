@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { MotionConfig } from 'motion/react';
 import { AuthProvider, useAuth } from './AuthContext';
+import { useLiteMotion } from './hooks/useLiteMotion';
 import { DashboardProvider } from './DashboardContext';
 import { CategoryAvailabilityProvider } from './services/categories/availability';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import PageTransition from './components/PageTransition';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
 import RoleSelection from './pages/RoleSelection';
 import Register from './pages/Register';
 import LabourRegister from './pages/LabourRegister';
+import PromoterSignup from './pages/PromoterSignup';
+import PromoterDashboard from './pages/PromoterDashboard';
 // Phase 2: LabourDashboard import removed — /labour/* now redirects to /provider.
 import BusinessVerification from './pages/BusinessVerification';
 import SellerCategorySelection from './pages/SellerCategorySelection';
@@ -95,6 +100,7 @@ function RootRedirect() {
   if (!user) return <Navigate to="/login" replace />;
   if (user.mustChangePassword) return <Navigate to="/force-password-change" replace />;
   if (user.role === 'ADMIN') return <Navigate to="/admin" replace />;
+  if (user.role === 'PROMOTER') return <Navigate to="/promoter" replace />;
   if (user.role === 'BUYER') return <Navigate to="/buyer" replace />;
   // Phase 2: SERVICE_PROVIDER (incl. former LABOUR users) and SELLER (incl.
   // former EVENTS / ENTERTAINMENT / SUPPLIER) all land on the unified
@@ -104,30 +110,61 @@ function RootRedirect() {
 }
 
 export default function App() {
+  // Touch devices get instant (non-transform) animations app-wide: budget
+  // Android GPUs ghost stale raster tiles under framer-motion's composited
+  // transforms. See src/hooks/useLiteMotion.ts for the full rationale.
+  // Elsewhere 'user' defers to the OS prefers-reduced-motion setting. Note
+  // this only strips positional/transform keys, never opacity — full
+  // disabling of the page transitions is handled inside PageTransition.
+  const lite = useLiteMotion();
   return (
     <ErrorBoundary>
       <AuthProvider>
         <ErrorBoundary>
         <DashboardProvider>
           <CategoryAvailabilityProvider>
+          <MotionConfig reducedMotion={lite ? 'always' : 'user'}>
           <Router>
             <Routes>
-              <Route path="/onboarding" element={<Onboarding />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/role-selection" element={<RoleSelection />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/register/labour" element={<LabourRegister />} />
-              <Route path="/register/company-documents" element={<CompanyDocuments />} />
-              <Route path="/business-verification" element={<BusinessVerification />} />
-              <Route path="/seller/categories" element={<SellerCategorySelection />} />
-              <Route path="/seller/location" element={<SellerLocationDetails />} />
-              <Route path="/store-verification" element={<StoreVerification />} />
-              <Route path="/verification-pending" element={<VerificationPending />} />
+              {/* Every route's PageTransition carries a unique static
+                  transitionKey: React Router reuses same-typed elements
+                  across sibling routes (no keying), so without it the
+                  motion.div never remounts and no enter animation plays. */}
+              <Route path="/onboarding" element={<PageTransition transitionKey="onboarding"><Onboarding /></PageTransition>} />
+              <Route path="/login" element={<PageTransition transitionKey="login"><Login /></PageTransition>} />
+              <Route path="/role-selection" element={<PageTransition transitionKey="role-selection"><RoleSelection /></PageTransition>} />
+              <Route path="/register" element={<PageTransition transitionKey="register"><Register /></PageTransition>} />
+              <Route path="/register/labour" element={<PageTransition transitionKey="register-labour"><LabourRegister /></PageTransition>} />
+              {/* Promoter programme. /promote is deliberately UNLISTED — it
+                  appears in no nav, sitemap, or link; the URL travels
+                  privately to NDA'd artists (the invite key is the real
+                  gate, validated server-side). */}
+              <Route path="/promote" element={<PageTransition transitionKey="promote"><PromoterSignup /></PageTransition>} />
+              <Route path="/promoter" element={<Navigate to="/promoter/dashboard" replace />} />
+              <Route
+                path="/promoter/:tab"
+                element={
+                  <ProtectedRoute allowedRoles={['PROMOTER']}>
+                    {/* Tab switches animate inside the shell (same reasoning as
+                        /admin/:tab) — PageTransition would remount the whole
+                        sidebar on every tab click. */}
+                    <PromoterDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/register/company-documents" element={<PageTransition transitionKey="company-documents"><CompanyDocuments /></PageTransition>} />
+              <Route path="/business-verification" element={<PageTransition transitionKey="business-verification"><BusinessVerification /></PageTransition>} />
+              <Route path="/seller/categories" element={<PageTransition transitionKey="seller-categories"><SellerCategorySelection /></PageTransition>} />
+              <Route path="/seller/location" element={<PageTransition transitionKey="seller-location"><SellerLocationDetails /></PageTransition>} />
+              <Route path="/store-verification" element={<PageTransition transitionKey="store-verification"><StoreVerification /></PageTransition>} />
+              <Route path="/verification-pending" element={<PageTransition transitionKey="verification-pending"><VerificationPending /></PageTransition>} />
               <Route
                 path="/force-password-change"
                 element={
                   <ProtectedRoute>
-                    <ForcePasswordChange />
+                    <PageTransition transitionKey="force-password-change">
+                      <ForcePasswordChange />
+                    </PageTransition>
                   </ProtectedRoute>
                 }
               />
@@ -153,7 +190,9 @@ export default function App() {
                 path="/buyer/quote-details"
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
-                    <QuoteDetailsPage />
+                    <PageTransition transitionKey="quote-details">
+                      <QuoteDetailsPage />
+                    </PageTransition>
                   </ProtectedRoute>
                 }
               />
@@ -161,7 +200,9 @@ export default function App() {
                 path="/buyer/collection-code/:id"
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
-                    <CollectionCodePage />
+                    <PageTransition transitionKey="collection-code">
+                      <CollectionCodePage />
+                    </PageTransition>
                   </ProtectedRoute>
                 }
               />
@@ -169,7 +210,9 @@ export default function App() {
                 path="/buyer/payment"
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
-                    <PaymentPage />
+                    <PageTransition transitionKey="payment">
+                      <PaymentPage />
+                    </PageTransition>
                   </ProtectedRoute>
                 }
               />
@@ -177,7 +220,9 @@ export default function App() {
                 path="/buyer/payment-success"
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
-                    <PaymentSuccessPage />
+                    <PageTransition transitionKey="payment-success">
+                      <PaymentSuccessPage />
+                    </PageTransition>
                   </ProtectedRoute>
                 }
               />
@@ -186,7 +231,9 @@ export default function App() {
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
                     <DashboardLayout>
-                      <ArchivedQuotesPage />
+                      <PageTransition transitionKey="buyer-archived">
+                        <ArchivedQuotesPage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -196,7 +243,9 @@ export default function App() {
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
                     <DashboardLayout>
-                      <ShopDetailsPage />
+                      <PageTransition transitionKey="shop-details">
+                        <ShopDetailsPage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -206,7 +255,9 @@ export default function App() {
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
                     <DashboardLayout>
-                      <ShopProductsPage />
+                      <PageTransition transitionKey="shop-products">
+                        <ShopProductsPage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -216,7 +267,9 @@ export default function App() {
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
                     <DashboardLayout>
-                      <SuppliersPage />
+                      <PageTransition transitionKey="buyer-suppliers">
+                        <SuppliersPage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -226,7 +279,9 @@ export default function App() {
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
                     <DashboardLayout>
-                      <BuyerProfilePage />
+                      <PageTransition transitionKey="buyer-profile">
+                        <BuyerProfilePage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -236,7 +291,9 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <DashboardLayout>
-                      <SchedulePage />
+                      <PageTransition transitionKey="schedule">
+                        <SchedulePage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -256,6 +313,11 @@ export default function App() {
                     ]}
                   >
                     <DashboardLayout>
+                      {/* No PageTransition here on purpose: every provider
+                          view funnels through DynamicAccountRenderer, whose
+                          own wrapper animates on mount and per tab switch —
+                          and /provider/:tab must keep ProviderDashboard
+                          mounted across tab param changes. */}
                       <ProviderDashboard />
                     </DashboardLayout>
                   </ProtectedRoute>
@@ -275,7 +337,9 @@ export default function App() {
                     ]}
                   >
                     <DashboardLayout>
-                      <SuppliersPage />
+                      <PageTransition transitionKey="provider-suppliers">
+                        <SuppliersPage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -295,7 +359,9 @@ export default function App() {
                     ]}
                   >
                     <DashboardLayout>
-                      <ShopProfilePage />
+                      <PageTransition transitionKey="provider-profile">
+                        <ShopProfilePage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -309,7 +375,9 @@ export default function App() {
                   // does the per-business filtering downstream.
                   <ProtectedRoute allowedRoles={['SELLER']}>
                     <DashboardLayout>
-                      <VenueSpacesManager />
+                      <PageTransition transitionKey="venue-spaces">
+                        <VenueSpacesManager />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -328,7 +396,9 @@ export default function App() {
                     ]}
                   >
                     <DashboardLayout>
-                      <AuditTrailPage />
+                      <PageTransition transitionKey="audit-trail">
+                        <AuditTrailPage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -347,7 +417,9 @@ export default function App() {
                     ]}
                   >
                     <DashboardLayout>
-                      <ArchivedLeadsPage />
+                      <PageTransition transitionKey="archived-leads">
+                        <ArchivedLeadsPage />
+                      </PageTransition>
                     </DashboardLayout>
                   </ProtectedRoute>
                 }
@@ -368,6 +440,7 @@ export default function App() {
               />
             </Routes>
           </Router>
+          </MotionConfig>
           </CategoryAvailabilityProvider>
         </DashboardProvider>
         </ErrorBoundary>

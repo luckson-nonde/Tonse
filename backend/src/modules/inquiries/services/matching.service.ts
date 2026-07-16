@@ -61,6 +61,9 @@ export class MatchingService {
   async findLeadsForProfile(
     selector: ProfileSelector,
     filters: LeadsFilters = {},
+    /** When provided, each lead is hydrated with the caller's NEW_LEAD
+     *  dispatch-notification id + Accept/Decline status. */
+    callerUserId?: string,
   ): Promise<{ data: Inquiry[]; total: number; matchedCategoryIds: string[] }> {
     const junctionTable =
       selector.type === 'SELLER'
@@ -251,46 +254,87 @@ export class MatchingService {
         row.category = (nameIndex.get(row.id) || []).join(', ');
       }
 
-      // Per-inquiry quote count — drives the "X / Y slots remaining"
-      // indicator on the lead card and stops the new-lead alert from
-      // firing once the slot is full. Single batched COUNT(*).
-      const quoteRows: Array<{ inquiryId: string; count: string }> =
+      // Per-inquiry quote counts split by slot tier — `quoteCount` keeps its
+      // original meaning (PRIMARY quotes; drives the "X / Y slots" UI) and
+      // `reserveCount` powers the overflow-reserve UX ("Quote (reserve N/Y)")
+      // once the primary batch is full. Single batched query.
+      const quoteRows: Array<{ inquiryId: string; primary: number; reserve: number }> =
         await this.inquiryRepository.query(
-          `SELECT "inquiryId", COUNT(*)::int AS count
+          `SELECT "inquiryId",
+                  COUNT(*) FILTER (WHERE "slotTier" = 'PRIMARY')::int AS primary,
+                  COUNT(*) FILTER (WHERE "slotTier" = 'RESERVE')::int AS reserve
              FROM quotes
              WHERE "inquiryId" = ANY($1::uuid[])
              GROUP BY "inquiryId"`,
           [inquiryIds],
         );
-      const quoteCountByInquiry = new Map<string, number>();
+      const quoteCountByInquiry = new Map<string, { primary: number; reserve: number }>();
       for (const qr of quoteRows) {
-        quoteCountByInquiry.set(qr.inquiryId, Number(qr.count));
+        quoteCountByInquiry.set(qr.inquiryId, {
+          primary: Number(qr.primary),
+          reserve: Number(qr.reserve),
+        });
       }
       for (const row of rows as any[]) {
-        row.quoteCount = quoteCountByInquiry.get(row.id) ?? 0;
+        const counts = quoteCountByInquiry.get(row.id);
+        row.quoteCount = counts?.primary ?? 0;
+        row.reserveCount = counts?.reserve ?? 0;
       }
 
-      // Buyer name for the lead — resolved from buyer_profiles
-      // (the users row has no name column in this schema). Without
-      // this, the seller's lead detail panel renders "Unknown Buyer"
-      // for every inquiry. Single batched query keyed by the unique
-      // buyer-id set in this page of results.
+      // Dispatch-notification state for THIS caller — the frontend uses
+      // `notificationId` to PATCH Accept/Decline and `notificationStatus`
+      // to suppress re-alerting leads the provider already DECLINED, even
+      // when the lead arrived via the poll fallback instead of SSE.
+      if (callerUserId) {
+        const notifRows: Array<{ id: string; inquiryId: string; status: string }> =
+          await this.inquiryRepository.query(
+            `SELECT id, "inquiryId", status
+               FROM notifications
+               WHERE "userId" = $1 AND type = 'NEW_LEAD' AND "inquiryId" = ANY($2::uuid[])`,
+            [callerUserId, inquiryIds],
+          );
+        const notifByInquiry = new Map<string, { id: string; status: string }>();
+        for (const nr of notifRows) notifByInquiry.set(nr.inquiryId, nr);
+        for (const row of rows as any[]) {
+          const n = notifByInquiry.get(row.id);
+          if (n) {
+            row.notificationId = n.id;
+            row.notificationStatus = n.status;
+          }
+        }
+      }
+
+      // Buyer name + verification status for the lead — resolved from
+      // buyer_profiles (the users row has no name column in this schema).
+      // Without this, the seller's lead detail panel renders "Unknown
+      // Buyer" for every inquiry. verificationStatus lets the seller see
+      // an "unverified buyer" badge — unapproved buyers can still send
+      // inquiries, they just carry the badge until an admin approves them.
+      // Single batched query keyed by the unique buyer-id set in this
+      // page of results.
       const buyerIds = Array.from(
         new Set((rows as any[]).map((r) => r.buyerId).filter(Boolean)),
       );
       if (buyerIds.length > 0) {
-        const buyerRows: Array<{ userId: string; name: string }> =
-          await this.inquiryRepository.query(
-            `SELECT "userId", name FROM buyer_profiles WHERE "userId" = ANY($1::uuid[])`,
-            [buyerIds],
-          );
+        const buyerRows: Array<{
+          userId: string;
+          name: string;
+          verificationStatus: string;
+        }> = await this.inquiryRepository.query(
+          `SELECT "userId", name, "verificationStatus" FROM buyer_profiles WHERE "userId" = ANY($1::uuid[])`,
+          [buyerIds],
+        );
         const nameByUserId = new Map<string, string>();
+        const statusByUserId = new Map<string, string>();
         for (const br of buyerRows) {
           if (br.name) nameByUserId.set(br.userId, br.name);
+          if (br.verificationStatus) statusByUserId.set(br.userId, br.verificationStatus);
         }
         for (const row of rows as any[]) {
           const name = nameByUserId.get(row.buyerId);
           if (name) row.buyerName = name;
+          const status = statusByUserId.get(row.buyerId);
+          if (status) row.buyerVerificationStatus = status;
         }
       }
     }
@@ -300,5 +344,92 @@ export class MatchingService {
     );
 
     return { data: rows, total, matchedCategoryIds };
+  }
+
+  /**
+   * REVERSE matching — the dispatch direction: given a new inquiry, which
+   * provider userIds should be alerted? Mirror image of findLeadsForProfile:
+   * instead of expanding a profile's subscriptions DOWN the category tree to
+   * find inquiries, expand the inquiry's categories UP to their ancestors and
+   * intersect with each profile's EFFECTIVE subscription set.
+   *
+   * "Effective" reuses the child-shadows-parent rule from the forward query
+   * (matching.service.ts effective_seeds): onboarding auto-adds the parent
+   * slug whenever a specific sub is picked, so a provider who only serves
+   * `laptops-buy` still carries an incidental `electronics` row — without
+   * the shadow-exclusion they'd be over-notified for every electronics sub.
+   *
+   * Geo scope: notify when the profile has no city set OR it matches the
+   * inquiry's city (same permissive default the pull side exposes via its
+   * optional city filter).
+   */
+  async findMatchedProviderUserIdsForInquiry(
+    inquiryId: string,
+    city: string | null,
+  ): Promise<string[]> {
+    const rows: Array<{ userId: string }> = await this.inquiryRepository.query(
+      `
+      WITH RECURSIVE
+        inquiry_cats AS (
+          SELECT "categoryId" AS id FROM inquiry_categories WHERE "inquiryId" = $1
+        ),
+        ancestors AS (
+          SELECT id FROM inquiry_cats
+          UNION
+          SELECT c."parentId" FROM categories c
+          JOIN ancestors a ON c.id = a.id
+          WHERE c."parentId" IS NOT NULL
+        ),
+        seller_explicit AS (
+          SELECT "sellerProfileId" AS "profileId", "categoryId" AS id
+          FROM seller_profile_categories
+        ),
+        seller_shadowed AS (
+          SELECT se."profileId", se.id FROM seller_explicit se
+          WHERE EXISTS (
+            SELECT 1 FROM categories child
+            JOIN seller_explicit se2
+              ON se2."profileId" = se."profileId" AND se2.id = child.id
+            WHERE child."parentId" = se.id
+          )
+        ),
+        seller_effective AS (
+          SELECT "profileId", id FROM seller_explicit
+          EXCEPT
+          SELECT "profileId", id FROM seller_shadowed
+        ),
+        sp_explicit AS (
+          SELECT "serviceProviderProfileId" AS "profileId", "categoryId" AS id
+          FROM service_provider_profile_categories
+        ),
+        sp_shadowed AS (
+          SELECT spe."profileId", spe.id FROM sp_explicit spe
+          WHERE EXISTS (
+            SELECT 1 FROM categories child
+            JOIN sp_explicit spe2
+              ON spe2."profileId" = spe."profileId" AND spe2.id = child.id
+            WHERE child."parentId" = spe.id
+          )
+        ),
+        sp_effective AS (
+          SELECT "profileId", id FROM sp_explicit
+          EXCEPT
+          SELECT "profileId", id FROM sp_shadowed
+        )
+      SELECT DISTINCT sp."userId"
+        FROM seller_effective se
+        JOIN seller_profiles sp ON sp.id = se."profileId"
+        WHERE se.id IN (SELECT id FROM ancestors)
+          AND (sp.city IS NULL OR $2::varchar IS NULL OR sp.city = $2)
+      UNION
+      SELECT DISTINCT pp."userId"
+        FROM sp_effective spe
+        JOIN service_provider_profiles pp ON pp.id = spe."profileId"
+        WHERE spe.id IN (SELECT id FROM ancestors)
+          AND (pp.city IS NULL OR $2::varchar IS NULL OR pp.city = $2)
+      `,
+      [inquiryId, city],
+    );
+    return rows.map((r) => r.userId);
   }
 }

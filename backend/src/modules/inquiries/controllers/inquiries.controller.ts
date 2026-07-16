@@ -96,6 +96,11 @@ export class InquiriesController {
         variant,
         providerUserId: profileOwner.id,
       },
+      // Dispatch notifications are addressed to the profile OWNER's userId
+      // (reverse matching resolves profiles → owner), so staff callers see
+      // the owner's Accept/Decline state — consistent with them matching
+      // against the owner's profile above.
+      profileOwner.id,
     );
   }
 
@@ -304,6 +309,17 @@ export class InquiriesController {
     }
     const newCount = await this.inquiriesService.incrementViewCount(id);
     return { id, viewCount: newCount, counted: true };
+  }
+
+  /**
+   * Buyer surfaces the RESERVE quote batch ("didn't find what I needed in
+   * the first N quotes — show me the extras"). Ownership enforced in the
+   * service; idempotent.
+   */
+  @Patch(':id/release-reserve')
+  @UseGuards(JwtAuthGuard)
+  async releaseReserve(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.inquiriesService.releaseReserve(id, req.user.id);
   }
 
   @Patch(':id')

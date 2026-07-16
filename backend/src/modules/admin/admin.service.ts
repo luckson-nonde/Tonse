@@ -8,6 +8,20 @@ import { AuditService } from '../audit/audit.service';
 import { CategoriesService } from '../categories/categories.service';
 import { ESCROW_HOLDING_STATUSES } from '../quotes/quote-status';
 import { fromNgwee } from '../../common/money/money';
+import { MilestonesService } from '../referrals/services/milestones.service';
+import { PromotersService } from '../referrals/services/promoters.service';
+import { CreateMilestoneDto } from '../referrals/dto/create-milestone.dto';
+import { UpdateMilestoneDto } from '../referrals/dto/update-milestone.dto';
+import { ReportsService } from '../reports/reports.service';
+import { ResolveReportDto } from '../reports/dto/resolve-report.dto';
+
+/**
+ * Acting-admin identity, threaded from req.user by the controller so
+ * moderation actions land in audit_logs with WHO did them — matters now
+ * that restricted User Manager sub-admins act alongside the primary
+ * admin. displayId doubles as the human-readable log label (staffName).
+ */
+type ActingAdmin = { id: string; displayId?: string };
 
 @Injectable()
 export class AdminService {
@@ -20,7 +34,10 @@ export class AdminService {
     private readonly quotesService: QuotesService,
     private readonly paymentsService: PaymentsService,
     private readonly auditService: AuditService,
-    private readonly categoriesService: CategoriesService
+    private readonly categoriesService: CategoriesService,
+    private readonly milestonesService: MilestonesService,
+    private readonly promotersService: PromotersService,
+    private readonly reportsService: ReportsService
   ) {}
 
   // ───── Escrow ───────────────────────────────────────────────────────────
@@ -87,6 +104,42 @@ export class AdminService {
         leakCount: rows.filter((r: any) => r.driftReason === 'LEAK').length,
       },
     };
+  }
+
+  /**
+   * Best-effort audit write for admin moderation actions — same
+   * swallow-the-failure contract as setCategoryActive's logging: the
+   * action itself must never fail because the log insert did.
+   * audit_logs.staffId/staffName were built for "who performed the
+   * action" and were never populated until now — they carry the acting
+   * admin (primary or User Manager).
+   */
+  private auditAdminAction(entry: {
+    action: string;
+    entityType: string;
+    entityId: string;
+    targetUserId?: string;
+    actingAdmin?: ActingAdmin;
+    status?: string;
+    reason?: string;
+    details?: string;
+  }) {
+    return this.auditService
+      .create({
+        action: entry.action,
+        entityType: entry.entityType,
+        entityId: entry.entityId,
+        userId: entry.targetUserId,
+        staffId: entry.actingAdmin?.id,
+        staffName: entry.actingAdmin?.displayId ?? entry.actingAdmin?.id,
+        status: entry.status,
+        reason: entry.reason,
+        details: entry.details,
+      } as any)
+      .catch((e: any) =>
+        this.logger.warn(`Audit log failed for ${entry.action}: ${e?.message}`),
+      );
+  }
   }
 
   // ───── Platform overview ────────────────────────────────────────────────
@@ -201,7 +254,7 @@ export class AdminService {
     return { ...page, data };
   }
 
-  async suspendUser(id: string) {
+  async suspendUser(id: string, actingAdmin?: ActingAdmin) {
     const user = await this.usersService.findById(id);
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
@@ -210,11 +263,19 @@ export class AdminService {
       isActive: false,
       verificationStatus: 'SUSPENDED',
     } as any);
-    this.logger.log(`User ${id} suspended.`);
+    this.logger.log(`User ${id} suspended by ${actingAdmin?.id ?? '(unknown admin)'}.`);
+    await this.auditAdminAction({
+      action: 'USER_SUSPENDED',
+      entityType: 'USER',
+      entityId: id,
+      targetUserId: id,
+      actingAdmin,
+      status: 'SUSPENDED',
+    });
     return this.usersService.findById(id);
   }
 
-  async unsuspendUser(id: string) {
+  async unsuspendUser(id: string, actingAdmin?: ActingAdmin) {
     const user = await this.usersService.findById(id);
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
@@ -223,7 +284,15 @@ export class AdminService {
       isActive: true,
       verificationStatus: 'VERIFIED',
     } as any);
-    this.logger.log(`User ${id} reinstated.`);
+    this.logger.log(`User ${id} reinstated by ${actingAdmin?.id ?? '(unknown admin)'}.`);
+    await this.auditAdminAction({
+      action: 'USER_UNSUSPENDED',
+      entityType: 'USER',
+      entityId: id,
+      targetUserId: id,
+      actingAdmin,
+      status: 'ACTIVE',
+    });
     return this.usersService.findById(id);
   }
 
@@ -254,10 +323,13 @@ export class AdminService {
   // ───── Verification queue ───────────────────────────────────────────────
 
   /**
-   * Roles that go through admin verification. Buyers and admins are
-   * intentionally excluded — they don't carry a "verified provider" badge.
+   * Roles that go through admin verification. Only admins are excluded.
+   * Buyers are verified too, but softly: an unapproved buyer keeps full
+   * access (browse, inquire) and simply carries an "unverified" badge that
+   * sellers/providers see on their inquiries.
    */
   static readonly VERIFIABLE_ROLES = [
+    'BUYER',
     'SELLER',
     'SUPPLIER',
     'SERVICE_PROVIDER',
@@ -271,9 +343,9 @@ export class AdminService {
    * `users_role_enum` (BUYER/SELLER/SERVICE_PROVIDER/ADMIN). SUPPLIER,
    * ENTERTAINMENT, EVENTS, and LABOUR became *categories*, not user roles —
    * querying `users.role = 'ENTERTAINMENT'` throws "invalid input value for
-   * enum". Only these two are safe to filter the users table by.
+   * enum". Only these three are safe to filter the users table by.
    */
-  static readonly QUERYABLE_VERIFIABLE_ROLES = ['SELLER', 'SERVICE_PROVIDER'];
+  static readonly QUERYABLE_VERIFIABLE_ROLES = ['BUYER', 'SELLER', 'SERVICE_PROVIDER'];
 
   async listVerifications(filters: Record<string, any> = {}) {
     // Default queue: all PENDING users in the verifiable role groups, newest
@@ -324,7 +396,7 @@ export class AdminService {
     return { data, total: merged.length };
   }
 
-  async verifyUser(id: string) {
+  async verifyUser(id: string, actingAdmin?: ActingAdmin) {
     const user = await this.usersService.findById(id);
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
@@ -345,12 +417,20 @@ export class AdminService {
       verifiedAt: new Date(),
       verificationRejectionReason: null,
     } as any);
-    this.logger.log(`User ${id} verified.`);
+    this.logger.log(`User ${id} verified by ${actingAdmin?.id ?? '(unknown admin)'}.`);
+    await this.auditAdminAction({
+      action: 'USER_VERIFIED',
+      entityType: 'USER',
+      entityId: id,
+      targetUserId: id,
+      actingAdmin,
+      status: 'VERIFIED',
+    });
     const fresh = await this.usersService.findById(id);
     return this.usersService.flattenWithProfile(fresh);
   }
 
-  async rejectUser(id: string, reason?: string) {
+  async rejectUser(id: string, reason?: string, actingAdmin?: ActingAdmin) {
     const user = await this.usersService.findById(id);
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
@@ -367,8 +447,41 @@ export class AdminService {
       verifiedAt: null,
     } as any);
     this.logger.log(`User ${id} verification rejected: ${reason ?? '(no reason)'}`);
+    await this.auditAdminAction({
+      action: 'USER_REJECTED',
+      entityType: 'USER',
+      entityId: id,
+      targetUserId: id,
+      actingAdmin,
+      status: 'REJECTED',
+      reason: reason || 'No reason provided',
+    });
     const fresh = await this.usersService.findById(id);
     return this.usersService.flattenWithProfile(fresh);
+  }
+
+  // ───── User reports (complaints) ─────────────────────────────────────────
+
+  async listReports(filters: Record<string, any> = {}) {
+    return this.reportsService.findAll(filters);
+  }
+
+  async resolveReport(id: string, dto: ResolveReportDto, actingAdmin?: ActingAdmin) {
+    const report = await this.reportsService.resolve(
+      id,
+      actingAdmin?.id ?? null,
+      dto,
+    );
+    await this.auditAdminAction({
+      action: dto.status === 'RESOLVED' ? 'REPORT_RESOLVED' : 'REPORT_DISMISSED',
+      entityType: 'REPORT',
+      entityId: report.id,
+      targetUserId: report.reportedUserId,
+      actingAdmin,
+      status: dto.status,
+      details: dto.resolutionNote || undefined,
+    });
+    return report;
   }
 
   // ───── Category control ─────────────────────────────────────────────────
@@ -393,6 +506,51 @@ export class AdminService {
         this.logger.warn(`Audit log for category toggle failed: ${e?.message ?? e}`)
       );
     return category;
+  }
+
+  // ───── Promoter programme (milestones + oversight) ──────────────────────
+  // Same composition pattern as category control above: the feature logic
+  // lives in ReferralsModule; AdminService just fronts it behind the
+  // class-wide ADMIN guard. MilestonesService itself handles the retro-award
+  // sweep + MILESTONE_UPDATED broadcast after every mutation.
+
+  async listMilestones() {
+    return this.milestonesService.list();
+  }
+
+  async createMilestone(dto: CreateMilestoneDto) {
+    return this.milestonesService.create(dto);
+  }
+
+  async updateMilestone(id: string, dto: UpdateMilestoneDto) {
+    return this.milestonesService.update(id, dto);
+  }
+
+  async removeMilestone(id: string) {
+    return this.milestonesService.remove(id);
+  }
+
+  async listPromoters() {
+    return this.promotersService.listForAdmin();
+  }
+
+  async getPromoterDetail(id: string) {
+    return this.promotersService.getAdminDetail(id);
+  }
+
+  async setPromoterVerification(id: string, status: 'VERIFIED' | 'REJECTED', reason?: string) {
+    if (status !== 'VERIFIED' && status !== 'REJECTED') {
+      throw new NotFoundException('status must be VERIFIED or REJECTED');
+    }
+    return this.promotersService.setVerification(id, status, reason);
+  }
+
+  async getPromoterInvite() {
+    return this.promotersService.getInviteSettings();
+  }
+
+  async rotatePromoterInvite() {
+    return this.promotersService.rotateInviteKey();
   }
 
   // ───── Cross-cutting list endpoints ─────────────────────────────────────

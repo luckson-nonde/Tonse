@@ -10,6 +10,19 @@ export const PERMISSIONS = {
   MANAGE_LOANS: 'MANAGE_LOANS'
 };
 
+/**
+ * Permission codes for restricted sub-admin ("User Manager") accounts —
+ * role ADMIN with parentProviderId set. Mirrors the backend constants in
+ * backend/src/modules/auth/constants/admin-permissions.ts; the server
+ * enforces these via AdminPermissionsGuard, the admin console uses them
+ * only to decide which tabs to show.
+ */
+export const ADMIN_PERMISSIONS = {
+  USERS: 'ADMIN_USERS',
+  VERIFICATIONS: 'ADMIN_VERIFICATIONS',
+  REPORTS: 'ADMIN_REPORTS',
+} as const;
+
 export function hasPermission(user: User | null | undefined, requiredPermission: string): boolean {
   if (!user) return false;
 

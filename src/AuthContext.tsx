@@ -17,7 +17,10 @@ import { generateVirtualAccount } from './utils/financeUtils';
 // (EVENTS, ENTERTAINMENT, SUPPLIER, LABOUR) are now categories — they
 // describe what the user trades in, not who they are. PROVIDER_STAFF is
 // also gone; team members live as related rows under their parent provider.
-export type Role = 'BUYER' | 'SELLER' | 'SERVICE_PROVIDER' | 'ADMIN';
+// PROMOTER (promoter programme) is the one true addition since: a
+// referral-only artist account minted by the hidden /promote signup —
+// never by the public registration flow.
+export type Role = 'BUYER' | 'SELLER' | 'SERVICE_PROVIDER' | 'ADMIN' | 'PROMOTER';
 
 export interface User {
   id: string;
@@ -55,7 +58,10 @@ export interface User {
   coverImage?: string;
   latitude?: number;
   longitude?: number;
-  verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'INCOMPLETE';
+  verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED' | 'INCOMPLETE';
+  /** Admin's reason when verificationStatus is REJECTED. Flattened from
+   *  the active profile row by /auth/me + /auth/login. */
+  verificationRejectionReason?: string | null;
   /** Whether a PIN has been set on the active profile. Backend
    * publishes this boolean in /auth/me + /auth/login + /users/:id
    * responses; the actual PIN value never leaves the server. */
@@ -102,8 +108,14 @@ interface AuthContextType {
     extraProfile?: Record<string, any>,
     /** Base64 data URL of the NRC document photo. Stored on the auth
      * row as users.nrcDocumentPath for admin verification. */
-    nrcDocument?: string
+    nrcDocument?: string,
+    /** Promoter referral attribution (?ref=CODE) — travels on
+     * /auth/register itself so it lands with account creation. */
+    referralCode?: string
   ) => Promise<void>;
+  /** Hydrate a session from tokens already minted by a non-/auth/register
+   * flow (promoter signup). Persists tokens + sets the user — nothing else. */
+  loginWithTokens: (accessToken: string, refreshToken: string, user: User) => void;
   updateUser: (data: Record<string, any>) => Promise<void>;
   logout: () => Promise<void>;
   isLoading: boolean;
@@ -233,7 +245,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       profilePicture: string = '',
       dob: string = '',
       extraProfile?: Record<string, any>,
-      nrcDocument: string = ''
+      nrcDocument: string = '',
+      referralCode: string = ''
     ) => {
       try {
         setError(null);
@@ -288,6 +301,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ...(nrcDocument ? { nrcDocument } : {}),
           ...(seedCategoryIds ? { categoryIds: seedCategoryIds } : {}),
           ...(seedSubRole ? { subRole: seedSubRole } : {}),
+          ...(referralCode ? { referralCode } : {}),
         });
 
         const newUserId = registerResponse?.user?.id;
@@ -408,6 +422,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user]
   );
 
+  const loginWithTokens = React.useCallback(
+    (accessToken: string, refreshToken: string, nextUser: User) => {
+      setError(null);
+      tokenManager.setTokens(accessToken, refreshToken);
+      setUser(nextUser);
+    },
+    []
+  );
+
   const logout = React.useCallback(async () => {
     try {
       await authService.logout();
@@ -426,13 +449,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       login,
       register,
+      loginWithTokens,
       updateUser,
       logout,
       isLoading,
       isAuthenticated: !!user && authService.isAuthenticated(),
       error,
     }),
-    [user, login, register, updateUser, logout, isLoading, error]
+    [user, login, register, loginWithTokens, updateUser, logout, isLoading, error]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

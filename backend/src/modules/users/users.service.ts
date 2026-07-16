@@ -19,6 +19,7 @@ import { UserDisplayIdUtil } from '../../utils/user-display-id.util';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ProfileMatchingService } from './services/profile-matching.service';
 import { ESCROW_HOLDING_STATUSES } from '../quotes/quote-status';
+import { FunnelTrackingService } from '../referrals/services/funnel-tracking.service';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import * as fs from 'fs';
@@ -88,6 +89,10 @@ export class UsersService {
     private readonly identityAuditService: IdentityAuditService,
     private readonly profileMatchingService: ProfileMatchingService,
     private readonly dataSource: DataSource,
+    // Referral funnel capture at registration. One-directional edge:
+    // UsersModule → ReferralsModule (referrals never imports UsersModule —
+    // it uses entity-only User/UserEmail repos).
+    private readonly funnelTrackingService: FunnelTrackingService,
   ) {}
 
   // ===== PROFILE HELPERS (Phase 3) ============================================
@@ -153,7 +158,21 @@ export class UsersService {
   async flattenWithProfile(user: User | null | undefined): Promise<any> {
     if (!user) return null;
     const profile = await this.loadActiveProfile(user);
-    if (!profile) return user;
+    if (!profile) {
+      // ADMIN has no profile table — name lives on users.name (the one
+      // carve-out to the profile contract) and email on the primary
+      // user_emails row. Backfill both so admin identity renders in the
+      // console sidebar and the User Manager team list like any other
+      // role. Other profile-less rows (e.g. PROMOTER) pass through
+      // unchanged — their surfaces resolve identity elsewhere.
+      if (user.role === 'ADMIN') {
+        const primaryEmail = await this.userEmailRepository.findOne({
+          where: { userId: user.id, isPrimary: true },
+        });
+        return { ...user, name: user.name ?? null, email: primaryEmail?.email ?? null };
+      }
+      return user;
+    }
 
     // Side query: select only the pin column so we can publish
     // hasPin without ever shipping the value itself. Staff
@@ -1048,6 +1067,14 @@ export class UsersService {
      * seller registered to date.
      */
     profileSeed?: { categoryIds?: string[]; subRole?: string },
+    /**
+     * Promoter referral code (?ref=CODE). Captured right after the identity
+     * is durably created — awaited so it lands before the HTTP response,
+     * but try/caught so a broken attribution can NEVER fail registration
+     * (asymmetric stakes: a lost referral credit is invisible; a failed
+     * signup is a hard user-facing error).
+     */
+    referralCode?: string,
   ): Promise<User> {
     // Normalize NRC
     const normalizedNrc = UserDisplayIdUtil.normalizeIdentifier(nrcNumber);
@@ -1080,6 +1107,9 @@ export class UsersService {
       password: passwordHash,
       role,
       isActive: true,
+      // ADMIN carve-out: no profile row exists to hold the name, so it
+      // lives on the auth row (see the users.name column doc).
+      ...(role === 'ADMIN' ? { name } : {}),
       ...(nrcDocumentPath ? { nrcDocumentPath } : {}),
     });
 
@@ -1100,6 +1130,18 @@ export class UsersService {
         verificationStatus: 'NOT_VERIFIED',
       })
     );
+
+    // Referral attribution (promoter funnel). Same-call, never a follow-up
+    // round-trip; failure is logged and swallowed.
+    if (referralCode) {
+      try {
+        await this.funnelTrackingService.captureRegistration(savedUser.id, referralCode);
+      } catch (e: any) {
+        this.logger.warn(
+          `register(${savedUser.id}): referral capture failed for code=${referralCode}: ${e?.message}`,
+        );
+      }
+    }
 
     // Create the matching profile row and point activeProfileId at it. The
     // profile carries the user-facing fields (name, email, phone, etc.) so

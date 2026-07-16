@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MapPin, Clock, CheckCircle2, Eye, Users } from 'lucide-react';
+import { MapPin, Clock, CheckCircle2, Eye, Users, Star } from 'lucide-react';
 import Button from './Button';
 import { ARCHETYPE_CONFIG } from '../services/archetypeConfig';
 import { getCategorySchema } from '../services/categories';
@@ -13,6 +13,15 @@ interface InquiryCardProps {
   paidQuote?: any;
   onAction: () => void;
   onDelete: () => void;
+  /** Buyer action: surface the reserved (overflow) quote batch. Rendered
+   *  only when `inquiry.reserveCount > 0`. */
+  onReleaseReserve?: () => void;
+  /** Order-history only: opens the rate-shop modal. Shown when the order
+   *  is DELIVERED/COMPLETED and this handler is provided. */
+  onRate?: () => void;
+  /** Order-history only: this order already has a review — show a quiet
+   *  "Rated" state instead of the button. */
+  alreadyRated?: boolean;
 }
 
 export default function InquiryCard({
@@ -22,6 +31,9 @@ export default function InquiryCard({
   paidQuote,
   onAction,
   onDelete,
+  onReleaseReserve,
+  onRate,
+  alreadyRated,
 }: InquiryCardProps) {
   // Inquiries no longer carry a `category` string column — they live
   // in the inquiry_categories junction. The buyer endpoint hydrates
@@ -169,6 +181,7 @@ export default function InquiryCard({
           <UrgencyStrip
             maxQuotes={inquiry.maxQuotes}
             quoteCount={inquiry.quoteCount}
+            reserveCount={inquiry.reserveCount}
             responseDeadlineAt={inquiry.responseDeadlineAt}
           />
         )}
@@ -215,6 +228,40 @@ export default function InquiryCard({
           </div>
         )}
 
+        {/* Dispatch telemetry — how the provider network is behaving on
+            this request: providers who ACCEPTED the alert vs quotes
+            actually submitted. Hydrated by the buyer endpoint and ticked
+            live over the SSE stream. */}
+        {state !== 'paid' &&
+          (inquiry.acceptedCount != null || inquiry.quoteCount != null) && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-[#d49b35]/10 border border-[#d49b35]/20 px-3 py-1.5 rounded-full">
+                <Users className="w-3.5 h-3.5 text-[#d49b35]" />
+                <span className="text-xs font-bold text-[#b5852f] font-sans">
+                  {inquiry.acceptedCount ?? 0} accepted
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-full">
+                <span className="text-xs font-bold text-blue-700 font-sans">
+                  {inquiry.quoteCount ?? 0}
+                  {inquiry.maxQuotes ? `/${inquiry.maxQuotes}` : ''} quoted
+                </span>
+              </div>
+              {Number(inquiry.reserveCount) > 0 && onReleaseReserve && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onReleaseReserve();
+                  }}
+                  className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full text-xs font-bold text-emerald-700 font-sans hover:bg-emerald-100 transition-colors"
+                >
+                  Show {inquiry.reserveCount} reserved quote
+                  {Number(inquiry.reserveCount) === 1 ? '' : 's'}
+                </button>
+              )}
+            </div>
+          )}
+
         {state === 'paid' && paidQuote && (
           <div className="space-y-4">
             <div className="bg-[#22c55e]/10 border border-[#22c55e]/20 rounded-xl p-3 flex items-center gap-2 text-[#16a34a] text-sm font-bold font-sans">
@@ -235,6 +282,29 @@ export default function InquiryCard({
                 Paid on {new Date(paidQuote.updatedAt).toLocaleDateString()} · via Mobile Money
               </p>
             </div>
+
+            {/* Rate-the-shop — only once the order actually reached the
+                buyer (DELIVERED/COMPLETED), and only where the order list
+                provides the handler. */}
+            {onRate &&
+              ['DELIVERED', 'COMPLETED'].includes(String(paidQuote.status || '')) &&
+              (alreadyRated ? (
+                <div className="flex items-center gap-2 text-[12px] font-bold text-slate-400 font-sans px-1">
+                  <Star className="w-4 h-4 text-[#C9973A] fill-[#C9973A]" />
+                  You rated this shop
+                </div>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRate();
+                  }}
+                  className="w-full py-2.5 rounded-xl border border-[#e8dcc4] bg-[#fdf6e9] text-[#8a6118] text-[12px] font-bold font-sans flex items-center justify-center gap-1.5 hover:border-[#d49b35] transition-colors"
+                >
+                  <Star className="w-4 h-4" />
+                  Rate this shop
+                </button>
+              ))}
           </div>
         )}
       </div>
@@ -307,19 +377,25 @@ export default function InquiryCard({
 interface UrgencyStripProps {
   maxQuotes?: number;
   quoteCount?: number;
+  /** Overflow quotes already captured in the hidden reserve pool. When the
+   *  primary slots are full but the reserve isn't, the strip reads
+   *  "Reserve N / Y" (emerald) instead of a dead-end rose "Slots full" —
+   *  providers can still quote into reserve. */
+  reserveCount?: number;
   responseDeadlineAt?: string;
 }
 
 /**
  * Compact "X / Y slots · Closes in 12m" strip on open leads. Two
  * tone-colored chips so the provider can read urgency at a glance:
- *   slots full   → rose
- *   < 3 slots    → amber
- *   plenty left  → slate
- *   deadline <30m→ amber pulse
- *   deadline past→ rose
+ *   slots full, reserve open → emerald "Reserve N / Y"
+ *   slots + reserve full     → rose
+ *   < 3 slots                → amber
+ *   plenty left              → slate
+ *   deadline <30m            → amber pulse
+ *   deadline past            → rose
  */
-function UrgencyStrip({ maxQuotes, quoteCount, responseDeadlineAt }: UrgencyStripProps) {
+function UrgencyStrip({ maxQuotes, quoteCount, reserveCount, responseDeadlineAt }: UrgencyStripProps) {
   const [, tick] = useState(0);
   useEffect(() => {
     if (!responseDeadlineAt) return;
@@ -332,6 +408,10 @@ function UrgencyStrip({ maxQuotes, quoteCount, responseDeadlineAt }: UrgencyStri
   const remaining = Math.max(0, total - taken);
   const slotsFull = total > 0 && remaining === 0;
   const slotsLow = total > 0 && remaining > 0 && remaining <= 2;
+  // Primary full but the overflow reserve (capacity = maxQuotes) isn't:
+  // providers can still quote — into reserve.
+  const reserveTaken = reserveCount ?? 0;
+  const reserveOpen = slotsFull && total > 0 && reserveTaken < total;
 
   let deadlineLabel = '';
   let deadlineUrgent = false;
@@ -354,11 +434,13 @@ function UrgencyStrip({ maxQuotes, quoteCount, responseDeadlineAt }: UrgencyStri
     }
   }
 
-  const slotClass = slotsFull
-    ? 'bg-rose-50 text-rose-600 border border-rose-200'
-    : slotsLow
-      ? 'bg-amber-50 text-amber-700 border border-amber-200'
-      : 'bg-slate-50 text-slate-600 border border-slate-200';
+  const slotClass = reserveOpen
+    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+    : slotsFull
+      ? 'bg-rose-50 text-rose-600 border border-rose-200'
+      : slotsLow
+        ? 'bg-amber-50 text-amber-700 border border-amber-200'
+        : 'bg-slate-50 text-slate-600 border border-slate-200';
   const deadlineClass = deadlineExpired
     ? 'bg-rose-50 text-rose-600 border border-rose-200'
     : deadlineUrgent
@@ -370,7 +452,11 @@ function UrgencyStrip({ maxQuotes, quoteCount, responseDeadlineAt }: UrgencyStri
       {total > 0 && (
         <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${slotClass}`}>
           <Users className="w-3 h-3" />
-          {slotsFull ? 'Slots full' : `${remaining} / ${total} slots`}
+          {reserveOpen
+            ? `Reserve ${reserveTaken} / ${total}`
+            : slotsFull
+              ? 'Slots full'
+              : `${remaining} / ${total} slots`}
         </div>
       )}
       {deadlineLabel && (

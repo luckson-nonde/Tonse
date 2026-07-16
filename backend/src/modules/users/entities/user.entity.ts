@@ -86,13 +86,29 @@ export class User {
    *   SELLER            — commerce side (products + sales-with-repair)
    *   SERVICE_PROVIDER  — services, repairs, labour, performances
    *   ADMIN             — internal
+   *   PROMOTER          — referral-only artist account (hidden, invite-gated
+   *                       signup). Carries NO profile row — see
+   *                       createProfileForRole's default:null branch — and
+   *                       never accepted by the public /auth/register DTO;
+   *                       minted only via POST /promoter/signup.
    */
   @Column({
     type: 'enum',
-    enum: ['BUYER', 'SELLER', 'SERVICE_PROVIDER', 'ADMIN'],
+    enum: ['BUYER', 'SELLER', 'SERVICE_PROVIDER', 'ADMIN', 'PROMOTER'],
     default: 'BUYER',
   })
   role: string;
+
+  /**
+   * Display name — ADMIN ONLY. Every other role keeps its name on the
+   * matching profile row (the Phase 3 contract); ADMIN has no profile
+   * table, so this column is the one carve-out. Populated by the admin
+   * seed script and by AdminManagerService.create() for User Manager
+   * sub-admins; flattenWithProfile() reads it back for admins. NULL on
+   * every non-admin row.
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  name: string | null;
 
   /**
    * NRC Document Verification Status (identity-level, separate from

@@ -57,6 +57,7 @@ export class AuthService {
       dob,
       categoryIds,
       subRole,
+      referralCode,
     } = registerDto;
 
     // Validate required NRC field
@@ -127,6 +128,9 @@ export class AuthService {
         ipAddress,
         userAgent,
         { categoryIds, subRole },
+        // Referral attribution travels in the same server call as user
+        // creation (not folded into profileSeed — it's not profile data).
+        referralCode,
       );
 
       // Phase 3: profile fields (name, email, verificationStatus) live on

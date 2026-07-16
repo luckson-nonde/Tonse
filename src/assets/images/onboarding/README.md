@@ -22,3 +22,19 @@ role-selection screen picks it up automatically (no code change, hot-reload).
 
 Until a file exists here, the app renders a designed in-code fallback banner
 for that role.
+
+## Company position photos ("Your Position" step)
+
+The four company-account positions (tier-2, after picking **Company Account** as
+a buyer) become photo-led cards when artwork is present in the
+**`company onboarding/`** subfolder. `getPositionImage(title)` in
+[`RoleSelection.tsx`](../../../pages/RoleSelection.tsx) keys them with the shared
+`normalizeSpecialtyKey`, so a file named for the position **label** resolves to
+the card title with no rename:
+
+- `Procurement Officer.webp`, `Secretary.webp`, `Receptionist.webp`,
+  `Manager  Owner.webp` (→ card "Manager / Owner")
+
+A position becomes image-led once its file is present; otherwise it keeps the
+icon chip. `16:9` crop, `object-cover`, photo on top with an eyebrow/title/
+description footer.

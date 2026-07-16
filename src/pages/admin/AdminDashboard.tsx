@@ -9,6 +9,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'motion/react';
+import PageTransition from '../../components/PageTransition';
 import {
   LayoutDashboard,
   Users,
@@ -41,8 +42,18 @@ import {
   Layers,
   AlertTriangle,
   Store,
+  Link2,
+  KeyRound,
+  Copy,
+  Flag,
 } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
+import { ADMIN_PERMISSIONS } from '../../utils/rbac';
+import TeamManagersView from '../../components/admin/TeamManagersView';
+import ReportsView from '../../components/admin/ReportsView';
+// StatTile / FunnelCard / Switch were extracted to DashboardPrimitives so the
+// promoter dashboard shares them — same components, zero behavior change.
+import { StatTile, FunnelCard, Switch } from '../../components/admin/DashboardPrimitives';
 import {
   adminService,
   AdminStats,
@@ -56,6 +67,11 @@ import {
   LedgerJournalRow,
   TrialBalance,
   EscrowPositions,
+  AdminMilestone,
+  AdminMilestoneInput,
+  AdminPromoter,
+  AdminPromoterDetail,
+  PromoterInvite,
   VERIFIABLE_ROLES,
 } from '../../services/api/adminService';
 
@@ -63,20 +79,42 @@ type AdminTab =
   | 'overview'
   | 'users'
   | 'verifications'
+  | 'reports'
   | 'categories'
+  | 'milestones'
   | 'inquiries'
   | 'quotes'
   | 'financial'
+  | 'team'
   | 'audit';
 
-const TABS: { id: AdminTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+/**
+ * `permission` opens a tab to restricted sub-admins ("User Managers")
+ * holding that code; tabs without one are primary-admin-only. The real
+ * enforcement is server-side (AdminPermissionsGuard) — this only decides
+ * what the sidebar shows.
+ */
+const TABS: {
+  id: AdminTab;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  permission?: string;
+}[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { id: 'users', label: 'Users', icon: Users },
-  { id: 'verifications', label: 'Verifications', icon: ShieldQuestion },
+  { id: 'users', label: 'Users', icon: Users, permission: ADMIN_PERMISSIONS.USERS },
+  {
+    id: 'verifications',
+    label: 'Verifications',
+    icon: ShieldQuestion,
+    permission: ADMIN_PERMISSIONS.VERIFICATIONS,
+  },
+  { id: 'reports', label: 'Reports', icon: Flag, permission: ADMIN_PERMISSIONS.REPORTS },
   { id: 'categories', label: 'Category Control', icon: SlidersHorizontal },
+  { id: 'milestones', label: 'Milestones', icon: Sparkles },
   { id: 'inquiries', label: 'Inquiries', icon: MessageSquare },
   { id: 'quotes', label: 'Quotes', icon: FileText },
   { id: 'financial', label: 'Financial', icon: Wallet },
+  { id: 'team', label: 'Admin Team', icon: UserPlus },
   { id: 'audit', label: 'Audit Log', icon: History },
 ];
 
@@ -91,6 +129,28 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const activeTab: AdminTab = (TABS.find((t) => t.id === tab)?.id ?? 'overview') as AdminTab;
+
+  // Sub-admin ("User Manager") = ADMIN with a parent. They see only the
+  // tabs their permission codes open; the primary admin sees everything.
+  const isSubAdmin = !!user?.parentProviderId;
+  const visibleTabs = useMemo(
+    () =>
+      isSubAdmin
+        ? TABS.filter((t) => t.permission && (user?.permissions ?? []).includes(t.permission))
+        : TABS,
+    [isSubAdmin, user?.permissions]
+  );
+
+  // Defense-in-depth: a sub-admin typing /admin/financial (or landing on
+  // the default /admin/overview) gets bounced to their first visible tab.
+  // The backend 403s those endpoints regardless — this just avoids a
+  // broken page.
+  const tabVisible = visibleTabs.some((t) => t.id === activeTab);
+  useEffect(() => {
+    if (!tabVisible && visibleTabs.length > 0) {
+      navigate(`/admin/${visibleTabs[0].id}`, { replace: true });
+    }
+  }, [tabVisible, visibleTabs, navigate]);
 
   return (
     <div className="min-h-screen bg-[#f5f2ed] flex">
@@ -107,7 +167,7 @@ export default function AdminDashboard() {
         </div>
 
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
-          {TABS.map((t) => {
+          {visibleTabs.map((t) => {
             const Icon = t.icon;
             const isActive = activeTab === t.id;
             return (
@@ -159,7 +219,7 @@ export default function AdminDashboard() {
           onChange={(e) => navigate(`/admin/${e.target.value}`)}
           className="bg-white/10 border border-white/15 text-white text-[12px] font-bold rounded-lg px-3 py-1.5 outline-none"
         >
-          {TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <option key={t.id} value={t.id} className="text-[#1a1a2e]">
               {t.label}
             </option>
@@ -170,14 +230,19 @@ export default function AdminDashboard() {
       {/* Content */}
       <main className="flex-1 min-w-0 px-5 sm:px-8 lg:px-10 xl:px-14 pt-20 md:pt-10 pb-12 overflow-x-hidden">
         <div className="max-w-[1400px] mx-auto w-full">
-          {activeTab === 'overview' && <OverviewView />}
-          {activeTab === 'users' && <UsersView />}
-          {activeTab === 'verifications' && <VerificationsView />}
-          {activeTab === 'categories' && <CategoryControlView />}
-          {activeTab === 'inquiries' && <InquiriesView />}
-          {activeTab === 'quotes' && <QuotesView />}
-          {activeTab === 'financial' && <FinancialView />}
-          {activeTab === 'audit' && <AuditView />}
+          <PageTransition transitionKey={activeTab}>
+            {activeTab === 'overview' && tabVisible && <OverviewView />}
+            {activeTab === 'users' && tabVisible && <UsersView />}
+            {activeTab === 'verifications' && tabVisible && <VerificationsView />}
+            {activeTab === 'reports' && tabVisible && <ReportsView />}
+            {activeTab === 'categories' && tabVisible && <CategoryControlView />}
+            {activeTab === 'milestones' && tabVisible && <MilestonesView />}
+            {activeTab === 'inquiries' && tabVisible && <InquiriesView />}
+            {activeTab === 'quotes' && tabVisible && <QuotesView />}
+            {activeTab === 'financial' && tabVisible && <FinancialView />}
+            {activeTab === 'team' && tabVisible && <TeamManagersView />}
+            {activeTab === 'audit' && tabVisible && <AuditView />}
+          </PageTransition>
         </div>
       </main>
     </div>
@@ -214,68 +279,6 @@ function ViewHeader({
       </div>
       {rightSlot && <div className="shrink-0">{rightSlot}</div>}
     </div>
-  );
-}
-
-function StatTile({
-  label,
-  value,
-  hint,
-  icon: Icon,
-  tone = 'default',
-  onClick,
-  badge,
-}: {
-  label: string;
-  value: string | number;
-  hint?: string;
-  icon: React.ComponentType<{ className?: string }>;
-  tone?: 'default' | 'gold' | 'navy' | 'amber';
-  /** When set, the tile becomes a button that jumps elsewhere. */
-  onClick?: () => void;
-  /** Optional attention badge (e.g. a pending count) shown top-right. */
-  badge?: string | number;
-}) {
-  const toneClasses =
-    tone === 'gold'
-      ? 'bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]'
-      : tone === 'navy'
-        ? 'bg-[#0f1023] text-[#C9973A]'
-        : tone === 'amber'
-          ? 'bg-amber-50 text-amber-500'
-          : 'bg-slate-50 text-slate-400';
-
-  const Tag: any = onClick ? 'button' : 'div';
-  return (
-    <Tag
-      onClick={onClick}
-      className={`relative text-left w-full bg-white border border-slate-100 rounded-2xl p-5 sm:p-6 shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)] ${
-        onClick
-          ? 'transition-all hover:border-[#C9973A]/40 hover:shadow-[0_10px_26px_-14px_rgba(201,151,58,0.5)] cursor-pointer group'
-          : ''
-      }`}
-    >
-      <div className="flex items-start justify-between mb-4">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${toneClasses}`}>
-          <Icon className="w-5 h-5" />
-        </div>
-        {badge != null && Number(badge) > 0 && (
-          <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-amber-500 text-white text-[11px] font-black">
-            {badge}
-          </span>
-        )}
-        {onClick && badge == null && (
-          <ArrowUpRight className="w-4 h-4 text-slate-300 group-hover:text-[#C9973A] transition-colors" />
-        )}
-      </div>
-      <p className="font-serif text-[28px] sm:text-[32px] font-black text-[#1a1a2e] leading-none tracking-tight">
-        {value}
-      </p>
-      <p className="mt-2 text-[10px] font-black uppercase tracking-[0.2em] text-[#C9973A]">
-        {label}
-      </p>
-      {hint && <p className="mt-1.5 text-[11px] text-slate-400 font-medium">{hint}</p>}
-    </Tag>
   );
 }
 
@@ -656,55 +659,6 @@ function QuickAction({
   );
 }
 
-function FunnelCard({ funnel }: { funnel?: { inquiries: number; quotes: number; paidQuotes: number } }) {
-  const inquiries = funnel?.inquiries ?? 0;
-  const quotes = funnel?.quotes ?? 0;
-  const paid = funnel?.paidQuotes ?? 0;
-  const max = Math.max(1, inquiries, quotes, paid);
-  const pct = (n: number) => `${Math.round((n / max) * 100)}%`;
-  const rate = (n: number, d: number) => (d > 0 ? `${Math.round((n / d) * 100)}%` : '—');
-  const stages = [
-    { label: 'Inquiries', value: inquiries, conv: null as string | null },
-    { label: 'Quotes', value: quotes, conv: rate(quotes, inquiries) },
-    { label: 'Paid', value: paid, conv: rate(paid, quotes) },
-  ];
-  return (
-    <div className="bg-white border border-slate-100 rounded-2xl p-5 sm:p-6 shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)]">
-      <div className="flex items-center gap-3 mb-5">
-        <div className="w-9 h-9 rounded-xl bg-[#fdf6e9]/60 text-[#C9973A] flex items-center justify-center">
-          <TrendingUp className="w-4 h-4" />
-        </div>
-        <h3 className="text-[12px] font-black uppercase tracking-widest text-[#1a1a2e]">
-          Conversion funnel
-        </h3>
-      </div>
-      <ul className="space-y-4">
-        {stages.map((s) => (
-          <li key={s.label}>
-            <div className="flex items-center justify-between text-[12px] font-bold mb-1.5">
-              <span className="text-[#1a1a2e]/75">{s.label}</span>
-              <span className="flex items-center gap-2">
-                {s.conv && (
-                  <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                    {s.conv}
-                  </span>
-                )}
-                <span className="text-[#C9973A]">{s.value}</span>
-              </span>
-            </div>
-            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-[#C9973A] to-[#e0b45f]"
-                style={{ width: pct(s.value) }}
-              />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function RecentActivityCard({ activity }: { activity: AdminAuditLog[] }) {
   return (
     <div className="bg-white border border-slate-100 rounded-2xl p-5 sm:p-6 shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)]">
@@ -796,35 +750,593 @@ function BreakdownCard({
 // Category control — switch categories / subcategories on & off platform-wide
 // ──────────────────────────────────────────────────────────────────────────
 
-function Switch({
-  checked,
-  disabled,
-  onChange,
-  title,
-}: {
-  checked: boolean;
-  disabled?: boolean;
-  onChange: () => void;
-  title?: string;
-}) {
+// ──────────────────────────────────────────────────────────────────────────
+// Milestones — promoter programme goals (referral funnel → equity rewards)
+// ──────────────────────────────────────────────────────────────────────────
+
+const STAGE_LABEL: Record<AdminMilestone['targetStage'], string> = {
+  inquiry: 'Completed Inquiries',
+  trade_complete: 'Completed Trades',
+};
+
+function MilestonesView() {
+  const [milestones, setMilestones] = useState<AdminMilestone[]>([]);
+  const [promoters, setPromoters] = useState<AdminPromoter[]>([]);
+  const [invite, setInvite] = useState<PromoterInvite | null>(null);
+  const [rotating, setRotating] = useState(false);
+  const [copied, setCopied] = useState<'url' | 'key' | null>(null);
+  const [reviewId, setReviewId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<AdminMilestoneInput>({
+    title: '',
+    targetStage: 'inquiry',
+    requiredCount: 10,
+    equitySharesReward: 50,
+  });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [ms, ps, inv] = await Promise.all([
+        adminService.getMilestones(),
+        adminService.getPromoters(),
+        adminService.getPromoterInvite(),
+      ]);
+      setMilestones(ms);
+      setPromoters(ps);
+      setInvite(inv);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load milestones');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const copyInvite = async (what: 'url' | 'key') => {
+    const value = what === 'url' ? invite?.signupUrl : invite?.inviteKey;
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(what);
+      window.setTimeout(() => setCopied(null), 2000);
+    } catch {
+      /* clipboard blocked — the value is visible to select manually */
+    }
+  };
+
+  const rotateInvite = async () => {
+    if (
+      !window.confirm(
+        'Generate a new invite key? The current key stops working IMMEDIATELY — anyone holding it can no longer sign up until you share the new one.'
+      )
+    )
+      return;
+    setRotating(true);
+    try {
+      const fresh = await adminService.rotatePromoterInvite();
+      if (fresh) setInvite(fresh);
+    } catch (e: any) {
+      alert(e?.message || 'Failed to rotate the invite key');
+    } finally {
+      setRotating(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const createMilestone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.title.trim()) return;
+    setSaving(true);
+    try {
+      const created = await adminService.createMilestone({
+        ...form,
+        title: form.title.trim(),
+        requiredCount: Math.max(1, Math.round(Number(form.requiredCount))),
+        equitySharesReward: Math.max(0, Number(form.equitySharesReward)),
+      });
+      if (created) setMilestones((prev) => [created, ...prev]);
+      setForm((f) => ({ ...f, title: '' }));
+    } catch (err: any) {
+      alert(err?.message || 'Failed to create milestone');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Optimistic toggle — same reconcile-on-error shape as CategoryControlView.
+  const toggleActive = async (m: AdminMilestone) => {
+    const next = !m.isActive;
+    setPendingId(m.id);
+    setMilestones((prev) => prev.map((x) => (x.id === m.id ? { ...x, isActive: next } : x)));
+    try {
+      await adminService.updateMilestone(m.id, { isActive: next });
+    } catch (e: any) {
+      setMilestones((prev) => prev.map((x) => (x.id === m.id ? { ...x, isActive: !next } : x)));
+      alert(e?.message || 'Failed to update milestone');
+    } finally {
+      setPendingId(null);
+    }
+  };
+
+  const removeMilestone = async (m: AdminMilestone) => {
+    if (!window.confirm(`Delete "${m.title}"? Milestones that already paid out can only be deactivated.`)) return;
+    setPendingId(m.id);
+    try {
+      await adminService.deleteMilestone(m.id);
+      setMilestones((prev) => prev.filter((x) => x.id !== m.id));
+    } catch (e: any) {
+      alert(e?.message || 'This milestone has already awarded shares — deactivate it instead.');
+    } finally {
+      setPendingId(null);
+    }
+  };
+
+  const activeCount = milestones.filter((m) => m.isActive).length;
+  const totalSharesGranted = promoters.reduce((acc, p) => acc + Number(p.totalEquityShares || 0), 0);
+
+  const inputCls =
+    'w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-[13px] font-medium text-[#1a1a2e] focus:outline-none focus:border-[#C9973A]/60';
+
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      title={title}
-      disabled={disabled}
-      onClick={onChange}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-        checked ? 'bg-[#C9973A]' : 'bg-slate-300'
-      }`}
-    >
-      <span
-        className={`inline-block h-[18px] w-[18px] transform rounded-full bg-white shadow transition-transform ${
-          checked ? 'translate-x-[22px]' : 'translate-x-1'
-        }`}
+    <>
+      <ViewHeader
+        eyebrow="Section / Promoter programme"
+        title="Milestones"
+        subtitle="Configure the goals promoters race toward. Each milestone grants equity shares the moment a promoter's referral funnel crosses its threshold — awards fire automatically and push to their dashboards live. Editing a goal re-checks every promoter immediately."
+        rightSlot={
+          <button
+            onClick={load}
+            className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[11px] font-bold uppercase tracking-widest text-slate-500 hover:text-[#1a1a2e] hover:border-[#C9973A]/40 transition-all flex items-center gap-2"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Refresh
+          </button>
+        }
       />
-    </button>
+
+      {!loading && !error && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4 mb-6">
+          <StatTile label="Live Milestones" value={`${activeCount}/${milestones.length}`} icon={Sparkles} tone="gold" />
+          <StatTile label="Promoters" value={promoters.length} icon={Users} />
+          <StatTile label="Shares Granted" value={totalSharesGranted} icon={TrendingUp} tone="navy" />
+        </div>
+      )}
+
+      {/* Invite — the unlisted signup link + the key that gates it */}
+      {!loading && !error && invite && (
+        <div className="bg-[#0f1023] rounded-2xl p-5 sm:p-6 shadow-[0_10px_30px_-16px_rgba(15,16,35,0.7)] mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#C9973A]/15 text-[#C9973A] flex items-center justify-center">
+                <KeyRound className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-[12px] font-black uppercase tracking-widest text-white">
+                  Artist invite
+                </h3>
+                <p className="text-[11px] text-white/40 font-medium">
+                  Share the link + key privately with NDA'd artists — the page is unlisted, the key is the gate.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={rotateInvite}
+              disabled={rotating}
+              className="px-4 py-2.5 bg-[#C9973A] hover:bg-[#b8852f] disabled:opacity-60 rounded-xl text-[11px] font-bold uppercase tracking-widest text-white transition-all flex items-center gap-2"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${rotating ? 'animate-spin' : ''}`} />
+              {invite.inviteKey ? 'Generate new key' : 'Generate key'}
+            </button>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-3">
+            <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3 flex items-center gap-3">
+              <Link2 className="w-4 h-4 text-[#C9973A] shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] font-black uppercase tracking-[0.24em] text-white/40">Signup link</p>
+                <p className="text-[13px] font-bold text-white truncate">{invite.signupUrl}</p>
+              </div>
+              <button
+                onClick={() => copyInvite('url')}
+                className="shrink-0 w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center transition-colors"
+                title="Copy signup link"
+              >
+                {copied === 'url' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+
+            <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3 flex items-center gap-3">
+              <KeyRound className="w-4 h-4 text-[#C9973A] shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] font-black uppercase tracking-[0.24em] text-white/40">
+                  Invite key{invite.rotatedAt ? '' : ' · from server config'}
+                </p>
+                <p className="text-[13px] font-black text-[#C9973A] tracking-wider truncate">
+                  {invite.inviteKey ?? 'Not set — signup is disabled'}
+                </p>
+              </div>
+              {invite.inviteKey && (
+                <button
+                  onClick={() => copyInvite('key')}
+                  className="shrink-0 w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center transition-colors"
+                  title="Copy invite key"
+                >
+                  {copied === 'key' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create form */}
+      <form
+        onSubmit={createMilestone}
+        className="bg-white border border-slate-100 rounded-2xl p-5 sm:p-6 shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)] mb-6"
+      >
+        <h3 className="text-[12px] font-black uppercase tracking-widest text-[#1a1a2e] mb-4">
+          New milestone
+        </h3>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-[1fr_180px_120px_140px_auto] gap-3 items-end">
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1.5">
+              Title
+            </label>
+            <input
+              value={form.title}
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              placeholder='e.g. "First 20 completed inquiries"'
+              required
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1.5">
+              Target stage
+            </label>
+            <select
+              value={form.targetStage}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, targetStage: e.target.value as AdminMilestone['targetStage'] }))
+              }
+              className={inputCls}
+            >
+              <option value="inquiry">Completed Inquiries</option>
+              <option value="trade_complete">Completed Trades</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1.5">
+              Required
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={form.requiredCount}
+              onChange={(e) => setForm((f) => ({ ...f, requiredCount: Number(e.target.value) }))}
+              required
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1.5">
+              Shares reward
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={form.equitySharesReward}
+              onChange={(e) => setForm((f) => ({ ...f, equitySharesReward: Number(e.target.value) }))}
+              required
+              className={inputCls}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-6 py-2.5 bg-[#C9973A] hover:bg-[#b8852f] disabled:opacity-60 rounded-xl text-[12px] font-bold text-white transition-all active:scale-95 whitespace-nowrap"
+          >
+            {saving ? 'Adding…' : 'Add milestone'}
+          </button>
+        </div>
+      </form>
+
+      {/* Milestones list */}
+      <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)] overflow-hidden mb-6">
+        <EmptyOrLoading
+          loading={loading}
+          error={error}
+          empty={!loading && !error && milestones.length === 0}
+          emptyLabel="No milestones yet — add the first goal above."
+        />
+        {!loading && !error && milestones.length > 0 && (
+          <ul className="divide-y divide-slate-100">
+            {milestones.map((m) => (
+              <li key={m.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
+                <div className="min-w-0 flex-1">
+                  <p className={`text-[13px] font-bold ${m.isActive ? 'text-[#1a1a2e]' : 'text-slate-400 line-through'}`}>
+                    {m.title}
+                  </p>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                    {m.requiredCount} × {STAGE_LABEL[m.targetStage]} →{' '}
+                    <span className="font-black text-[#C9973A]">{m.equitySharesReward} shares</span>
+                  </p>
+                </div>
+                <Switch
+                  checked={m.isActive}
+                  disabled={pendingId === m.id}
+                  onChange={() => toggleActive(m)}
+                  title={m.isActive ? 'Deactivate' : 'Activate'}
+                />
+                <button
+                  onClick={() => removeMilestone(m)}
+                  disabled={pendingId === m.id}
+                  className="w-9 h-9 rounded-lg border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-200 disabled:opacity-40 flex items-center justify-center transition-colors"
+                  title="Delete (blocked once shares have been paid out)"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Promoter oversight — identity review lives behind each row's Review button */}
+      {!loading && !error && promoters.length > 0 && (
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)] overflow-hidden">
+          <div className="px-5 pt-5 pb-3">
+            <h3 className="text-[12px] font-black uppercase tracking-widest text-[#1a1a2e]">
+              Promoters
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 border-b border-slate-100">
+                  <th className="px-5 py-3">Promoter</th>
+                  <th className="px-5 py-3">Code</th>
+                  <th className="px-5 py-3">Identity</th>
+                  <th className="px-5 py-3 text-right">Registrations</th>
+                  <th className="px-5 py-3 text-right">Inquiries</th>
+                  <th className="px-5 py-3 text-right">Trades</th>
+                  <th className="px-5 py-3 text-right">Shares</th>
+                  <th className="px-5 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {promoters.map((p) => (
+                  <tr key={p.id} className="text-[13px] font-medium text-[#1a1a2e]">
+                    <td className="px-5 py-3.5">
+                      <p className="font-bold">{p.name}</p>
+                      <p className="text-[11px] text-slate-400">{p.email}</p>
+                    </td>
+                    <td className="px-5 py-3.5 font-black text-[#C9973A]">{p.referralCode}</td>
+                    <td className="px-5 py-3.5">
+                      <StatusPill value={p.verificationStatus} />
+                    </td>
+                    <td className="px-5 py-3.5 text-right">{p.funnel.registrations}</td>
+                    <td className="px-5 py-3.5 text-right">{p.funnel.inquiries}</td>
+                    <td className="px-5 py-3.5 text-right">{p.funnel.tradesComplete}</td>
+                    <td className="px-5 py-3.5 text-right font-black">{p.totalEquityShares}</td>
+                    <td className="px-5 py-3.5 text-right">
+                      <button
+                        onClick={() => setReviewId(p.id)}
+                        className="px-3.5 py-2 rounded-lg border border-slate-200 text-[11px] font-bold uppercase tracking-widest text-slate-500 hover:text-[#1a1a2e] hover:border-[#C9973A]/40 transition-all"
+                      >
+                        Review
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {reviewId && (
+        <PromoterReviewModal
+          promoterId={reviewId}
+          onClose={() => setReviewId(null)}
+          onDecision={(id, status) => {
+            setPromoters((prev) =>
+              prev.map((p) => (p.id === id ? { ...p, verificationStatus: status } : p))
+            );
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * Identity review: selfie + ID document side by side, the platforms the
+ * artist claims to run, and the verify/reject decision. Detail (with the
+ * base64 images) loads on open — never in the bulk list.
+ */
+function PromoterReviewModal({
+  promoterId,
+  onClose,
+  onDecision,
+}: {
+  promoterId: string;
+  onClose: () => void;
+  onDecision: (id: string, status: 'VERIFIED' | 'REJECTED') => void;
+}) {
+  const [detail, setDetail] = useState<AdminPromoterDetail | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [deciding, setDeciding] = useState(false);
+
+  useEffect(() => {
+    adminService
+      .getPromoterDetail(promoterId)
+      .then(setDetail)
+      .catch((e: any) => setError(e?.message || 'Failed to load promoter'));
+  }, [promoterId]);
+
+  const decide = async (status: 'VERIFIED' | 'REJECTED') => {
+    let reason: string | undefined;
+    if (status === 'REJECTED') {
+      reason = window.prompt('Reason shown to the promoter (optional):') ?? undefined;
+    }
+    setDeciding(true);
+    try {
+      const fresh = await adminService.setPromoterVerification(promoterId, status, reason);
+      if (fresh) setDetail(fresh);
+      onDecision(promoterId, status);
+    } catch (e: any) {
+      alert(e?.message || 'Failed to update verification');
+    } finally {
+      setDeciding(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center px-4 py-8 bg-[#0f1023]/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl max-h-full overflow-y-auto bg-white rounded-3xl p-6 sm:p-8 shadow-[0_30px_80px_-20px_rgba(15,16,35,0.6)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 mb-5">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#C9973A] mb-1">
+              Identity review
+            </p>
+            <h3 className="font-serif text-xl font-black text-[#1a1a2e]">
+              {detail?.name ?? 'Loading…'}
+            </h3>
+            {detail && (
+              <p className="text-[12px] text-slate-400 font-medium">
+                {detail.email}
+                {detail.phone ? ` · ${detail.phone}` : ''} · code{' '}
+                <span className="font-black text-[#C9973A]">{detail.referralCode}</span>
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            {detail && <StatusPill value={detail.verificationStatus} />}
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 hover:text-[#1a1a2e] flex items-center justify-center transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="p-4 bg-rose-50 border border-rose-100 text-rose-600 text-sm rounded-xl font-medium">
+            {error}
+          </div>
+        )}
+
+        {!detail && !error && (
+          <div className="py-16 flex justify-center text-slate-400">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+        )}
+
+        {detail && (
+          <>
+            {detail.bio && (
+              <p className="text-[13px] text-[#1a1a2e]/70 font-medium leading-relaxed mb-5">
+                {detail.bio}
+              </p>
+            )}
+
+            {/* Identity images — face must match the document */}
+            <div className="grid sm:grid-cols-2 gap-4 mb-5">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">
+                  Live selfie
+                </p>
+                {detail.selfie ? (
+                  <img
+                    src={detail.selfie}
+                    alt="Promoter selfie"
+                    className="w-full aspect-square object-cover rounded-2xl border border-slate-100"
+                  />
+                ) : (
+                  <div className="w-full aspect-square rounded-2xl border border-dashed border-slate-200 flex items-center justify-center text-[12px] text-slate-400 font-medium">
+                    Not submitted
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">
+                  ID document
+                </p>
+                {detail.idDocument ? (
+                  <img
+                    src={detail.idDocument}
+                    alt="ID document"
+                    className="w-full aspect-square object-contain bg-slate-50 rounded-2xl border border-slate-100"
+                  />
+                ) : (
+                  <div className="w-full aspect-square rounded-2xl border border-dashed border-slate-200 flex items-center justify-center text-[12px] text-slate-400 font-medium">
+                    Not submitted
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Platforms */}
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">
+              Platforms they run
+            </p>
+            {detail.socialLinks?.length ? (
+              <ul className="space-y-1.5 mb-6">
+                {detail.socialLinks.map((s, i) => (
+                  <li key={i} className="flex items-center gap-2 text-[13px] font-medium">
+                    <span className="font-bold text-[#1a1a2e] w-28 shrink-0">{s.platform}</span>
+                    <a
+                      href={s.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#C9973A] hover:underline underline-offset-2 truncate flex items-center gap-1"
+                    >
+                      {s.url}
+                      <ExternalLink className="w-3 h-3 shrink-0" />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-[12px] text-slate-400 font-medium mb-6">None submitted.</p>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => decide('REJECTED')}
+                disabled={deciding}
+                className="flex-1 py-3 rounded-xl border border-rose-200 text-[13px] font-bold text-rose-500 hover:bg-rose-50 disabled:opacity-50 transition-all"
+              >
+                Reject
+              </button>
+              <button
+                onClick={() => decide('VERIFIED')}
+                disabled={deciding}
+                className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-[13px] font-bold text-white disabled:opacity-50 transition-all"
+              >
+                Verify identity
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -2120,6 +2632,9 @@ function AuditView() {
                   <th className="text-left px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400 hidden md:table-cell">
                     User
                   </th>
+                  <th className="text-left px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400 hidden md:table-cell">
+                    Admin
+                  </th>
                   <th className="text-left px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400 hidden lg:table-cell">
                     Details
                   </th>
@@ -2155,6 +2670,9 @@ function AuditView() {
                         '—'
                       )}
                     </td>
+                    <td className="px-5 py-4 text-slate-600 truncate max-w-[140px] hidden md:table-cell font-mono text-[12px]">
+                      {entry.staffName || '—'}
+                    </td>
                     <td className="px-5 py-4 text-slate-500 truncate max-w-[280px] text-[12px] hidden lg:table-cell">
                       {typeof entry.details === 'string'
                         ? entry.details
@@ -2182,12 +2700,14 @@ function AuditView() {
 
 const ROLE_GROUP_LABELS: Record<string, string> = {
   ALL: 'All pending',
+  BUYERS: 'Buyers',
   SHOPS: 'Shops',
   SERVICES: 'Service Providers',
   LABOUR: 'Labour',
 };
 
 const ROLES_IN_GROUP: Record<string, string[]> = {
+  BUYERS: ['BUYER'],
   SHOPS: ['SELLER', 'SUPPLIER'],
   SERVICES: ['SERVICE_PROVIDER', 'ENTERTAINMENT', 'EVENTS'],
   LABOUR: ['LABOUR'],
@@ -2200,7 +2720,9 @@ function VerificationsView() {
   const [statusFilter, setStatusFilter] = useState<'PENDING' | 'VERIFIED' | 'REJECTED'>(
     'PENDING'
   );
-  const [groupFilter, setGroupFilter] = useState<'ALL' | 'SHOPS' | 'SERVICES' | 'LABOUR'>('ALL');
+  const [groupFilter, setGroupFilter] = useState<
+    'ALL' | 'BUYERS' | 'SHOPS' | 'SERVICES' | 'LABOUR'
+  >('ALL');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState<AdminUser | null>(null);
@@ -2239,7 +2761,7 @@ function VerificationsView() {
       <ViewHeader
         eyebrow="Section 03 / Trust"
         title="Verifications"
-        subtitle="Approve or reject the documents that shops, service providers, and labour submitted during onboarding. Buyers don't pass through this queue."
+        subtitle="Approve or reject the documents that buyers, shops, service providers, and labour submitted during onboarding. Unapproved buyers keep full access — sellers just see them marked as unverified."
         rightSlot={
           <button
             onClick={load}
@@ -2254,7 +2776,7 @@ function VerificationsView() {
       <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)] overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col md:flex-row gap-3">
           <div className="flex flex-wrap gap-1.5 p-1 bg-slate-100/70 rounded-xl">
-            {(['ALL', 'SHOPS', 'SERVICES', 'LABOUR'] as const).map((g) => (
+            {(['ALL', 'BUYERS', 'SHOPS', 'SERVICES', 'LABOUR'] as const).map((g) => (
               <button
                 key={g}
                 onClick={() => {

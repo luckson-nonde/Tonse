@@ -1,10 +1,12 @@
-import React, { useRef, useState } from 'react';
-import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package, Users, Clock, FileText, Flag } from 'lucide-react';
+import ReportUserModal from '../ReportUserModal';
 import emptyLeadsImage from '../../assets/images/empty-states/owl_reading.png';
 import { uniqueKey } from '../../utils/keyUtils';
 import { PreferenceTags, Lightbox } from './LeadsHelpers';
 import QuoteSubmissionForm from './QuoteSubmissionForm';
 import { recordInquiryView } from '../../services/api/inquiryService';
+import { LABOUR_CATEGORIES } from '../../services/labourCategories';
 import {
   getEffectiveBusinessType,
   getEffectiveBusinessTypes,
@@ -32,6 +34,9 @@ function collectLeadImages(lead: any, parsedItems: any[]): string[] {
     imgs.push(...parse(lead.attributes.images));
     imgs.push(...parse(lead.attributes.referencePhotos));
     imgs.push(...parse(lead.attributes.photos));
+    // Clinical Services: the buyer's prescription / doctor's order photo IS
+    // the request content — the pharmacist/lab reads it here to quote.
+    imgs.push(...parse(lead.attributes.prescriptionPhotos));
   }
   if (lead.entertainmentData) imgs.push(...parse(lead.entertainmentData.images));
   if (lead.repairData) imgs.push(...parse(lead.repairData.images));
@@ -356,6 +361,8 @@ export default function ProviderLeadsView({
   // Local viewCount overrides keyed by lead id so the UI bumps optimistically
   // the moment a provider expands a row, even before the next leads refresh.
   const [viewCounts, setViewCounts] = useState<Record<string, number>>({});
+  // Report-a-buyer modal — holds the lead whose buyer is being reported.
+  const [reportingLead, setReportingLead] = useState<any | null>(null);
   // Record each (provider, inquiry) at most once per session so re-expanding
   // the same row doesn't pad the counter — the backend would no-op anyway,
   // but skipping the call avoids unnecessary network chatter.
@@ -398,6 +405,8 @@ export default function ProviderLeadsView({
       case 'EVENTS':        return 'Event Bookings';
       case 'ENTERTAINMENT': return 'Performance Bookings';
       case 'RETAIL':        return 'Buyer Inquiries';
+      case 'RENTAL':        return 'Rental Requests';
+      case 'LABOUR':        return 'Job Requests';
       default:              return 'Booking Requests';
     }
   })();
@@ -421,7 +430,18 @@ export default function ProviderLeadsView({
       // think the system is broadcasting too widely.
       const idSet = new Set(rawIds);
       const cats = Array.from(idSet)
-        .map((id) => CATEGORIES_DB.find((c) => c.id === id))
+        .map((id) => {
+          const row = CATEGORIES_DB.find((c) => c.id === id);
+          if (row) return row;
+          // Labour trades / machinery equipment aren't CATEGORIES_DB rows —
+          // resolve their display names from the labour taxonomy so a
+          // machinery provider's subtitle reads "Excavator, Tipper Truck"
+          // instead of "No categories matched".
+          const labour = LABOUR_CATEGORIES.find((c) => c.id === id);
+          return labour
+            ? ({ id: labour.id, name: labour.label, parentId: null } as (typeof CATEGORIES_DB)[number])
+            : undefined;
+        })
         .filter((c): c is NonNullable<typeof c> => !!c);
       const childIds = new Set(cats.map((c) => c.parentId).filter(Boolean) as string[]);
       const effectiveCats = cats.filter((c) => !childIds.has(c.id));
@@ -583,9 +603,31 @@ export default function ProviderLeadsView({
                         {((lead as any).buyerName || 'B').charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <h4 className="text-[15px] font-bold text-slate-900 leading-tight">
-                          {(lead as any).buyerName || 'Buyer'}
-                        </h4>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="text-[15px] font-bold text-slate-900 leading-tight">
+                            {(lead as any).buyerName || 'Buyer'}
+                          </h4>
+                          {(lead as any).buyerVerificationStatus &&
+                            (lead as any).buyerVerificationStatus !== 'VERIFIED' && (
+                              /* Opaque border hex on purpose — translucent borders
+                                 mis-rasterize on Mali-GPU Android phones. */
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-[#fdf6e9] border border-[#ecd9b3] text-[9px] font-bold uppercase tracking-wider text-[#b07f24] shrink-0">
+                                Unverified
+                              </span>
+                            )}
+                          {(lead as any).buyerId && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setReportingLead(lead);
+                              }}
+                              className="p-1 rounded-md text-slate-300 hover:text-[#c0392b] hover:bg-red-50 transition-colors shrink-0"
+                              title="Report this buyer"
+                            >
+                              <Flag className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                         <p className="text-[11px] text-slate-400 font-medium mt-0.5">
                           {daysAgo === 0 ? 'Today' : `${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago`}
                         </p>
@@ -610,6 +652,28 @@ export default function ProviderLeadsView({
 
                   {/* Title */}
                   <p className="text-[15px] font-bold text-slate-800 leading-snug -mt-1">{lead.title}</p>
+
+                  {/* Live dispatch counter — quotes taken / slots, reserve
+                      state, and the response countdown. Ticks in real time
+                      via the SSE QUOTE_COUNT_UPDATE overlay upstream. */}
+                  {(lead.maxQuotes || lead.responseDeadlineAt) && (
+                    <LeadSlotStrip
+                      quoteCount={(lead as any).quoteCount}
+                      reserveCount={(lead as any).reserveCount}
+                      maxQuotes={lead.maxQuotes}
+                      responseDeadlineAt={lead.responseDeadlineAt}
+                    />
+                  )}
+
+                  {/* Clinical: flag that the request carries a prescription /
+                      doctor's order — expand the card to read it (lightbox). */}
+                  {Array.isArray((lead as any).attributes?.prescriptionPhotos) &&
+                    (lead as any).attributes.prescriptionPhotos.length > 0 && (
+                      <span className="self-start flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-teal-50 text-teal-700 border-teal-200 -mt-1">
+                        <FileText className="w-3 h-3" />
+                        Prescription attached
+                      </span>
+                    )}
 
                   {/* Divider */}
                   <div className="h-px w-full bg-gradient-to-r from-slate-100 via-slate-100 to-transparent" />
@@ -764,6 +828,105 @@ export default function ProviderLeadsView({
           })
         )}
       </div>
+
+      {reportingLead && (
+        <ReportUserModal
+          reportedUserId={String(reportingLead.buyerId)}
+          reportedUserName={reportingLead.buyerName || 'this buyer'}
+          contextType="INQUIRY"
+          contextId={String(reportingLead.id)}
+          onClose={() => setReportingLead(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Live dispatch counter on a lead card: quotes taken vs slots, reserve
+ * state once the primary batch fills, and a 1s-tick response countdown.
+ * Values arrive hydrated from /inquiries/leads/me and are overlaid in
+ * real time by the SSE QUOTE_COUNT_UPDATE events upstream (ProviderDashboard
+ * merges `liveCounts` into each lead object before it reaches this card).
+ */
+function LeadSlotStrip({
+  quoteCount,
+  reserveCount,
+  maxQuotes,
+  responseDeadlineAt,
+}: {
+  quoteCount?: number;
+  reserveCount?: number;
+  maxQuotes?: number;
+  responseDeadlineAt?: string;
+}) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!responseDeadlineAt) return;
+    const id = window.setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [responseDeadlineAt]);
+
+  const taken = quoteCount ?? 0;
+  const total = maxQuotes ?? 0;
+  const reserveTaken = reserveCount ?? 0;
+  const primaryFull = total > 0 && taken >= total;
+  const reserveOpen = primaryFull && reserveTaken < total;
+  const allFull = primaryFull && reserveTaken >= total;
+
+  let deadlineLabel = '';
+  let deadlineUrgent = false;
+  let deadlineExpired = false;
+  if (responseDeadlineAt) {
+    const ms = new Date(responseDeadlineAt).getTime() - Date.now();
+    if (ms <= 0) {
+      deadlineExpired = true;
+    } else {
+      const totalSec = Math.floor(ms / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      deadlineLabel =
+        h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`;
+      deadlineUrgent = ms < 30 * 60 * 1000;
+    }
+  }
+
+  const slotClass = allFull
+    ? 'bg-rose-50 text-rose-600 border-rose-200'
+    : reserveOpen
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      : total > 0 && total - taken <= 2
+        ? 'bg-amber-50 text-amber-700 border-amber-200'
+        : 'bg-slate-50 text-slate-600 border-slate-200';
+  const deadlineClass = deadlineExpired
+    ? 'bg-rose-50 text-rose-600 border-rose-200'
+    : deadlineUrgent
+      ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
+      : 'bg-slate-50 text-slate-600 border-slate-200';
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 -mt-1">
+      {total > 0 && (
+        <span
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${slotClass}`}
+        >
+          <Users className="w-3 h-3" />
+          {allFull
+            ? 'All slots full'
+            : reserveOpen
+              ? `Primary full · reserve ${reserveTaken}/${total}`
+              : `${taken}/${total} quotes in`}
+        </span>
+      )}
+      {(deadlineLabel || deadlineExpired) && (
+        <span
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${deadlineClass}`}
+        >
+          <Clock className="w-3 h-3" />
+          {deadlineExpired ? 'Response window closed' : `Respond in ${deadlineLabel}`}
+        </span>
+      )}
     </div>
   );
 }

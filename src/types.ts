@@ -84,6 +84,9 @@ export type SubRole =
   | 'INDIVIDUAL_PROVIDER'
   | 'AGENCY_PROVIDER'
   | 'SKILLED_LABOUR'
+  // Equipment rental — a provider type (tier-2, next to Service & Labour) that
+  // hires out plant/machinery rather than performing labour.
+  | 'MACHINERY_HIRE'
   // Lender (loan company) — a service provider offering loan products.
   | 'LENDER';
 export type EntityType = 'INDIVIDUAL' | 'BUSINESS';
@@ -112,6 +115,10 @@ export interface Inquiry {
   location: string;
   buyerName: string;
   buyerId: number;
+  /** Buyer's account verification status, joined from buyer_profiles by the
+   *  leads endpoint. Anything other than VERIFIED renders an "unverified
+   *  buyer" badge on the seller's lead card. */
+  buyerVerificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED' | 'INCOMPLETE';
   createdAt: number;
   status: 'OPEN' | 'QUOTED' | 'CLOSED';
   viewCount?: number;

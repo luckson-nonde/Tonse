@@ -15,6 +15,7 @@ import { UsersController } from './controllers/users.controller';
 import { ArchetypeResolverService } from './services/archetype-resolver.service';
 import { ProfileMatchingService } from './services/profile-matching.service';
 import { IdentityAuditModule } from '../identity-audit/identity-audit.module';
+import { ReferralsModule } from '../referrals/referrals.module';
 
 @Module({
   imports: [
@@ -31,6 +32,9 @@ import { IdentityAuditModule } from '../identity-audit/identity-audit.module';
       Category,
     ]),
     IdentityAuditModule,
+    // Referral capture at registration (one-directional — referrals uses
+    // entity-only User/UserEmail repos, never this module).
+    ReferralsModule,
   ],
   providers: [UsersService, ArchetypeResolverService, ProfileMatchingService],
   controllers: [UsersController],

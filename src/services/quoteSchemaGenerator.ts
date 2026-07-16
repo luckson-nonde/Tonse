@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { generateZodSchema } from './quoteValidation';
 import { isRepairVariant, CATEGORIES_DB, getCategoryType, type Category } from './categories';
+import { LABOUR_CATEGORIES } from './labourCategories';
 
 export interface QuoteField {
   name: string;
@@ -32,9 +33,26 @@ const VENUE_AMENITIES = [
 // suffix in the category name (the same suffix isRepairVariant checks for in
 // services/categories.ts), so the buyer-side specification flows directly into
 // the seller-side quote shape.
+// Heavy-machinery-hire items live in labourCategories.ts (category
+// MACHINERY_HIRE), not CATEGORIES_DB, so archetypeFromRow can never resolve
+// them — detection matches the lead's category string against the equipment
+// ids AND labels. Checked FIRST in detectArchetype: labels like "Mobile
+// Crane" would otherwise trip the `mobile` PRODUCT keyword below.
+const MACHINERY_HIRE_KEYS = new Set(
+  LABOUR_CATEGORIES.filter((c) => c.category === 'MACHINERY_HIRE').flatMap((c) => [
+    c.id,
+    c.label.toLowerCase(),
+  ]),
+);
+const isMachineryHireCategory = (category: string): boolean => {
+  const first = (category || '').split(',')[0].trim().toLowerCase();
+  return MACHINERY_HIRE_KEYS.has(first) || MACHINERY_HIRE_KEYS.has(first.replace(/[\s-]+/g, '_'));
+};
+
 const detectArchetype = (
   category: string
-): 'REPAIR' | 'PRODUCT' | 'SERVICE' | 'VENUE' | 'LABOUR' | 'GENERIC' => {
+): 'REPAIR' | 'PRODUCT' | 'SERVICE' | 'VENUE' | 'LABOUR' | 'HIRE' | 'GENERIC' => {
+  if (isMachineryHireCategory(category)) return 'HIRE';
   if (isRepairVariant(category || '')) return 'REPAIR';
   const cat = (category || '').toLowerCase();
   if (cat.includes('venue') || cat.includes('hall') || cat.includes('garden') || cat.includes('space')) return 'VENUE';
@@ -540,6 +558,113 @@ const QUOTE_SCHEMA_BY_CATEGORY_ID: Record<
     { name: 'message', label: 'Message to Buyer', type: 'textarea', required: false,
       placeholder: 'Bundled accessories, training/manual included, return policy…', group: 'Notes & Photos' },
   ],
+
+  // Clinical Services — the provider quotes off the buyer's typed items
+  // and/or their prescription photo (rendered in the lead's lightbox).
+  // Pharmacies: stock + substitution + readiness are the decision drivers.
+  'pharmacies': (attrs) => [
+    { name: 'price', label: 'Total Price (ZMW)', type: 'currency', required: true,
+      calculation: 'total', group: 'Pricing' },
+    { name: 'allItemsInStock', label: 'All prescribed items in stock?', type: 'toggle',
+      required: false, group: 'Pricing' },
+    { name: 'genericSubstitution', label: 'Generic substitute offered?', type: 'toggle',
+      required: false, helpText: 'Only if the buyer allowed generic alternatives.',
+      group: 'Pricing' },
+    { name: 'readyIn', label: 'Ready For Collection', type: 'select', required: true,
+      options: ['Ready now', 'Within 1 hour', 'Later today', 'Tomorrow'], group: 'Logistics & Timing' },
+    ...(String(attrs?.fulfilment ?? '').toLowerCase().includes('deliver') ||
+    String(attrs?.fulfilment ?? '').toLowerCase().includes('faster')
+      ? [{ name: 'deliveryFee', label: 'Delivery Fee (ZMW)', type: 'currency', required: false,
+          helpText: 'The buyer asked for delivery (or whichever is faster).',
+          group: 'Logistics & Timing' } as QuoteField]
+      : []),
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'Pharmacist Notes', type: 'textarea', required: false,
+      placeholder: 'Dosage guidance, brand supplied, items out of stock…', group: 'Notes & Photos' },
+  ],
+
+  // ── Apartments & Housing ─────────────────────────────────────────────
+  // The quotation is a FULL UNIT OFFER, not just a number: the landlord/
+  // agent quotes a concrete available unit and attaches up to 5 photos of
+  // it via the quote form's built-in photo section (referencePhotos —
+  // no schema field needed). The buyer compares real units.
+  'long-term-rentals': () => [
+    { name: 'price', label: 'Monthly Rent (ZMW)', type: 'currency', required: true,
+      calculation: 'total', group: 'Pricing' },
+    { name: 'depositMonths', label: 'Deposit Required', type: 'select', required: true,
+      options: ['1 month', '2 months', '3 months', 'Negotiable'], group: 'Pricing' },
+    { name: 'includedInRent', label: 'Included in the Rent', type: 'multiselect', required: false,
+      options: ['Water', 'ZESCO / electricity', 'Security', 'Garbage collection', 'WiFi', 'Parking', 'Garden service'],
+      group: 'Pricing' },
+    { name: 'unitArea', label: 'Location / Area', type: 'textarea', required: true,
+      placeholder: 'e.g. Kabulonga, off Church Road — quiet close', group: 'Logistics & Timing' },
+    { name: 'availabilityDate', label: 'Available From', type: 'date', required: true,
+      group: 'Logistics & Timing' },
+    { name: 'viewingSlot', label: 'Proposed Viewing Time', type: 'textarea', required: false,
+      placeholder: 'e.g. Saturday 10:00, or weekdays after 17:00', group: 'Logistics & Timing' },
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'Unit Description', type: 'textarea', required: true,
+      placeholder: 'Bedrooms, bathrooms, self-contained, wall fence, water supply, nearby landmarks…',
+      group: 'Notes & Photos' },
+  ],
+  'short-stay-serviced': () => [
+    { name: 'price', label: 'Total for the Stay (ZMW)', type: 'currency', required: true,
+      calculation: 'total', group: 'Pricing' },
+    { name: 'nightlyRate', label: 'Rate per Night (ZMW)', type: 'currency', required: false,
+      group: 'Pricing' },
+    { name: 'includedServices', label: 'Included Services', type: 'multiselect', required: false,
+      options: ['WiFi', 'DSTV', 'Housekeeping', 'Breakfast', 'Airport pickup', 'Backup power', 'Pool / gym access'],
+      group: 'Pricing' },
+    { name: 'unitArea', label: 'Location / Area', type: 'textarea', required: true,
+      placeholder: 'e.g. Rhodes Park, near Arcades', group: 'Logistics & Timing' },
+    { name: 'dateFit', label: 'Availability for the Requested Dates', type: 'select', required: true,
+      options: ['Available for your exact dates', 'Alternative dates only (see notes)'],
+      group: 'Logistics & Timing' },
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'Apartment Description', type: 'textarea', required: true,
+      placeholder: 'Rooms, floor, check-in process, house rules…', group: 'Notes & Photos' },
+  ],
+  'boarding-student-rooms': () => [
+    { name: 'price', label: 'Monthly Rent (ZMW)', type: 'currency', required: true,
+      calculation: 'total', group: 'Pricing' },
+    { name: 'depositRequired', label: 'Deposit Required', type: 'select', required: false,
+      options: ['None', 'Half month', '1 month', 'Negotiable'], group: 'Pricing' },
+    { name: 'includedInRent', label: 'Included in the Rent', type: 'multiselect', required: false,
+      options: ['Water', 'ZESCO', 'WiFi', 'Meals', 'Room cleaning'], group: 'Pricing' },
+    { name: 'distanceToCampus', label: 'Distance to Campus', type: 'textarea', required: true,
+      placeholder: 'e.g. 10 minutes walk to UNZA main gate', group: 'Logistics & Timing' },
+    { name: 'roomsAvailable', label: 'Rooms Available', type: 'number', required: false,
+      group: 'Logistics & Timing' },
+    { name: 'availabilityDate', label: 'Available From', type: 'date', required: false,
+      group: 'Logistics & Timing' },
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'House Description', type: 'textarea', required: true,
+      placeholder: 'House rules, caretaker, visiting hours, cooking arrangements…',
+      group: 'Notes & Photos' },
+  ],
+
+  // Hospital Labs: turnaround + collection logistics drive the choice.
+  'hospital-labs': (attrs) => [
+    { name: 'price', label: 'Total Test Fee (ZMW)', type: 'currency', required: true,
+      calculation: 'total', group: 'Pricing' },
+    { name: 'turnaroundHours', label: 'Results Turnaround (hours)', type: 'number',
+      required: true, placeholder: 'e.g. 24', group: 'Logistics & Timing' },
+    ...(attrs?.homeSampleCollection === true || attrs?.homeSampleCollection === 'true'
+      ? [{ name: 'homeCollectionFee', label: 'Home Sample Collection Fee (ZMW)', type: 'currency',
+          required: false, helpText: 'The buyer asked for sample collection at their location.',
+          group: 'Logistics & Timing' } as QuoteField]
+      : []),
+    { name: 'availabilityDate', label: 'Earliest Available Slot', type: 'date', required: true,
+      group: 'Logistics & Timing' },
+    { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+      options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+    { name: 'message', label: 'Lab Notes', type: 'textarea', required: false,
+      placeholder: 'Fasting requirements, accreditation, how results are shared…', group: 'Notes & Photos' },
+  ],
 };
 
 export const generateQuoteSchema = (
@@ -561,7 +686,96 @@ export const generateQuoteSchema = (
   const archetype = archetypeFromRow(categoryRow) ?? detectArchetype(inquiryCategory);
   const schema: QuoteField[] = [];
 
-  if (archetype === 'REPAIR') {
+  if (archetype === 'HIRE') {
+    // Equipment hire — the quote is a rate structure, not a sale price:
+    // hire rate × duration, plus mobilisation/operator/deposit line items.
+    // `price` stays the all-in total so payment + quote-card rendering
+    // downstream need no special case (same pattern as REPAIR).
+    schema.push({
+      name: 'price',
+      label: 'Total Hire Quote (ZMW)',
+      type: 'currency',
+      required: true,
+      helpText: 'All-in for the requested period: hire + delivery + operator. Editable after entering the breakdown below.',
+      calculation: 'total',
+      group: 'Pricing',
+    });
+    // Rate + unit as two fields — QuoteSubmissionForm renders
+    // currency/select but not the composite `rate_with_unit` type.
+    schema.push({
+      name: 'hireRate',
+      label: 'Hire Rate (ZMW)',
+      type: 'currency',
+      required: true,
+      helpText: 'Base rate for the machine itself.',
+      group: 'Pricing',
+    });
+    schema.push({
+      name: 'hireRateUnit',
+      label: 'Rate Unit',
+      type: 'select',
+      required: true,
+      options: ['Per Hour', 'Per Day', 'Per Week', 'Per Month'],
+      group: 'Pricing',
+    });
+    schema.push({
+      name: 'mobilisationFee',
+      label: 'Delivery / Mobilisation Fee (ZMW)',
+      type: 'currency',
+      required: false,
+      helpText: 'Transporting the machine to and from the site (low-bed, permits, escort).',
+      group: 'Pricing',
+    });
+    schema.push({
+      name: 'operatorFee',
+      label: 'Operator Fee (ZMW)',
+      type: 'currency',
+      required: false,
+      helpText: 'Leave empty for dry hire (buyer supplies the operator).',
+      group: 'Pricing',
+    });
+    schema.push({
+      name: 'damageDeposit',
+      label: 'Refundable Deposit (ZMW)',
+      type: 'currency',
+      required: false,
+      helpText: 'Held against damage; refunded on clean return.',
+      group: 'Pricing',
+    });
+    schema.push({
+      name: 'fuelPolicy',
+      label: 'Fuel Policy',
+      type: 'select',
+      required: true,
+      options: ['Included — wet hire', 'Buyer fuels — dry hire', 'Negotiable'],
+      group: 'Logistics & Timing',
+    });
+    schema.push({
+      name: 'availabilityDate',
+      label: 'Earliest Availability',
+      type: 'date',
+      required: true,
+      helpText: 'First date the machine can be on site.',
+      group: 'Logistics & Timing',
+    });
+    schema.push({
+      name: 'expiryDuration',
+      label: 'Quote Valid For',
+      type: 'select',
+      required: true,
+      options: VALIDITY_OPTIONS,
+      group: 'Logistics & Timing',
+    });
+    schema.push({
+      name: 'message',
+      label: 'Inclusions & Notes',
+      type: 'textarea',
+      required: false,
+      placeholder: 'Machine model/year, attachments included, insurance, min hire period, standby charges…',
+      group: 'Notes & Photos',
+    });
+
+  } else if (archetype === 'REPAIR') {
     // Total quoted price — kept as `price` so downstream payment / quote-card
     // rendering doesn't need a special case. The breakdown fields below give
     // buyers and finance the visibility into what's parts vs labour.

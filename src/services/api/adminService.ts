@@ -160,9 +160,53 @@ export interface AdminAuditLog {
   entityType?: string;
   entityId?: string | number;
   details?: any;
+  /** Acting admin (primary or User Manager) — id + displayId label. */
+  staffId?: string;
+  staffName?: string;
+  status?: string;
+  reason?: string;
   createdAt?: string;
   timestamp?: number;
   [key: string]: any;
+}
+
+/** Restricted sub-admin account created by the primary admin. */
+export interface AdminManagerUser {
+  id: string;
+  displayId?: string;
+  name?: string;
+  email?: string;
+  phone?: string | null;
+  permissions?: string[];
+  isActive?: boolean;
+  mustChangePassword?: boolean;
+  createdAt?: string;
+  lastLoginAt?: string;
+  [key: string]: any;
+}
+
+export type AdminReportStatus = 'OPEN' | 'RESOLVED' | 'DISMISSED';
+
+/** User-submitted complaint, hydrated with both parties' identity. */
+export interface AdminReport {
+  id: string;
+  reporterId: string;
+  reporterName?: string | null;
+  reporterDisplayId?: string | null;
+  reporterRole?: string | null;
+  reportedUserId: string;
+  reportedUserName?: string | null;
+  reportedUserDisplayId?: string | null;
+  reportedUserRole?: string | null;
+  category: string;
+  description: string;
+  contextType?: 'INQUIRY' | 'QUOTE' | 'ORDER' | null;
+  contextId?: string | null;
+  status: AdminReportStatus;
+  resolutionNote?: string | null;
+  resolvedByAdminId?: string | null;
+  resolvedAt?: string | null;
+  createdAt: string;
 }
 
 const buildQuery = (params: Record<string, any>) => {
@@ -304,13 +348,175 @@ export const adminService = {
     const res = await apiClient.patch<AdminCategoryNode>(`/admin/categories/${id}`, { isActive });
     return res.data ?? null;
   },
+
+  // ───── Promoter programme (milestones + oversight) ────────────────────────
+
+  async getMilestones(): Promise<AdminMilestone[]> {
+    const res = await apiClient.get<AdminMilestone[]>('/admin/milestones');
+    return res.data ?? [];
+  },
+
+  async createMilestone(payload: AdminMilestoneInput): Promise<AdminMilestone | null> {
+    const res = await apiClient.post<AdminMilestone>('/admin/milestones', payload);
+    return res.data ?? null;
+  },
+
+  async updateMilestone(
+    id: string,
+    payload: Partial<AdminMilestoneInput>,
+  ): Promise<AdminMilestone | null> {
+    const res = await apiClient.patch<AdminMilestone>(`/admin/milestones/${id}`, payload);
+    return res.data ?? null;
+  },
+
+  /** 409s if the milestone already paid out shares — deactivate instead. */
+  async deleteMilestone(id: string): Promise<void> {
+    await apiClient.delete(`/admin/milestones/${id}`);
+  },
+
+  async getPromoters(): Promise<AdminPromoter[]> {
+    const res = await apiClient.get<AdminPromoter[]>('/admin/promoters');
+    return res.data ?? [];
+  },
+
+  async getPromoterDetail(id: string): Promise<AdminPromoterDetail | null> {
+    const res = await apiClient.get<AdminPromoterDetail>(`/admin/promoters/${id}`);
+    return res.data ?? null;
+  },
+
+  async setPromoterVerification(
+    id: string,
+    status: 'VERIFIED' | 'REJECTED',
+    reason?: string,
+  ): Promise<AdminPromoterDetail | null> {
+    const res = await apiClient.patch<AdminPromoterDetail>(`/admin/promoters/${id}/verification`, {
+      status,
+      ...(reason ? { reason } : {}),
+    });
+    return res.data ?? null;
+  },
+
+  /** Current invite key + the unlisted /promote signup URL to share. */
+  async getPromoterInvite(): Promise<PromoterInvite | null> {
+    const res = await apiClient.get<PromoterInvite>('/admin/promoter-invite');
+    return res.data ?? null;
+  },
+
+  /** Mint a fresh invite key — the old one stops working immediately. */
+  async rotatePromoterInvite(): Promise<PromoterInvite | null> {
+    const res = await apiClient.post<PromoterInvite>('/admin/promoter-invite/rotate');
+    return res.data ?? null;
+  },
+
+  // ───── User Managers (restricted sub-admins) — primary admin only ─────────
+
+  async listManagers(): Promise<AdminManagerUser[]> {
+    const res = await apiClient.get<AdminManagerUser[]>('/admin/managers');
+    return res.data ?? [];
+  },
+
+  /** generatedPassword is returned ONCE — show it to the admin immediately. */
+  async createManager(payload: {
+    name: string;
+    email: string;
+    phone?: string;
+    permissions: string[];
+  }): Promise<{ user: AdminManagerUser; generatedPassword: string } | null> {
+    const res = await apiClient.post<{ user: AdminManagerUser; generatedPassword: string }>(
+      '/admin/managers',
+      payload
+    );
+    return res.data ?? null;
+  },
+
+  async updateManager(
+    id: string,
+    payload: { permissions?: string[]; isActive?: boolean; name?: string; phone?: string }
+  ): Promise<AdminManagerUser | null> {
+    const res = await apiClient.patch<AdminManagerUser>(`/admin/managers/${id}`, payload);
+    return res.data ?? null;
+  },
+
+  async deleteManager(id: string): Promise<{ success: boolean } | null> {
+    const res = await apiClient.delete<{ success: boolean }>(`/admin/managers/${id}`);
+    return res.data ?? null;
+  },
+
+  // ───── User reports (complaints) ───────────────────────────────────────────
+
+  async listReports(
+    params: Record<string, any> = {}
+  ): Promise<PaginatedResponse<AdminReport>> {
+    const res = await apiClient.get<PaginatedResponse<AdminReport>>(
+      `/admin/reports${buildQuery(params)}`
+    );
+    return res.data ?? emptyPage<AdminReport>();
+  },
+
+  async resolveReport(
+    id: string,
+    payload: { status: 'RESOLVED' | 'DISMISSED'; resolutionNote?: string }
+  ): Promise<AdminReport | null> {
+    const res = await apiClient.patch<AdminReport>(`/admin/reports/${id}`, payload);
+    return res.data ?? null;
+  },
 };
 
+export interface PromoterInvite {
+  /** null ⇒ programme switched off (no admin key, no env fallback). */
+  inviteKey: string | null;
+  signupUrl: string;
+  /** null ⇒ key still comes from the env fallback, never rotated in the UI. */
+  rotatedAt: string | null;
+}
+
+export interface AdminMilestone {
+  id: string;
+  title: string;
+  targetStage: 'inquiry' | 'trade_complete';
+  requiredCount: number;
+  equitySharesReward: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type AdminMilestoneInput = Pick<
+  AdminMilestone,
+  'title' | 'targetStage' | 'requiredCount' | 'equitySharesReward'
+> & { isActive?: boolean };
+
+export interface AdminPromoter {
+  id: string;
+  name: string;
+  email: string;
+  referralCode: string;
+  isActive: boolean;
+  createdAt?: string;
+  verificationStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  funnel: { registrations: number; inquiries: number; tradesComplete: number };
+  totalEquityShares: number;
+}
+
+/** Full identity detail for the review modal — selfie + document included. */
+export interface AdminPromoterDetail extends Omit<AdminPromoter, 'isActive'> {
+  phone: string | null;
+  bio: string | null;
+  socialLinks: Array<{ platform: string; url: string; handle?: string }>;
+  selfie: string | null;
+  idDocument: string | null;
+  rejectionReason: string | null;
+  referralUrl: string;
+}
+
 /**
- * Roles eligible for the verification badge. Buyers and admins are excluded.
+ * Roles eligible for the verification badge. Only admins are excluded —
+ * buyers are verified too (they keep full access while pending; sellers
+ * just see an "unverified" badge on their inquiries).
  * Mirrors the backend constant in `AdminService.VERIFIABLE_ROLES`.
  */
 export const VERIFIABLE_ROLES = [
+  'BUYER',
   'SELLER',
   'SUPPLIER',
   'SERVICE_PROVIDER',

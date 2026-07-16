@@ -105,6 +105,20 @@
     "type": null
   },
   {
+    "id": "clinical-services",
+    "name": "Clinical Services",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "apartments",
+    "name": "Apartments & Housing",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
     "id": "loans",
     "name": "Loans",
     "parentId": null,
@@ -665,6 +679,41 @@
     "type": null
   },
   {
+    "id": "hospital-labs",
+    "name": "Hospital Labs",
+    "parentId": "clinical-services",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "pharmacies",
+    "name": "Pharmacies",
+    "parentId": "clinical-services",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "long-term-rentals",
+    "name": "Long-Term Rentals",
+    "parentId": "apartments",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "short-stay-serviced",
+    "name": "Short Stay & Serviced",
+    "parentId": "apartments",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "boarding-student-rooms",
+    "name": "Boarding & Student Rooms",
+    "parentId": "apartments",
+    "baseName": null,
+    "type": null
+  },
+  {
     "id": "loan-collateral",
     "name": "Collateral Loan",
     "parentId": "loans",
@@ -682,6 +731,321 @@
     "id": "loan-government",
     "name": "Government Employee Loan",
     "parentId": "loans",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "labour",
+    "name": "Labour & Skills",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "machinery-hire",
+    "name": "Heavy Machinery for Hire",
+    "parentId": null,
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "general_labourer",
+    "name": "General Labourer",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "bricklayer",
+    "name": "Bricklayer / Mason",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "carpenter",
+    "name": "Carpenter",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "electrician",
+    "name": "Electrician",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "plumber",
+    "name": "Plumber",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "welder",
+    "name": "Welder",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "steel_fixer",
+    "name": "Steel Fixer / Reinforcement",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "painter",
+    "name": "Painter & Decorator",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "tiler",
+    "name": "Tiler",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "roofer",
+    "name": "Roofer",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "house_cleaner",
+    "name": "House Cleaner",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "nanny",
+    "name": "Nanny / Childcare",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "cook",
+    "name": "Cook / Domestic Chef",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "gardener",
+    "name": "Gardener / Landscaper",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "house_help",
+    "name": "House Help / General Domestic",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "laundry",
+    "name": "Laundry & Ironing",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "machine_operator",
+    "name": "Machine Operator",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "warehouse_worker",
+    "name": "Warehouse Worker",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "factory_hand",
+    "name": "Factory Hand / General Industrial",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "forklift_operator",
+    "name": "Forklift Operator",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "safety_officer",
+    "name": "Safety Officer",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "excavator",
+    "name": "Excavator",
+    "parentId": "machinery-hire",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "bulldozer",
+    "name": "Bulldozer",
+    "parentId": "machinery-hire",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "wheel_loader",
+    "name": "Wheel Loader",
+    "parentId": "machinery-hire",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "backhoe_loader",
+    "name": "Backhoe Loader (TLB)",
+    "parentId": "machinery-hire",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "motor_grader",
+    "name": "Motor Grader",
+    "parentId": "machinery-hire",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "roller_compactor",
+    "name": "Roller / Compactor",
+    "parentId": "machinery-hire",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "mobile_crane",
+    "name": "Mobile Crane",
+    "parentId": "machinery-hire",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "forklift",
+    "name": "Forklift",
+    "parentId": "machinery-hire",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "tipper_truck",
+    "name": "Tipper Truck",
+    "parentId": "machinery-hire",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "concrete_mixer",
+    "name": "Concrete Mixer Truck",
+    "parentId": "machinery-hire",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "water_bowser",
+    "name": "Water Bowser",
+    "parentId": "machinery-hire",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "generator",
+    "name": "Diesel Generator",
+    "parentId": "machinery-hire",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "tractor",
+    "name": "Tractor",
+    "parentId": "machinery-hire",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "farm_worker",
+    "name": "Farm Worker / General",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "irrigation_technician",
+    "name": "Irrigation Technician",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "crop_harvesting",
+    "name": "Crop Harvesting",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "livestock_handler",
+    "name": "Livestock Handler",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "equipment_operator_agri",
+    "name": "Equipment Operator",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "driver_light",
+    "name": "Driver (Light Vehicle)",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "driver_heavy",
+    "name": "Driver (Heavy Vehicle / HGV)",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "loader",
+    "name": "Loader / Offloader",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "delivery_rider",
+    "name": "Delivery Rider",
+    "parentId": "labour",
     "baseName": null,
     "type": null
   }

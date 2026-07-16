@@ -5,6 +5,7 @@ import { User, Save, Loader2, CheckCircle, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useDashboard } from '../DashboardContext';
 import { getProfileSchema } from '../services/userSchemas';
+import { filterToUpdatableUserFields } from '../services/updatableUserFields';
 import DynamicProfileForm from '../components/DynamicProfileForm';
 import DeleteAccountSection from '../components/DeleteAccountSection';
 
@@ -40,8 +41,12 @@ export default function ShopProfilePage() {
     if (!user) return {};
     return {
       ...user,
-      // Map backend column names → form field names
-      logo: user.profilePicture ?? user.logo,
+      // Map backend column names → form field names. The form's `logo`
+      // field is the OWNER'S profile picture (registration selfie);
+      // `shopLogo` is the business brand mark shown on directory cards.
+      logo: user.profilePicture ?? '',
+      shopLogo: user.logo ?? '',
+      coverImage: user.coverImage ?? '',
       nrc: user.nrcNumber ?? user.nrc,
       dob: user.dateOfBirth,
       ownerName: user.name,
@@ -60,11 +65,14 @@ export default function ShopProfilePage() {
     setSaveSuccess(false);
 
     try {
-      const { logo, dob: _dob, ownerName, gps, ...rest } = data;
+      const { logo, shopLogo, dob: _dob, ownerName, gps, ...rest } = data;
       const updates: Record<string, any> = { ...rest };
 
-      // Reverse-map form field names → backend DTO field names
+      // Reverse-map form field names → backend DTO field names. `logo`
+      // (form) is the owner's profile picture; `shopLogo` (form) is the
+      // business logo column shown on directory cards.
       if (logo !== undefined) updates.profilePicture = logo;
+      if (shopLogo !== undefined && shopLogo !== '') updates.logo = shopLogo;
       if (ownerName !== undefined) updates.name = ownerName;
 
       // Handle GPS data
@@ -73,17 +81,11 @@ export default function ShopProfilePage() {
         updates.longitude = gps.longitude;
       }
 
-      // Handle Store Photos mapping
-      if (data.storePhotoFront || data.storePhotoInterior) {
-        updates.storePhotos = {
-          front: data.storePhotoFront || user?.storePhotos?.front || '',
-          interior: data.storePhotoInterior || user?.storePhotos?.interior || '',
-        };
-        delete updates.storePhotoFront;
-        delete updates.storePhotoInterior;
-      }
-
-      await updateUser(updates);
+      // PATCH /users runs forbidNonWhitelisted — one stray schema-only
+      // form key (country, storePhotoFront, …) used to 400 the whole
+      // save, killing even the profile-picture change. Send only what
+      // the backend DTO accepts; the rest is logged and dropped.
+      await updateUser(filterToUpdatableUserFields(updates));
 
       // Update shop entry if it exists. Phase 2: PROVIDER_STAFF dropped
       // from the role enum. Staff users (if reintroduced) carry

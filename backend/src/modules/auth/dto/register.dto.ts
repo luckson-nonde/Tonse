@@ -25,11 +25,13 @@ export class RegisterDto {
   @MinLength(10)
   phone: string;
 
-  @IsEnum(['BUYER', 'SELLER', 'SERVICE_PROVIDER', 'ADMIN'])
+  @IsEnum(['BUYER', 'SELLER', 'SERVICE_PROVIDER'])
   @IsOptional()
   role?: string; // Phase 2: legacy values (EVENTS, ENTERTAINMENT, SUPPLIER,
   // LABOUR) are now category strings, not roles. Backfill SQL already
-  // collapsed existing rows.
+  // collapsed existing rows. ADMIN is deliberately NOT accepted here —
+  // admins are provisioned only via the seed CLI or POST /admin/managers
+  // (public self-registration as admin was an open hole).
 
   @IsString()
   @IsNotEmpty()
@@ -74,4 +76,17 @@ export class RegisterDto {
   @IsString()
   @IsOptional()
   subRole?: string;
+
+  /**
+   * Promoter referral code (?ref=CODE on the shared signup link). Pure
+   * attribution metadata — threaded through registration in the same
+   * server call (same lesson as categoryIds above: never a follow-up
+   * PATCH). A bad/unknown code silently no-ops; it can never fail or
+   * privilege a registration. Note PROMOTER is deliberately NOT accepted
+   * by `role` here — promoter accounts are minted only via the
+   * invite-gated POST /promoter/signup.
+   */
+  @IsString()
+  @IsOptional()
+  referralCode?: string;
 }

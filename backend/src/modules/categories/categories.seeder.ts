@@ -36,7 +36,35 @@ const PARENT_ARCHETYPE: Record<string, Archetype> = {
   'it-products': 'RETAIL',
   'drilling-services': 'SERVICE',
   agriculture: 'RETAIL',
+  // Synthetic roots for the labour trades and machinery-hire equipment
+  // (children of these in catalog.json come from labourCategories.ts via
+  // extract-catalog.cjs). Seeding them satisfies the junction FKs — a
+  // provider registering with trade/equipment ids, or an inquiry tagged
+  // with them, writes rows that reference these categories. LABOUR routes
+  // trade providers to the labour dashboard; RENTAL routes machinery-hire
+  // providers to the rental dashboard (fleet / active rentals / returns).
+  labour: 'LABOUR',
+  'machinery-hire': 'RENTAL',
+  // Hospital Labs + Pharmacies both fulfil buyer requests (test orders /
+  // prescriptions) — generic SERVICE archetype, no bespoke dashboard.
+  'clinical-services': 'SERVICE',
+  // Landlords/agents quote unit offers against booking-shaped requests —
+  // the BOOKING dashboard ("Booking Requests") fits, NOT machinery RENTAL.
+  apartments: 'BOOKING',
   loans: 'LENDING',
+};
+
+/**
+ * Id-pinned sub-category archetypes — checked BEFORE the name regexes in
+ * deriveArchetype. Exists because name-sniffing is fragile here: the
+ * apartment subs live one plural away from the `\brental\b` → RENTAL rule
+ * ("Long-Term Rentals"), and a future rename must not silently reroute
+ * landlords onto the machinery fleet dashboard.
+ */
+const SUB_ARCHETYPE: Record<string, Archetype> = {
+  'long-term-rentals': 'BOOKING',
+  'short-stay-serviced': 'BOOKING',
+  'boarding-student-rooms': 'BOOKING',
 };
 
 const PARENT_NATURE: Record<string, CategoryNature> = {
@@ -55,6 +83,10 @@ const PARENT_NATURE: Record<string, CategoryNature> = {
   'it-products': 'PRODUCT',
   'drilling-services': 'SERVICE',
   agriculture: 'BOTH',
+  labour: 'SERVICE',
+  'machinery-hire': 'SERVICE',
+  'clinical-services': 'SERVICE',
+  apartments: 'SERVICE',
   loans: 'SERVICE',
 };
 
@@ -75,6 +107,9 @@ function deriveArchetype(
   entry: typeof catalog[number],
   parentArchetype: Archetype | undefined
 ): Archetype {
+  // Explicit id pins win over every name heuristic below.
+  if (SUB_ARCHETYPE[entry.id]) return SUB_ARCHETYPE[entry.id];
+
   const variant = deriveActionVariant(entry.name);
   if (variant === 'REPAIR') return 'REPAIR';
 
@@ -180,3 +215,7 @@ export class CategoriesSeederService implements OnModuleInit {
     }
   }
 }
+
+// catalog.json regenerated 2026-07-11: +clinical-services (hospital-labs, pharmacies)
+
+// catalog.json regenerated: +apartments (long-term-rentals, short-stay-serviced, boarding-student-rooms)

@@ -505,9 +505,9 @@ export default function QuoteSubmissionForm({
         )}
 
         {/* Sticky action footer — keeps Submit reachable without
-            scrolling on long quotes. Backdrop blur matches the buyer
-            catalog review bar. */}
-        <div className="sticky bottom-0 -mx-5 sm:-mx-6 px-5 sm:px-6 py-4 bg-white/85 backdrop-blur-md border-t border-slate-200/70 flex gap-3">
+            scrolling on long quotes. Opaque, no backdrop-blur: blur on
+            sticky strips ghosts on budget Android GPUs. */}
+        <div className="sticky bottom-0 -mx-5 sm:-mx-6 px-5 sm:px-6 py-4 bg-white border-t border-slate-200/70 flex gap-3">
           <button
             type="button"
             onClick={onCancel}

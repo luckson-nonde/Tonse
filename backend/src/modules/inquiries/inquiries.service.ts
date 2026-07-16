@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Inquiry } from './entities/inquiry.entity';
@@ -7,9 +7,14 @@ import { CreateInquiryDto, UpdateInquiryDto } from './dto';
 import { DisplayIdUtil } from '../../utils/display-id.util';
 import { CategoriesService } from '../categories/categories.service';
 import { ESCROW_HOLDING_STATUSES } from '../quotes/quote-status';
+import { MatchingService } from './services/matching.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { FunnelTrackingService } from '../referrals/services/funnel-tracking.service';
 
 @Injectable()
 export class InquiriesService {
+  private readonly logger = new Logger(InquiriesService.name);
+
   constructor(
     @InjectRepository(Inquiry)
     private readonly inquiriesRepository: Repository<Inquiry>,
@@ -17,6 +22,9 @@ export class InquiriesService {
     private readonly inquiryCategoriesRepository: Repository<InquiryCategory>,
     private readonly dataSource: DataSource,
     private readonly categoriesService: CategoriesService,
+    private readonly matchingService: MatchingService,
+    private readonly notificationsService: NotificationsService,
+    private readonly funnelTrackingService: FunnelTrackingService,
   ) {}
 
   /**
@@ -100,7 +108,119 @@ export class InquiriesService {
         );
       }
       return saved;
+    }).then((saved) => {
+      // Uber-dispatch: alert every matched provider the moment the inquiry
+      // lands. Post-commit (transaction resolved above), fire-and-forget —
+      // dispatch failure must never fail the buyer's 201, and the provider
+      // side's poll fallback is the safety net.
+      this.dispatchNewLeadNotifications(saved).catch((e) =>
+        this.logger.error(
+          `NEW_LEAD dispatch failed for inquiry ${saved.id}: ${(e as Error).message}`,
+        ),
+      );
+      // Referral funnel: a referred buyer's first inquiry advances their
+      // conversion row (repeat inquiries no-op via the guarded UPDATE).
+      // Same fire-and-forget contract — never fails the buyer's 201.
+      void this.funnelTrackingService
+        .advanceStage(saved.buyerId, 'inquiry', { type: 'inquiry', id: saved.id })
+        .catch((e) =>
+          this.logger.error(
+            `Referral funnel advance failed for inquiry ${saved.id}: ${(e as Error).message}`,
+          ),
+        );
+      return saved;
     });
+  }
+
+  /** Reverse-match the fresh inquiry to provider userIds and push the
+   *  durable NEW_LEAD notification that drives the incoming-request alert. */
+  private async dispatchNewLeadNotifications(inquiry: Inquiry): Promise<void> {
+    const providerIds = await this.matchingService.findMatchedProviderUserIdsForInquiry(
+      inquiry.id,
+      inquiry.city ?? null,
+    );
+    // Never dispatch the buyer's own request back at them (a user can hold
+    // both buyer and provider profiles).
+    const audience = providerIds.filter((id) => id !== inquiry.buyerId);
+    if (audience.length === 0) return;
+    await this.notificationsService.notifyUsers(audience, 'NEW_LEAD', () => ({
+      title: inquiry.title,
+      inquiryId: inquiry.id,
+      // Snapshot: enough for IncomingLeadAlert to render without a
+      // follow-up GET (the alert shows title/location/slots/deadline).
+      data: {
+        id: inquiry.id,
+        title: inquiry.title,
+        description: inquiry.description,
+        location: inquiry.location,
+        city: inquiry.city,
+        province: inquiry.province,
+        processType: inquiry.processType,
+        maxQuotes: inquiry.maxQuotes,
+        responseDeadlineAt: inquiry.responseDeadlineAt,
+        isLabour: inquiry.isLabour,
+        labourGroup: inquiry.labourGroup,
+        labourSubType: inquiry.labourSubType,
+        createdAt: inquiry.createdAt,
+        quoteCount: 0,
+        reserveCount: 0,
+      },
+    }));
+  }
+
+  /**
+   * Surface the RESERVE quote batch to the buyer. Two callers:
+   *   - PATCH /inquiries/:id/release-reserve (explicit buyer action;
+   *     requesterId enforced as the inquiry owner)
+   *   - QuotesService.maybeAutoReleaseReserve (system; requesterId null)
+   * Idempotent: releasing twice is a no-op.
+   */
+  async releaseReserve(inquiryId: string, requesterId: string | null): Promise<Inquiry> {
+    const inquiry = await this.inquiriesRepository.findOne({ where: { id: inquiryId } });
+    if (!inquiry) throw new NotFoundException('Inquiry not found');
+    if (requesterId && inquiry.buyerId !== requesterId) {
+      throw new ForbiddenException('Only the inquiry owner can release reserved quotes');
+    }
+    if (inquiry.reserveReleasedAt) return inquiry;
+
+    const reserveRows: Array<{ providerId: string; count: string }> =
+      await this.inquiriesRepository.query(
+        `SELECT "providerId", COUNT(*)::int AS count
+           FROM quotes WHERE "inquiryId" = $1 AND "slotTier" = 'RESERVE'
+           GROUP BY "providerId"`,
+        [inquiryId],
+      );
+    const reserveCount = reserveRows.reduce((s, r) => s + Number(r.count), 0);
+    if (reserveCount === 0 && requesterId) {
+      throw new BadRequestException('No reserved quotes to release yet');
+    }
+
+    inquiry.reserveReleasedAt = new Date();
+    const saved = await this.inquiriesRepository.save(inquiry);
+
+    // Tier-1 both ways: reserve providers learn they're now in play; the
+    // buyer learns the extra batch landed. Fire-and-forget.
+    void this.notificationsService
+      .notifyUsers(
+        reserveRows.map((r) => r.providerId),
+        'RESERVE_RELEASED',
+        () => ({
+          title: `Your reserved quote on "${inquiry.title}" is now visible to the buyer`,
+          inquiryId: inquiry.id,
+          data: { inquiryTitle: inquiry.title },
+        }),
+      )
+      .catch((e) => this.logger.warn(`RESERVE_RELEASED dispatch failed: ${(e as Error).message}`));
+    if (reserveCount > 0) {
+      void this.notificationsService
+        .notifyUsers([inquiry.buyerId], 'QUOTE_RECEIVED', () => ({
+          title: `${reserveCount} reserved quote${reserveCount === 1 ? '' : 's'} added to "${inquiry.title}"`,
+          inquiryId: inquiry.id,
+          data: { reserveReleased: true, reserveCount },
+        }))
+        .catch((e) => this.logger.warn(`Reserve-release buyer notify failed: ${(e as Error).message}`));
+    }
+    return saved;
   }
 
   async findAll(filters: any = {}): Promise<{ data: Inquiry[]; total: number }> {
@@ -228,7 +348,42 @@ export class InquiriesService {
       order: { createdAt: 'DESC' },
     });
     const withCats = await this.hydrateCategoryFields(inquiries);
-    return this.hydrateBuyerInfo(withCats);
+    const hydrated = await this.hydrateBuyerInfo(withCats);
+
+    // Dispatch telemetry for the buyer's cards: "X providers accepted ·
+    // Y/Z quoted", plus how many overflow quotes sit in reserve (drives the
+    // "Show reserved quotes (N)" affordance). Two batched queries.
+    if (hydrated.length > 0) {
+      const ids = hydrated.map((i) => i.id);
+      const quoteRows: Array<{ inquiryId: string; primary: number; reserve: number }> =
+        await this.inquiriesRepository.query(
+          `SELECT "inquiryId",
+                  COUNT(*) FILTER (WHERE "slotTier" = 'PRIMARY')::int AS primary,
+                  COUNT(*) FILTER (WHERE "slotTier" = 'RESERVE')::int AS reserve
+             FROM quotes WHERE "inquiryId" = ANY($1::uuid[]) GROUP BY "inquiryId"`,
+          [ids],
+        );
+      const acceptRows: Array<{ inquiryId: string; accepted: number }> =
+        await this.inquiriesRepository.query(
+          `SELECT "inquiryId", COUNT(*)::int AS accepted
+             FROM notifications
+             WHERE "inquiryId" = ANY($1::uuid[]) AND type = 'NEW_LEAD' AND status = 'ACKNOWLEDGED'
+             GROUP BY "inquiryId"`,
+          [ids],
+        );
+      const quotesBy = new Map(quoteRows.map((r) => [r.inquiryId, r]));
+      const acceptedBy = new Map(acceptRows.map((r) => [r.inquiryId, Number(r.accepted)]));
+      for (const row of hydrated as any[]) {
+        const q = quotesBy.get(row.id);
+        const released = !!row.reserveReleasedAt;
+        // quoteCount = what the buyer can SEE (primary + released reserve);
+        // reserveCount = quotes still held back.
+        row.quoteCount = (q ? Number(q.primary) : 0) + (released && q ? Number(q.reserve) : 0);
+        row.reserveCount = released || !q ? 0 : Number(q.reserve);
+        row.acceptedCount = acceptedBy.get(row.id) ?? 0;
+      }
+    }
+    return hydrated;
   }
 
   /**

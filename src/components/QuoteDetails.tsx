@@ -245,7 +245,7 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
               animate={{ scale: 1, opacity: 1 }}
               className="bg-white rounded-[32px] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto print:max-h-none print:shadow-none print:rounded-none print:overflow-visible"
             >
-              <div className="sticky top-0 bg-white/80 backdrop-blur-md px-8 py-4 border-b border-slate-100 flex items-center justify-between z-10 print:hidden">
+              <div className="sticky top-0 bg-white px-8 py-4 border-b border-slate-100 flex items-center justify-between z-10 print:hidden">
                 <div>
                   <h3 className="text-xl font-black text-slate-900">Print Receipt</h3>
                   <p className="text-xs text-slate-400 font-medium tracking-wide uppercase mt-0.5">Formal Quotation Document</p>

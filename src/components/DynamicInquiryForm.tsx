@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { API_BASE_URL } from '../services/api/client';
+import { compressImage } from '../utils/compressImage';
 import {
   ChevronLeft,
   ImagePlus,
@@ -93,16 +94,47 @@ export default function DynamicInquiryForm({
     .replace(/-/g, ' ')
     .includes('equipment rental');
 
+  // Clinical Services (Hospital Labs / Pharmacies): the request content is
+  // EITHER typed items OR the prescription photo — the image is first-class
+  // request content, not just an attachment. Slug-normalized per the
+  // category-pattern convention.
+  const isClinical = /hospital labs|pharmac/.test(
+    categoryName.toLowerCase().replace(/-/g, ' '),
+  );
+
   useEffect(() => {
     if (Object.keys(selectedItems).length > 0 && itemsError) {
       setItemsError(null);
     }
   }, [selectedItems, itemsError]);
 
+  // Clear the clinical either/or error as soon as the buyer supplies either
+  // request-content field (mirrors the equipment-rental clear-on-add effect).
+  const clinicalTyped = String((formValues as any).requestItems ?? '').trim();
+  const clinicalPhotoCount = Array.isArray((formValues as any).prescriptionPhotos)
+    ? (formValues as any).prescriptionPhotos.length
+    : 0;
+  useEffect(() => {
+    if (isClinical && itemsError && (clinicalTyped || clinicalPhotoCount > 0)) {
+      setItemsError(null);
+    }
+  }, [isClinical, itemsError, clinicalTyped, clinicalPhotoCount]);
+
   const onFormSubmit = (data: Record<string, any>) => {
     if (isEquipmentRental && Object.keys(selectedItems).length === 0) {
       setItemsError('Add at least one item from the catalog before submitting.');
       return;
+    }
+    // Either/or guard: both fields are schema-optional (image_upload isn't
+    // zod-enforceable), so requiredness lives here — at least one of the two
+    // request-content fields must be present.
+    if (isClinical) {
+      const typed = String(data.requestItems ?? '').trim();
+      const photos = Array.isArray(data.prescriptionPhotos) ? data.prescriptionPhotos : [];
+      if (!typed && photos.length === 0) {
+        setItemsError('Type what you need or attach your prescription photo.');
+        return;
+      }
     }
     setItemsError(null);
     const finalData = {
@@ -131,8 +163,13 @@ export default function DynamicInquiryForm({
 
       // Upload files one by one
       for (const file of newFiles) {
+        // Compress before upload: raw phone captures are multi-MB; the server
+        // stores whatever we send (no server-side resizing), so this is the
+        // storage-bloat guard. Prescription photos stay a readable 1600px —
+        // stored as an image only, never OCR'd.
+        const compressed = await compressImage(file);
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', compressed);
 
         const response = await fetch(`${API_BASE_URL}/files/upload?category=${uploadCategory}`, {
           method: 'POST',
@@ -510,7 +547,8 @@ export default function DynamicInquiryForm({
     return (
       <div className="w-full min-h-screen bg-[#f5f2ed]">
         {/* Catalog Header */}
-        <div className="sticky top-0 z-30 bg-[#f5f2ed]/95 backdrop-blur-md border-b border-[#1B3068]/5">
+        {/* Opaque, no backdrop-blur: blur on sticky strips ghosts on budget Android GPUs. */}
+        <div className="sticky top-0 z-30 bg-[#f5f2ed] border-b border-[#1B3068]/5">
           <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-8 py-5 sm:py-7 flex items-center gap-4">
             <motion.button
               type="button"
@@ -603,7 +641,7 @@ export default function DynamicInquiryForm({
               initial={{ y: 100 }}
               animate={{ y: 0 }}
               exit={{ y: 100 }}
-              className="fixed bottom-0 left-0 right-0 bg-white/85 backdrop-blur-md border-t border-[#1B3068]/8 z-[120] shadow-[0_-4px_24px_rgba(27,48,104,0.08)]"
+              className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#1B3068]/8 z-[120] shadow-[0_-4px_24px_rgba(27,48,104,0.08)]"
             >
               <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-8 py-4 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
@@ -1049,6 +1087,16 @@ export default function DynamicInquiryForm({
                       <span>{itemsError}</span>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Clinical either/or error — the equipment-rental block above
+                  owns the shared itemsError render, but it never mounts for
+                  clinical categories, so surface it here instead. */}
+              {isClinical && itemsError && (
+                <div className="flex items-center gap-2 text-brand-error text-[13px] font-medium mt-6">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{itemsError}</span>
                 </div>
               )}
 

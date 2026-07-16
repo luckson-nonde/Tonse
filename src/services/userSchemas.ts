@@ -279,7 +279,20 @@ export const SELLER_SUPPLIER_SCHEMA: ProfileSchema = {
       title: 'Shop Information',
       type: 'fields',
       fields: [
-        { name: 'coverImage', label: 'Cover Image', type: 'image_upload', required: false },
+        {
+          name: 'shopLogo',
+          label: 'Shop / Business Logo',
+          type: 'image_upload',
+          required: false,
+          helpText: 'Your brand mark — shown on your shop card in the marketplace directory',
+        },
+        {
+          name: 'coverImage',
+          label: 'Shop Image (Cover)',
+          type: 'image_upload',
+          required: false,
+          helpText: 'A photo of your best product or storefront — shown on your shop card',
+        },
         {
           name: 'name',
           label: 'Shop Name',
@@ -453,6 +466,20 @@ export const SERVICE_PROVIDER_SCHEMA: ProfileSchema = {
       type: 'fields',
       fields: [
         {
+          name: 'shopLogo',
+          label: 'Business Logo',
+          type: 'image_upload',
+          required: false,
+          helpText: 'Your brand mark — shown on your card in the marketplace directory',
+        },
+        {
+          name: 'coverImage',
+          label: 'Showcase Image (Cover)',
+          type: 'image_upload',
+          required: false,
+          helpText: 'A photo of your best work — shown on your card in the directory',
+        },
+        {
           name: 'name',
           label: 'Business/Professional Name',
           type: 'text',
@@ -607,10 +634,18 @@ export const ENTERTAINMENT_EVENTS_SCHEMA: ProfileSchema = {
       type: 'fields',
       fields: [
         {
+          name: 'shopLogo',
+          label: 'Brand Logo',
+          type: 'image_upload',
+          required: false,
+          helpText: 'Your brand mark — shown on your card in the marketplace directory',
+        },
+        {
           name: 'coverImage',
           label: 'Cover Image / Banner',
           type: 'image_upload',
           required: false,
+          helpText: 'Shown on your card in the marketplace directory',
         },
         {
           name: 'name',

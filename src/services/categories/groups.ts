@@ -32,7 +32,7 @@ export const CATEGORY_GROUPS: CategoryGroup[] = [
   {
     id: 'professional-services',
     label: 'Professional Services',
-    categoryIds: ['construction', 'it-services', 'drilling-services', 'telecommunications'],
+    categoryIds: ['construction', 'it-services', 'drilling-services', 'telecommunications', 'clinical-services'],
   },
   {
     id: 'business-industry',
@@ -42,7 +42,16 @@ export const CATEGORY_GROUPS: CategoryGroup[] = [
   {
     id: 'lifestyle',
     label: 'Lifestyle',
-    categoryIds: ['entertainment', 'events'],
+    categoryIds: ['entertainment', 'events', 'apartments'],
+  },
+  {
+    // Synthetic masters injected by BuyerCategoryPicker (not CATEGORIES_DB
+    // rows): labour trades + machinery-hire equipment from
+    // labourCategories.ts. Ids match the backend catalog rows, so admin
+    // category-control toggles apply to them like any other master.
+    id: 'people-equipment',
+    label: 'People & Equipment',
+    categoryIds: ['labour', 'machinery-hire'],
   },
   {
     id: 'finance',

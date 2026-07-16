@@ -54,6 +54,10 @@ export interface RegisterRequest {
   categoryIds?: string[];
   /** Optional sub-role hint (PRODUCT_SELLER / SUPPLIER_SELLER / etc.). */
   subRole?: string;
+  /** Promoter referral attribution (?ref=CODE from a shared promoter link).
+   * Travels on /auth/register itself so the conversion row lands with
+   * account creation — never a follow-up call. */
+  referralCode?: string;
 }
 
 export interface RegisterResponse {

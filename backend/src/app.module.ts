@@ -22,6 +22,10 @@ import { FilesModule } from './modules/files/files.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { TeamModule } from './modules/team/team.module';
 import { PortfolioModule } from './modules/portfolio/portfolio.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ReferralsModule } from './modules/referrals/referrals.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
 import { CollectionModule } from './modules/collection/collection.module';
 import { LoanModule } from './modules/loans/loans.module';
 import { ConsentsModule } from './modules/consents/consents.module';
@@ -38,13 +42,14 @@ import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import encryptionConfig from './config/encryption.config';
 import pspConfig from './config/lenco.config';
+import promoterConfig from './config/promoter.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
-      load: [databaseConfig, jwtConfig, encryptionConfig, pspConfig],
+      load: [databaseConfig, jwtConfig, encryptionConfig, pspConfig, promoterConfig],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -77,6 +82,10 @@ import pspConfig from './config/lenco.config';
     CategoriesModule,
     TeamModule,
     PortfolioModule,
+    NotificationsModule,
+    ReferralsModule,
+    ReportsModule,
+    ReviewsModule,
     CollectionModule,
     LoanModule,
     ConsentsModule,

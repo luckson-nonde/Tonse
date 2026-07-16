@@ -21,6 +21,10 @@ export interface ShopResult {
   categoryIds?: string[];
   /** Human-readable category names for display */
   categoryNames?: string[];
+  /** Archetypes across this provider's categories (RETAIL, REPAIR, …) —
+   *  powers the directory's "Select Service Type" filter. */
+  archetypes?: string[];
+  verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED' | 'INCOMPLETE';
   shopType?: 'SELLER' | 'SERVICE_PROVIDER';
 }
 
@@ -31,7 +35,6 @@ export interface ShopProfile extends Omit<ShopResult, 'socialLinks'> {
   phone?: string;
   area?: string;
   socialLinks?: string;
-  verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED' | 'INCOMPLETE';
   verifiedAt?: string;
   hasTpin?: boolean;
   subRole?: string;
