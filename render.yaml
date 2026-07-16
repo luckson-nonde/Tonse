@@ -106,7 +106,7 @@ services:
   - type: web
     name: tonse-web
     runtime: static
-    region: frankfurt
+    # (no region — static sites are served on Render's global CDN)
     branch: main
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
