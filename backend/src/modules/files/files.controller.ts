@@ -1,6 +1,10 @@
 import {
   Controller,
   Post,
+  Get,
+  Param,
+  Res,
+  UseGuards,
   UseInterceptors,
   UploadedFile,
   UploadedFiles,
@@ -11,11 +15,29 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import type { Multer } from 'multer';
+import type { Response } from 'express';
 import { FilesService } from './files.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('files')
 export class FilesController {
   constructor(private readonly filesService: FilesService) {}
+
+  /**
+   * Serve a SENSITIVE file (NRC/payslip/bank-statement/licence/collateral) —
+   * decrypted on the fly. AUTH REQUIRED (JwtAuthGuard): unlike public
+   * `/uploads/*`, these documents are never world-readable.
+   */
+  @Get('secure/:filename')
+  @UseGuards(JwtAuthGuard)
+  serveSecure(@Param('filename') filename: string, @Res() res: Response) {
+    const { data, contentType } = this.filesService.readSecureFile(filename);
+    res.set({
+      'Content-Type': contentType,
+      'Cache-Control': 'private, no-store',
+    });
+    res.send(data);
+  }
 
   /**
    * Upload a single file

@@ -18,8 +18,11 @@ import { Archetype } from '../categories/entities/category.entity';
 import { UserDisplayIdUtil } from '../../utils/user-display-id.util';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ProfileMatchingService } from './services/profile-matching.service';
+import { ESCROW_HOLDING_STATUSES } from '../quotes/quote-status';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcryptjs';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Phase 3 contract: users table holds ONLY these fields. Anything else is
 // profile data and lives in buyer_profiles / seller_profiles /
@@ -588,7 +591,418 @@ export class UsersService {
   }
 
   async remove(id: string): Promise<void> {
-    await this.userRepository.delete({ id });
+    // Full account deletion — hard-remove the user AND every trace of their
+    // data. Kept as `remove` so existing callers (DELETE /users/:id, admin
+    // delete) get the complete purge, not the old cascade-only stub.
+    return this.deleteAccount(id);
+  }
+
+  /**
+   * PRE-DELETION SAFETY CHECK — surfaces cross-user obligations that must
+   * block or merely warn before an account is erased.
+   *
+   * Money in escrow is the hard line: a SELLER who still owes a handover
+   * (the buyer already paid into the holding account) and a BUYER whose
+   * funds are still held both HARD-BLOCK deletion — the escrow has to be
+   * released/reversed first (a blocked buyer contacts the platform admin to
+   * reverse the funds). Everything else — in-progress orders, offers still
+   * awaiting the buyer's decision, open inquiries, incomplete off-platform
+   * loans — only WARNS; the user may still choose to proceed.
+   *
+   * Escrow lives on the QUOTE (`quote.status`), never on the order, so both
+   * hard blocks key off the collectible quote statuses. A user can be both a
+   * buyer and a seller, so the same id is checked from both sides. Loan
+   * quotes are barred from the collectible statuses, so a lender is never
+   * hard-blocked here.
+   */
+  async getDeletionBlockers(userId: string): Promise<{
+    canDelete: boolean;
+    hardBlocks: {
+      sellerCollections: { count: number; amount: number };
+      buyerEscrow: { count: number; amount: number };
+    };
+    warnings: {
+      inProgressOrders: number;
+      pendingOffers: number;
+      openInquiries: number;
+      incompleteLoans: number;
+    };
+  }> {
+    // The parcels still holding a buyer's escrowed funds. Single source of
+    // truth — this list and collection.service's used to disagree, which let a
+    // PENDING_COLLECTION quote block deletion while never appearing in the
+    // provider's collection queue (so it could never be released).
+    const COLLECTIBLE = [...ESCROW_HOLDING_STATUSES];
+
+    // HARD BLOCK 1 — seller/provider owes a handover: buyer paid, funds not
+    // yet released. This is exactly collection.service.queue(providerId).
+    const sellerRows: Array<{ count: number; amount: string }> = await this.dataSource.query(
+      // status::text — quotes.status is a Postgres enum; `= ANY(text[])` needs
+      // the column cast to text or the comparison operator doesn't exist.
+      `SELECT COUNT(*)::int AS count, COALESCE(SUM(price), 0) AS amount
+         FROM quotes WHERE "providerId" = $1 AND status::text = ANY($2)`,
+      [userId, COLLECTIBLE],
+    );
+
+    // HARD BLOCK 2 — buyer's funds sitting in escrow on a paid order whose
+    // quote hasn't been handed over. Buyer link is indirect (order → quote).
+    const buyerRows: Array<{ count: number; amount: string }> = await this.dataSource.query(
+      // q.status::text — see note above; enum column vs text[] parameter.
+      `SELECT COUNT(*)::int AS count, COALESCE(SUM(q.price), 0) AS amount
+         FROM orders o JOIN quotes q ON q.id = o."quoteId"
+        WHERE o."buyerId" = $1 AND q.status::text = ANY($2)`,
+      [userId, COLLECTIBLE],
+    );
+
+    const sellerCollections = {
+      count: Number(sellerRows[0]?.count || 0),
+      amount: Number(sellerRows[0]?.amount || 0),
+    };
+    const buyerEscrow = {
+      count: Number(buyerRows[0]?.count || 0),
+      amount: Number(buyerRows[0]?.amount || 0),
+    };
+
+    // SOFT WARN — orders past confirmation but not yet completed (as either party).
+    const ipoRows: Array<{ count: number }> = await this.dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM orders
+        WHERE ("buyerId" = $1 OR "sellerId" = $1)
+          AND status IN ('CONFIRMED', 'SHIPPED', 'DELIVERED')`,
+      [userId],
+    );
+    // Offers still awaiting THIS buyer's decision.
+    const poRows: Array<{ count: number }> = await this.dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM quotes q
+         JOIN inquiries i ON i.id = q."inquiryId"
+        WHERE i."buyerId" = $1 AND q.status = 'PENDING'`,
+      [userId],
+    );
+    // Inquiries the buyer still has open to the market.
+    const oiRows: Array<{ count: number }> = await this.dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM inquiries
+        WHERE "buyerId" = $1 AND status = 'OPEN'`,
+      [userId],
+    );
+    // Incomplete off-platform loans (accepted, stage not yet COMPLETED) — the
+    // user as borrower (inquiry.buyerId) or lender (quote.providerId).
+    const ilRows: Array<{ count: number }> = await this.dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM quotes q
+         LEFT JOIN inquiries i ON i.id = q."inquiryId"
+        WHERE q.condition = 'LOAN' AND q.status = 'ACCEPTED'
+          AND COALESCE(q."dynamicFields"->>'stage', '') <> 'COMPLETED'
+          AND (q."providerId" = $1 OR i."buyerId" = $1)`,
+      [userId],
+    );
+
+    const canDelete = sellerCollections.count === 0 && buyerEscrow.count === 0;
+    return {
+      canDelete,
+      hardBlocks: { sellerCollections, buyerEscrow },
+      warnings: {
+        inProgressOrders: Number(ipoRows[0]?.count || 0),
+        pendingOffers: Number(poRows[0]?.count || 0),
+        openInquiries: Number(oiRows[0]?.count || 0),
+        incompleteLoans: Number(ilRows[0]?.count || 0),
+      },
+    };
+  }
+
+  /**
+   * DATA PROTECTION — erase a user on request, using the TIERED model that
+   * reconciles the right-to-erasure with lawful retention (Zambia Data
+   * Protection Act 2021 §§ erasure exemptions; FIC/AML + tax record-keeping):
+   *
+   *   • HARD-DELETE all personal / private data and everything the user solely
+   *     owns that carries no legal retention duty: profiles (name/contact/GPS),
+   *     NRC + ID docs, PINs, uploaded files, portfolio, products, shops,
+   *     schedules, loan requests/offers (the loan contract is off-platform, so
+   *     TONSE holds no financial record there), and any inquiry/quote that never
+   *     converted to a paid escrow order.
+   *
+   *   • ANONYMISE-AND-RETAIN the escrow FINANCIAL records TONSE must keep (buyer
+   *     paid into the holding account): `orders` + `payments`, and the quote /
+   *     inquiry they reference — the transaction FACTS stay (amount, date, fee,
+   *     status), the PERSONAL data is stripped (contact, address, GPS, free
+   *     text). The user row is reduced to a de-identified shell so those rows
+   *     keep referential integrity; a user with NO financial footprint is
+   *     hard-deleted outright.
+   *
+   *   • A PII-free ERASURE RECEIPT (audit action ACCOUNT_DELETED, keyed by a
+   *     one-way hash of the user id) records that erasure happened, for proof of
+   *     compliance — without retaining anything identifying.
+   */
+  async deleteAccount(userId: string): Promise<void> {
+    // Server-side enforcement of the escrow hard-block — the frontend runs the
+    // same check for UX, but this is the real gate (can't be bypassed). Money
+    // in escrow (seller owes a handover, or buyer's funds still held) must be
+    // released/reversed before the account can be erased.
+    const blockers = await this.getDeletionBlockers(userId);
+    if (!blockers.canDelete) {
+      throw new ConflictException({
+        reason: 'PENDING_ESCROW',
+        message:
+          'Account cannot be deleted while funds are held in escrow. Resolve the pending collection(s) first.',
+        hardBlocks: blockers.hardBlocks,
+      });
+    }
+
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    try {
+      const staff: Array<{ id: string }> = await qr.query(
+        'SELECT id FROM users WHERE "parentProviderId" = $1',
+        [userId],
+      );
+      const staffIds = staff.map((s) => s.id);
+
+      // Capture, BEFORE deleting the rows that hold them: uploaded-file paths,
+      // and the user's display name(s) — so we can also scrub the name out of
+      // OTHER parties' audit rows (buyerName/staffName).
+      const files: string[] = [];
+      const names: string[] = [];
+      for (const id of [userId, ...staffIds]) {
+        for (const t of ['buyer_profiles', 'seller_profiles', 'service_provider_profiles']) {
+          (await qr.query(`SELECT * FROM "${t}" WHERE "userId" = $1`, [id])).forEach((r: any) => {
+            this.collectFileRefs(r, files);
+            if (r.name) names.push(String(r.name));
+            if (r.companyName) names.push(String(r.companyName));
+          });
+        }
+        (await qr.query('SELECT * FROM shops WHERE "sellerId" = $1', [id])).forEach((r: any) =>
+          this.collectFileRefs(r, files),
+        );
+        (await qr.query('SELECT * FROM products WHERE "sellerId" = $1', [id])).forEach((r: any) =>
+          this.collectFileRefs(r, files),
+        );
+        (
+          await qr.query('SELECT attributes, items, preferences FROM inquiries WHERE "buyerId" = $1', [id])
+        ).forEach((r: any) => this.collectFileRefs(r, files));
+        (
+          await qr.query(
+            'SELECT ii."imagePath", ii."imageUrl" FROM inquiry_images ii JOIN inquiries i ON ii."inquiryId" = i.id WHERE i."buyerId" = $1',
+            [id],
+          )
+        ).forEach((r: any) => this.collectFileRefs(r, files));
+      }
+
+      const pseudoKey = crypto.createHash('sha256').update(userId).digest('hex').slice(0, 32);
+
+      await qr.startTransaction();
+      try {
+        // Staff hold no financial records of their own (their provider actions
+        // attribute to the parent owner) — hard-purge them entirely.
+        for (const sid of staffIds) {
+          await this.hardPurgeUser(qr, sid);
+        }
+
+        // Resolve the owner's retained FINANCIAL footprint (paid escrow orders).
+        const orderRows: Array<{ quoteId: string }> = await qr.query(
+          'SELECT DISTINCT "quoteId" FROM orders WHERE ("buyerId" = $1 OR "sellerId" = $1) AND "quoteId" IS NOT NULL',
+          [userId],
+        );
+        const retQuoteIds = orderRows.map((r) => r.quoteId);
+        let retInquiryIds: string[] = [];
+        if (retQuoteIds.length) {
+          const inqRows: Array<{ inquiryId: string }> = await qr.query(
+            'SELECT DISTINCT "inquiryId" FROM quotes WHERE id = ANY($1) AND "inquiryId" IS NOT NULL',
+            [retQuoteIds],
+          );
+          retInquiryIds = inqRows.map((r) => r.inquiryId);
+        }
+        const paymentCount: Array<unknown> = await qr.query(
+          'SELECT 1 FROM payments WHERE "userId" = $1 LIMIT 1',
+          [userId],
+        );
+        const hasFinancial = orderRows.length > 0 || paymentCount.length > 0;
+
+        // ── Scrub PII on the retained financial rows (keep the facts) ──
+        await qr.query(
+          `UPDATE orders SET "shippingAddress" = '[deleted]', notes = '[deleted]', items = '[]'::json
+             WHERE "buyerId" = $1 OR "sellerId" = $1`,
+          [userId],
+        );
+        await qr.query('UPDATE payments SET metadata = NULL WHERE "userId" = $1', [userId]);
+        if (retQuoteIds.length) {
+          await qr.query('UPDATE quotes SET "buyerContact" = NULL WHERE id = ANY($1)', [retQuoteIds]);
+        }
+        if (retInquiryIds.length) {
+          await qr.query(
+            `UPDATE inquiries SET title = '[deleted]', description = '[deleted]', location = '[deleted]',
+               province = NULL, city = NULL, latitude = NULL, longitude = NULL,
+               attributes = '{}'::json, items = '[]'::json, preferences = '{}'::json
+             WHERE id = ANY($1)`,
+            [retInquiryIds],
+          );
+        }
+
+        // ── Hard-delete the owner's NON-retained, personal data ──
+        if (retQuoteIds.length) {
+          await qr.query('DELETE FROM quotes WHERE "providerId" = $1 AND NOT (id = ANY($2))', [
+            userId,
+            retQuoteIds,
+          ]);
+        } else {
+          await qr.query('DELETE FROM quotes WHERE "providerId" = $1', [userId]);
+        }
+        // OTHER providers' quotes on this buyer's inquiries. The quote→inquiry
+        // FK is RESTRICT (so escrow can never be cascade-vaporised), which means
+        // these must be removed explicitly before their inquiry. Retained quotes
+        // hang off retained inquiries, so they're never in this set.
+        if (retInquiryIds.length) {
+          await qr.query(
+            `DELETE FROM quotes WHERE "inquiryId" IN (
+               SELECT id FROM inquiries WHERE "buyerId" = $1 AND NOT (id = ANY($2)))`,
+            [userId, retInquiryIds],
+          );
+          await qr.query('DELETE FROM inquiries WHERE "buyerId" = $1 AND NOT (id = ANY($2))', [
+            userId,
+            retInquiryIds,
+          ]);
+        } else {
+          await qr.query(
+            `DELETE FROM quotes WHERE "inquiryId" IN (SELECT id FROM inquiries WHERE "buyerId" = $1)`,
+            [userId],
+          );
+          await qr.query('DELETE FROM inquiries WHERE "buyerId" = $1', [userId]);
+        }
+        await qr.query('DELETE FROM products WHERE "sellerId" = $1', [userId]);
+        await qr.query('DELETE FROM schedules WHERE "userId" = $1', [userId]);
+        await qr.query('DELETE FROM shops WHERE "sellerId" = $1', [userId]);
+        await qr.query('DELETE FROM portfolio_items WHERE "userId" = $1', [userId]);
+        await qr.query('DELETE FROM buyer_profiles WHERE "userId" = $1', [userId]);
+        await qr.query('DELETE FROM seller_profiles WHERE "userId" = $1', [userId]);
+        await qr.query('DELETE FROM service_provider_profiles WHERE "userId" = $1', [userId]);
+        await qr.query('DELETE FROM identity_audits WHERE "userId" = $1', [userId]);
+        await qr.query('DELETE FROM user_emails WHERE "userId" = $1', [userId]);
+        // The user's OWN audit trail (holds ip/ua/names) is deleted; the FACTS
+        // survive on the retained orders/payments.
+        await qr.query(
+          'DELETE FROM audit_logs WHERE "userId" = $1 OR "providerId" = $1 OR "staffId" = $1',
+          [userId],
+        );
+        // Scrub the ex-user's name out of OTHER parties' audit rows.
+        if (names.length) {
+          await qr.query(`UPDATE audit_logs SET "buyerName" = 'Deleted user' WHERE "buyerName" = ANY($1)`, [names]);
+          await qr.query(`UPDATE audit_logs SET "staffName" = 'Deleted user' WHERE "staffName" = ANY($1)`, [names]);
+        }
+
+        // ── User row: de-identified shell (anchors retained financials) or full delete ──
+        if (hasFinancial) {
+          await qr.query(
+            `UPDATE users SET "nrcNumber" = NULL, "nrcDocumentPath" = NULL, "refreshToken" = NULL,
+               password = '!deleted', "isActive" = false, "isNrcVerified" = false,
+               "displayId" = NULL, "activeProfileId" = NULL, "activeProfileType" = NULL,
+               permissions = NULL, "assignedArchetype" = NULL, pin = NULL,
+               "parentProviderId" = NULL, "mustChangePassword" = false
+             WHERE id = $1`,
+            [userId],
+          );
+        } else {
+          await qr.query('DELETE FROM users WHERE id = $1', [userId]);
+        }
+
+        // ── PII-free erasure receipt (proof of compliance) ──
+        await qr.query(
+          `INSERT INTO audit_logs (action, "entityType", "entityId", details, reason, status)
+           VALUES ('ACCOUNT_DELETED', 'USER', $1, $2, $3, $4)`,
+          [
+            userId,
+            hasFinancial
+              ? 'Account PII erased; escrow financial records anonymised and retained per AML/tax retention.'
+              : 'Account and all personal data erased; no financial records held.',
+            pseudoKey,
+            hasFinancial ? 'ANONYMISED' : 'DELETED',
+          ],
+        );
+
+        await qr.commitTransaction();
+      } catch (e) {
+        await qr.rollbackTransaction();
+        throw e;
+      }
+
+      // Files last — a failure here must not resurrect the (already-erased) account.
+      this.deleteUploadedFiles(files);
+      this.logger.log(
+        `deleteAccount: erased user ${userId} + ${staffIds.length} staff; removed ${files.length} file(s)`,
+      );
+    } finally {
+      await qr.release();
+    }
+  }
+
+  /** Remove EVERYTHING for a user with no retained financial footprint (staff,
+   *  or an owner who never transacted through escrow). */
+  private async hardPurgeUser(qr: any, id: string): Promise<void> {
+    await qr.query('DELETE FROM orders WHERE "buyerId" = $1 OR "sellerId" = $1', [id]);
+    await qr.query('DELETE FROM payments WHERE "userId" = $1', [id]);
+    await qr.query('DELETE FROM quotes WHERE "providerId" = $1', [id]);
+    // Quotes others placed on this user's inquiries — the quote→inquiry FK is
+    // RESTRICT (escrow can't be cascade-vaporised), so they go before the inquiry.
+    await qr.query(
+      `DELETE FROM quotes WHERE "inquiryId" IN (SELECT id FROM inquiries WHERE "buyerId" = $1)`,
+      [id],
+    );
+    await qr.query('DELETE FROM inquiries WHERE "buyerId" = $1', [id]);
+    await qr.query('DELETE FROM products WHERE "sellerId" = $1', [id]);
+    await qr.query('DELETE FROM schedules WHERE "userId" = $1', [id]);
+    await qr.query('DELETE FROM shops WHERE "sellerId" = $1', [id]);
+    await qr.query('DELETE FROM portfolio_items WHERE "userId" = $1', [id]);
+    await qr.query('DELETE FROM buyer_profiles WHERE "userId" = $1', [id]);
+    await qr.query('DELETE FROM seller_profiles WHERE "userId" = $1', [id]);
+    await qr.query('DELETE FROM service_provider_profiles WHERE "userId" = $1', [id]);
+    await qr.query('DELETE FROM identity_audits WHERE "userId" = $1', [id]);
+    await qr.query('DELETE FROM user_emails WHERE "userId" = $1', [id]);
+    await qr.query('DELETE FROM audit_logs WHERE "userId" = $1 OR "providerId" = $1 OR "staffId" = $1', [id]);
+    await qr.query('DELETE FROM users WHERE id = $1', [id]);
+  }
+
+  /** Recursively gather any string that points at an uploaded file. */
+  private collectFileRefs(value: any, out: string[]): void {
+    if (value == null) return;
+    if (typeof value === 'string') {
+      if (value.includes('/uploads/') || value.includes('/files/secure/')) out.push(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((v) => this.collectFileRefs(v, out));
+      return;
+    }
+    if (typeof value === 'object') {
+      Object.values(value).forEach((v) => this.collectFileRefs(v, out));
+    }
+  }
+
+  /** Unlink uploaded files from disk (public/uploads AND the encrypted
+   *  secure-uploads dir), each guarded to stay within its own directory. */
+  private deleteUploadedFiles(candidates: string[]): void {
+    const publicDir = path.join(process.cwd(), 'public');
+    const uploadsDir = path.join(publicDir, 'uploads');
+    const secureDir = path.join(process.cwd(), 'secure-uploads');
+    for (const raw of candidates) {
+      if (!raw || typeof raw !== 'string') continue;
+      try {
+        let p: string;
+        let root: string;
+        if (raw.includes('/files/secure/')) {
+          // Encrypted sensitive file — lives in secure-uploads/<basename>.
+          p = path.join(secureDir, path.basename(raw));
+          root = secureDir;
+        } else if (path.isAbsolute(raw)) {
+          p = path.normalize(raw);
+          root = uploadsDir;
+        } else {
+          const idx = raw.indexOf('/uploads/');
+          if (idx === -1) continue;
+          p = path.join(publicDir, raw.slice(idx + 1)); // 'uploads/…'
+          root = uploadsDir;
+        }
+        if (!p.startsWith(root)) continue; // never escape the intended dir
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+      } catch {
+        // best-effort — a missing/locked file must not fail the deletion
+      }
+    }
   }
 
   async updateLastLoginAt(userId: string): Promise<void> {

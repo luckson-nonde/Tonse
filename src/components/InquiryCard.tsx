@@ -4,6 +4,7 @@ import Button from './Button';
 import { ARCHETYPE_CONFIG } from '../services/archetypeConfig';
 import { getCategorySchema } from '../services/categories';
 import { isLoanContext } from '../utils/loan';
+import SecureFile, { isSecureFileUrl } from './SecureFile';
 
 interface InquiryCardProps {
   inquiry: any;
@@ -195,9 +196,13 @@ export default function InquiryCard({
                 <p className="text-[10px] font-bold text-slate-400 tracking-wider uppercase font-sans mb-1">
                   {getLabel(key)}
                 </p>
-                <p className="text-sm text-brand-dark font-medium font-sans">
-                  {formatValue(key, value)}
-                </p>
+                {isSecureFileUrl(value) ? (
+                  <SecureFile url={value} asLink />
+                ) : (
+                  <p className="text-sm text-brand-dark font-medium font-sans">
+                    {formatValue(key, value)}
+                  </p>
+                )}
               </div>
             );
           })}

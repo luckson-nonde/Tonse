@@ -138,6 +138,16 @@ export class OrdersController {
     return this.ordersService.updateDeliveryDate(id, body.deliveryDate);
   }
 
+  /**
+   * DELETE /orders/:id — buyer-only.
+   *
+   * MONEY SAFETY: refuses while the linked quote still holds escrow. Deleting
+   * the order used to hard-delete it while leaving the quote `PAID` forever —
+   * the buyer's money stayed in escrow with no order to trace it to, the seller
+   * could still "collect" it, and the orphaned position permanently blocked the
+   * buyer's own account deletion. Cancelling a paid deal is a refund, not a
+   * row deletion — that flow is the cancel/refund endpoint, not this one.
+   */
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
@@ -147,6 +157,7 @@ export class OrdersController {
     if (order.buyerId !== req.user.id) {
       throw new ForbiddenException('Only the buyer can delete orders');
     }
+    await this.ordersService.assertNoEscrowHeld(id);
     await this.ordersService.remove(id);
   }
 }

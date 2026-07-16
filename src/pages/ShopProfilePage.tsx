@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useDashboard } from '../DashboardContext';
 import { getProfileSchema } from '../services/userSchemas';
 import DynamicProfileForm from '../components/DynamicProfileForm';
+import DeleteAccountSection from '../components/DeleteAccountSection';
 
 export default function ShopProfilePage() {
   const { user, updateUser } = useAuth();
@@ -291,6 +292,9 @@ export default function ShopProfilePage() {
             </div>
           </form>
         </div>
+
+        {/* Danger zone — permanent account deletion */}
+        <DeleteAccountSection />
       </div>
     </div>
   );

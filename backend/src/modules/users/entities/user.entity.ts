@@ -10,6 +10,7 @@ import {
 import { Exclude } from 'class-transformer';
 import { UserEmail } from './user-email.entity';
 import { IdentityAudit } from '../../identity-audit/entities/identity-audit.entity';
+import { piiTransformer } from '../../../common/crypto/pii-crypto';
 
 /**
  * User Entity — auth identity ONLY (Phase 3c contract).
@@ -107,7 +108,7 @@ export class User {
    * default selects and from JSON serialisation — only the admin
    * verification path should ever see this value.
    */
-  @Column({ type: 'text', nullable: true, select: false })
+  @Column({ type: 'text', nullable: true, select: false, transformer: piiTransformer })
   @Exclude({ toPlainOnly: true })
   nrcDocumentPath: string;
 

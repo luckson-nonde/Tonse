@@ -15,7 +15,10 @@ export default defineConfig(({mode}) => {
     ],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.LENCO_API_KEY': JSON.stringify(env.LENCO_API_KEY),
+      // NOTE: never `define` a payment-provider secret here. Anything in
+      // `define` is inlined into the client bundle and shipped to every
+      // visitor. The PSP key lives server-side only (backend config) and the
+      // browser never talks to the PSP directly — it goes through our API.
       'global': 'window.global',
       'globalThis': 'window.global',
       'self': 'window.global',

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Order } from './entities/order.entity';
@@ -6,6 +6,7 @@ import { Quote } from '../quotes/entities/quote.entity';
 import { Inquiry } from '../inquiries/entities/inquiry.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
+import { ESCROW_HOLDING_STATUSES } from '../quotes/quote-status';
 
 @Injectable()
 export class OrdersService {
@@ -14,6 +15,27 @@ export class OrdersService {
     private ordersRepository: Repository<Order>,
     private readonly dataSource: DataSource,
   ) {}
+
+  /**
+   * Refuse to destroy an order whose quote still holds the buyer's money.
+   * Deleting the order doesn't move the money — it just orphans the escrow
+   * position (quote stays PAID with nothing pointing at it), which is how
+   * buyers ended up permanently blocked from deleting their own account.
+   */
+  async assertNoEscrowHeld(orderId: string): Promise<void> {
+    const rows: Array<{ count: string }> = await this.dataSource.query(
+      `SELECT COUNT(*) AS count
+         FROM orders o JOIN quotes q ON q.id = o."quoteId"
+        WHERE o.id = $1 AND q.status::text = ANY($2)`,
+      [orderId, [...ESCROW_HOLDING_STATUSES]],
+    );
+    if (Number(rows[0]?.count || 0) > 0) {
+      throw new ConflictException(
+        'This order has funds held in escrow and cannot be deleted. ' +
+          'Cancel the order to have the money refunded instead.',
+      );
+    }
+  }
 
   async create(createOrderDto: CreateOrderDto): Promise<Order> {
     const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substring(7).toUpperCase()}`;

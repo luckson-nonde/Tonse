@@ -50,6 +50,7 @@ import CollectionPage from '../pages/CollectionPage';
 import { LoanRequestsView, LoanOffersView } from './loan/LoanViews';
 import { LoanHomeView } from './loan/LoanHomeView';
 import LoanTermsEditor from './loan/LoanTermsEditor';
+import DeleteAccountSection from './DeleteAccountSection';
 import LoanOfferDetail from './loan/LoanOfferDetail';
 import FinancialPage from '../pages/FinancialPage';
 import { Inquiry, Quote } from '../types';
@@ -699,6 +700,7 @@ export default function DynamicAccountRenderer({
                 </Button>
               </div>
             </DynamicProfileForm>
+            <DeleteAccountSection />
           </div>
         );
       }

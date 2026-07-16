@@ -5,6 +5,11 @@ export class CreateAuditLogDto {
   @IsUUID()
   userId?: string;
 
+  /** Human-readable actor. Usually auto-filled from the request audit context. */
+  @IsOptional()
+  @IsString()
+  actorLabel?: string;
+
   @IsOptional()
   @IsUUID()
   providerId?: string;

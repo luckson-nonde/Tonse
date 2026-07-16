@@ -15,12 +15,16 @@ import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { LedgerService } from '../ledger/ledger.service';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly ledger: LedgerService,
+  ) {}
 
   // ───── Platform overview ────────────────────────────────────────────────
 
@@ -106,6 +110,41 @@ export class AdminController {
   @Get('transactions')
   async listTransactions(@Query() query: Record<string, any>) {
     return this.adminService.listTransactions(query);
+  }
+
+  // ───── Ledger & escrow ──────────────────────────────────────────────────
+  //
+  // The double-entry mirror of money the PSP custodies. `payments` (above) is
+  // the frozen legacy record; these are the authoritative money views.
+
+  /** Every account's live balance — the shape of the whole float. */
+  @Get('ledger/accounts')
+  async ledgerAccounts() {
+    return this.ledger.accountBalances();
+  }
+
+  /** Debits vs credits per account. `balanced: false` means a broken ledger. */
+  @Get('ledger/trial-balance')
+  async trialBalance() {
+    return this.ledger.trialBalance();
+  }
+
+  /** Journals — one row per money event. */
+  @Get('ledger/journals')
+  async listJournals(@Query() query: Record<string, any>) {
+    return this.ledger.listJournals(query);
+  }
+
+  /** One journal plus its balanced lines. */
+  @Get('ledger/journals/:id')
+  async getJournal(@Param('id') id: string) {
+    return this.ledger.getJournal(id);
+  }
+
+  /** Open escrow positions — what is held, per deal. */
+  @Get('escrow/positions')
+  async escrowPositions() {
+    return this.adminService.escrowPositions();
   }
 
   @Get('audit')

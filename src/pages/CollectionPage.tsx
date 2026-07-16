@@ -68,24 +68,12 @@ export default function CollectionPage() {
     loadLists();
   }, [loadLists]);
 
-  const selectParcel = useCallback(
-    (found: Quote) => {
-      setQuote(found);
-      setError('');
-      if (user && found.id != null) {
-        logAuditAction(
-          user,
-          'COLLECTION_STARTED',
-          String(found.id),
-          found.inquiryTitle,
-          found.buyerContact?.name || 'Unknown Buyer',
-          found.price,
-          `Started collection for parcel ${String(found.id)}`,
-        );
-      }
-    },
-    [user],
-  );
+  // Selecting a parcel only opens it on screen — nothing has happened to it yet,
+  // so it is not audited. The trail records completed actions only.
+  const selectParcel = useCallback((found: Quote) => {
+    setQuote(found);
+    setError('');
+  }, []);
 
   const handleFindParcel = useCallback(
     async (raw: string) => {
@@ -134,6 +122,17 @@ export default function CollectionPage() {
     try {
       const updated = await collectionService.verify(String(quote.id));
       setQuote({ ...quote, ...updated, status: 'AWAITING_PICKUP' });
+      if (user) {
+        logAuditAction(
+          user,
+          'BUYER_VERIFIED',
+          String(quote.id),
+          quote.inquiryTitle,
+          quote.buyerContact?.name || 'Unknown Buyer',
+          quote.price,
+          `Verified buyer for parcel ${String(quote.id)}`,
+        );
+      }
       await loadLists();
     } catch (e: any) {
       setError(e?.message || 'Failed to verify buyer. Please try again.');

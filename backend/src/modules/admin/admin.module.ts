@@ -8,6 +8,7 @@ import { QuotesModule } from '../quotes/quotes.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { AuditModule } from '../audit/audit.module';
 import { CategoriesModule } from '../categories/categories.module';
+import { LedgerModule } from '../ledger/ledger.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { CategoriesModule } from '../categories/categories.module';
     PaymentsModule,
     AuditModule,
     CategoriesModule,
+    LedgerModule,
   ],
   providers: [AdminService],
   controllers: [AdminController],

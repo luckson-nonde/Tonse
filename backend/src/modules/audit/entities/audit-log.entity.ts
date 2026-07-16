@@ -21,6 +21,15 @@ export class AuditLog {
   @Column({ type: 'uuid', nullable: true })
   userId: string;
 
+  /**
+   * Human-readable actor label captured at write time (e.g.
+   * "USER-KVBDUK (SERVICE_PROVIDER)"). Denormalised so the trail still names
+   * WHO acted even after that user is deleted and their `userId` no longer
+   * resolves. Populated automatically from the request's audit context.
+   */
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  actorLabel: string;
+
   @Column({ type: 'uuid', nullable: true })
   providerId: string;
 

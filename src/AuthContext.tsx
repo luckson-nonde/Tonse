@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from './services/auth/authService';
 import { tokenManager } from './services/api/client';
+import { flushSessionConsents } from './services/api/consentService';
 import { SubRole, EntityType } from './types';
 import { generateVirtualAccount } from './utils/financeUtils';
 
@@ -211,6 +212,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 
       setUser(finalUser);
+      // Persist any consents captured this session now that we're authenticated.
+      void flushSessionConsents();
       return finalUser;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Login failed';
@@ -349,6 +352,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             role: role as Role,
           });
         }
+        // Durably persist consents captured during onboarding (NRC, credentials,
+        // location, business docs) now that the account exists + is authenticated.
+        void flushSessionConsents();
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Registration failed';
         setError(errorMessage);

@@ -54,6 +54,10 @@ services:
       JWT_REFRESH_SECRET: change_me_super_secret_refresh_key
       JWT_REFRESH_EXPIRATION: '604800s'
       ENCRYPTION_KEY: change_me_32_character_key_000001
+      # At-rest PII encryption (AES-256-GCM). PROD: set to base64 of 32 random
+      # bytes from a secrets manager / KMS, and rotate. Missing key in prod =
+      # fail-closed (see common/crypto/pii-crypto.ts).
+      PII_ENCRYPTION_KEY: change_me_base64_32_random_bytes_dev_only
       ENCRYPTION_IV: change_me_16_char
     ports:
       - '3001:3001'

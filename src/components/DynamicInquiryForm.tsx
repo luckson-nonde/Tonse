@@ -122,12 +122,19 @@ export default function DynamicInquiryForm({
       const newFiles = Array.from(files).slice(0, 5 - currentImages.length);
       const uploadedUrls: string[] = [];
 
+      // Sensitive documents (payslip, bank statement, NRC, licence, collateral,
+      // title deed, white book, proof) upload to the encrypted, auth-gated
+      // `kyc` category; ordinary reference photos stay public under `inquiries`.
+      const isSensitiveDoc =
+        /payslip|bank|nrc|licen[cs]e|deed|collateral|white.?book|proof|statement|introduction|kyc/i.test(name);
+      const uploadCategory = isSensitiveDoc ? 'kyc' : 'inquiries';
+
       // Upload files one by one
       for (const file of newFiles) {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch(`${API_BASE_URL}/files/upload?category=inquiries`, {
+        const response = await fetch(`${API_BASE_URL}/files/upload?category=${uploadCategory}`, {
           method: 'POST',
           body: formData,
         });

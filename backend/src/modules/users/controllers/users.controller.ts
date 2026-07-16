@@ -71,15 +71,37 @@ export class UsersController {
     return this.usersService.flattenWithProfile(user);
   }
 
+  /**
+   * GET /users/:id/deletion-check — pre-flight for account deletion. Self-only.
+   * Reports whether the account can be erased and what stands in the way: hard
+   * blocks (funds held in escrow, as seller or buyer) vs soft warnings (open
+   * orders/offers/inquiries/loans). The frontend uses this to block or warn
+   * BEFORE the user commits; the actual DELETE re-checks server-side.
+   */
+  @Get(':id/deletion-check')
+  @UseGuards(JwtAuthGuard)
+  async deletionCheck(@Param('id') id: string, @Request() req) {
+    if (req.user.id !== id) {
+      throw new ForbiddenException();
+    }
+    return this.usersService.getDeletionBlockers(id);
+  }
+
+  /**
+   * DELETE /users/:id — permanent account deletion. Self-only: a user can only
+   * delete their OWN account. Irreversibly purges the user and ALL their data
+   * (inquiries, quotes, orders, payments, products, shops, schedules, profiles,
+   * audit logs, staff, and uploaded files) — see usersService.deleteAccount.
+   * Blocked (409) while funds are held in escrow — see getDeletionBlockers.
+   */
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id') id: string, @Request() req) {
-    // Implement authorization check
     if (req.user.id !== id) {
-      throw new Error('Unauthorized');
+      throw new ForbiddenException('You can only delete your own account');
     }
-    await this.usersService.remove(id);
+    await this.usersService.deleteAccount(id);
   }
 
   /**

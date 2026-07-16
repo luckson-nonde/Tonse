@@ -24,7 +24,13 @@ export class Quote {
   @Column({ type: 'uuid' })
   inquiryId: string;
 
-  @ManyToOne(() => Inquiry, { onDelete: 'CASCADE' })
+  // RESTRICT, not CASCADE: a quote can hold the buyer's money in escrow, and
+  // cascading meant deleting an inquiry silently vaporised its PAID quotes —
+  // destroying the escrow record with no trace and no refund. Callers must now
+  // remove an inquiry's quotes deliberately (see InquiriesService.remove, which
+  // refuses while any quote holds escrow), so money can never be erased as a
+  // side-effect of deleting a request.
+  @ManyToOne(() => Inquiry, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'inquiryId' })
   inquiry: Inquiry;
 
@@ -57,12 +63,19 @@ export class Quote {
       'ACCEPTED',
       'REJECTED',
       'ARCHIVED',
+      // Collection initiated with the PSP, payer hasn't approved yet. NOT an
+      // escrow-holding status — no money has moved.
+      'PAYMENT_PENDING',
       'PAID',
       'PENDING_COLLECTION',
       'AWAITING_PICKUP',
       'COMPLETED',
       'HANDED_OVER',
       'SUPERSEDED', // Added for original quotes that were revised and accepted
+      // Terminal exits for a paid deal. PAID previously had NO way out, which
+      // is why cancelled orders stranded escrow forever.
+      'CANCELLED',
+      'REFUNDED',
     ],
     default: 'PENDING',
   })

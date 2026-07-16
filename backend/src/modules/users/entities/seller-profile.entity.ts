@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { User } from './user.entity';
+import { piiTransformer } from '../../../common/crypto/pii-crypto';
 
 /**
  * SellerProfile — Phase 3 of the users-table restructure.
@@ -76,10 +77,12 @@ export class SellerProfile {
   @Column({ type: 'varchar', length: 255, nullable: true })
   companyName: string;
 
-  @Column({ type: 'varchar', length: 20, nullable: true })
+  // Widened to `text` + encrypted at rest (see pii-crypto). Not a search key.
+  @Column({ type: 'text', nullable: true, transformer: piiTransformer })
   tpin: string;
 
-  @Column({ type: 'text', nullable: true })
+  // PACRA certificate (base64 data URL) — encrypted at rest.
+  @Column({ type: 'text', nullable: true, transformer: piiTransformer })
   incorporationCertUrl: string;
 
   @Column({ type: 'uuid', nullable: true })
