@@ -93,14 +93,17 @@ services:
         sync: false
       - key: WEB_PUSH_SUBJECT
         value: mailto:ops@tonsehub.com
-      # --- CORS: auto-wired to the frontend's host (code prepends https://) ---
+      # --- CORS: the frontend's PUBLIC origin. NOTE: Render's `fromService host`
+      #     returns the private service name (e.g. `tonse-web`), not the public
+      #     .onrender.com URL, so the browser-facing origin must be hardcoded.
+      #     Update if you rename the static site or attach a custom domain. ---
       - key: CORS_ORIGINS
-        fromService: { type: web, name: tonse-web, property: host }
+        value: https://tonse-web.onrender.com
       # --- Promoter programme ---
       - key: PROMOTER_INVITE_KEY
         sync: false
       - key: PROMOTER_APP_BASE_URL
-        fromService: { type: web, name: tonse-web, property: host }
+        value: https://tonse-web.onrender.com
 
   # ---- Frontend (React + Vite, Static Site + CDN) ------------------------
   - type: web
@@ -128,10 +131,12 @@ services:
         name: Referrer-Policy
         value: strict-origin-when-cross-origin
     envVars:
-      # Build-time (Vite bakes these in). API base auto-wired to the backend's
-      # host — client.ts prepends https:// to the bare hostname.
+      # Build-time (Vite bakes this in). The backend's PUBLIC URL — Render's
+      # `fromService host` gives the private name `tonse-api`, which the browser
+      # can't resolve, so the full URL is hardcoded. This is baked at build, so
+      # changing it re-triggers a frontend build. Update on rename/custom domain.
       - key: VITE_API_URL
-        fromService: { type: web, name: tonse-api, property: host }
+        value: https://tonse-api.onrender.com
       # MUST equal the backend's WEB_PUSH_PUBLIC_KEY (same VAPID public key).
       - key: VITE_VAPID_PUBLIC_KEY
         sync: false
