@@ -1,10 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Inquiry } from './entities/inquiry.entity';
@@ -12,6 +6,7 @@ import { InquiryCategory } from './entities/inquiry-category.entity';
 import { CreateInquiryDto, UpdateInquiryDto } from './dto';
 import { DisplayIdUtil } from '../../utils/display-id.util';
 import { CategoriesService } from '../categories/categories.service';
+import { ESCROW_HOLDING_STATUSES } from '../quotes/quote-status';
 import { MatchingService } from './services/matching.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { FunnelTrackingService } from '../referrals/services/funnel-tracking.service';
@@ -323,8 +318,31 @@ export class InquiriesService {
     return rows.map((r) => r.categoryId);
   }
 
+  /**
+   * Delete an inquiry and the quotes attached to it.
+   *
+   * MONEY SAFETY: a quote can hold the buyer's funds in escrow. The quote→
+   * inquiry FK used to CASCADE, so deleting an inquiry silently destroyed its
+   * PAID quotes — the escrow record vanished with no trace and no refund. The
+   * FK is now RESTRICT, so we remove the quotes deliberately here, and refuse
+   * outright while any of them still holds money.
+   */
   async remove(id: string): Promise<void> {
-    await this.inquiriesRepository.delete(id);
+    const held: Array<{ count: string }> = await this.dataSource.query(
+      `SELECT COUNT(*) AS count FROM quotes WHERE "inquiryId" = $1 AND status::text = ANY($2)`,
+      [id, [...ESCROW_HOLDING_STATUSES]],
+    );
+    if (Number(held[0]?.count || 0) > 0) {
+      throw new ConflictException(
+        'This request has a paid order with funds still held in escrow. ' +
+          'Complete or cancel it before deleting the request.',
+      );
+    }
+
+    await this.dataSource.transaction(async (m) => {
+      await m.query('DELETE FROM quotes WHERE "inquiryId" = $1', [id]);
+      await m.getRepository(Inquiry).delete(id);
+    });
   }
 
   async findByBuyerId(buyerId: string): Promise<Inquiry[]> {

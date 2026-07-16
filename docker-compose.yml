@@ -61,6 +61,10 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in a root .env file (openssl rand -base64 48)}
       JWT_REFRESH_EXPIRATION: '604800s'
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in a root .env file}
+      # At-rest PII encryption (AES-256-GCM). PROD: set to base64 of 32 random
+      # bytes from a secrets manager / KMS, and rotate. Missing key in prod =
+      # fail-closed (see common/crypto/pii-crypto.ts).
+      PII_ENCRYPTION_KEY: ${PII_ENCRYPTION_KEY:?Set PII_ENCRYPTION_KEY (base64 of 32 random bytes) in a root .env file}
       ENCRYPTION_IV: ${ENCRYPTION_IV:?Set ENCRYPTION_IV in a root .env file}
     ports:
       - '3001:3001'

@@ -2,24 +2,23 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import {defineConfig} from 'vite';
+import {defineConfig, loadEnv} from 'vite';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig(() => {
+export default defineConfig(({mode}) => {
+  const env = loadEnv(mode, '.', '');
   return {
     plugins: [
       react(),
       tailwindcss(),
     ],
-    // NOTE: no process.env.* secret injection here on purpose. This used to
-    // manually reach into loadEnv(mode, '.', '') — an empty prefix filter —
-    // to bake GEMINI_API_KEY/LENCO_API_KEY into the client bundle, which
-    // defeats Vite's VITE_-prefix convention that exists specifically to
-    // stop server secrets from reaching the browser. Only import.meta.env.VITE_*
-    // vars are safe to expose to client code; anything else belongs behind
-    // the NestJS backend, never referenced from src/.
     define: {
+      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      // NOTE: never `define` a payment-provider secret here. Anything in
+      // `define` is inlined into the client bundle and shipped to every
+      // visitor. The PSP key lives server-side only (backend config) and the
+      // browser never talks to the PSP directly — it goes through our API.
       'global': 'window.global',
       'globalThis': 'window.global',
       'self': 'window.global',

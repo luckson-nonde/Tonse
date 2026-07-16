@@ -6,6 +6,8 @@ import { QuotesService } from '../quotes/quotes.service';
 import { PaymentsService } from '../payments/payments.service';
 import { AuditService } from '../audit/audit.service';
 import { CategoriesService } from '../categories/categories.service';
+import { ESCROW_HOLDING_STATUSES } from '../quotes/quote-status';
+import { fromNgwee } from '../../common/money/money';
 import { MilestonesService } from '../referrals/services/milestones.service';
 import { PromotersService } from '../referrals/services/promoters.service';
 import { CreateMilestoneDto } from '../referrals/dto/create-milestone.dto';
@@ -40,6 +42,72 @@ export class AdminService {
     private readonly reportsService: ReportsService,
     private readonly billingService: BillingService
   ) {}
+
+  // ───── Escrow ───────────────────────────────────────────────────────────
+
+  /**
+   * Open escrow positions with the deal context an admin actually needs: who
+   * paid, who owes the handover, since when. The balance comes from the ledger
+   * view (authoritative), joined out to the quote/inquiry for names.
+   *
+   * `driftReason` surfaces the two ways truth can diverge:
+   *   • PHANTOM — the quote reads as holding escrow but the ledger has no
+   *     position. Every pre-cutover PAID quote is this: no money was ever
+   *     collected. They need voiding, not releasing.
+   *   • LEAK — the ledger holds a position but the quote no longer reads as
+   *     escrow-holding. That's money stranded with nothing driving it.
+   */
+  async escrowPositions() {
+    const rows = await this.dataSource.query(
+      `
+      WITH ledger_pos AS (
+        SELECT "quoteId", currency, balance FROM escrow_positions
+      ),
+      quote_pos AS (
+        SELECT q.id AS "quoteId", q.price, q.status, q."providerId", q."providerName",
+               q."inquiryTitle", q."createdAt", i."buyerId"
+          FROM quotes q
+          LEFT JOIN inquiries i ON i.id = q."inquiryId"
+         WHERE q.status::text = ANY($1)
+      )
+      SELECT COALESCE(l."quoteId", p."quoteId") AS "quoteId",
+             p."inquiryTitle", p.status, p."providerId", p."providerName",
+             p."buyerId", p."createdAt",
+             COALESCE(l.balance, 0)::text AS "ledgerBalance",
+             COALESCE(p.price, 0)::text AS "quotePrice",
+             CASE
+               WHEN l."quoteId" IS NULL THEN 'PHANTOM'
+               WHEN p."quoteId" IS NULL THEN 'LEAK'
+               ELSE NULL
+             END AS "driftReason"
+        FROM ledger_pos l
+        FULL OUTER JOIN quote_pos p ON p."quoteId" = l."quoteId"
+       ORDER BY p."createdAt" DESC NULLS LAST
+      `,
+      [[...ESCROW_HOLDING_STATUSES]],
+    );
+
+    const totalLedgerNgwee = rows.reduce(
+      (acc: number, r: any) => acc + Math.round(Number(r.ledgerBalance || 0) * 100),
+      0,
+    );
+    const phantom = rows.filter((r: any) => r.driftReason === 'PHANTOM');
+    const phantomNgwee = phantom.reduce(
+      (acc: number, r: any) => acc + Math.round(Number(r.quotePrice || 0) * 100),
+      0,
+    );
+
+    return {
+      positions: rows,
+      summary: {
+        openPositions: rows.length,
+        totalHeldZmw: fromNgwee(totalLedgerNgwee),
+        phantomCount: phantom.length,
+        phantomValueZmw: fromNgwee(phantomNgwee),
+        leakCount: rows.filter((r: any) => r.driftReason === 'LEAK').length,
+      },
+    };
+  }
 
   /**
    * Best-effort audit write for admin moderation actions — same

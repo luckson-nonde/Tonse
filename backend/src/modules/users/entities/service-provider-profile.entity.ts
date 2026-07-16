@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { User } from './user.entity';
+import { piiTransformer } from '../../../common/crypto/pii-crypto';
 
 /**
  * ServiceProviderProfile — Phase 3 of the users-table restructure.
@@ -100,10 +101,13 @@ export class ServiceProviderProfile {
   @Column({ type: 'varchar', length: 255, nullable: true })
   companyName: string;
 
-  @Column({ type: 'varchar', length: 20, nullable: true })
+  // Widened to `text` + encrypted at rest (ciphertext is longer than the raw
+  // value). Not a search key, so field-level encryption is safe here.
+  @Column({ type: 'text', nullable: true, transformer: piiTransformer })
   tpin: string;
 
-  @Column({ type: 'text', nullable: true })
+  // PACRA certificate (base64 data URL) — encrypted at rest.
+  @Column({ type: 'text', nullable: true, transformer: piiTransformer })
   incorporationCertUrl: string;
 
   @Column({ type: 'uuid', nullable: true })
@@ -115,10 +119,11 @@ export class ServiceProviderProfile {
    * alongside PACRA (incorporationCertUrl) + ZRA (tpin). Nullable — only loan
    * companies fill these.
    */
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({ type: 'text', nullable: true, transformer: piiTransformer })
   bozLicenceNumber: string;
 
-  @Column({ type: 'text', nullable: true })
+  // Bank of Zambia licence document (base64 data URL) — encrypted at rest.
+  @Column({ type: 'text', nullable: true, transformer: piiTransformer })
   bozLicenceUrl: string;
 
   /**
@@ -130,6 +135,18 @@ export class ServiceProviderProfile {
    */
   @Column({ type: 'json', nullable: true })
   loanTerms: Record<string, string>;
+
+  /**
+   * Per-loan-type Terms & Conditions DOCUMENT the lender attaches (a signed
+   * T&C PDF / scan), keyed by loan type: { collateral, salary, government,
+   * general }. Each value is the uploaded document's URL (secure, auth-gated
+   * `/files/secure/...`). Parallel to `loanTerms` (the typed text): a lender
+   * can supply the written terms, an attached document, or both. The matching
+   * type travels with every offer (falling back to `general`) so the borrower
+   * reviews the actual contract. LENDING archetype only; nullable.
+   */
+  @Column({ type: 'json', nullable: true })
+  loanTermsDocs: Record<string, string>;
 
   // ===== Verification audit =====
 

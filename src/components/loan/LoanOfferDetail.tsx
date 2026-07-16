@@ -22,6 +22,7 @@ import {
 import { updateQuoteStatus, counterLoanOffer, confirmLoanDisbursement } from '../../services/api/quoteService';
 import { useAuth } from '../../AuthContext';
 import { loanStageIndex } from '../../utils/loan';
+import SecureFile, { isSecureFileUrl } from '../SecureFile';
 
 const zmw = (v: any) => `ZMW ${Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 const monthsOf = (t: any): number => {
@@ -143,6 +144,7 @@ export default function LoanOfferDetail({ quote, onAction }: LoanOfferDetailProp
       <h3>Agreed Terms</h3>
       <table>${rowsHtml}</table>
       ${tnc ? `<h3>Lender's Terms &amp; Conditions</h3><div class="tnc">${esc(tnc)}</div>` : ''}
+      ${d.termsDocUrl ? `<p class="tnc" style="margin-top:12px"><strong>A signed Terms &amp; Conditions document is attached to this offer</strong> — open it from the loan offer in the TONSE app.</p>` : ''}
       <div class="foot">
         <p><span class="status">Accepted</span></p>
         <p>This document records the loan offer terms accepted by the borrower on the TONSE marketplace. It is a summary for the parties' reference; disbursement and repayment are arranged directly between the lender and the borrower. Generated ${esc(date)}.</p>
@@ -242,14 +244,35 @@ export default function LoanOfferDetail({ quote, onAction }: LoanOfferDetailProp
             </div>
           </div>
 
-          {(d.conditions || quote.message) && (
+          {(d.conditions || quote.message || d.termsDocUrl) && (
             <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
               <div className="flex items-center gap-2 text-[#C9973A] font-bold mb-3">
                 <MessageSquare className="w-4.5 h-4.5" /> Lender's Terms &amp; Conditions
               </div>
-              <p className="text-sm text-slate-600 leading-relaxed italic bg-slate-50 rounded-2xl p-4 border border-slate-100">
-                “{d.conditions || quote.message}”
-              </p>
+              {(d.conditions || quote.message) && (
+                <p className="text-sm text-slate-600 leading-relaxed italic bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                  “{d.conditions || quote.message}”
+                </p>
+              )}
+              {d.termsDocUrl && (
+                <div className="mt-3 flex items-center gap-2 px-4 py-3 rounded-2xl bg-[#C9973A]/5 border border-[#C9973A]/20">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Attached document
+                  </span>
+                  {isSecureFileUrl(d.termsDocUrl) ? (
+                    <SecureFile url={d.termsDocUrl} asLink />
+                  ) : (
+                    <a
+                      href={d.termsDocUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C9973A] hover:underline"
+                    >
+                      View document
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

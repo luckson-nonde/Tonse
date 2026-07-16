@@ -79,47 +79,19 @@ export default function PaymentPage() {
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6">
         {paymentMethod === 'card' ? (
           <div className="space-y-4">
-            <div>
-              <label className="text-sm font-bold text-slate-500 mb-2 block">Cardholder Name</label>
-              <input
-                type="text"
-                placeholder="Full Name on Card"
-                className="w-full bg-slate-50 rounded-2xl border border-slate-100 p-4 font-bold text-slate-900 outline-none"
-              />
+            {/* PCI: no card details are collected on a TONSE page. They are
+                entered on the payment provider's own secure page, so we never
+                see, transmit or store a PAN/CVV. Mirrors PaymentSheet. */}
+            <div className="p-5 rounded-2xl border border-slate-100 bg-slate-50">
+              <p className="text-sm font-bold text-slate-900">Bank Card</p>
+              <p className="mt-2 text-[13px] leading-relaxed text-slate-500 font-medium">
+                Card details are entered on the next screen via our PCI-compliant payment
+                provider. <span className="font-bold text-slate-900">TONSE never sees or stores
+                your card number.</span>
+              </p>
             </div>
-            <div>
-              <label className="text-sm font-bold text-slate-500 mb-2 block">Card Number</label>
-              <input
-                type="text"
-                placeholder="0000 0000 0000 0000"
-                className="w-full bg-slate-50 rounded-2xl border border-slate-100 p-4 font-bold text-slate-900 outline-none"
-              />
-            </div>
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <label className="text-sm font-bold text-slate-500 mb-2 block">Expiry Date</label>
-                <input
-                  type="text"
-                  placeholder="MM / YY"
-                  className="w-full bg-slate-50 rounded-2xl border border-slate-100 p-4 font-bold text-slate-900 outline-none"
-                />
-              </div>
-              <div className="flex-1">
-                <label className="text-sm font-bold text-slate-500 mb-2 block">CVV</label>
-                <input
-                  type="text"
-                  placeholder="123"
-                  className="w-full bg-slate-50 rounded-2xl border border-slate-100 p-4 font-bold text-slate-900 outline-none"
-                />
-              </div>
-            </div>
-            <label className="flex items-center gap-2 text-sm text-slate-600 font-medium">
-              <input
-                type="checkbox"
-                className="w-4 h-4 rounded border-slate-300 text-[#d49b35] focus:ring-[#d49b35]"
-              />
-              Save card for future payments
-            </label>
+            {/* "Save card" removed: card storage is the provider's job via
+                tokenisation — offering it here implies TONSE holds card data. */}
 
             {/* Amount Input for Card */}
             <div className="pt-4 border-t border-slate-100">

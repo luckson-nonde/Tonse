@@ -24,6 +24,7 @@ import { RequirePermissions } from '../../auth/decorators/permissions.decorator'
 import { PERMISSIONS } from '../../../common/constants/permissions';
 import { InquiriesService } from '../../inquiries/inquiries.service';
 import { AuditService } from '../../audit/audit.service';
+import { isSystemOnlyStatus } from '../quote-status';
 
 interface AuthenticatedRequest extends ExpressRequest {
   user?: {
@@ -155,6 +156,19 @@ export class QuotesController {
     const isBuyer = quote.inquiry?.buyerId === req.user.id;
     if (!isProvider && !isBuyer) {
       throw new ForbiddenException('You do not have access to this quote');
+    }
+    // MONEY INTEGRITY: statuses that represent money movement or fulfilment are
+    // server-written only. Previously a buyer could self-assign PAID (minting
+    // escrow with no order and no money collected) and a provider could jump to
+    // COMPLETED/HANDED_OVER, discharging escrow without ever going through
+    // CollectionService.complete — i.e. no release and no ledger record.
+    // Payment status comes from the PSP webhook; collection status comes from
+    // the collection flow. See quotes/quote-status.ts.
+    if (isSystemOnlyStatus(body.status)) {
+      throw new ForbiddenException(
+        `Status '${body.status}' is set by the system, not by clients. ` +
+          `Use the payment or collection flow.`,
+      );
     }
     // SECURITY: a loan OFFER only moves PENDING → ACCEPTED/REJECTED, and ONLY
     // the borrower may accept or reject it. This blocks a lender from

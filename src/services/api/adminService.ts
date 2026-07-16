@@ -90,9 +90,72 @@ export interface AdminTransaction {
   [key: string]: any;
 }
 
+/** A ledger control account plus its live balance. */
+export interface LedgerAccountBalance {
+  code: string;
+  name: string;
+  type: 'ASSET' | 'LIABILITY' | 'REVENUE' | 'EXPENSE';
+  normalSide: 'DEBIT' | 'CREDIT';
+  balance: string;
+  description?: string;
+}
+
+/** Debits vs credits per account. `balanced: false` means a broken ledger. */
+export interface TrialBalance {
+  rows: Array<{ accountCode: string; debit: string; credit: string; balance: string }>;
+  totalDebit: string;
+  totalCredit: string;
+  balanced: boolean;
+}
+
+/** One money event. `amount` is the journal's debit total. */
+export interface LedgerJournalRow {
+  id: string;
+  reference: string;
+  type: string;
+  currency: string;
+  amount: string;
+  quoteId?: string;
+  orderId?: string;
+  description?: string;
+  actorLabel?: string;
+  memo?: Record<string, any>;
+  postedAt?: string;
+}
+
+export interface EscrowPositionRow {
+  quoteId: string;
+  inquiryTitle?: string;
+  status?: string;
+  providerId?: string;
+  providerName?: string;
+  buyerId?: string;
+  createdAt?: string;
+  ledgerBalance: string;
+  quotePrice: string;
+  /** PHANTOM = quote says escrow, ledger has nothing (pre-cutover, no money was
+   *  ever collected). LEAK = ledger holds money the quote no longer reflects. */
+  driftReason?: 'PHANTOM' | 'LEAK' | null;
+}
+
+export interface EscrowPositions {
+  positions: EscrowPositionRow[];
+  summary: {
+    openPositions: number;
+    totalHeldZmw: string;
+    phantomCount: number;
+    phantomValueZmw: string;
+    leakCount: number;
+  };
+}
+
 export interface AdminAuditLog {
   id: string | number;
   userId?: string;
+  /** Human-readable actor captured at write time (e.g. "USER-KVBDUK (BUYER)"). */
+  actorLabel?: string;
+  ipAddress?: string;
+  userAgent?: string;
   action?: string;
   entityType?: string;
   entityId?: string | number;
@@ -208,6 +271,37 @@ export const adminService = {
       `/admin/transactions${buildQuery(params)}`
     );
     return res.data ?? emptyPage<AdminTransaction>();
+  },
+
+  // ───── Ledger & escrow ────────────────────────────────────────────────
+  // The double-entry mirror of money the PSP custodies. `listTransactions`
+  // above reads the frozen legacy `payments` table; these are authoritative.
+
+  async getLedgerAccounts(): Promise<LedgerAccountBalance[]> {
+    const res = await apiClient.get<LedgerAccountBalance[]>('/admin/ledger/accounts');
+    return res.data ?? [];
+  },
+
+  async getTrialBalance(): Promise<TrialBalance | null> {
+    const res = await apiClient.get<TrialBalance>('/admin/ledger/trial-balance');
+    return res.data ?? null;
+  },
+
+  async listJournals(params: Record<string, any> = {}): Promise<PaginatedResponse<LedgerJournalRow>> {
+    const res = await apiClient.get<PaginatedResponse<LedgerJournalRow>>(
+      `/admin/ledger/journals${buildQuery(params)}`
+    );
+    return res.data ?? emptyPage<LedgerJournalRow>();
+  },
+
+  async getJournal(id: string): Promise<any | null> {
+    const res = await apiClient.get<any>(`/admin/ledger/journals/${id}`);
+    return res.data ?? null;
+  },
+
+  async getEscrowPositions(): Promise<EscrowPositions | null> {
+    const res = await apiClient.get<EscrowPositions>('/admin/escrow/positions');
+    return res.data ?? null;
   },
 
   async listAudit(params: Record<string, any> = {}): Promise<PaginatedResponse<AdminAuditLog>> {

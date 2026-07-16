@@ -12,6 +12,7 @@ import { QuotesModule } from '../quotes/quotes.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { AuditModule } from '../audit/audit.module';
 import { CategoriesModule } from '../categories/categories.module';
+import { LedgerModule } from '../ledger/ledger.module';
 import { ReferralsModule } from '../referrals/referrals.module';
 import { ReportsModule } from '../reports/reports.module';
 import { BillingModule } from '../billing/billing.module';
@@ -28,6 +29,10 @@ import { BillingModule } from '../billing/billing.module';
     PaymentsModule,
     AuditModule,
     CategoriesModule,
+    PaymentsModule,
+    AuditModule,
+    CategoriesModule,
+    LedgerModule,
     // Promoter programme: milestone CRUD + promoter oversight.
     ReferralsModule,
     // User-submitted complaints, reviewed under /admin/reports*.

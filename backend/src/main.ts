@@ -12,8 +12,21 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
 
-  // Configure payload size limits (for large file uploads and base64 images)
-  app.use(express.json({ limit: '50mb' }));
+  // Configure payload size limits (for large file uploads and base64 images).
+  //
+  // `verify` stashes the RAW request body before JSON parsing. PSP webhooks are
+  // signed over the exact bytes sent, so re-serialising the parsed object can
+  // never reproduce the signature (key order and whitespace differ). Without
+  // this, webhook signatures are unverifiable — i.e. anyone who knows the URL
+  // could post a "payment succeeded" event and mint escrow.
+  app.use(
+    express.json({
+      limit: '50mb',
+      verify: (req: any, _res, buf: Buffer) => {
+        if (buf?.length) req.rawBody = buf;
+      },
+    }),
+  );
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // Security — must run BEFORE express.static. express.static ends the

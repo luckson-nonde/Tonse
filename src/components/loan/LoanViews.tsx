@@ -15,6 +15,8 @@ import {
 import { useAuth } from '../../AuthContext';
 import { loanService } from '../../services/api/loanService';
 import { recordInquiryView } from '../../services/api/inquiryService';
+import SecureFile, { isSecureFileUrl } from '../SecureFile';
+import { recordConsent } from '../../services/api/consentService';
 import { generateQuoteSchema, type QuoteField } from '../../services/quoteSchemaGenerator';
 import {
   loanTypeKey,
@@ -68,7 +70,13 @@ const RequestDetails: React.FC<{ attributes: Record<string, any> }> = ({ attribu
             {prettifyKey(k)}
           </span>
           <span className="text-sm font-medium text-slate-800 break-words">
-            {typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v)}
+            {isSecureFileUrl(v) ? (
+              <SecureFile url={v} asLink />
+            ) : typeof v === 'boolean' ? (
+              v ? 'Yes' : 'No'
+            ) : (
+              String(v)
+            )}
           </span>
         </div>
       ))}
@@ -100,6 +108,10 @@ const OfferForm: React.FC<{
   // (type-specific → general fallback) so they rarely retype boilerplate.
   const savedTerms = ((user as any)?.loanTerms || {}) as Record<string, string>;
   const defaultTerms = isLoan ? savedTerms[lt as string] || savedTerms.general || '' : '';
+  // The lender's attached T&C DOCUMENT for this loan type (type-specific →
+  // general fallback) travels with the offer so the borrower sees the contract.
+  const savedDocs = ((user as any)?.loanTermsDocs || {}) as Record<string, string>;
+  const termsDocUrl = isLoan ? savedDocs[lt as string] || savedDocs.general || '' : '';
 
   // Seed the offer from the borrower's ask + a sensible interest method per
   // loan type, so the lender edits rather than types everything from scratch.
@@ -111,6 +123,10 @@ const OfferForm: React.FC<{
       tenureMonths: request.attributes?.tenureMonths ?? '',
       interestType: lt ? DEFAULT_INTEREST_TYPE[lt] : 'Flat',
       conditions: defaultTerms,
+      // Rides along in the submitted values → dynamicFields.termsDocUrl, so the
+      // lender's attached T&C document travels with the offer. Not a rendered
+      // input; just metadata carried through submit.
+      termsDocUrl,
     };
     // Only let defined seed values override, so a missing counter field
     // doesn't blank out a good default.
@@ -745,6 +761,7 @@ export const LoanOffersView: React.FC = () => {
                       {contactPhone && (
                         <a
                           href={`tel:${contactPhone.replace(/[^\d+]/g, '')}`}
+                          onClick={() => recordConsent('offplatform_handoff', true, 'loan-contact')}
                           className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 rounded-lg flex items-center gap-1.5"
                         >
                           <PhoneCall className="w-3.5 h-3.5" /> Call
@@ -753,12 +770,19 @@ export const LoanOffersView: React.FC = () => {
                       {contactEmail && (
                         <a
                           href={`mailto:${contactEmail}`}
+                          onClick={() => recordConsent('offplatform_handoff', true, 'loan-contact')}
                           className="px-4 py-2 text-xs font-bold text-emerald-700 border border-emerald-300 rounded-lg flex items-center gap-1.5"
                         >
                           <Mail className="w-3.5 h-3.5" /> Email
                         </a>
                       )}
                     </div>
+                    <p className="mt-2.5 text-[11px] text-emerald-800/70 leading-snug">
+                      By contacting the borrower you agree to use these details{' '}
+                      <span className="font-semibold">only to arrange this loan</span>, keep them
+                      secure, and not reuse or retain them beyond what this deal and the law require —
+                      you become an independent controller of this data under the Data Protection Act.
+                    </p>
                   </>
                 ) : (
                   <p className="text-[13px] text-emerald-800/80">

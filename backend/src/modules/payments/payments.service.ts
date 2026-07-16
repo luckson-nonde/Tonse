@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { Payment } from './entities/payment.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
@@ -15,15 +15,23 @@ export class PaymentsService {
     private paymentsRepository: Repository<Payment>,
   ) {}
 
-  async create(createPaymentDto: CreatePaymentDto): Promise<Payment> {
+  /**
+   * Record a payment. Pass the caller's `manager` to enlist this write in their
+   * transaction — money records must commit atomically with the state change
+   * that caused them (e.g. an escrow release must not persist if the quote's
+   * COMPLETED write rolls back, and vice versa). Without it this repository
+   * runs on its own connection and would silently escape the caller's rollback.
+   */
+  async create(createPaymentDto: CreatePaymentDto, manager?: EntityManager): Promise<Payment> {
+    const repo = manager ? manager.getRepository(Payment) : this.paymentsRepository;
     const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substring(7).toUpperCase()}`;
     const netAmount = createPaymentDto.amount - (createPaymentDto.fee || 0);
-    const payment = this.paymentsRepository.create({
+    const payment = repo.create({
       ...createPaymentDto,
       transactionId,
       netAmount,
     });
-    return this.paymentsRepository.save(payment);
+    return repo.save(payment);
   }
 
   async findAll(filters: any = {}): Promise<{ data: Payment[]; total: number }> {
@@ -81,9 +89,14 @@ export class PaymentsService {
     });
   }
 
-  async findByType(type: string): Promise<Payment[]> {
+  /** Payments of a given type. `userId` scopes the read to one party — the
+   *  controller passes it for everyone except ADMIN, so a caller can't read
+   *  the whole platform's payments of a type. */
+  async findByType(type: string, userId?: string): Promise<Payment[]> {
+    const where: Record<string, any> = { type };
+    if (userId) where.userId = userId;
     return this.paymentsRepository.find({
-      where: { type },
+      where,
       order: { createdAt: 'DESC' },
     });
   }

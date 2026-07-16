@@ -65,6 +65,10 @@ import {
   AdminTransaction,
   AdminAuditLog,
   AdminCategoryNode,
+  LedgerAccountBalance,
+  LedgerJournalRow,
+  TrialBalance,
+  EscrowPositions,
   AdminMilestone,
   AdminMilestoneInput,
   AdminPromoter,
@@ -376,10 +380,14 @@ function EmptyOrLoading({
   return null;
 }
 
-const formatZmw = (n: number | undefined | null) =>
-  typeof n === 'number' && !Number.isNaN(n)
-    ? `K${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+// Accepts strings too: ledger/escrow amounts come off Postgres `numeric` as
+// exact decimal STRINGS, and must not be coerced to floats upstream.
+const formatZmw = (n: number | string | undefined | null) => {
+  const v = typeof n === 'string' ? Number(n) : n;
+  return typeof v === 'number' && !Number.isNaN(v)
+    ? `K${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
     : 'K0';
+};
 
 const formatDate = (s?: string | number) => {
   if (!s) return '—';
@@ -2053,70 +2061,226 @@ function QuotesView() {
 // Financial view
 // ──────────────────────────────────────────────────────────────────────────
 
+type FinanceTab = 'escrow' | 'ledger' | 'accounts' | 'legacy';
+
+const FINANCE_TABS: Array<{ id: FinanceTab; label: string }> = [
+  { id: 'escrow', label: 'Escrow' },
+  { id: 'ledger', label: 'Ledger' },
+  { id: 'accounts', label: 'Accounts' },
+  { id: 'legacy', label: 'Legacy payments' },
+];
+
+/**
+ * The money console. Escrow positions + the double-entry ledger are the
+ * authoritative views; "Legacy payments" is the frozen pre-ledger `payments`
+ * table, kept visible for history but no longer written to.
+ */
 function FinancialView() {
-  const [items, setItems] = useState<AdminTransaction[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [stats, setStats] = useState<AdminStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [tx, s] = await Promise.all([
-        adminService.listTransactions({ page, limit: PAGE_SIZE }),
-        page === 1 ? adminService.getStats() : Promise.resolve(stats),
-      ]);
-      setItems(tx.data ?? []);
-      setTotal(tx.total ?? 0);
-      if (s) setStats(s);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load financial data');
-    } finally {
-      setLoading(false);
-    }
-    // stats intentionally omitted from deps — only refresh stats on page 1.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const [tab, setTab] = useState<FinanceTab>('escrow');
 
   return (
     <>
       <ViewHeader
         eyebrow="Section 05 / Money"
         title="Financial"
-        subtitle="Aggregate ZMW collected and the full transaction ledger across the platform."
+        subtitle="What's held in escrow, every money event, and whether the books balance. Funds are custodied by the payment provider — this is TONSE's mirror of them."
       />
 
-      {stats && (
+      <div className="flex gap-1.5 mb-6 p-1 bg-slate-100/70 rounded-xl w-fit">
+        {FINANCE_TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-[0.12em] transition-all ${
+              tab === t.id
+                ? 'bg-white text-[#1a1a2e] shadow-[0_4px_12px_-4px_rgba(15,23,42,0.12)]'
+                : 'text-slate-400 hover:text-[#1a1a2e]'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'escrow' && <EscrowTab />}
+      {tab === 'ledger' && <LedgerTab />}
+      {tab === 'accounts' && <AccountsTab />}
+      {tab === 'legacy' && <LegacyPaymentsTab />}
+    </>
+  );
+}
+
+/** Open escrow positions + drift between the quote's story and the ledger's. */
+function EscrowTab() {
+  const [data, setData] = useState<EscrowPositions | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        setData(await adminService.getEscrowPositions());
+      } catch (e: any) {
+        setError(e?.message || 'Failed to load escrow positions');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const s = data?.summary;
+  const rows = data?.positions ?? [];
+
+  return (
+    <>
+      {s && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-          <StatTile
-            label="Total Collected"
-            value={formatZmw(stats.payments.totalCollectedZmw)}
-            icon={Wallet}
-            tone="gold"
-          />
-          <StatTile
-            label="Quote Volume Paid"
-            value={formatZmw(stats.quotes.paidVolumeZmw)}
-            icon={TrendingUp}
-            tone="navy"
-          />
-          <StatTile label="Transactions" value={stats.payments.total} icon={History} />
-          <StatTile
-            label="Successful"
-            value={
-              (stats.payments.byStatus?.COMPLETED ?? 0) +
-              (stats.payments.byStatus?.SUCCESS ?? 0) +
-              (stats.payments.byStatus?.PAID ?? 0)
-            }
-            icon={ShieldCheck}
-          />
+          <StatTile label="Held in escrow" value={formatZmw(s.totalHeldZmw)} icon={Wallet} tone="gold" />
+          <StatTile label="Open positions" value={s.openPositions} icon={History} tone="navy" />
+          <StatTile label="Phantom (no money)" value={s.phantomCount} icon={ShieldCheck} />
+          <StatTile label="Leaks" value={s.leakCount} icon={TrendingUp} />
+        </div>
+      )}
+
+      {!!s?.phantomCount && (
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-[13px] font-black text-amber-800">
+            {s.phantomCount} position{s.phantomCount > 1 ? 's' : ''} ({formatZmw(s.phantomValueZmw)}) are
+            phantom — no money was ever collected
+          </p>
+          <p className="mt-1.5 text-[12px] text-amber-700/90 leading-relaxed">
+            These quotes were marked paid before real payment collection existed, so nothing was ever
+            held for them. They are shown for reconciliation only — they must be voided, not released
+            or refunded. The ledger deliberately starts at zero rather than inventing balances for them.
+          </p>
+        </div>
+      )}
+
+      <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)] overflow-hidden">
+        <EmptyOrLoading
+          loading={loading}
+          error={error}
+          empty={rows.length === 0}
+          emptyLabel="Nothing is held in escrow."
+        />
+        {!loading && !error && rows.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  {['Deal', 'Seller', 'Quote', 'Held (ledger)', 'State', 'Since'].map((h, i) => (
+                    <th
+                      key={h}
+                      className={`px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400 ${
+                        i === 3 ? 'text-right' : 'text-left'
+                      }`}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.quoteId} className="border-b border-slate-50 hover:bg-slate-50/40">
+                    <td className="px-5 py-4 text-slate-700 truncate max-w-[200px]">
+                      {r.inquiryTitle || '—'}
+                      <span className="block font-mono text-[10px] text-slate-300">
+                        #{String(r.quoteId).slice(0, 8)}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-slate-600 truncate max-w-[140px]">
+                      {r.providerName || '—'}
+                    </td>
+                    <td className="px-5 py-4 text-slate-500">{formatZmw(r.quotePrice)}</td>
+                    <td className="px-5 py-4 text-right font-black text-[#C9973A]">
+                      {formatZmw(r.ledgerBalance)}
+                    </td>
+                    <td className="px-5 py-4">
+                      {r.driftReason === 'PHANTOM' ? (
+                        <span className="px-2 py-1 rounded-md bg-amber-50 text-amber-700 text-[10px] font-black uppercase tracking-wider">
+                          Phantom
+                        </span>
+                      ) : r.driftReason === 'LEAK' ? (
+                        <span className="px-2 py-1 rounded-md bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-wider">
+                          Leak
+                        </span>
+                      ) : (
+                        <StatusPill value={r.status} />
+                      )}
+                    </td>
+                    <td className="px-5 py-4 text-slate-500">{formatDate(r.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** Every money event, newest first, with its balanced lines on drill-in. */
+function LedgerTab() {
+  const [items, setItems] = useState<LedgerJournalRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [tb, setTb] = useState<TrialBalance | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [j, t] = await Promise.all([
+          adminService.listJournals({ page, limit: PAGE_SIZE }),
+          adminService.getTrialBalance(),
+        ]);
+        setItems(j.data ?? []);
+        setTotal(j.total ?? 0);
+        setTb(t);
+      } catch (e: any) {
+        setError(e?.message || 'Failed to load the ledger');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [page]);
+
+  const drill = async (id: string) => {
+    if (openId === id) {
+      setOpenId(null);
+      setDetail(null);
+      return;
+    }
+    setOpenId(id);
+    setDetail(await adminService.getJournal(id));
+  };
+
+  return (
+    <>
+      {tb && (
+        <div
+          className={`mb-6 rounded-2xl border p-4 flex items-center gap-3 ${
+            tb.balanced ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'
+          }`}
+        >
+          <ShieldCheck className={`w-5 h-5 ${tb.balanced ? 'text-emerald-600' : 'text-rose-600'}`} />
+          <div>
+            <p className={`text-[13px] font-black ${tb.balanced ? 'text-emerald-800' : 'text-rose-800'}`}>
+              {tb.balanced ? 'Books balance' : 'BOOKS DO NOT BALANCE'}
+            </p>
+            <p className={`text-[12px] ${tb.balanced ? 'text-emerald-700/90' : 'text-rose-700/90'}`}>
+              Debits {formatZmw(tb.totalDebit)} · Credits {formatZmw(tb.totalCredit)}
+            </p>
+          </div>
         </div>
       )}
 
@@ -2125,38 +2289,217 @@ function FinancialView() {
           loading={loading}
           error={error}
           empty={items.length === 0}
-          emptyLabel="No transactions yet."
+          emptyLabel="No money events yet — the ledger starts at zero and fills as payments are collected."
         />
         {!loading && !error && items.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
-                  <th className="text-left px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400">
-                    Reference
+                  {['Reference', 'Event', 'Amount', 'Actor', 'When'].map((h, i) => (
+                    <th
+                      key={h}
+                      className={`px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400 ${
+                        i === 2 ? 'text-right' : 'text-left'
+                      }`}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((j) => (
+                  <React.Fragment key={j.id}>
+                    <tr
+                      onClick={() => drill(j.id)}
+                      className="border-b border-slate-50 hover:bg-slate-50/40 cursor-pointer"
+                    >
+                      <td className="px-5 py-4 font-mono text-[11px] text-slate-500">{j.reference}</td>
+                      <td className="px-5 py-4 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                        {j.type}
+                      </td>
+                      <td className="px-5 py-4 text-right font-black text-[#C9973A]">
+                        {formatZmw(j.amount)}
+                      </td>
+                      <td className="px-5 py-4 text-slate-500 truncate max-w-[180px]">
+                        {j.actorLabel || 'system'}
+                      </td>
+                      <td className="px-5 py-4 text-slate-500">{formatDate(j.postedAt)}</td>
+                    </tr>
+                    {openId === j.id && detail && (
+                      <tr className="bg-slate-50/60">
+                        <td colSpan={5} className="px-5 py-4">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                            Journal lines
+                          </p>
+                          <div className="space-y-1">
+                            {(detail.entries ?? []).map((e: any, i: number) => (
+                              <div key={i} className="flex items-center gap-3 text-[12px]">
+                                <span
+                                  className={`w-14 font-black uppercase text-[10px] ${
+                                    e.direction === 'DEBIT' ? 'text-sky-600' : 'text-emerald-600'
+                                  }`}
+                                >
+                                  {e.direction === 'DEBIT' ? 'Dr' : 'Cr'}
+                                </span>
+                                <span className="font-mono text-slate-600 flex-1">{e.accountCode}</span>
+                                <span className="font-black text-slate-800">{formatZmw(e.amount)}</span>
+                              </div>
+                            ))}
+                          </div>
+                          {detail.memo && (
+                            <p className="mt-3 text-[11px] text-slate-400 font-mono">
+                              memo: {JSON.stringify(detail.memo)}
+                            </p>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="px-5">
+          <Pagination page={page} total={total} pageSize={PAGE_SIZE} onChange={setPage} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** The chart of accounts and where the float sits. */
+function AccountsTab() {
+  const [rows, setRows] = useState<LedgerAccountBalance[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        setRows(await adminService.getLedgerAccounts());
+      } catch (e: any) {
+        setError(e?.message || 'Failed to load accounts');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  return (
+    <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)] overflow-hidden">
+      <EmptyOrLoading loading={loading} error={error} empty={rows.length === 0} emptyLabel="No accounts." />
+      {!loading && !error && rows.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/50">
+                {['Account', 'Type', 'Balance'].map((h, i) => (
+                  <th
+                    key={h}
+                    className={`px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400 ${
+                      i === 2 ? 'text-right' : 'text-left'
+                    }`}
+                  >
+                    {h}
                   </th>
-                  <th className="text-left px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400">
-                    User
-                  </th>
-                  <th className="text-left px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400">
-                    Type
-                  </th>
-                  <th className="text-right px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400">
-                    Amount
-                  </th>
-                  <th className="text-left px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400">
-                    Status
-                  </th>
-                  <th className="text-left px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400 hidden md:table-cell">
-                    When
-                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((a) => (
+                <tr key={a.code} className="border-b border-slate-50 hover:bg-slate-50/40 align-top">
+                  <td className="px-5 py-4">
+                    <span className="font-bold text-slate-700">{a.name}</span>
+                    <span className="block font-mono text-[10px] text-slate-300">{a.code}</span>
+                    {a.description && (
+                      <span className="block mt-1 text-[11px] text-slate-400 leading-relaxed max-w-[520px]">
+                        {a.description}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-5 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    {a.type}
+                  </td>
+                  <td className="px-5 py-4 text-right font-black text-slate-800">
+                    {formatZmw(a.balance)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The frozen pre-ledger `payments` table — history only, no longer written. */
+function LegacyPaymentsTab() {
+  const [items, setItems] = useState<AdminTransaction[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const tx = await adminService.listTransactions({ page, limit: PAGE_SIZE });
+        setItems(tx.data ?? []);
+        setTotal(tx.total ?? 0);
+      } catch (e: any) {
+        setError(e?.message || 'Failed to load transactions');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [page]);
+
+  return (
+    <>
+      <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <p className="text-[12px] text-slate-500 leading-relaxed">
+          <span className="font-black text-slate-700">Frozen legacy record.</span> This is the old
+          single-entry payments table, kept for history. New money events are recorded in the
+          double-entry <span className="font-bold">Ledger</span> tab instead.
+        </p>
+      </div>
+      <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)] overflow-hidden">
+        <EmptyOrLoading
+          loading={loading}
+          error={error}
+          empty={items.length === 0}
+          emptyLabel="No legacy transactions."
+        />
+        {!loading && !error && items.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  {['Reference', 'User', 'Type', 'Amount', 'Status', 'When'].map((h, i) => (
+                    <th
+                      key={h}
+                      className={`px-5 py-3 font-black text-[10px] uppercase tracking-[0.12em] text-slate-400 ${
+                        i === 3 ? 'text-right' : 'text-left'
+                      }`}
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {items.map((t) => (
                   <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50/40">
                     <td className="px-5 py-4 font-mono text-[11px] text-slate-500 truncate max-w-[160px]">
-                      {t.reference || t.id}
+                      {t.transactionId || t.externalReference || t.id}
                     </td>
                     <td className="px-5 py-4 text-slate-600 truncate max-w-[160px]">
                       {t.userId || '—'}
@@ -2170,9 +2513,7 @@ function FinancialView() {
                     <td className="px-5 py-4">
                       <StatusPill value={t.status} />
                     </td>
-                    <td className="px-5 py-4 text-slate-500 hidden md:table-cell">
-                      {formatDate(t.createdAt)}
-                    </td>
+                    <td className="px-5 py-4 text-slate-500">{formatDate(t.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -2317,8 +2658,22 @@ function AuditView() {
                         <span className="font-mono text-slate-300">#{String(entry.entityId).slice(0, 8)}</span>
                       )}
                     </td>
-                    <td className="px-5 py-4 text-slate-600 truncate max-w-[160px] hidden md:table-cell">
-                      {entry.userId || '—'}
+                    <td className="px-5 py-4 text-slate-600 max-w-[200px] hidden md:table-cell">
+                      {entry.actorLabel || entry.userId ? (
+                        <div className="flex flex-col">
+                          <span className="truncate font-medium text-slate-700">
+                            {entry.actorLabel ||
+                              `#${String(entry.userId).slice(0, 8)}`}
+                          </span>
+                          {entry.ipAddress && (
+                            <span className="font-mono text-[10px] text-slate-400 truncate">
+                              {entry.ipAddress}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td className="px-5 py-4 text-slate-600 truncate max-w-[140px] hidden md:table-cell font-mono text-[12px]">
                       {entry.staffName || '—'}

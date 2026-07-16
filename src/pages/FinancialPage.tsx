@@ -26,7 +26,6 @@ import { generateVirtualAccount, formatCurrency } from '../utils/financeUtils';
 import ReadingOwl from '../assets/images/empty-states/owl_reading.png';
 import TriumphantOwl from '../assets/images/empty-states/owl_triumphant.png';
 import { createOrder } from '../services/api/orderService';
-import { updateQuoteStatus } from '../services/api/quoteService';
 import PaymentSheet from '../components/PaymentSheet';
 
 interface FinancialPageProps {
@@ -157,19 +156,18 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
     await new Promise((resolve) => setTimeout(resolve, 1200));
     try {
       if (typeof pendingQuote.id === 'string' && pendingQuote.providerId) {
+        // createOrder is server-authoritative: it moves the quote to PAID and
+        // the inquiry to CLOSED inside one transaction. The client no longer
+        // pushes those statuses itself — PAID is a money status and is now
+        // server-written only (a client could otherwise mint escrow). The old
+        // updateInquiryStatus(...,'PAID') call was also invalid: the inquiry
+        // enum is OPEN|QUOTED|CLOSED, so it always failed.
         await createOrder({
           quoteId: String(pendingQuote.id),
           buyerId: user.id,
           sellerId: String(pendingQuote.providerId),
           totalAmount: total,
         });
-      }
-      if (typeof pendingQuote.id === 'string') {
-        await updateQuoteStatus(pendingQuote.id, 'PAID');
-        if (pendingQuote.inquiryId) {
-          const { updateInquiryStatus } = await import('../services/api/inquiryService');
-          await updateInquiryStatus(String(pendingQuote.inquiryId), 'PAID');
-        }
       }
     } catch (e) {
       console.warn('Wallet payment status sync failed:', e);

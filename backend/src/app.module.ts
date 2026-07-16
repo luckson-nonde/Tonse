@@ -30,16 +30,20 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
 import { CollectionModule } from './modules/collection/collection.module';
 import { LoanModule } from './modules/loans/loans.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { ConsentsModule } from './modules/consents/consents.module';
+import { LedgerModule } from './modules/ledger/ledger.module';
 
 // Common
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { AuditContextInterceptor } from './common/audit/audit-context.interceptor';
 
 // Config
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import encryptionConfig from './config/encryption.config';
+import pspConfig from './config/lenco.config';
 import promoterConfig from './config/promoter.config';
 import webpushConfig from './config/webpush.config';
 
@@ -48,7 +52,7 @@ import webpushConfig from './config/webpush.config';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
-      load: [databaseConfig, jwtConfig, encryptionConfig, promoterConfig, webpushConfig],
+      load: [databaseConfig, jwtConfig, encryptionConfig, pspConfig, promoterConfig, webpushConfig],
     }),
     // Global default: generous enough for normal browsing (dashboards
     // firing several requests on load), tight enough to blunt scripted
@@ -95,6 +99,8 @@ import webpushConfig from './config/webpush.config';
     CollectionModule,
     LoanModule,
     BillingModule,
+    ConsentsModule,
+    LedgerModule,
   ],
   providers: [
     {
@@ -104,6 +110,13 @@ import webpushConfig from './config/webpush.config';
     {
       provide: APP_INTERCEPTOR,
       useClass: LoggingInterceptor,
+    },
+    // Establishes the per-request audit actor context (who + IP + UA) so every
+    // audit write is attributed automatically. Registered before Transform so
+    // it wraps the handler execution.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditContextInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,

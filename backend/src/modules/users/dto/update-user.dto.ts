@@ -153,6 +153,12 @@ export class UpdateUserDto {
   @IsObject()
   loanTerms?: Record<string, string>;
 
+  /** Per-loan-type Terms & Conditions DOCUMENT URLs: { collateral, salary,
+   *  government, general }. Routed to the service-provider profile. */
+  @IsOptional()
+  @IsObject()
+  loanTermsDocs?: Record<string, string>;
+
   @IsOptional()
   @IsString()
   @MaxLength(50)

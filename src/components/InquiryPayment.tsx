@@ -62,19 +62,14 @@ export default function InquiryPayment({
   const [method, setMethod] = useState<'mobile' | 'card'>('mobile');
   const [mobileProvider, setMobileProvider] = useState('mtn');
   const [phone, setPhone] = useState('');
-  const [cardName, setCardName] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvc, setCardCvc] = useState('');
   const [error, setError] = useState('');
   const [processing, setProcessing] = useState(false);
 
   const selectedNetwork = MOBILE_NETWORKS.find((n) => n.id === mobileProvider) ?? MOBILE_NETWORKS[0];
 
-  const formatCard = (raw: string) =>
-    raw.replace(/\D/g, '').replace(/(\d{4})/g, '$1 ').trim().slice(0, 19);
-  const formatExpiry = (raw: string) =>
-    raw.replace(/\D/g, '').replace(/(\d{2})(\d)/, '$1/$2').slice(0, 5);
+  // PCI: card details are NEVER collected here. Card payments are completed on
+  // the payment provider's own secure page — TONSE never sees, transmits or
+  // stores a card number, expiry or CVC, which keeps us out of PCI-DSS scope.
 
   const handlePay = (paymentMethod: InquiryPaymentMethod) => {
     setError('');
@@ -82,23 +77,6 @@ export default function InquiryPayment({
     if (paymentMethod === 'mobile') {
       if (phone.replace(/\D/g, '').length < 9) {
         setError('Please enter a valid mobile number.');
-        return;
-      }
-    } else if (paymentMethod === 'card') {
-      if (cardNumber.replace(/\s/g, '').length < 16) {
-        setError('Card number looks incomplete.');
-        return;
-      }
-      if (!cardName.trim()) {
-        setError('Add the cardholder name.');
-        return;
-      }
-      if (!/^\d{2}\/\d{2}$/.test(cardExpiry)) {
-        setError('Expiry must be MM/YY.');
-        return;
-      }
-      if (cardCvc.length < 3) {
-        setError('Enter a valid CVC.');
         return;
       }
     } else if (paymentMethod === 'virtual') {
@@ -352,52 +330,24 @@ export default function InquiryPayment({
                 </div>
               )}
 
-              {/* Card content */}
+              {/* Card content — NO card details are collected here. TONSE never
+                  sees a card number, expiry or CVC: the payment provider takes
+                  them on its own secure page, which keeps us out of PCI scope. */}
               {method === 'card' && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div>
-                    <label className={labelClass}>Cardholder Name</label>
-                    <input
-                      type="text"
-                      value={cardName}
-                      onChange={(e) => setCardName(e.target.value)}
-                      placeholder="John Mwanza"
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Card Number</label>
-                    <input
-                      type="text"
-                      value={cardNumber}
-                      onChange={(e) => setCardNumber(formatCard(e.target.value))}
-                      placeholder="0000 0000 0000 0000"
-                      inputMode="numeric"
-                      className={`${inputClass} tracking-[0.18em]`}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className={labelClass}>Expiry</label>
-                      <input
-                        type="text"
-                        value={cardExpiry}
-                        onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
-                        placeholder="MM/YY"
-                        inputMode="numeric"
-                        className={inputClass}
-                      />
+                  <div className="flex items-start gap-3 p-5 rounded-2xl border-[1.5px] border-[#f1f5f9] bg-[#f8fafc]">
+                    <div className="w-10 h-10 rounded-xl bg-[#C9973A]/10 text-[#C9973A] flex items-center justify-center shrink-0">
+                      <Lock className="w-5 h-5" />
                     </div>
-                    <div>
-                      <label className={labelClass}>CVC</label>
-                      <input
-                        type="password"
-                        value={cardCvc}
-                        onChange={(e) => setCardCvc(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        placeholder="•••"
-                        inputMode="numeric"
-                        className={inputClass}
-                      />
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-black text-[#1a1a2e]">
+                        You'll finish on our payment provider's secure page
+                      </p>
+                      <p className="mt-1.5 text-[12px] leading-relaxed text-[#64748b] font-medium">
+                        Continue below and we'll hand you over to our licensed payment provider to
+                        enter your card details. <span className="font-bold text-[#1a1a2e]">TONSE never
+                        sees or stores your card number, expiry or CVC.</span>
+                      </p>
                     </div>
                   </div>
                 </div>

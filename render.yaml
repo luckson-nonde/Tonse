@@ -85,6 +85,12 @@ services:
         sync: false
       - key: ENCRYPTION_IV
         sync: false
+      # --- At-rest PII encryption (AES-256-GCM). REQUIRED: the backend
+      #     fail-closes and refuses to start in production without this.
+      #     Set to base64 of 32 random bytes:
+      #       node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+      - key: PII_ENCRYPTION_KEY
+        sync: false
       # --- Web Push (VAPID). Generate once: `npx web-push generate-vapid-keys`.
       #     WEB_PUSH_PUBLIC_KEY must equal the frontend's VITE_VAPID_PUBLIC_KEY. ---
       - key: WEB_PUSH_PUBLIC_KEY

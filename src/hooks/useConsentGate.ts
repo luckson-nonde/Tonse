@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { recordConsent, CONSENT_NOTICE_BY_STEP } from '../services/api/consentService';
 
 /**
  * Session-scoped consent gate for the Universal Consent Modal.
@@ -45,6 +46,11 @@ export function useConsentGate(stepKey: string | undefined | null): ConsentGate 
       } catch {
         /* quota / privacy mode — still close the gate for this render */
       }
+      // Durably record consent (best-effort). Authenticated steps persist now;
+      // pre-auth registration steps are re-persisted by flushSessionConsents()
+      // right after the account is created.
+      const noticeKey = CONSENT_NOTICE_BY_STEP[stepKey!] || stepKey!;
+      void recordConsent(noticeKey, true, 'onboarding');
     }
     setOpen(false);
   }, [active, stepKey]);

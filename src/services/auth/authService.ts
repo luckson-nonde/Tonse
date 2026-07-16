@@ -5,6 +5,26 @@
 
 import { apiClient, tokenManager } from '../api/client';
 
+/**
+ * Result of the pre-deletion safety check (GET /users/:id/deletion-check).
+ * `canDelete` is false only when funds sit in escrow (a hard block); the
+ * `warnings` counts never block deletion but are surfaced so the user can
+ * decide whether to proceed.
+ */
+export interface DeletionCheck {
+  canDelete: boolean;
+  hardBlocks: {
+    sellerCollections: { count: number; amount: number };
+    buyerEscrow: { count: number; amount: number };
+  };
+  warnings: {
+    inProgressOrders: number;
+    pendingOffers: number;
+    openInquiries: number;
+    incompleteLoans: number;
+  };
+}
+
 export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
@@ -252,5 +272,34 @@ export const authService = {
     }
 
     throw new Error(response.message || 'Profile update failed');
+  },
+
+  /**
+   * Pre-deletion safety check. Reports whether the signed-in user's account
+   * can be erased and what stands in the way — hard blocks (funds held in
+   * escrow) vs soft warnings (open orders/offers/inquiries/loans). Drives the
+   * block/warn UX before the user commits. Self-only on the backend.
+   */
+  checkDeletion: async (userId: string): Promise<DeletionCheck> => {
+    const response = await apiClient.get<DeletionCheck>(`/users/${userId}/deletion-check`);
+    return (
+      response.data ?? {
+        canDelete: true,
+        hardBlocks: {
+          sellerCollections: { count: 0, amount: 0 },
+          buyerEscrow: { count: 0, amount: 0 },
+        },
+        warnings: { inProgressOrders: 0, pendingOffers: 0, openInquiries: 0, incompleteLoans: 0 },
+      }
+    );
+  },
+
+  /**
+   * Permanently delete the signed-in user's account and ALL their data.
+   * Self-only on the backend (DELETE /users/:id). Irreversible. Blocked (409)
+   * while funds are held in escrow — resolve the pending collection(s) first.
+   */
+  deleteAccount: async (userId: string): Promise<void> => {
+    await apiClient.delete(`/users/${userId}`);
   },
 };

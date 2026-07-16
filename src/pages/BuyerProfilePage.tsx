@@ -31,6 +31,7 @@ import Button from '../components/Button';
 import { getProfileSchema, ProfileSection } from '../services/userSchemas';
 import { filterToUpdatableUserFields } from '../services/updatableUserFields';
 import DynamicProfileForm from '../components/DynamicProfileForm';
+import DeleteAccountSection from '../components/DeleteAccountSection';
 
 export default function BuyerProfilePage() {
   const { user, updateUser, logout } = useAuth();
@@ -476,6 +477,9 @@ export default function BuyerProfilePage() {
           }
         })}
       </div>
+
+      {/* Danger zone — permanent account deletion */}
+      <DeleteAccountSection />
 
       {/* Edit Profile Modal */}
       <AnimatePresence>

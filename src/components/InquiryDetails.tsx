@@ -19,6 +19,7 @@ import { Inquiry, Quote } from '../types';
 import { INQUIRY_STATUS_SCHEMA } from '../services/buyerAccountSchema';
 import Button from '../components/Button';
 import { isLoanContext } from '../utils/loan';
+import SecureFile, { isSecureFileUrl } from './SecureFile';
 
 interface InquiryDetailsProps {
   inquiry: Inquiry;
@@ -287,6 +288,29 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                   // Skip empty strings and whitespace-only strings
                   if (typeof value === 'string' && !value.trim()) {
                     return null;
+                  }
+
+                  // Secure (encrypted, auth-gated) documents — render via the
+                  // authenticated loader, never a public <img>.
+                  const secureVals = (Array.isArray(value) ? value : [value]).filter(isSecureFileUrl);
+                  if (secureVals.length > 0) {
+                    return (
+                      <div key={key}>
+                        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                          <Tag className="w-4 h-4 text-[#C9973A]" />
+                          {key.replace(/([A-Z])/g, ' $1').trim()}
+                        </p>
+                        <div className="flex flex-wrap gap-4">
+                          {secureVals.map((u, i) => (
+                            <SecureFile
+                              key={i}
+                              url={u}
+                              className="w-40 h-40 object-cover rounded-2xl border-2 border-slate-200"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
                   }
 
                   // Match image files by EXTENSION, not protocol — uploads are

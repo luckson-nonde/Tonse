@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditLog } from './entities/audit-log.entity';
 import { CreateAuditLogDto } from './dto/create-audit-log.dto';
+import { getAuditContext } from '../../common/audit/audit-context';
 
 @Injectable()
 export class AuditService {
@@ -12,7 +13,18 @@ export class AuditService {
   ) {}
 
   async create(createAuditLogDto: CreateAuditLogDto): Promise<AuditLog> {
-    const auditLog = this.auditRepository.create(createAuditLogDto);
+    // Auto-attribute the WHO + WHERE from the ambient request context so every
+    // write records the actor, IP and user-agent without the call-site having
+    // to pass them. Explicit values on the DTO always win (e.g. a system job).
+    const ctx = getAuditContext();
+    const entry: Record<string, any> = { ...createAuditLogDto };
+    if (ctx) {
+      if (entry.userId == null && ctx.userId) entry.userId = ctx.userId;
+      if (entry.actorLabel == null && ctx.actorLabel) entry.actorLabel = ctx.actorLabel;
+      if (entry.ipAddress == null && ctx.ipAddress) entry.ipAddress = ctx.ipAddress;
+      if (entry.userAgent == null && ctx.userAgent) entry.userAgent = ctx.userAgent;
+    }
+    const auditLog = this.auditRepository.create(entry as Partial<AuditLog>);
     return this.auditRepository.save(auditLog);
   }
 
