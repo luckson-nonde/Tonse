@@ -7,7 +7,16 @@
 // same-origin so the Vite dev-server proxy can forward them to the NestJS
 // backend on :3001 — this is what lets the public Cloudflare tunnel reach
 // the backend through the single exposed frontend port, with no CORS.
-export const API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:3001';
+//
+// The Render blueprint wires VITE_API_URL from the API service's `host`, which
+// carries no scheme. Normalize: a leading '/' stays same-origin (dev proxy /
+// nginx), a full URL is used as-is, and a bare host gets https:// prepended so
+// fetch() resolves it absolutely instead of relative to the static site.
+const rawApiBase = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:3001';
+export const API_BASE_URL =
+  /^https?:\/\//.test(rawApiBase) || rawApiBase.startsWith('/')
+    ? rawApiBase
+    : `https://${rawApiBase}`;
 
 interface ApiResponse<T> {
   data?: T;

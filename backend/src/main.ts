@@ -25,16 +25,24 @@ async function bootstrap() {
   // Serve static files from public directory
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
+  // Production origins come from CORS_ORIGINS (comma-separated, e.g. the Render
+  // static-site URL). Falls back to the local dev ports when unset.
+  const corsOrigins =
+    process.env.NODE_ENV === 'production'
+      ? (process.env.CORS_ORIGINS || '')
+          .split(',')
+          .map((o) => o.trim())
+          .filter(Boolean)
+      : [
+          'http://localhost:3000',
+          'http://localhost:3001',
+          'http://localhost:3002',
+          'http://localhost:5173',
+        ];
   app.enableCors({
-    origin:
-      process.env.NODE_ENV === 'production'
-        ? ['https://yourdomain.com']
-        : [
-            'http://localhost:3000',
-            'http://localhost:3001',
-            'http://localhost:3002',
-            'http://localhost:5173',
-          ],
+    // The Render blueprint wires CORS_ORIGINS from the frontend service's
+    // `host` (no scheme); prepend https:// so it matches the browser Origin.
+    origin: corsOrigins.map((o) => (/^https?:\/\//.test(o) ? o : `https://${o}`)),
     credentials: true,
   });
 

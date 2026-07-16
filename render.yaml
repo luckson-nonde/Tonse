@@ -1,0 +1,142 @@
+# ---------------------------------------------------------------------------
+# Tonse Hub — Render Blueprint (Infrastructure as Code)
+#
+# Provisions all three tiers as one deploy: managed Postgres, the NestJS API
+# (Docker), and the Vite frontend (Static Site) — "Option A" from the runbook.
+#
+# How to use:
+#   1. Commit this file and push it to the branch Render deploys (main).
+#   2. Render dashboard → New → Blueprint → pick the tonsesupport-droid/Tonse repo.
+#   3. Render reads this file, creates the services, and PROMPTS for every var
+#      marked `sync: false` below (secrets it can't invent) — fill those in.
+#   4. Apply. First backend boot runs the InitialSchema migration on the empty DB.
+#
+# Everything else (DB credentials, the two service URLs, JWT secrets) is wired
+# automatically via fromDatabase / fromService / generateValue.
+#
+# NOTE: all three resources MUST share one region for private DB networking.
+# `frankfurt` is Render's closest region to Zambia — change it in ALL places
+# together if you prefer another. Plans are `free` to start; see upgrade notes.
+# ---------------------------------------------------------------------------
+
+databases:
+  - name: tonse-db
+    databaseName: tonse
+    user: tonse
+    region: frankfurt
+    plan: free                 # free expires ~30 days; upgrade to `basic-256mb`+ for production
+    postgresMajorVersion: "16"
+
+services:
+  # ---- Backend API (NestJS, Docker) --------------------------------------
+  - type: web
+    name: tonse-api
+    runtime: docker
+    region: frankfurt
+    plan: free                 # free instances sleep when idle (cold starts); `starter` to keep warm
+    branch: main
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /categories/status
+    numInstances: 1            # KEEP AT 1 — the live SSE notification registry is in-memory per process
+    autoDeploy: true
+    # Persistent uploads need a paid plan + a single instance. Uncomment to keep
+    # multer's public/uploads across deploys (otherwise it is ephemeral):
+    # disk:
+    #   name: tonse-uploads
+    #   mountPath: /app/public/uploads
+    #   sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"           # main.ts honors it; matches the Dockerfile EXPOSE/healthcheck
+      # --- Database (auto-wired from the managed Postgres above) ---
+      - key: DB_HOST
+        fromDatabase: { name: tonse-db, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: tonse-db, property: port }
+      - key: DB_USERNAME
+        fromDatabase: { name: tonse-db, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: tonse-db, property: password }
+      - key: DB_NAME
+        fromDatabase: { name: tonse-db, property: database }
+      # --- Schema management: migrations, never synchronize, in production ---
+      - key: DB_SYNCHRONIZE
+        value: "false"
+      - key: DB_RUN_MIGRATIONS
+        value: "true"           # first boot applies InitialSchema to the empty DB
+      - key: DB_SSL
+        value: no-verify        # Render's internal PG cert CN won't verify; TLS still on
+      - key: DB_LOGGING
+        value: "false"
+      # --- Auth secrets (Render generates strong random values) ---
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_EXPIRATION
+        value: 1h
+      - key: JWT_REFRESH_EXPIRATION
+        value: 7d
+      # --- Field encryption (crypto-js). Enter EXACT lengths: KEY 32 chars, IV 16 chars ---
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: ENCRYPTION_IV
+        sync: false
+      # --- Web Push (VAPID). Generate once: `npx web-push generate-vapid-keys`.
+      #     WEB_PUSH_PUBLIC_KEY must equal the frontend's VITE_VAPID_PUBLIC_KEY. ---
+      - key: WEB_PUSH_PUBLIC_KEY
+        sync: false
+      - key: WEB_PUSH_PRIVATE_KEY
+        sync: false
+      - key: WEB_PUSH_SUBJECT
+        value: mailto:ops@tonsehub.com
+      # --- CORS: auto-wired to the frontend's host (code prepends https://) ---
+      - key: CORS_ORIGINS
+        fromService: { type: web, name: tonse-web, property: host }
+      # --- Promoter programme ---
+      - key: PROMOTER_INVITE_KEY
+        sync: false
+      - key: PROMOTER_APP_BASE_URL
+        fromService: { type: web, name: tonse-web, property: host }
+
+  # ---- Frontend (React + Vite, Static Site + CDN) ------------------------
+  - type: web
+    name: tonse-web
+    runtime: static
+    region: frankfurt
+    branch: main
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    autoDeploy: true
+    # SPA fallback so React Router deep links resolve to the app shell.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    # A few security headers (the Static Site has no nginx.conf CSP).
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+    envVars:
+      # Build-time (Vite bakes these in). API base auto-wired to the backend's
+      # host — client.ts prepends https:// to the bare hostname.
+      - key: VITE_API_URL
+        fromService: { type: web, name: tonse-api, property: host }
+      # MUST equal the backend's WEB_PUSH_PUBLIC_KEY (same VAPID public key).
+      - key: VITE_VAPID_PUBLIC_KEY
+        sync: false
+      # Optional integrations — leave blank if unused.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: LENCO_API_KEY
+        sync: false
