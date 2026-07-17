@@ -1,0 +1,46 @@
+{
+  "packageId": "com.tonsehub.twa",
+  "host": "tonse-web.onrender.com",
+  "name": "Tonse Hub",
+  "launcherName": "Tonse",
+  "display": "standalone",
+  "themeColor": "#1B3068",
+  "navigationColor": "#1B3068",
+  "navigationColorDark": "#1B3068",
+  "navigationDividerColor": "#1B3068",
+  "navigationDividerColorDark": "#1B3068",
+  "backgroundColor": "#FFFFFF",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://tonse-web.onrender.com/icon-512.png",
+  "maskableIconUrl": "https://tonse-web.onrender.com/icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "android"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "Leads",
+      "shortName": "Leads",
+      "url": "/provider/leads"
+    },
+    {
+      "name": "My Quotes",
+      "shortName": "Quotes",
+      "url": "/buyer/my-quotes"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://tonse-web.onrender.com/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://tonse-web.onrender.com/",
+  "minSdkVersion": 21,
+  "orientation": "portrait"
+}

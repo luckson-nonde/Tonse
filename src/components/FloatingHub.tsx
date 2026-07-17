@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, useMotionValue } from 'motion/react';
-import { Minimize2, Bell, Maximize2, X, Smartphone, Download } from 'lucide-react';
+import { Minimize2, Bell, Maximize2, X, Smartphone, Download, PictureInPicture2 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import { useBackgroundMode } from '../BackgroundModeContext';
 import { useNotificationStream } from '../hooks/useNotificationStream';
@@ -18,6 +18,12 @@ import {
   promptInstall,
   subscribeInstallable,
 } from '../services/installPrompt';
+import {
+  closeFloatingWindow,
+  isFloatingWindowSupported,
+  openFloatingWindow,
+  updateFloatingWindow,
+} from '../services/floatingWindow';
 
 /**
  * FloatingHub — the single, global "run in the background" widget.
@@ -100,6 +106,8 @@ export default function FloatingHub() {
   // Bumped whenever beforeinstallprompt/appinstalled fires, so the banner
   // decision below re-evaluates with fresh canPromptInstall().
   const [installTick, setInstallTick] = useState(0);
+  // Desktop always-on-top widget (Document PiP) currently showing?
+  const [pipOpen, setPipOpen] = useState(false);
 
   useEffect(() => subscribeInstallable(() => setInstallTick((t) => t + 1)), []);
 
@@ -155,6 +163,7 @@ export default function FloatingHub() {
     if (prevUserRef.current && !user) {
       restore();
       updateAppBadge(0);
+      closeFloatingWindow();
       try {
         localStorage.setItem('tonse_minimized', 'false');
       } catch {
@@ -226,6 +235,36 @@ export default function FloatingHub() {
     dismissInstallBanner();
   }, [dismissInstallBanner]);
 
+  // ── Desktop always-on-top widget (Document PiP, Chromium desktop) ───────
+  // Must be opened from a CLICK (the API requires a user gesture), so it's
+  // called from the minimize button / pop-out pill — never from an effect.
+  const tryOpenPip = useCallback(() => {
+    if (!isFloatingWindowSupported()) return;
+    void openFloatingWindow({
+      unread,
+      onRestore: restore, // service raises the tab via window.focus() first
+      onClosed: () => setPipOpen(false),
+    }).then(setPipOpen);
+  }, [unread, restore]);
+
+  const handleMinimize = useCallback(() => {
+    minimize();
+    tryOpenPip();
+  }, [minimize, tryOpenPip]);
+
+  // Live count into the desktop widget.
+  useEffect(() => {
+    updateFloatingWindow(unread);
+  }, [unread]);
+
+  // Restoring the app dismisses the desktop widget.
+  useEffect(() => {
+    if (!isMinimized) {
+      closeFloatingWindow();
+      setPipOpen(false);
+    }
+  }, [isMinimized]);
+
   if (hidden) return null;
 
   // ── Not minimized: subtle corner control ────────────────────────────────
@@ -233,7 +272,7 @@ export default function FloatingHub() {
     return (
       <button
         type="button"
-        onClick={minimize}
+        onClick={handleMinimize}
         title="Run in background"
         aria-label="Run in background"
         className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-[120] flex items-center gap-2 rounded-full bg-[#1B3068] px-3 py-2 text-white shadow-lg shadow-slate-900/20 ring-1 ring-white/10 transition hover:bg-[#24407f] active:scale-95"
@@ -266,6 +305,18 @@ export default function FloatingHub() {
         <p className="text-white/70 text-sm mt-1 max-w-xs">
           Waiting for inquiries. Tap the bubble to come back — you stay signed in until you log out.
         </p>
+        {/* Desktop Chromium: re-open the always-on-top widget (needs a fresh
+            click — a reload into minimized state has no user activation). */}
+        {isFloatingWindowSupported() && !pipOpen && (
+          <button
+            type="button"
+            onClick={tryOpenPip}
+            className="pointer-events-auto mt-4 flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white ring-1 ring-white/25 backdrop-blur transition hover:bg-white/20"
+          >
+            <PictureInPicture2 className="h-4 w-4 text-[#c9973a]" />
+            Pop out desktop widget
+          </button>
+        )}
       </div>
 
       {/* Push opt-in banner (one-time). */}
