@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, useMotionValue } from 'motion/react';
-import { Minimize2, Bell, Maximize2, X, Smartphone } from 'lucide-react';
+import { Minimize2, Bell, Maximize2, X, Smartphone, Download } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import { useBackgroundMode } from '../BackgroundModeContext';
 import { useNotificationStream } from '../hooks/useNotificationStream';
@@ -12,6 +12,12 @@ import {
   isPushSupported,
   subscribePush,
 } from '../services/pushService';
+import {
+  canPromptInstall,
+  isStandalone,
+  promptInstall,
+  subscribeInstallable,
+} from '../services/installPrompt';
 
 /**
  * FloatingHub — the single, global "run in the background" widget.
@@ -43,6 +49,19 @@ const NO_WIDGET_PREFIXES = [
 ];
 
 const PUSH_PROMPTED_KEY = 'tonse_push_prompted';
+const INSTALL_PROMPTED_KEY = 'tonse_install_prompted';
+
+/** Mirror the unread count onto the installed PWA's app icon (Badging API —
+ *  feature-detected no-op elsewhere). */
+function updateAppBadge(count: number) {
+  try {
+    const nav = navigator as any;
+    if (count > 0) nav.setAppBadge?.(count);
+    else nav.clearAppBadge?.();
+  } catch {
+    /* badge is best-effort */
+  }
+}
 
 /** Tiny WebAudio ping when a new inquiry lands while minimized. */
 function playPing() {
@@ -77,6 +96,12 @@ export default function FloatingHub() {
   const [pulse, setPulse] = useState(false);
   const [showPushBanner, setShowPushBanner] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  // Bumped whenever beforeinstallprompt/appinstalled fires, so the banner
+  // decision below re-evaluates with fresh canPromptInstall().
+  const [installTick, setInstallTick] = useState(0);
+
+  useEffect(() => subscribeInstallable(() => setInstallTick((t) => t + 1)), []);
 
   const constraintsRef = useRef<HTMLDivElement>(null);
   const draggedRef = useRef(false);
@@ -117,6 +142,11 @@ export default function FloatingHub() {
     onReconnect: refreshCount,
   });
 
+  // Installed-PWA icon badge tracks the unread count.
+  useEffect(() => {
+    updateAppBadge(hidden ? 0 : unread);
+  }, [unread, hidden]);
+
   // Logout (user → null) must dismiss the widget. AuthProvider wraps
   // BackgroundModeProvider, so AuthContext can't call restore() itself; this
   // watcher is the clean decoupling.
@@ -124,6 +154,7 @@ export default function FloatingHub() {
   useEffect(() => {
     if (prevUserRef.current && !user) {
       restore();
+      updateAppBadge(0);
       try {
         localStorage.setItem('tonse_minimized', 'false');
       } catch {
@@ -163,6 +194,37 @@ export default function FloatingHub() {
     setPushBusy(false);
     dismissPushBanner();
   }, [dismissPushBanner]);
+
+  // One-time install banner (Android/desktop `beforeinstallprompt` platforms),
+  // sequenced AFTER the push banner — never both at once. iOS gets its
+  // Add-to-Home-Screen hint via the push banner instead.
+  useEffect(() => {
+    if (!isMinimized || hidden || showPushBanner) {
+      setShowInstallBanner(false);
+      return;
+    }
+    let prompted = false;
+    try {
+      prompted = localStorage.getItem(INSTALL_PROMPTED_KEY) === 'true';
+    } catch {
+      /* ignore */
+    }
+    setShowInstallBanner(!prompted && !isStandalone() && canPromptInstall());
+  }, [isMinimized, hidden, showPushBanner, installTick]);
+
+  const dismissInstallBanner = useCallback(() => {
+    setShowInstallBanner(false);
+    try {
+      localStorage.setItem(INSTALL_PROMPTED_KEY, 'true');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const doInstall = useCallback(async () => {
+    await promptInstall(); // accepted or dismissed — either way, don't nag again
+    dismissInstallBanner();
+  }, [dismissInstallBanner]);
 
   if (hidden) return null;
 
@@ -235,6 +297,36 @@ export default function FloatingHub() {
           <button
             type="button"
             onClick={dismissPushBanner}
+            aria-label="Dismiss"
+            className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Install-app banner (one-time, shown after the push banner is settled). */}
+      {showInstallBanner && (
+        <div className="pointer-events-auto absolute inset-x-0 bottom-6 mx-auto flex max-w-sm items-start gap-3 rounded-2xl bg-white px-4 py-3 shadow-2xl ring-1 ring-slate-200 md:left-6 md:right-auto md:mx-0">
+          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1B3068]/10 text-[#1B3068]">
+            <Download className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-slate-800">Install Tonse</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Works like an app — opens full-screen from your home screen, with inquiry alerts on the icon.
+            </p>
+            <button
+              type="button"
+              onClick={doInstall}
+              className="mt-2 rounded-lg bg-[#1B3068] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#24407f]"
+            >
+              Install app
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={dismissInstallBanner}
             aria-label="Dismiss"
             className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
           >

@@ -1,13 +1,17 @@
 {
+  "id": "/",
   "name": "Tonse Hub",
   "short_name": "Tonse",
   "description": "Tonse Hub marketplace — send and receive inquiries, quotes and orders.",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#1B3068",
+  "categories": ["business", "shopping"],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -20,6 +24,18 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Leads",
+      "description": "Incoming inquiries matched to your business",
+      "url": "/provider/leads"
+    },
+    {
+      "name": "My Quotes",
+      "description": "Quotes you have received",
+      "url": "/buyer/my-quotes"
     }
   ]
 }

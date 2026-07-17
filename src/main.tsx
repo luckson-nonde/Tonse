@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App.tsx';
 import { initializeFetchInterceptor } from './services/api/fetchInterceptor';
+import { initInstallPrompt } from './services/installPrompt';
 
 // Initialize fetch interceptor to handle network errors gracefully
 initializeFetchInterceptor({
@@ -10,6 +11,10 @@ initializeFetchInterceptor({
   logErrors: true,
   timeout: 10000,
 });
+
+// Capture `beforeinstallprompt` before it can fire (it's a one-shot event) so
+// FloatingHub can offer an in-app "Install Tonse" banner later.
+initInstallPrompt();
 
 // Register the Web Push service worker. It is a PLAIN file at /sw.js (served
 // from public/, copied verbatim) so it never passes through Vite's esbuild
