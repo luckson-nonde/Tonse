@@ -33,6 +33,7 @@ import {
   Wallet,
   Landmark,
   Heart,
+  LogOut,
 } from 'lucide-react';
 import Logo from './Logo';
 import ConfirmModal from './ConfirmModal';
@@ -1134,8 +1135,26 @@ export default function DashboardLayout({
         </div>
 
         <div className="p-4 border-t border-[#f1f5f9] mt-auto min-h-[140px] flex flex-col items-center justify-center bg-white space-y-4">
-          <LogoutToggle user={user} onLogout={handleLogout} />
-          <button 
+          {/* Phones: the ceremonial slide guards against accidental pocket
+              logouts. Desktop (sidebar goes sticky at md): dragging with a
+              mouse is pure friction — a plain click button instead. */}
+          <div className="md:hidden w-full flex justify-center">
+            <LogoutToggle user={user} onLogout={handleLogout} />
+          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="hidden md:flex w-40 h-12 items-center justify-center gap-2 rounded-full border-2 border-white text-sm font-bold text-white transition-all hover:brightness-110 active:scale-[0.98]"
+            style={{
+              background: 'linear-gradient(145deg, #c9973a, #b8832a)',
+              boxShadow:
+                '0 4px 12px rgba(201,151,58,0.25), 0 1px 3px rgba(0,0,0,0.1)',
+            }}
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </button>
+          <button
             onClick={() => setIsResetModalOpen(true)}
             className="text-[10px] font-bold text-slate-400 hover:text-rose-500 transition-colors uppercase tracking-widest flex items-center gap-1.5"
           >

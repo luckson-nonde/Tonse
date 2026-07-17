@@ -356,33 +356,69 @@ export default function FloatingHub() {
         </div>
       )}
 
-      {/* Install-app banner (one-time, shown after the push banner is settled). */}
+      {/* Install-app card (one-time, shown after the push banner is settled).
+          This is the TONSE-DESIGNED layer of the install flow — the final
+          confirm dialog after "Install app" is Chrome's own UI and cannot be
+          styled by any website. */}
       {showInstallBanner && (
-        <div className="pointer-events-auto absolute inset-x-0 bottom-6 mx-auto flex max-w-sm items-start gap-3 rounded-2xl bg-white px-4 py-3 shadow-2xl ring-1 ring-slate-200 md:left-6 md:right-auto md:mx-0">
-          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1B3068]/10 text-[#1B3068]">
-            <Download className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-slate-800">Install Tonse</p>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Works like an app — opens full-screen from your home screen, with inquiry alerts on the icon.
-            </p>
+        <div className="pointer-events-auto absolute inset-x-4 bottom-6 mx-auto max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200 md:left-6 md:right-auto md:mx-0">
+          {/* Brand header band */}
+          <div
+            className="relative flex items-center gap-3 px-5 py-4"
+            style={{
+              background:
+                'radial-gradient(120% 160% at 88% -20%, rgba(201,151,58,.30), transparent 55%), linear-gradient(180deg, #1B3068, #16264F)',
+            }}
+          >
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#c9973a]/60 bg-white/5 font-serif text-2xl font-bold text-[#c9973a]">
+              T
+            </div>
+            <div className="min-w-0">
+              <p className="font-serif text-lg font-bold leading-tight text-white">
+                TON<span className="text-[#c9973a]">SE</span>
+              </p>
+              <p className="text-[11px] uppercase tracking-widest text-white/60">
+                Install the app
+              </p>
+            </div>
             <button
               type="button"
-              onClick={doInstall}
-              className="mt-2 rounded-lg bg-[#1B3068] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#24407f]"
+              onClick={dismissInstallBanner}
+              aria-label="Dismiss"
+              className="absolute right-3 top-3 rounded-full p-1 text-white/50 transition hover:bg-white/10 hover:text-white"
             >
-              Install app
+              <X className="h-4 w-4" />
             </button>
           </div>
-          <button
-            type="button"
-            onClick={dismissInstallBanner}
-            aria-label="Dismiss"
-            className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-          >
-            <X className="h-4 w-4" />
-          </button>
+
+          {/* Body */}
+          <div className="px-5 py-4">
+            <p className="text-sm text-slate-600">
+              Tonse on your device — opens full-screen from your home screen or
+              taskbar, stays signed in, and shows new-inquiry alerts right on the
+              icon.
+            </p>
+            <div className="mt-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={doInstall}
+                className="flex flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#c9973a] to-[#b8832a] px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#c9973a]/25 transition hover:brightness-110 active:scale-[0.98]"
+              >
+                <Download className="h-4 w-4" />
+                Install app
+              </button>
+              <button
+                type="button"
+                onClick={dismissInstallBanner}
+                className="rounded-full px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+              >
+                Not now
+              </button>
+            </div>
+            <p className="mt-3 text-center text-[11px] text-slate-400">
+              Your browser will show a quick confirmation.
+            </p>
+          </div>
         </div>
       )}
 

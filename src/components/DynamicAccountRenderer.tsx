@@ -473,9 +473,14 @@ export default function DynamicAccountRenderer({
                 variant={action.variant}
                 onClick={() => onAction(action.id)}
                 className={`flex items-center gap-2.5 px-6 py-3 rounded-full font-bold shadow-lg transition-all duration-300 hover:-translate-y-0.5 ${
-                  action.variant === 'primary' 
-                    ? '!bg-[#C9973A] !text-white hover:!bg-[#1e3a8a] shadow-[#C9973A]/30 hover:shadow-[#1e3a8a]/30' 
-                    : 'bg-white border-2 border-slate-200 text-slate-700 hover:border-[#1e3a8a] hover:text-[#1e3a8a]'
+                  action.variant === 'primary'
+                    ? '!bg-[#C9973A] !text-white hover:!bg-[#1e3a8a] shadow-[#C9973A]/30 hover:shadow-[#1e3a8a]/30'
+                    // `!` overrides are load-bearing (same as the primary branch):
+                    // Button's own variant="secondary" ships bg-brand-dark +
+                    // text-white, and without !important the class-order
+                    // coin-flip left WHITE text on the white pill (invisible
+                    // until hover recolored it).
+                    : '!bg-white border-2 !border-slate-200 !text-slate-700 hover:!border-[#1e3a8a] hover:!text-[#1e3a8a]'
                 }`}
               >
                 {renderIcon(action.icon || 'Plus', 'w-4.5 h-4.5')}
