@@ -21,6 +21,17 @@ export function isLoanContext(
   return /loan|lending/.test(hay);
 }
 
+/**
+ * True when a Quote is a loan OFFER (condition LOAN) or a lender DECLINE
+ * (condition DECLINED) rather than a marketplace quote. A loan is
+ * accepted/countered, never "paid", so it lives on its own "Loan Offers"
+ * surface. Single source for a rule previously duplicated in the buyer
+ * dashboard and the sidebar badge logic.
+ */
+export function isLoanQuote(q: any): boolean {
+  return ['LOAN', 'DECLINED'].includes(String(q?.condition || '').toUpperCase());
+}
+
 /** Resolve the loan sub-type from a category id ('loan-government') or a
  *  display name ('Government Employee Loan'). Returns null when not a loan. */
 export function loanTypeKey(...vals: Array<string | string[] | undefined | null>): LoanTypeKey | null {

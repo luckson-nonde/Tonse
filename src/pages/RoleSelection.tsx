@@ -303,9 +303,22 @@ export default function RoleSelection() {
     if (subRole === 'COMPANY_BUYER') {
       setIsCompanyExpanded(true);
       setSelectedSubRole(null);
-    } else {
-      setSelectedSubRole(subRole);
+      return;
     }
+    // Buyer account types have no tier-3 step (buyers pick categories at
+    // inquiry time, not at signup) — the only thing left after choosing is
+    // to head to registration. On mobile we advance straight from the card
+    // tap so the shared Continue button below is redundant and stays hidden
+    // there; desktop keeps the deliberate select-then-Continue rhythm.
+    if (
+      masterRole === 'BUYER' &&
+      typeof window !== 'undefined' &&
+      window.matchMedia('(max-width: 1023px)').matches
+    ) {
+      navigate(`/register?role=${masterRole}&subRole=${subRole}${refSuffix}`);
+      return;
+    }
+    setSelectedSubRole(subRole);
   };
 
   const { isAvailable, disabledIds } = useCategoryAvailability();
@@ -779,8 +792,13 @@ export default function RoleSelection() {
                 ? !specialistHasSubPicked
                 : selectedCategories.length === 0;
 
+        // Buyer tier-2 advances on card tap on mobile (see handleSubRoleSelect),
+        // so the shared Continue is redundant below lg — hide it there. Sellers
+        // and providers still rely on it across their tier-2 / tier-3 steps.
+        const hideOnMobile = masterRole === 'BUYER' && tier === 2;
+
         return (
-          <div className="pt-7">
+          <div className={`pt-7 ${hideOnMobile ? 'hidden lg:block' : ''}`}>
             <Button
               onClick={handleContinue}
               disabled={disabled}

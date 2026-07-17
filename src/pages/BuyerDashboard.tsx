@@ -17,6 +17,7 @@ import { releaseReserveQuotes } from '../services/api/notificationService';
 import { markQuoteAsRead, archiveQuote, deleteQuote, updateQuoteStatus } from '../services/api/quoteService';
 import { createOrder, fetchBuyerOrders, type OrderRecord } from '../services/api/orderService';
 import { isActiveInquiry, isActiveQuote } from '../services/lifecycleFilters';
+import { isLoanQuote } from '../utils/loan';
 import { ViewType, MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
 import BuyerCategoryPicker from '../components/buyer/BuyerCategoryPicker';
@@ -266,9 +267,8 @@ export default function BuyerDashboard() {
     // NOT alongside marketplace quotes — a loan is accepted/countered, never
     // "paid". Include terminal ones (REJECTED/DECLINED) so the borrower actually
     // sees a lender's decision + reason instead of the request going silent.
-    const isLoanish = (q: any) => ['LOAN', 'DECLINED'].includes(String(q?.condition || '').toUpperCase());
-    const loanOffers = enrichedQuotes.filter((q) => isLoanish(q) && !(q as any).isArchived);
-    const marketplaceQuotes = activeQuotes.filter((q) => !isLoanish(q));
+    const loanOffers = enrichedQuotes.filter((q) => isLoanQuote(q) && !(q as any).isArchived);
+    const marketplaceQuotes = activeQuotes.filter((q) => !isLoanQuote(q));
 
     // Recent activity: one card per inquiry, labelled by its
     // most-advanced known stage (Order Placed > Quote Received >
@@ -902,6 +902,14 @@ export default function BuyerDashboard() {
             onViewProfile={(shop) => handleAction('view_shop_profile', shop)}
           />
         );
+      case 'favorites':
+        return (
+          <BrowseShopsView
+            favoritesOnly
+            onSendInquiry={(shop) => handleAction('send_inquiry_to_shop', shop)}
+            onViewProfile={(shop) => handleAction('view_shop_profile', shop)}
+          />
+        );
       case 'shop-profile':
         return selectedShopProfileId ? (
           <ShopProfileView
@@ -925,6 +933,7 @@ export default function BuyerDashboard() {
     'inquiry-success',
     'financial',
     'shops',
+    'favorites',
     'shop-profile',
   ].includes(activeTab);
 

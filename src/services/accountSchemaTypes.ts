@@ -80,6 +80,15 @@ export interface NavigationItem {
   // categories.ts. (Phase 1.5 retired the legacy collapsed types like
   // REPAIR_SERVICE / PRODUCTS_AND_REPAIR.)
   businessTypes?: string[];
+  // Which sidebar section this item lives in. Absent / 'core' = the always-on
+  // top group; 'contextual' = the "Your Activity" section below, whose tabs
+  // only surface once the buyer has interacted with the related category.
+  group?: 'core' | 'contextual';
+  // Activity-trigger key (e.g. 'loans'). When set, the item is HIDDEN unless
+  // the corresponding activity signal is true (see activitySignals in
+  // DashboardLayout). Lets a category tab appear only after the buyer inquires
+  // in that category / receives a related offer. Future: 'events', etc.
+  requiresActivity?: string;
 }
 
 export interface MasterAccountSchema {

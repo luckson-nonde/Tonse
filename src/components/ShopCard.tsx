@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, Star, ArrowRight, BadgeCheck } from 'lucide-react';
+import { MapPin, Star, ArrowRight, BadgeCheck, Heart } from 'lucide-react';
 import type { ShopResult } from '../services/api/shopService';
 import { getBusinessTypeLabel, type BusinessType } from '../services/categories';
 
@@ -7,6 +7,10 @@ interface ShopCardProps {
   shop: ShopResult;
   onSendInquiry: (shop: ShopResult) => void;
   onViewProfile: (shop: ShopResult) => void;
+  /** Favorite (♥) state + toggle. When onToggleFavorite is omitted the heart
+   *  isn't rendered (e.g. surfaces where favoriting doesn't apply). */
+  isFavorite?: boolean;
+  onToggleFavorite?: (shop: ShopResult) => void;
 }
 
 /**
@@ -25,7 +29,13 @@ interface ShopCardProps {
  * Border/ring colors are opaque on purpose — translucent borders on
  * rounded elements mis-rasterize on Mali-GPU Android phones.
  */
-export default function ShopCard({ shop, onSendInquiry, onViewProfile }: ShopCardProps) {
+export default function ShopCard({
+  shop,
+  onSendInquiry,
+  onViewProfile,
+  isFavorite = false,
+  onToggleFavorite,
+}: ShopCardProps) {
   // "LTS"-style monogram — the brand mark for the header circle:
   // first letters of up to three words of the business name.
   const monogram = (shop.name || 'S')
@@ -68,6 +78,27 @@ export default function ShopCard({ shop, onSendInquiry, onViewProfile }: ShopCar
           className="absolute inset-0 opacity-30 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle at 88% 15%, rgba(212,155,53,0.55) 0%, transparent 55%)' }}
         />
+        {/* Favorite (♥) toggle — top-right over the header. stopPropagation so
+            it never triggers the card's Send Inquiry / View profile actions. */}
+        {onToggleFavorite && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite(shop);
+            }}
+            aria-pressed={isFavorite}
+            aria-label={isFavorite ? `Remove ${shop.name} from favorites` : `Add ${shop.name} to favorites`}
+            className="absolute top-3 right-3 z-20 w-9 h-9 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 border border-white/25 backdrop-blur-sm transition-colors"
+          >
+            <Heart
+              className={`w-4.5 h-4.5 transition-colors ${
+                isFavorite ? 'text-[#d49b35] fill-[#d49b35]' : 'text-white'
+              }`}
+              strokeWidth={2}
+            />
+          </button>
+        )}
         <div className="absolute inset-x-0 top-4 flex justify-center">
           {shop.logo ? (
             <img

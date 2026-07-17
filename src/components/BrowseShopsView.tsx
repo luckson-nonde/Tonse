@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, X, Store, LayoutGrid, Briefcase } from 'lucide-react';
+import { Search, X, Store, LayoutGrid, Briefcase, Heart } from 'lucide-react';
 import { fetchShops, type ShopResult } from '../services/api/shopService';
 import { CATEGORIES_DB, getBusinessTypeLabel, type BusinessType } from '../services/categories';
 import ShopCard from './ShopCard';
 import InlineFilterDropdown from './InlineFilterDropdown';
 import owlSearching from '../assets/images/empty-states/owl_searching.png';
+import { useAuth } from '../AuthContext';
+import { useFavoriteShops } from '../hooks/useFavoriteShops';
 
 interface BrowseShopsViewProps {
   onSendInquiry: (shop: ShopResult) => void;
   onViewProfile: (shop: ShopResult) => void;
+  /** When true, show only the buyer's favorited shops (Favorites tab). */
+  favoritesOnly?: boolean;
 }
 
 /** Archetypes offered in the "Select Service Type" filter, in menu order. */
@@ -24,7 +28,13 @@ const SERVICE_TYPE_ARCHETYPES = [
   'LABOUR',
 ] as const;
 
-export default function BrowseShopsView({ onSendInquiry, onViewProfile }: BrowseShopsViewProps) {
+export default function BrowseShopsView({
+  onSendInquiry,
+  onViewProfile,
+  favoritesOnly = false,
+}: BrowseShopsViewProps) {
+  const { user } = useAuth();
+  const { favoriteIds, isFavorite, toggle: toggleFavorite } = useFavoriteShops(user?.id);
   const [shops, setShops] = useState<ShopResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -70,9 +80,12 @@ export default function BrowseShopsView({ onSendInquiry, onViewProfile }: Browse
     }));
   }, [shops]);
 
-  // Client-side filter: text search + industry + service type.
+  // Client-side filter: favorites + text search + industry + service type.
   const filtered = useMemo(() => {
     let list = shops;
+    if (favoritesOnly) {
+      list = list.filter((s) => favoriteIds.has(s.id));
+    }
     if (selectedIndustry) {
       list = list.filter((s) =>
         (s.categoryIds ?? []).some((id) => (categoryParentMap.get(id) ?? id) === selectedIndustry)
@@ -97,7 +110,7 @@ export default function BrowseShopsView({ onSendInquiry, onViewProfile }: Browse
       );
     }
     return list;
-  }, [shops, search, selectedIndustry, selectedServiceType, categoryParentMap]);
+  }, [shops, search, selectedIndustry, selectedServiceType, categoryParentMap, favoritesOnly, favoriteIds]);
 
   const hasActiveFilters = !!(search || selectedIndustry || selectedServiceType);
   const selectedIndustryLabel = industryOptions.find((o) => o.value === selectedIndustry)?.label;
@@ -127,19 +140,27 @@ export default function BrowseShopsView({ onSendInquiry, onViewProfile }: Browse
         <div className="relative z-10">
           <div className="flex items-center gap-2.5 mb-2">
             <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center backdrop-blur-sm">
-              <Store className="w-4 h-4 text-[#d49b35]" />
+              {favoritesOnly ? (
+                <Heart className="w-4 h-4 text-[#d49b35] fill-[#d49b35]" />
+              ) : (
+                <Store className="w-4 h-4 text-[#d49b35]" />
+              )}
             </div>
             <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#d49b35]">
-              Marketplace Directory
+              {favoritesOnly ? 'Your Favorites' : 'Marketplace Directory'}
             </p>
           </div>
           <h2 className="text-2xl sm:text-[28px] font-serif font-bold leading-tight">
-            Discover Shops and Providers
+            {favoritesOnly ? 'Your Favorite Shops' : 'Discover Shops and Providers'}
           </h2>
           <p className="text-white/55 text-[13px] mt-1">
-            {loading
-              ? 'Loading verified shops…'
-              : `${shops.length} verified ${shops.length === 1 ? 'shop' : 'shops'} · browse, compare and send an inquiry`}
+            {favoritesOnly
+              ? loading
+                ? 'Loading your favorites…'
+                : `${favoriteIds.size} saved ${favoriteIds.size === 1 ? 'shop' : 'shops'} · your handpicked list`
+              : loading
+                ? 'Loading verified shops…'
+                : `${shops.length} verified ${shops.length === 1 ? 'shop' : 'shops'} · browse, compare and send an inquiry`}
           </p>
 
           {/* One white bar: search left, filter dropdowns embedded right.
@@ -218,10 +239,18 @@ export default function BrowseShopsView({ onSendInquiry, onViewProfile }: Browse
         <div className="bg-white rounded-2xl p-16 border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center min-h-[50vh]">
           <img
             src={owlSearching}
-            alt="No shops found"
+            alt={favoritesOnly ? 'No favorites yet' : 'No shops found'}
             className="w-44 h-44 object-contain opacity-90 mb-8"
           />
-          {hasActiveFilters ? (
+          {favoritesOnly && !hasActiveFilters ? (
+            <>
+              <p className="text-[17px] font-bold text-slate-700 mb-2">No favorites yet</p>
+              <p className="text-[13px] text-slate-400 max-w-xs">
+                Tap the <span className="text-[#d49b35] font-semibold">♥</span> on any shop under{' '}
+                <span className="font-semibold text-slate-500">All Shops</span> to save it here for quick access.
+              </p>
+            </>
+          ) : hasActiveFilters ? (
             <>
               <p className="text-[17px] font-bold text-slate-700 mb-2">No shops match your filter</p>
               <p className="text-[13px] text-slate-400 mb-5">
@@ -253,7 +282,14 @@ export default function BrowseShopsView({ onSendInquiry, onViewProfile }: Browse
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map((shop) => (
-              <ShopCard key={shop.id} shop={shop} onSendInquiry={onSendInquiry} onViewProfile={onViewProfile} />
+              <ShopCard
+                key={shop.id}
+                shop={shop}
+                onSendInquiry={onSendInquiry}
+                onViewProfile={onViewProfile}
+                isFavorite={isFavorite(shop.id)}
+                onToggleFavorite={(s) => toggleFavorite(s.id)}
+              />
             ))}
           </div>
           <p className="text-[11px] text-slate-400 font-medium text-center">

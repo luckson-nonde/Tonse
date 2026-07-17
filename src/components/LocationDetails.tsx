@@ -29,6 +29,12 @@ interface LocationDetailsProps {
   submitLabel?: string;
   showRadius?: boolean;
   isStandalone?: boolean;
+  /** When false, the GPS-capture "Pinpoint" section (and the registration
+   *  "Be at your shop" advisory) is hidden and coordinates are stripped from
+   *  the onComplete payload. Buyer registration passes this — a buyer only
+   *  pins a precise point per-inquiry, not at signup. Sellers/providers and
+   *  the inquiry flow leave it at the default (true). */
+  showGps?: boolean;
   /** When true, the consuming layout (e.g. RegistrationStepShell)
    *  already renders the eyebrow / title / description / tips / "be
    *  at your shop" advisory in its left context panel. The form
@@ -336,6 +342,7 @@ export default function LocationDetails({
   onComplete,
   submitLabel = 'Next →',
   showRadius = true,
+  showGps = true,
   isStandalone = true,
   embeddedInShell = false,
   initialValue,
@@ -636,13 +643,15 @@ export default function LocationDetails({
     // the backend can match providers within `radius` km of the point;
     // when blank, matching falls back to "all providers in this city".
     if (!province || !city) return;
-    const hasCoords = latitude !== undefined && longitude !== undefined;
+    // With GPS off (buyer registration) we save no coordinates — even if the
+    // Area/Landmark search happened to set an internal lat/lng, strip it here.
+    const hasCoords = showGps && latitude !== undefined && longitude !== undefined;
     onComplete({
       province,
       city,
       address,
-      latitude,
-      longitude,
+      latitude: showGps ? latitude : undefined,
+      longitude: showGps ? longitude : undefined,
       radius: hasCoords && showRadius ? radius : undefined,
     });
   };
@@ -667,7 +676,11 @@ export default function LocationDetails({
       {/* Section 01 — Service Area */}
       <div className="flex items-center gap-3">
         <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A] shrink-0">
-          {isRegistration ? 'Section 01 · Your Shop' : 'Section 01 · Where'}
+          {isRegistration
+            ? showGps
+              ? 'Section 01 · Your Shop'
+              : 'Section 01 · Your Area'
+            : 'Section 01 · Where'}
         </p>
         <div className="h-px flex-1 bg-[#e8e4dc]" />
         <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#C9973A]/10 text-[#C9973A] font-bold uppercase tracking-[0.14em] text-[10px] shrink-0">
@@ -686,7 +699,7 @@ export default function LocationDetails({
           When `embeddedInShell` is true, RegistrationStepShell renders
           the advisory (and the per-step context) in its own slot, so
           we skip the inline copy here to avoid showing it twice. */}
-      {isRegistration && !embeddedInShell && (
+      {isRegistration && !embeddedInShell && showGps && (
         <div className="flex items-start gap-3 p-4 rounded-2xl border border-[#C9973A]/30 bg-gradient-to-br from-[#fdf6e9]/80 to-[#fdf6e9]/30">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white flex items-center justify-center shrink-0 shadow-md shadow-[#C9973A]/30">
             <Store className="w-5 h-5" />
@@ -817,11 +830,14 @@ export default function LocationDetails({
             )}
         </div>
         <p className="text-[11px] text-[#1a1612]/50 mt-1.5 ml-1 leading-snug">
-          The most important field — search the area, market or landmark where you need this,
-          then pick a result to set the map pin.
+          {showGps
+            ? 'The most important field — search the area, market or landmark where you need this, then pick a result to set the map pin.'
+            : 'Search the area, market or landmark near you, then pick a result to fill in your province and city.'}
         </p>
       </div>
 
+      {showGps && (
+        <>
       {/* Section 02 — Pin location. Inline GPS picker on the same
           screen as the manual fields. When `showRadius` is true
           (inquiry context) we frame this as an optional refinement
@@ -966,6 +982,8 @@ export default function LocationDetails({
           </button>
         </div>
       </div>
+        </>
+      )}
 
       {/* Radius / outreach slider — always visible. Tells the buyer
           "how far should this inquiry reach?" in plain language. */}
@@ -1038,7 +1056,7 @@ export default function LocationDetails({
       {/* Section 03 — Privacy */}
       <div className="flex items-center gap-3 pt-2">
         <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A] shrink-0">
-          Section 03 · Privacy
+          Section 0{showGps ? '3' : '2'} · Privacy
         </p>
         <div className="h-px flex-1 bg-[#e8e4dc]" />
       </div>

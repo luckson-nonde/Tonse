@@ -32,6 +32,7 @@ import {
   LayoutDashboard,
   Wallet,
   Landmark,
+  Heart,
 } from 'lucide-react';
 import Logo from './Logo';
 import ConfirmModal from './ConfirmModal';
@@ -41,6 +42,7 @@ import DashboardCalendar, { CalendarTone, CounterCard } from './DashboardCalenda
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useDashboard } from '../DashboardContext';
 import { hasPermission, isCollectionOfficer, isQuotationManager, PERMISSIONS } from '../utils/rbac';
+import { isLoanContext, isLoanQuote } from '../utils/loan';
 import {
   getBusinessTypes,
   getPrimaryBusinessType,
@@ -53,6 +55,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useUserInquiries, useMatchedLeads } from '../hooks/useInquiries';
 import { useUserQuotes } from '../hooks/useQuotes';
+import { useFavoriteShops } from '../hooks/useFavoriteShops';
 import { isActiveInquiry, isActiveQuote } from '../services/lifecycleFilters';
 import {
   fetchBuyerOrders,
@@ -292,6 +295,12 @@ export default function DashboardLayout({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  // Browse Shops sidebar sub-menu (All Shops / Favorites). Auto-opens whenever
+  // the buyer is on either shops tab so the active child stays visible.
+  const [isShopsMenuOpen, setIsShopsMenuOpen] = useState(false);
+  useEffect(() => {
+    if (activeTab === 'shops' || activeTab === 'favorites') setIsShopsMenuOpen(true);
+  }, [activeTab]);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
 
@@ -371,6 +380,10 @@ export default function DashboardLayout({
     sidebarVariant,
   );
   const { quotes: sidebarQuotes } = useUserQuotes(user?.id);
+  // Favorite-shop count for the Browse Shops → Favorites sub-tab badge.
+  const { favoriteIds: sidebarFavoriteIds } = useFavoriteShops(
+    sidebarIsBuyer ? user?.id : undefined,
+  );
   const [sidebarOrders, setSidebarOrders] = useState<OrderRecord[]>([]);
 
   useEffect(() => {
@@ -398,10 +411,9 @@ export default function DashboardLayout({
       // Mirror the page split: loan offers live under "Loan Offers", not
       // "Received Quotes". Marketplace badge excludes loans; the loan badge
       // signals pending offers the borrower still needs to act on.
-      const isLoanish = (q: any) => ['LOAN', 'DECLINED'].includes(String(q?.condition || '').toUpperCase());
-      const activeQuotes = (sidebarQuotes ?? []).filter((q: any) => isActiveQuote(q) && !isLoanish(q)).length;
+      const activeQuotes = (sidebarQuotes ?? []).filter((q: any) => isActiveQuote(q) && !isLoanQuote(q)).length;
       const pendingLoanOffers = (sidebarQuotes ?? []).filter(
-        (q: any) => isLoanish(q) && String(q?.status || '').toUpperCase() === 'PENDING',
+        (q: any) => isLoanQuote(q) && String(q?.status || '').toUpperCase() === 'PENDING',
       ).length;
       counts.inquiries = activeInquiries;
       counts.quotes = activeQuotes;
@@ -512,6 +524,22 @@ export default function DashboardLayout({
     else handleTabClick('home');
   };
 
+  // Contextual nav gating. A schema item with `requiresActivity: '<key>'` only
+  // appears when activitySignals[key] is true — keyed off data the sidebar
+  // already fetches (no new plumbing). Buyers only for now; extend with new
+  // keys (e.g. 'events') as more contextual tabs are added.
+  const activitySignals = useMemo<Record<string, boolean>>(() => {
+    const signals: Record<string, boolean> = {};
+    if (sidebarIsBuyer) {
+      const hasLoanInquiry = (sidebarOwnInquiries ?? []).some((i: any) =>
+        isLoanContext(i.category, i.categoryIds, i.title),
+      );
+      const hasLoanOffer = (sidebarQuotes ?? []).some((q: any) => isLoanQuote(q));
+      signals.loans = hasLoanInquiry || hasLoanOffer;
+    }
+    return signals;
+  }, [sidebarIsBuyer, sidebarOwnInquiries, sidebarQuotes]);
+
   const navItems = useMemo(() => {
     if (!user) return [];
     // Schema resolution. Three-way: merged multi-archetype view
@@ -558,9 +586,23 @@ export default function DashboardLayout({
         if (!item.businessTypes.includes(businessType)) return false;
       }
 
+      // Contextual/activity-gated items (e.g. Loan Offers) stay hidden until
+      // the related activity exists — but never hide the tab the user is on.
+      if (
+        item.requiresActivity &&
+        !activitySignals[item.requiresActivity] &&
+        activeTab !== item.id
+      ) {
+        return false;
+      }
+
       return true;
     });
-  }, [user, businessType, businessTypes, activeContext]);
+  }, [user, businessType, businessTypes, activeContext, activitySignals, activeTab]);
+
+  // The "Your Activity" section header renders just before the first contextual
+  // nav item (contextual items sort to the end of the schema navigation array).
+  const firstContextualId = navItems.find((i) => i.group === 'contextual')?.id;
 
   // Adapt the label of universal nav items based on businessType. The schema
   // declares "Booking Requests" generically; for a REPAIR_SERVICE shop we
@@ -987,6 +1029,73 @@ export default function DashboardLayout({
                 );
               }
 
+              // Buyer "Browse Shops" is an expandable parent with two children:
+              // All Shops (the directory) and Favorites (the buyer's saved
+              // shops). Same collapsible pattern as the Profile / Inquiries
+              // items above; children route via handleTabClick.
+              if (item.id === 'shops' && user?.role === 'BUYER') {
+                const ShopsIcon = iconMap[item.icon] || Home;
+                const shopsActive = activeTab === 'shops' || activeTab === 'favorites';
+                const favoriteCount = sidebarFavoriteIds.size;
+                return (
+                  <div key={item.id} className="w-full">
+                    <button
+                      onClick={() => setIsShopsMenuOpen((o) => !o)}
+                      className={`flex items-center justify-between w-full px-6 py-3.5 md:py-4 text-[14px] font-medium font-sans transition-all duration-200 border-l-[4px] ${
+                        shopsActive || isShopsMenuOpen
+                          ? 'border-[#C9973A] bg-[#1B3068] text-white shadow-md'
+                          : 'border-transparent text-slate-500 hover:bg-[#1B3068] hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        <ShopsIcon className="w-4.5 h-4.5 mr-4 stroke-[1.8]" />
+                        {getLabel(item.label, item.id)}
+                      </div>
+                      {isShopsMenuOpen ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )}
+                    </button>
+                    {isShopsMenuOpen && (
+                      <div className="pl-8 space-y-1 pb-2 pt-1">
+                        <button
+                          onClick={() => handleTabClick('shops')}
+                          className={`flex items-center w-full px-4 py-2 text-[13px] font-medium font-sans transition-all duration-200 ${
+                            activeTab === 'shops'
+                              ? 'text-[#C9973A]'
+                              : 'text-[#64748b] hover:text-brand-dark'
+                          }`}
+                        >
+                          All Shops
+                        </button>
+                        <button
+                          onClick={() => handleTabClick('favorites')}
+                          className={`flex items-center justify-between w-full px-4 py-2 text-[13px] font-medium font-sans transition-all duration-200 ${
+                            activeTab === 'favorites'
+                              ? 'text-[#C9973A]'
+                              : 'text-[#64748b] hover:text-brand-dark'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Heart
+                              className={`w-3.5 h-3.5 ${activeTab === 'favorites' ? 'fill-[#C9973A]' : ''}`}
+                              strokeWidth={2}
+                            />
+                            Favorites
+                          </span>
+                          {favoriteCount > 0 && (
+                            <span className="ml-2 min-w-[18px] h-[18px] px-1 rounded-full bg-[#C9973A]/15 text-[#C9973A] text-[10px] font-bold flex items-center justify-center">
+                              {favoriteCount}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
               const Icon = iconMap[item.icon] || Home;
               // Single source of truth for sidebar badges — see
               // `badgeCounts` useMemo above. Items lacking an entry get
@@ -994,25 +1103,31 @@ export default function DashboardLayout({
               const badgeCount = badgeCounts[item.id];
 
               return (
-                <NavLink
-                  key={item.id}
-                  tab={item.id}
-                  icon={Icon}
-                  label={getLabel(item.label, item.id)}
-                  isActive={
-                    activeTab === item.id ||
-                    (item.id === 'inquiries' &&
-                      [
-                        'inquiries',
-                        'create-inquiry',
-                        'inquiry-items',
-                        'category-selection',
-                        'inquiry-preferences',
-                        'location-details',
-                      ].includes(activeTab))
-                  }
-                  badgeCount={badgeCount}
-                />
+                <React.Fragment key={item.id}>
+                  {item.id === firstContextualId && (
+                    <div className="px-6 pt-4 mt-3 border-t border-[#f1f5f9] text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                      Your Activity
+                    </div>
+                  )}
+                  <NavLink
+                    tab={item.id}
+                    icon={Icon}
+                    label={getLabel(item.label, item.id)}
+                    isActive={
+                      activeTab === item.id ||
+                      (item.id === 'inquiries' &&
+                        [
+                          'inquiries',
+                          'create-inquiry',
+                          'inquiry-items',
+                          'category-selection',
+                          'inquiry-preferences',
+                          'location-details',
+                        ].includes(activeTab))
+                    }
+                    badgeCount={badgeCount}
+                  />
+                </React.Fragment>
               );
             })}
           </nav>

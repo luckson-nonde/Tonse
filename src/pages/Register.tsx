@@ -168,6 +168,10 @@ export default function Register() {
       role === 'ENTERTAINMENT' ||
       role === 'EVENTS';
 
+    // Buyers don't pin a permanent map location at signup — GPS capture is
+    // per-inquiry only. Sellers/providers keep the registration pinpoint.
+    const isBuyer = role === 'BUYER';
+
     const steps = [
       { id: 1, label: 'Profile' },
       { id: 2, label: 'Location' },
@@ -744,7 +748,7 @@ export default function Register() {
             <RegistrationStepShell
               consentKey="location"
               onConsentBack={() => setCurrentStep(1)}
-              advisory={
+              advisory={isBuyer ? undefined : (
                 <div className="flex items-start gap-3 p-4 rounded-2xl border border-[#C9973A]/30 bg-gradient-to-br from-[#fdf6e9]/80 to-[#fdf6e9]/30">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#D5A547] to-[#C9973A] text-white flex items-center justify-center shrink-0 shadow-md shadow-[#C9973A]/30">
                     <Store className="w-5 h-5" />
@@ -758,7 +762,7 @@ export default function Register() {
                     </p>
                   </div>
                 </div>
-              }
+              )}
             >
               <div className="animate-in fade-in slide-in-from-right-4 duration-500">
                 <LocationDetails
@@ -766,6 +770,7 @@ export default function Register() {
                   isStandalone={false}
                   submitLabel="Continue to Credentials →"
                   showRadius={false}
+                  showGps={!isBuyer}
                   embeddedInShell={true}
                   initialValue={{ province, city, address, latitude, longitude, radius }}
                 />
@@ -988,12 +993,17 @@ export default function Register() {
                     ['Province', province],
                     ['City', city],
                     ['Address', address],
-                    [
-                      'GPS pin',
-                      latitude !== undefined && longitude !== undefined
-                        ? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
-                        : 'Not pinned',
-                    ],
+                    // Buyers don't capture a GPS pin at signup (per-inquiry only).
+                    ...(isBuyer
+                      ? []
+                      : [
+                          [
+                            'GPS pin',
+                            latitude !== undefined && longitude !== undefined
+                              ? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
+                              : 'Not pinned',
+                          ],
+                        ]),
                   ]}
                 />
                 <ReviewSection

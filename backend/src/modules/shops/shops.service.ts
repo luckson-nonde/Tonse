@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Shop } from './entities/shop.entity';
+import { ShopFavorite } from './entities/shop-favorite.entity';
 import { CreateShopDto } from './dto/create-shop.dto';
 import { UpdateShopDto } from './dto/update-shop.dto';
 
@@ -11,9 +12,39 @@ export class ShopsService {
   constructor(
     @InjectRepository(Shop)
     private shopsRepository: Repository<Shop>,
+    @InjectRepository(ShopFavorite)
+    private favoritesRepository: Repository<ShopFavorite>,
     @InjectDataSource()
     private dataSource: DataSource,
   ) {}
+
+  // ── Favorites (Browse Shops → Favorites) ─────────────────────────────
+  // A buyer marks a shop card as a favorite. `shopId` is ShopResult.id (the
+  // provider profile id shown in the directory). Idempotent: the unique
+  // (userId, shopId) index makes a repeat POST a no-op.
+
+  async favoriteShop(userId: string, shopId: string): Promise<{ favorited: true }> {
+    await this.favoritesRepository
+      .createQueryBuilder()
+      .insert()
+      .values({ userId, shopId })
+      .orIgnore() // ON CONFLICT DO NOTHING — safe to favorite twice
+      .execute();
+    return { favorited: true };
+  }
+
+  async unfavoriteShop(userId: string, shopId: string): Promise<void> {
+    await this.favoritesRepository.delete({ userId, shopId });
+  }
+
+  async listFavoriteShopIds(userId: string): Promise<string[]> {
+    const rows = await this.favoritesRepository.find({
+      where: { userId },
+      select: ['shopId'],
+      order: { createdAt: 'DESC' },
+    });
+    return rows.map((r) => r.shopId);
+  }
 
   async create(createShopDto: CreateShopDto): Promise<Shop> {
     const shop = this.shopsRepository.create(createShopDto);

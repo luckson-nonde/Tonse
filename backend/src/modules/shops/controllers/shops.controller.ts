@@ -50,6 +50,15 @@ export class ShopsController {
     return this.shopsService.findBySellerId(sellerId);
   }
 
+  /** Ids of shops the caller has favorited. Static route — declared before
+   *  @Get(':id') so 'me' isn't captured as an id. */
+  @Get('me/favorites')
+  @UseGuards(JwtAuthGuard)
+  async listFavorites(@Request() req) {
+    const shopIds = await this.shopsService.listFavoriteShopIds(req.user.id);
+    return { shopIds };
+  }
+
   /** Full provider profile — must be declared before @Get(':id') */
   @Get(':id/profile')
   async findProfile(@Param('id') profileId: string) {
@@ -87,6 +96,22 @@ export class ShopsController {
   @UseGuards(JwtAuthGuard)
   async unfollow(@Param('id') id: string, @Request() req) {
     return this.shopsService.decrementFollowerCount(id);
+  }
+
+  // A buyer favorites / unfavorites a shop card for their own "Favorites"
+  // list. Actor is the caller (JWT), never the body. Favoriting is
+  // idempotent (unique index); unfavoriting a non-favorite is a no-op.
+  @Post(':id/favorite')
+  @UseGuards(JwtAuthGuard)
+  async favorite(@Param('id') id: string, @Request() req) {
+    return this.shopsService.favoriteShop(req.user.id, id);
+  }
+
+  @Delete(':id/favorite')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async unfavorite(@Param('id') id: string, @Request() req) {
+    await this.shopsService.unfavoriteShop(req.user.id, id);
   }
 
   @Delete(':id')

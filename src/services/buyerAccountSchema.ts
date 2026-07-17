@@ -12,7 +12,8 @@ export type ViewType =
   | 'quote_details'
   | 'order_details'
   | 'financial'
-  | 'shops';
+  | 'shops'
+  | 'favorites';
 
 export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
   schemaType: 'BUYER',
@@ -20,11 +21,16 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'dashboard', label: 'Overview', icon: 'LayoutDashboard' },
     { id: 'inquiries', label: 'My Inquiries', icon: 'MessageSquare' },
     { id: 'quotes', label: 'Received Quotes', icon: 'FileText' },
-    { id: 'loan_offers', label: 'Loan Offers', icon: 'Landmark' },
     { id: 'orders', label: 'Order History', icon: 'ShoppingBag' },
     { id: 'shops', label: 'Browse Shops', icon: 'Store' },
     { id: 'profile', label: 'Account Settings', icon: 'User' },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
+    // Contextual tab — hidden until the buyer actually engages the Loans
+    // category (a loan inquiry) or receives a loan offer. Rendered in the
+    // "Your Activity" section below the core tabs. See requiresActivity +
+    // activitySignals in DashboardLayout; future category tabs (e.g. event
+    // tickets) drop in here the same way.
+    { id: 'loan_offers', label: 'Loan Offers', icon: 'Landmark', group: 'contextual', requiresActivity: 'loans' },
   ],
   views: {
     dashboard: {

@@ -64,3 +64,26 @@ export async function fetchShops(filters: {
   const res = await apiClient.get<{ data: ShopResult[]; total: number }>(`/shops?${params}`);
   return res.data ?? { data: [], total: 0 };
 }
+
+// ── Favorites (Browse Shops → Favorites) ────────────────────────────────
+// Persisted per-user on the backend (shop_favorites). Keyed by ShopResult.id.
+
+/** Ids of the shops the current buyer has favorited (most-recent first). */
+export async function fetchFavoriteShopIds(): Promise<string[]> {
+  try {
+    const res = await apiClient.get<{ shopIds: string[] }>('/shops/me/favorites');
+    return res.data?.shopIds ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Favorite a shop. Idempotent server-side (unique (userId, shopId) index). */
+export async function favoriteShop(shopId: string): Promise<void> {
+  await apiClient.post(`/shops/${shopId}/favorite`);
+}
+
+/** Remove a shop from the buyer's favorites. */
+export async function unfavoriteShop(shopId: string): Promise<void> {
+  await apiClient.delete(`/shops/${shopId}/favorite`);
+}

@@ -117,6 +117,22 @@ export const apiCall = async <T = any>(
 ): Promise<ApiResponse<T>> => {
   let accessToken = tokenManager.getAccessToken();
 
+  // Pre-auth flows (the registration wizard, role selection, login) legitimately
+  // fire best-effort AUTHENTICATED calls before any session exists — onboarding
+  // CONSENT recording is the main one — so a 401 there is an expected miss, not
+  // a dead session. In those places we must NOT hard-redirect to /login: that
+  // reloads the page and discards the user's half-filled form (the exact bug
+  // where registration "refreshes halfway on the location / account-creation
+  // step and bounces to login"). Let the call reject instead so the caller's
+  // own try/catch swallows it; authenticated app routes keep the bounce.
+  const authFlowPath =
+    typeof window !== 'undefined' &&
+    (window.location.pathname === '/register' ||
+      window.location.pathname === '/role-selection' ||
+      window.location.pathname === '/login' ||
+      window.location.pathname.startsWith('/forgot-password') ||
+      window.location.pathname.startsWith('/reset-password'));
+
   // Check if token is expired and refresh if needed
   if (accessToken && tokenManager.isTokenExpired(accessToken)) {
     try {
@@ -124,7 +140,7 @@ export const apiCall = async <T = any>(
       accessToken = newAccessToken;
     } catch (error) {
       tokenManager.clearTokens();
-      window.location.href = '/login';
+      if (!authFlowPath) window.location.href = '/login';
       throw new Error('Session expired. Please login again.');
     }
   }
@@ -157,8 +173,14 @@ export const apiCall = async <T = any>(
     // catch block instead of a hard page reload.
     const isAuthAttempt = /^\/auth\/(login|register|refresh)/.test(endpoint);
     if (response.status === 401 && !isAuthAttempt) {
-      tokenManager.clearTokens();
-      window.location.href = '/login';
+      // Only a genuine authenticated-session 401 clears tokens and bounces to
+      // /login. On a pre-auth flow (see authFlowPath above) the 401 is an
+      // expected best-effort miss — let it reject so the caller handles it,
+      // without a page-reloading redirect that drops the registration form.
+      if (!authFlowPath) {
+        tokenManager.clearTokens();
+        window.location.href = '/login';
+      }
       throw new Error('Unauthorized. Please login again.');
     }
 

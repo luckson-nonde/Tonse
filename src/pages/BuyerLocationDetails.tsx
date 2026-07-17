@@ -54,6 +54,7 @@ export default function BuyerLocationDetails() {
         onComplete={handleComplete}
         submitLabel="Complete Registration →"
         showRadius={false}
+        showGps={false}
         isStandalone={false}
       />
     </AuthLayout>
