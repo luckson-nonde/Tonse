@@ -46,6 +46,16 @@ function getKey(): Buffer {
   return cachedKey;
 }
 
+/**
+ * Fail-fast probe for bootstrap: resolves the key NOW so a production deploy
+ * missing PII_ENCRYPTION_KEY dies at startup with a clear log — instead of
+ * booting green (getKey() is lazy) and 500ing on the first registration that
+ * actually encrypts something.
+ */
+export function assertPiiCryptoReady(): void {
+  getKey();
+}
+
 /** Encrypt a string for storage. Idempotent: already-encrypted / empty / null pass through. */
 export function encryptPii(plain: string | null | undefined): string | null {
   if (plain == null) return plain as null;

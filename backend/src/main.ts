@@ -6,8 +6,14 @@ import helmet from 'helmet';
 import * as cors from 'cors';
 import * as path from 'path';
 import * as express from 'express';
+import { assertPiiCryptoReady } from './common/crypto/pii-crypto';
 
 async function bootstrap() {
+  // Fail fast on missing PII_ENCRYPTION_KEY (production fail-closed). The key
+  // resolution is otherwise lazy, so without this a misconfigured deploy boots
+  // with a green health check and 500s on the first registration instead.
+  assertPiiCryptoReady();
+
   const app = await NestFactory.create(AppModule);
 
   const configService = app.get(ConfigService);

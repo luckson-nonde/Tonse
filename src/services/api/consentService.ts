@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, tokenManager } from './client';
 
 /**
  * Durable consent capture. The app gates collection behind the Universal
@@ -29,16 +29,21 @@ export async function recordConsent(
   granted = true,
   method?: string,
 ): Promise<void> {
+  // No session → the POST is GUARANTEED to 401; don't fire a doomed request
+  // (it spammed the register page console). flushSessionConsents() persists
+  // these grants right after login/registration instead.
+  if (!tokenManager.getAccessToken()) return;
   try {
     await apiClient.post('/consents', { noticeKey, granted, version: CONSENT_VERSION, method });
   } catch {
-    /* best-effort: pre-auth steps (no token) or transient errors are ignored;
+    /* best-effort: transient errors are ignored;
        flushSessionConsents() re-persists them once the user is authenticated. */
   }
 }
 
 /** Current consent state for the signed-in user. */
 export async function getMyConsents(): Promise<Record<string, { granted: boolean; version: string; at: string }>> {
+  if (!tokenManager.getAccessToken()) return {}; // pre-auth: nothing to fetch
   try {
     const res = await apiClient.get<any>('/consents');
     return (res && 'data' in res ? res.data : res) ?? {};
