@@ -48,6 +48,10 @@ export const tokenManager = {
   clearTokens: (): void => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    // The offline session cache is only valid alongside its tokens — every
+    // path that ends the session (logout, real 401, rejected refresh) lands
+    // here, so this is the single cleanup point.
+    localStorage.removeItem('tonse_user_cache');
   },
 
   isTokenExpired: (token: string): boolean => {
@@ -85,13 +89,23 @@ const refreshAccessToken = async (): Promise<TokenPair> => {
         throw new Error('No refresh token available');
       }
 
-      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${refreshToken}`,
-        },
-      });
+      // Distinguish "the server REJECTED the refresh" (session truly dead)
+      // from "the network is DOWN" (session merely unreachable). A fetch
+      // throw here must never destroy a still-valid refresh token.
+      let response: Response;
+      try {
+        response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${refreshToken}`,
+          },
+        });
+      } catch (networkErr) {
+        const err = new Error('Network unreachable during token refresh');
+        err.name = 'NetworkError';
+        throw err;
+      }
 
       if (!response.ok) {
         throw new Error('Failed to refresh token');
@@ -133,12 +147,26 @@ export const apiCall = async <T = any>(
       window.location.pathname.startsWith('/forgot-password') ||
       window.location.pathname.startsWith('/reset-password'));
 
+  // Offline fail-fast for MUTATIONS: a write that can't reach the server is
+  // not "pending", it's not happening — say so immediately and honestly
+  // instead of a hung request + generic failure. GETs still proceed so the
+  // service worker / HTTP cache can answer them.
+  const method = (options.method || 'GET').toUpperCase();
+  if (typeof navigator !== 'undefined' && !navigator.onLine && method !== 'GET') {
+    throw new Error("You're offline — this needs a connection. Your change was not saved.");
+  }
+
   // Check if token is expired and refresh if needed
   if (accessToken && tokenManager.isTokenExpired(accessToken)) {
     try {
       const { accessToken: newAccessToken } = await refreshAccessToken();
       accessToken = newAccessToken;
     } catch (error) {
+      // Network down ≠ session dead: keep the refresh token, surface a soft
+      // error, and let the session resume when connectivity returns.
+      if ((error as Error)?.name === 'NetworkError') {
+        throw new Error("You're offline — reconnect to continue.");
+      }
       tokenManager.clearTokens();
       if (!authFlowPath) window.location.href = '/login';
       throw new Error('Session expired. Please login again.');

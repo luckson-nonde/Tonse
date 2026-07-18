@@ -14,8 +14,9 @@
  *      requests are NEVER intercepted; offline covers the shell, not data.
  */
 
-const VERSION = 'v2';
+const VERSION = 'v3';
 const SHELL_CACHE = 'tonse-shell-' + VERSION;
+const FONT_CACHE = 'tonse-fonts-' + VERSION;
 const PRECACHE = ['/', '/offline.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -40,7 +41,7 @@ self.addEventListener('activate', (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((k) => k.startsWith('tonse-') && k !== SHELL_CACHE)
+            .filter((k) => k.startsWith('tonse-') && k !== SHELL_CACHE && k !== FONT_CACHE)
             .map((k) => caches.delete(k))
         )
       )
@@ -48,15 +49,37 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+/**
+ * Stale-while-revalidate: answer instantly from cache when possible, refresh
+ * the cache in the background; fall back to cache when the network is down.
+ * Used for content that should survive offline but may change occasionally
+ * (Google Fonts, /uploads/ images like shop logos).
+ */
+function staleWhileRevalidate(request, cacheName) {
+  return caches.open(cacheName).then((cache) =>
+    cache.match(request).then((cached) => {
+      const network = fetch(request)
+        .then((response) => {
+          // Opaque responses (no-cors font stylesheets) are cacheable too.
+          if (response && (response.ok || response.type === 'opaque')) {
+            cache.put(request, response.clone()).catch(() => {});
+          }
+          return response;
+        })
+        .catch(() => cached);
+      return cached || network;
+    })
+  );
+}
+
 // ── Offline app shell ─────────────────────────────────────────────────────
 
-// Paths the SW must pass straight to the network: live data, user uploads,
-// encrypted secure files, and dev-server internals (so Vite/HMR never gets a
-// stale cached module). The production API lives on another origin entirely
-// and is already excluded by the same-origin check.
+// Paths the SW must pass straight to the network: live data, encrypted secure
+// files (/files/ — NEVER cached), and dev-server internals (so Vite/HMR never
+// gets a stale cached module). The production API lives on another origin
+// entirely and is already excluded by the origin check.
 const NETWORK_ONLY_PREFIXES = [
   '/api/',
-  '/uploads/',
   '/files/',
   '/notifications/',
   '/src/',
@@ -65,6 +88,10 @@ const NETWORK_ONLY_PREFIXES = [
   '/@react-refresh',
 ];
 
+// The one cross-origin exception: Google Fonts (the stylesheet + woff2 files).
+// Without caching these, offline pages lose their typography entirely.
+const FONT_ORIGINS = ['https://fonts.googleapis.com', 'https://fonts.gstatic.com'];
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
@@ -72,8 +99,24 @@ self.addEventListener('fetch', (event) => {
   if (request.headers.get('range')) return;
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return; // API, fonts, CDNs — untouched
+
+  // Cross-origin: fonts get stale-while-revalidate; everything else (the API,
+  // CDNs) is untouched.
+  if (url.origin !== self.location.origin) {
+    if (FONT_ORIGINS.includes(url.origin)) {
+      event.respondWith(staleWhileRevalidate(request, FONT_CACHE));
+    }
+    return;
+  }
+
   if (NETWORK_ONLY_PREFIXES.some((p) => url.pathname.startsWith(p))) return;
+
+  // User uploads (shop logos, product images): fresh when online, cached when
+  // not. Secure documents live under /files/ and never reach this route.
+  if (url.pathname.startsWith('/uploads/')) {
+    event.respondWith(staleWhileRevalidate(request, SHELL_CACHE));
+    return;
+  }
 
   // SPA navigations: network-first (never a stale shell while online), keep the
   // freshest shell cached under '/', fall back to it offline, else offline.html.

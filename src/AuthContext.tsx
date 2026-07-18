@@ -126,17 +126,80 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Offline session cache: the last successfully-hydrated user object. Lets a
+ * page refresh restore the signed-in state when /auth/me is unreachable
+ * (offline / backend down) instead of bouncing to /login. Cleared by
+ * tokenManager.clearTokens() alongside the tokens it belongs to. Contains no
+ * secrets — the tokens themselves already live in localStorage.
+ */
+const USER_CACHE_KEY = 'tonse_user_cache';
+
+function readCachedUser(): User | null {
+  try {
+    const raw = localStorage.getItem(USER_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as User) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // True when the current user came from the offline cache and hasn't been
+  // re-confirmed by the server yet.
+  const sessionStaleRef = React.useRef(false);
+
+  // Persist every REAL hydration (login/register/refresh/update all funnel
+  // through setUser) so an offline reload can restore the session.
+  useEffect(() => {
+    if (user && user.id && user.id !== 'pending') {
+      try {
+        localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+      } catch {
+        /* non-fatal */
+      }
+    }
+  }, [user]);
+
+  // The moment connectivity returns, re-confirm a cache-restored session
+  // against the server (OfflineBanner dispatches 'tonse:online' as well).
+  useEffect(() => {
+    const revalidate = async () => {
+      if (!sessionStaleRef.current) return;
+      try {
+        const fresh = await authService.getCurrentUser();
+        if (fresh?.id) {
+          sessionStaleRef.current = false;
+          setUser((prev) => ({ ...(prev as any), ...(fresh as any) }));
+        }
+      } catch {
+        /* still unreachable — the next online event retries */
+      }
+    };
+    window.addEventListener('online', revalidate);
+    window.addEventListener('tonse:online', revalidate as EventListener);
+    return () => {
+      window.removeEventListener('online', revalidate);
+      window.removeEventListener('tonse:online', revalidate as EventListener);
+    };
+  }, []);
 
   // Initialize auth on mount - check if there's a valid token
   useEffect(() => {
     const initializeAuth = async () => {
       try {
         const accessToken = tokenManager.getAccessToken();
-        if (accessToken && !tokenManager.isTokenExpired(accessToken)) {
+        // An expired ACCESS token is not a dead session while a refresh token
+        // exists — apiCall transparently refreshes (and, offline, now fails
+        // softly without destroying tokens). Only a token with no refresh
+        // path is truly unusable.
+        const hasSession =
+          !!accessToken &&
+          (!tokenManager.isTokenExpired(accessToken) || !!tokenManager.getRefreshToken());
+        if (hasSession) {
           try {
             // Try to fetch current user from API
             const currentUser = await authService.getCurrentUser();
@@ -166,6 +229,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(finalUser);
           } catch (apiError) {
             console.warn('Failed to fetch current user from API:', apiError);
+
+            // NETWORK failure (offline / backend unreachable) — not an auth
+            // rejection: restore the session from the offline cache so a
+            // refresh while offline doesn't read as a logout. The cache must
+            // belong to the token's subject (guards against a stale cache
+            // from a different account). Re-confirmed on 'online'.
+            const msg = String((apiError as Error)?.message || '');
+            const isAuthRejection =
+              msg.includes('Unauthorized') || msg.includes('Session expired');
+            if (!isAuthRejection) {
+              const tokenUser = authService.getUserFromToken();
+              const cached = readCachedUser();
+              if (tokenUser && cached && cached.id === tokenUser.id) {
+                sessionStaleRef.current = true;
+                setUser(cached);
+                return;
+              }
+            }
+
             // Don't throw - let the app continue without initial user data
             // Try to restore from pending profile if available
             try {

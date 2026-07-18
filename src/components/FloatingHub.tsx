@@ -125,12 +125,18 @@ export default function FloatingHub() {
     setUnread(c);
   }, [user]);
 
-  // Badge: initial fetch + 30s poll (same cadence DashboardLayout uses).
+  // Badge: initial fetch + 30s poll (same cadence DashboardLayout uses),
+  // plus an immediate refresh when connectivity returns (OfflineBanner).
   useEffect(() => {
     if (hidden) return;
     refreshCount();
     const id = window.setInterval(refreshCount, 30000);
-    return () => window.clearInterval(id);
+    const onBackOnline = () => refreshCount();
+    window.addEventListener('tonse:online', onBackOnline);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener('tonse:online', onBackOnline);
+    };
   }, [hidden, refreshCount]);
 
   // Instant bump + chime on a live event. FloatingHub is only a badge here —

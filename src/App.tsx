@@ -9,6 +9,7 @@ import { CategoryAvailabilityProvider } from './services/categories/availability
 import { ErrorBoundary } from './components/ErrorBoundary';
 import PageTransition from './components/PageTransition';
 import FloatingHub from './components/FloatingHub';
+import OfflineBanner from './components/OfflineBanner';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
 import RoleSelection from './pages/RoleSelection';
@@ -442,6 +443,7 @@ export default function App() {
                 }
               />
             </Routes>
+            <OfflineBanner />
             <FloatingHub />
           </Router>
           </BackgroundModeProvider>
