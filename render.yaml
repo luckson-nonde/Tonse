@@ -110,6 +110,18 @@ services:
         sync: false
       - key: PROMOTER_APP_BASE_URL
         value: https://tonse-web.onrender.com
+      # --- Platform admin seed. NOT read at app boot — only consumed by the
+      #     manual `backend/src/database/seeds/seed.ts` script. Setting these
+      #     here does NOT create the admin account by itself: after they're
+      #     set, open the tonse-api service's Shell tab in the Render
+      #     dashboard and run `npm run seed` once (add `-- --reset-password`
+      #     to rotate an existing admin's password to the current value). ---
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_NAME
+        sync: false
 
   # ---- Frontend (React + Vite, Static Site + CDN) ------------------------
   - type: web
