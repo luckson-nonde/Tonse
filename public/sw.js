@@ -14,9 +14,10 @@
  *      requests are NEVER intercepted; offline covers the shell, not data.
  */
 
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SHELL_CACHE = 'tonse-shell-' + VERSION;
 const FONT_CACHE = 'tonse-fonts-' + VERSION;
+const IMG_CACHE = 'tonse-img-' + VERSION;
 const PRECACHE = ['/', '/offline.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -41,7 +42,13 @@ self.addEventListener('activate', (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((k) => k.startsWith('tonse-') && k !== SHELL_CACHE && k !== FONT_CACHE)
+            .filter(
+              (k) =>
+                k.startsWith('tonse-') &&
+                k !== SHELL_CACHE &&
+                k !== FONT_CACHE &&
+                k !== IMG_CACHE
+            )
             .map((k) => caches.delete(k))
         )
       )
@@ -99,6 +106,18 @@ self.addEventListener('fetch', (event) => {
   if (request.headers.get('range')) return;
 
   const url = new URL(request.url);
+
+  // IMAGES FIRST — keyed on the request TYPE, not the URL path. Uploaded images
+  // render as <img src="/api/uploads/…">, and '/api/' is network-only below, so
+  // a path-based rule never catches them. request.destination === 'image' is
+  // set for <img>/CSS backgrounds regardless of origin or prefix, and is never
+  // set for fetch()/SSE — so this caches every displayable image (api uploads,
+  // /uploads, /assets, absolute API-host URLs) without ever touching live data.
+  // Secure documents (/files/, encrypted) are excluded and stay network-only.
+  if (request.destination === 'image' && !url.pathname.startsWith('/files/')) {
+    event.respondWith(staleWhileRevalidate(request, IMG_CACHE));
+    return;
+  }
 
   // Cross-origin: fonts get stale-while-revalidate; everything else (the API,
   // CDNs) is untouched.
