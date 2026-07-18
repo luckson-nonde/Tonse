@@ -37,13 +37,11 @@ services:
     branch: main
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    # --- TEMPORARY: no Shell access on the free plan, so this is how the
-    #     one-off admin seed runs. `;` not `&&` is deliberate — if the seed
-    #     step fails (e.g. ADMIN_EMAIL/ADMIN_PASSWORD not set yet) the API
-    #     still boots normally; it never blocks startup. Idempotent — safe
-    #     to redeploy. REMOVE this line (revert to the Dockerfile's own
-    #     CMD) once the admin login has been confirmed working.
-    dockerCommand: sh -c "node dist/database/seeds/seed.js; node dist/main"
+    # The one-off admin seed currently runs via backend/Dockerfile's CMD
+    # (temporary — no Shell access on the free plan). Render's `dockerCommand`
+    # override field mangled a `sh -c "a; b"` string (its exact
+    # tokenization isn't documented), so the Dockerfile's own shell-form CMD
+    # is used instead — that's standard, unambiguous Docker behavior.
     healthCheckPath: /categories/status
     numInstances: 1            # KEEP AT 1 — the live SSE notification registry is in-memory per process
     autoDeploy: true

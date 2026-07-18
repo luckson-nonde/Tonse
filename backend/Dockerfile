@@ -46,4 +46,10 @@ EXPOSE 3001
 HEALTHCHECK --interval=15s --timeout=5s --retries=10 --start-period=40s \
   CMD node -e "require('http').get('http://127.0.0.1:3001/categories/status',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"
 
-CMD ["node", "dist/main"]
+# TEMPORARY (shell form, not exec form, so `;` is interpreted by /bin/sh):
+# runs the one-off admin seed before the server starts, since the free plan
+# has no Shell access. `;` not `&&` — a failed seed (e.g. ADMIN_EMAIL not
+# set yet) must never block the API from booting. Idempotent — safe to
+# redeploy. REVERT to `CMD ["node", "dist/main"]` once the admin login has
+# been confirmed working.
+CMD node dist/database/seeds/seed.js; node dist/main
