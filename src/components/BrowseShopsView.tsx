@@ -4,7 +4,7 @@ import { fetchShops, type ShopResult } from '../services/api/shopService';
 import { CATEGORIES_DB, getBusinessTypeLabel, type BusinessType } from '../services/categories';
 import ShopCard from './ShopCard';
 import InlineFilterDropdown from './InlineFilterDropdown';
-import owlSearching from '../assets/images/empty-states/owl_searching.png';
+import owlSearching from '../assets/images/empty-states/owl_searching.webp';
 import { useAuth } from '../AuthContext';
 import { useFavoriteShops } from '../hooks/useFavoriteShops';
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, CheckCircle, Copy } from 'lucide-react';
-import successOwl from '../assets/images/empty-states/owl_triumphant.png';
+import successOwl from '../assets/images/empty-states/owl_triumphant.webp';
 import { useNavigate, useLocation } from 'react-router-dom';
 import QRCode from 'qrcode';
 import Button from '../components/Button';

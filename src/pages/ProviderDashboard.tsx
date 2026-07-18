@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { useActiveProfileContext, resolveActiveArchetype } from '../hooks/useActiveProfileContext';
-import owlTriumphant from '../assets/images/empty-states/owl_triumphant.png';
+import owlTriumphant from '../assets/images/empty-states/owl_triumphant.webp';
 import { type Inquiry, type Quote } from '../types';
 import { useDashboard } from '../DashboardContext';
 import {

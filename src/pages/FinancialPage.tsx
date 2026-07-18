@@ -23,8 +23,8 @@ import { useLiveQuery } from '../hooks/useLiveQuery';
 import { db } from '../services/api/database';
 import Button from '../components/Button';
 import { generateVirtualAccount, formatCurrency } from '../utils/financeUtils';
-import ReadingOwl from '../assets/images/empty-states/owl_reading.png';
-import TriumphantOwl from '../assets/images/empty-states/owl_triumphant.png';
+import ReadingOwl from '../assets/images/empty-states/owl_reading.webp';
+import TriumphantOwl from '../assets/images/empty-states/owl_triumphant.webp';
 import { createOrder } from '../services/api/orderService';
 import PaymentSheet from '../components/PaymentSheet';
 

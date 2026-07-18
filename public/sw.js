@@ -14,11 +14,18 @@
  *      requests are NEVER intercepted; offline covers the shell, not data.
  */
 
-const VERSION = 'v4';
+const VERSION = 'v5';
 const SHELL_CACHE = 'tonse-shell-' + VERSION;
 const FONT_CACHE = 'tonse-fonts-' + VERSION;
 const IMG_CACHE = 'tonse-img-' + VERSION;
-const PRECACHE = ['/', '/offline.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
+const PRECACHE = [
+  '/',
+  '/offline.html',
+  '/manifest.webmanifest',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/favicon.ico',
+];
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -53,8 +60,51 @@ self.addEventListener('activate', (event) => {
         )
       )
       .then(() => self.clients.claim())
+      // Kick the image warm-up AFTER claiming — deliberately not part of the
+      // waitUntil chain's success (errors swallowed), so activation is never
+      // held hostage by a slow network.
+      .then(() => warmImageCache())
+      .catch(() => {})
   );
 });
+
+/**
+ * Background image warm-up: fetch the build's image manifest and pull every
+ * bundled image into IMG_CACHE. This is what makes images on screens the user
+ * has NEVER visited render offline — runtime caching alone only covers what
+ * the browser has already seen online. Best-effort and incremental: the
+ * manifest is small-first, fetches run in small batches, already-cached files
+ * are skipped, and any failure (offline install, killed worker) just means
+ * the next activation resumes where it left off.
+ */
+function warmImageCache() {
+  return fetch('/image-manifest.json')
+    .then((r) => (r.ok ? r.json() : []))
+    .then((urls) => {
+      if (!Array.isArray(urls) || urls.length === 0) return;
+      return caches.open(IMG_CACHE).then((cache) => {
+        let i = 0;
+        const BATCH = 4;
+        const next = () => {
+          if (i >= urls.length) return Promise.resolve();
+          const slice = urls.slice(i, i + BATCH);
+          i += BATCH;
+          return Promise.all(
+            slice.map((url) =>
+              cache
+                .match(url)
+                .then((hit) => (hit ? null : fetch(url).then((res) => {
+                  if (res && res.ok) return cache.put(url, res);
+                })))
+                .catch(() => {})
+            )
+          ).then(next);
+        };
+        return next();
+      });
+    })
+    .catch(() => {});
+}
 
 /**
  * Stale-while-revalidate: answer instantly from cache when possible, refresh

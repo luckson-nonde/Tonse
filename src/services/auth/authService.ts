@@ -25,6 +25,28 @@ export interface DeletionCheck {
   };
 }
 
+/**
+ * One slot in the Role Manager modal — the state of a single role-account
+ * (BUYER/SELLER/SERVICE_PROVIDER) the signed-in user could hold. Mirrors
+ * backend RoleAccountSlot (users.service.ts).
+ */
+export interface RoleAccountSlot {
+  role: 'BUYER' | 'SELLER' | 'SERVICE_PROVIDER';
+  exists: boolean;
+  isActive: boolean;
+  companyName: string | null;
+  displayName: string | null;
+  verificationStatus: string | null;
+  canActivate: boolean;
+  blockedReason: string | null;
+}
+
+export interface RoleAccountsResponse {
+  isCompanyAccount: boolean;
+  currentRole: string;
+  accounts: RoleAccountSlot[];
+}
+
 export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
@@ -254,6 +276,39 @@ export const authService = {
    */
   changePassword: async (userId: string, password: string): Promise<void> => {
     await apiClient.post(`/users/${userId}/password`, { password });
+  },
+
+  /**
+   * List every role-account (BUYER/SELLER/SERVICE_PROVIDER) the signed-in
+   * company user could hold — powers the Role Manager modal. Self-only on
+   * the backend. Defaults to "nothing switchable" on an unexpected shape so
+   * Role Manager degrades to empty rather than throwing.
+   */
+  getRoleAccounts: async (userId: string): Promise<RoleAccountsResponse> => {
+    const response = await apiClient.get<RoleAccountsResponse>(`/users/${userId}/role-accounts`);
+    return response.data ?? { isCompanyAccount: false, currentRole: 'BUYER', accounts: [] };
+  },
+
+  /**
+   * Make `targetRole` the signed-in user's active role. One combined call —
+   * the backend decides whether that's a pure flip to an existing sibling
+   * profile or a first-time activation (which inherits verified company
+   * info, no new documents). Returns the freshly-flattened user (same shape
+   * as /auth/me) so the caller can merge it straight into AuthContext.
+   */
+  switchRole: async (
+    userId: string,
+    targetRole: 'BUYER' | 'SELLER' | 'SERVICE_PROVIDER'
+  ): Promise<any> => {
+    const response = await apiClient.post<any>(`/users/${userId}/role-accounts/switch`, {
+      targetRole,
+    });
+
+    if (response.data) {
+      return response.data;
+    }
+
+    throw new Error(response.message || 'Role switch failed');
   },
 
   updateProfile: async (userId: string, data: UpdateProfileRequest): Promise<any> => {

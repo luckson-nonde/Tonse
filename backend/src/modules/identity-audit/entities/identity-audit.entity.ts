@@ -74,6 +74,7 @@ export class IdentityAudit {
       'ACCOUNT_DELETED',
       'SUSPICIOUS_ACTIVITY',
       'ADMIN_ACTION',
+      'ACTIVE_ROLE_SWITCHED',
     ],
   })
   eventType: string;

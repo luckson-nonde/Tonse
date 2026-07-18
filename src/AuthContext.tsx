@@ -118,6 +118,11 @@ interface AuthContextType {
    * flow (promoter signup). Persists tokens + sets the user — nothing else. */
   loginWithTokens: (accessToken: string, refreshToken: string, user: User) => void;
   updateUser: (data: Record<string, any>) => Promise<void>;
+  /** Make `targetRole` this company account's active role — see Role
+   * Manager. One combined call: flips to an existing sibling profile, or
+   * activates it for the first time (inheriting verified company info).
+   * Merges the response straight into `user` state, same as updateUser. */
+  switchRole: (targetRole: 'BUYER' | 'SELLER' | 'SERVICE_PROVIDER') => Promise<void>;
   logout: () => Promise<void>;
   isLoading: boolean;
   isAuthenticated: boolean;
@@ -505,6 +510,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user]
   );
 
+  const switchRole = React.useCallback(
+    async (targetRole: 'BUYER' | 'SELLER' | 'SERVICE_PROVIDER') => {
+      if (!user) {
+        throw new Error('No user logged in');
+      }
+      setError(null);
+      const response = await authService.switchRole(user.id, targetRole);
+      setUser((prevUser) => (prevUser ? { ...prevUser, ...response } : prevUser));
+    },
+    [user]
+  );
+
   const loginWithTokens = React.useCallback(
     (accessToken: string, refreshToken: string, nextUser: User) => {
       setError(null);
@@ -538,12 +555,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       register,
       loginWithTokens,
       updateUser,
+      switchRole,
       logout,
       isLoading,
       isAuthenticated: !!user && authService.isAuthenticated(),
       error,
     }),
-    [user, login, register, loginWithTokens, updateUser, logout, isLoading, error]
+    [user, login, register, loginWithTokens, updateUser, switchRole, logout, isLoading, error]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

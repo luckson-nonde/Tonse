@@ -37,6 +37,8 @@ import {
 } from 'lucide-react';
 import Logo from './Logo';
 import ConfirmModal from './ConfirmModal';
+import HeaderProfileMenu from './HeaderProfileMenu';
+import RoleManagerModal from './RoleManagerModal';
 import BuyerVerificationBanner from './BuyerVerificationBanner';
 import SubscriptionPaywall from './SubscriptionPaywall';
 import DashboardCalendar, { CalendarTone, CounterCard } from './DashboardCalendar';
@@ -303,6 +305,13 @@ export default function DashboardLayout({
     if (activeTab === 'shops' || activeTab === 'favorites') setIsShopsMenuOpen(true);
   }, [activeTab]);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isRoleManagerOpen, setIsRoleManagerOpen] = useState(false);
+  // Client-side gate only, for showing/hiding the menu item — every rule is
+  // re-enforced server-side in UsersService.switchOrActivateRole.
+  const canUseRoleManager =
+    ['BUYER', 'SELLER', 'SERVICE_PROVIDER'].includes(user?.role ?? '') &&
+    !!user?.companyName &&
+    !user?.parentProviderId;
   const [isResetting, setIsResetting] = useState(false);
 
   // ── Real notifications (Uber-dispatch Tier-1 rows) ───────────────────
@@ -1257,6 +1266,11 @@ export default function DashboardLayout({
                 </div>
 
                 <div className="relative flex items-center gap-3">
+                  <HeaderProfileMenu
+                    onSettingsClick={() => handleTabClick('profile')}
+                    onRoleManagerClick={() => setIsRoleManagerOpen(true)}
+                    showRoleManager={canUseRoleManager}
+                  />
                   <button
                     onClick={() => setIsNotificationPanelOpen(true)}
                     className="w-10 h-10 bg-transparent flex items-center justify-center text-brand-dark hover:bg-slate-50 transition-colors relative rounded-full"
@@ -1614,6 +1628,11 @@ export default function DashboardLayout({
             </>
           )}
         </AnimatePresence>
+
+        <RoleManagerModal
+          isOpen={isRoleManagerOpen}
+          onClose={() => setIsRoleManagerOpen(false)}
+        />
       </div>
     </div>
   );

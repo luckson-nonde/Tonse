@@ -1,7 +1,7 @@
 import React from 'react';
 import { Clock, MapPin, ChevronRight, X } from 'lucide-react';
 import { uniqueKey } from '../../utils/keyUtils';
-import emptyScheduleImage from '../../assets/images/empty-states/owl_reading.png';
+import emptyScheduleImage from '../../assets/images/empty-states/owl_reading.webp';
 import DashboardCalendar from '../DashboardCalendar';
 import { getEffectiveBusinessTypes } from '../../services/categories';
 import { useActiveProfileContext } from '../../hooks/useActiveProfileContext';

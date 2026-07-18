@@ -3,7 +3,7 @@ import { Clock, Check, FileText, QrCode } from 'lucide-react';
 import { Inquiry } from '../../types';
 import { hasPermission, PERMISSIONS } from '../../utils/rbac';
 import { uniqueKey } from '../../utils/keyUtils';
-import emptyOrdersImage from '../../assets/images/empty-states/owl_reading.png';
+import emptyOrdersImage from '../../assets/images/empty-states/owl_reading.webp';
 import { getEffectiveBusinessTypes } from '../../services/categories';
 import { useActiveProfileContext } from '../../hooks/useActiveProfileContext';
 

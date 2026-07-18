@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package, Users, Clock, FileText, Flag } from 'lucide-react';
 import ReportUserModal from '../ReportUserModal';
-import emptyLeadsImage from '../../assets/images/empty-states/owl_reading.png';
+import emptyLeadsImage from '../../assets/images/empty-states/owl_reading.webp';
 import { uniqueKey } from '../../utils/keyUtils';
 import { PreferenceTags, Lightbox } from './LeadsHelpers';
 import QuoteSubmissionForm from './QuoteSubmissionForm';

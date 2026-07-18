@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { usePageTransitionProps } from './PageTransition';
-import defaultEmptyImage from '../assets/images/empty-states/owl_reading.png';
+import defaultEmptyImage from '../assets/images/empty-states/owl_reading.webp';
 import {
   LayoutDashboard,
   MessageSquare,

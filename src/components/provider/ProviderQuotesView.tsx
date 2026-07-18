@@ -1,7 +1,7 @@
 import React from 'react';
 import { MapPin, Eye, PackageOpen, ChevronUp, ChevronDown, Printer, Archive, Zap } from 'lucide-react';
 import { Inquiry } from '../../types';
-import emptyQuotesImage from '../../assets/images/empty-states/owl_reading.png';
+import emptyQuotesImage from '../../assets/images/empty-states/owl_reading.webp';
 import { hasPermission, PERMISSIONS } from '../../utils/rbac';
 import { uniqueKey } from '../../utils/keyUtils';
 import { robustParse } from '../../utils/jsonUtils';

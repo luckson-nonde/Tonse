@@ -16,6 +16,7 @@ import {
 import { UsersService } from '../users.service';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
+import { SwitchRoleDto } from '../dto/switch-role.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -172,5 +173,42 @@ export class UsersController {
     }
     await this.usersService.changePassword(id, body.password, body.currentPassword);
     return { success: true };
+  }
+
+  /**
+   * GET /users/:id/role-accounts — powers the Role Manager modal. Self-only.
+   * Lists all three (BUYER/SELLER/SERVICE_PROVIDER) role-accounts this user
+   * could hold: which exist, which is active, and whether each can be
+   * activated right now. Company-account-only feature — see UsersService.
+   */
+  @Get(':id/role-accounts')
+  @UseGuards(JwtAuthGuard)
+  async getRoleAccounts(@Param('id') id: string, @Request() req) {
+    if (req.user.id !== id) {
+      throw new ForbiddenException();
+    }
+    return this.usersService.getRoleAccounts(id);
+  }
+
+  /**
+   * POST /users/:id/role-accounts/switch — make `targetRole` the caller's
+   * active role. One combined action: flips role/activeProfile pointers to
+   * an existing sibling profile, or creates it (inheriting verified company
+   * info, no re-review) the first time. Self-only; every gating rule is
+   * re-checked server-side in UsersService regardless of what the UI shows.
+   */
+  @Post(':id/role-accounts/switch')
+  @UseGuards(JwtAuthGuard)
+  async switchRoleAccount(
+    @Param('id') id: string,
+    @Body() dto: SwitchRoleDto,
+    @Request() req,
+  ) {
+    if (req.user.id !== id) {
+      throw new ForbiddenException();
+    }
+    await this.usersService.switchOrActivateRole(id, dto.targetRole);
+    const user = await this.usersService.findById(id);
+    return this.usersService.flattenWithProfile(user);
   }
 }

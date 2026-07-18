@@ -421,6 +421,15 @@ export class AdminService {
       verifiedAt: new Date(),
       verificationRejectionReason: null,
     } as any);
+    // One approval covers every side of the company — mirror onto any
+    // sibling buyer/seller/service-provider profile row (see
+    // Role Manager / active-role switching).
+    await this.usersService.cascadeVerificationToSiblingProfiles(id, {
+      verificationStatus: 'VERIFIED',
+      verifiedAt: new Date(),
+      rejectedAt: null,
+      verificationRejectionReason: null,
+    });
     this.logger.log(`User ${id} verified by ${actingAdmin?.id ?? '(unknown admin)'}.`);
     await this.auditAdminAction({
       action: 'USER_VERIFIED',
@@ -450,6 +459,15 @@ export class AdminService {
       rejectedAt: new Date(),
       verifiedAt: null,
     } as any);
+    // One approval covers every side of the company — mirror onto any
+    // sibling buyer/seller/service-provider profile row (see
+    // Role Manager / active-role switching).
+    await this.usersService.cascadeVerificationToSiblingProfiles(id, {
+      verificationStatus: 'REJECTED',
+      verificationRejectionReason: reason || 'No reason provided',
+      rejectedAt: new Date(),
+      verifiedAt: null,
+    });
     this.logger.log(`User ${id} verification rejected: ${reason ?? '(no reason)'}`);
     await this.auditAdminAction({
       action: 'USER_REJECTED',

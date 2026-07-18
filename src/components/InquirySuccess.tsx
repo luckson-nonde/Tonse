@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowRight } from 'lucide-react';
-import successOwl from '../assets/images/empty-states/owl_triumphant.png';
+import successOwl from '../assets/images/empty-states/owl_triumphant.webp';
 import ConfettiBurst from './ConfettiBurst';
 
 interface InquirySuccessProps {

@@ -3,6 +3,7 @@ import {
   Logger,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -52,6 +53,27 @@ const USER_AUTH_FIELDS = [
 ];
 
 type ActiveProfile = BuyerProfile | SellerProfile | ServiceProviderProfile;
+
+// Active-role switching (company accounts): the three profile types a
+// single `users` row can hold one of each of, per activeProfileType.
+const ROLE_ACCOUNT_TYPES = ['BUYER', 'SELLER', 'SERVICE_PROVIDER'] as const;
+
+export interface RoleAccountSlot {
+  role: (typeof ROLE_ACCOUNT_TYPES)[number];
+  exists: boolean;
+  isActive: boolean;
+  companyName: string | null;
+  displayName: string | null;
+  verificationStatus: string | null;
+  canActivate: boolean;
+  blockedReason: string | null;
+}
+
+export interface RoleAccountsResponse {
+  isCompanyAccount: boolean;
+  currentRole: string;
+  accounts: RoleAccountSlot[];
+}
 
 /**
  * Users Service
@@ -482,6 +504,239 @@ export class UsersService {
 
       return saved;
     });
+  }
+
+  // ===== ACTIVE ROLE SWITCHING (company accounts) =============================
+  // One `users` row, up to three profile rows (buyer/seller/service_provider),
+  // `role` + `activeProfileId` + `activeProfileType` always point together at
+  // whichever one is "front and center". Company-account-only: gated by
+  // `companyName` being set on the active profile. Activating a role the
+  // company doesn't have yet inherits the source profile's verified company
+  // info instead of re-running admin review — see switchOrActivateRole.
+
+  /**
+   * Every role-account (BUYER/SELLER/SERVICE_PROVIDER) this user could hold,
+   * for the Role Manager UI: which exist, which is active, and whether each
+   * can be activated right now. Real enforcement lives in
+   * switchOrActivateRole — this is read-only, for rendering.
+   */
+  async getRoleAccounts(userId: string): Promise<RoleAccountsResponse> {
+    const user = await this.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    const eligible = !user.parentProviderId && ROLE_ACCOUNT_TYPES.includes(user.role as any);
+    const activeProfile = eligible ? await this.loadActiveProfile(user) : null;
+    const isCompanyAccount = !!(activeProfile as any)?.companyName;
+    const sourceVerified = (activeProfile as any)?.verificationStatus === 'VERIFIED';
+
+    const accounts: RoleAccountSlot[] = await Promise.all(
+      ROLE_ACCOUNT_TYPES.map(async (role) => {
+        const repo = this.profileRepoFor(role);
+        const row: any = repo
+          ? await (repo as any).findOne({ where: { userId }, order: { createdAt: 'DESC' } })
+          : null;
+        const isActive = eligible && user.activeProfileType === role && user.role === role;
+
+        let canActivate = false;
+        let blockedReason: string | null = null;
+        if (isActive) {
+          // Active slot is never itself "activatable".
+        } else if (!eligible) {
+          blockedReason = 'Not available for this account.';
+        } else if (!isCompanyAccount) {
+          blockedReason = 'Available for verified company accounts only.';
+        } else if (!sourceVerified) {
+          blockedReason = 'Your company must be verified before switching roles.';
+        } else if (row && row.verificationStatus !== 'VERIFIED') {
+          blockedReason =
+            row.verificationStatus === 'REJECTED'
+              ? 'This profile was rejected — contact support.'
+              : row.verificationStatus === 'SUSPENDED'
+                ? 'This profile is suspended.'
+                : 'This profile is still awaiting verification.';
+        } else {
+          canActivate = true;
+        }
+
+        return {
+          role,
+          exists: !!row,
+          isActive,
+          companyName: row?.companyName ?? null,
+          displayName: row?.name || row?.companyName || null,
+          verificationStatus: row?.verificationStatus ?? null,
+          canActivate,
+          blockedReason,
+        };
+      }),
+    );
+
+    return { isCompanyAccount, currentRole: user.role, accounts };
+  }
+
+  /**
+   * The one combined "make `targetRole` my active role" action. Runs
+   * entirely inside one transaction: re-checks every gating rule
+   * server-side (never trusts the UI's gate), then either flips the
+   * role/activeProfile pointer to an existing sibling profile, or —
+   * the first time this target role is activated — creates it by
+   * copying verified company identity from the source profile
+   * (companyName/tpin/incorporationCertUrl/businessLicenseId/location)
+   * and marking it VERIFIED immediately. Deliberately does NOT copy
+   * `pin` (each profile keeps its own, per the entity's doc comment)
+   * or categories/archetypes (buyer interests vs seller/provider
+   * offerings are different concepts — the new profile starts empty,
+   * same as any brand-new profile).
+   */
+  async switchOrActivateRole(
+    userId: string,
+    targetRole: 'BUYER' | 'SELLER' | 'SERVICE_PROVIDER',
+  ): Promise<ActiveProfile> {
+    return this.dataSource.transaction(async (manager) => {
+      const userRepo = manager.getRepository(User);
+      const user = await userRepo.findOne({ where: { id: userId } });
+      if (!user) throw new NotFoundException('User not found');
+      if (user.parentProviderId) {
+        throw new ForbiddenException('Only the account owner can switch roles.');
+      }
+      if (!ROLE_ACCOUNT_TYPES.includes(user.role as any)) {
+        throw new ForbiddenException('Role switching is not available for this account.');
+      }
+
+      const sourceRepoRef = this.profileRepoFor(user.activeProfileType as string);
+      if (!sourceRepoRef || !user.activeProfileId) {
+        throw new BadRequestException('No active profile yet — finish onboarding first.');
+      }
+      const txSourceRepo = manager.getRepository(sourceRepoRef.target as any) as Repository<any>;
+      const sourceProfile = await txSourceRepo.findOne({ where: { id: user.activeProfileId } });
+      if (!sourceProfile) {
+        throw new NotFoundException('Active profile not found.');
+      }
+
+      if (targetRole === user.activeProfileType && targetRole === user.role) {
+        return sourceProfile; // Idempotent no-op — already there.
+      }
+      if (!sourceProfile.companyName) {
+        throw new ForbiddenException('Role switching is only available to company accounts.');
+      }
+      if (sourceProfile.verificationStatus !== 'VERIFIED') {
+        throw new ForbiddenException('Your company must be verified before switching roles.');
+      }
+
+      const targetRepoRef = this.profileRepoFor(targetRole);
+      if (!targetRepoRef) {
+        throw new BadRequestException(`Unsupported target role: ${targetRole}`);
+      }
+      const txTargetRepo = manager.getRepository(targetRepoRef.target as any) as Repository<any>;
+      let targetProfile: any = await txTargetRepo.findOne({
+        where: { userId },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (targetProfile) {
+        if (targetProfile.verificationStatus !== 'VERIFIED') {
+          const reason =
+            targetProfile.verificationStatus === 'REJECTED'
+              ? `Your ${targetRole} profile was rejected — contact support.`
+              : targetProfile.verificationStatus === 'SUSPENDED'
+                ? `Your ${targetRole} profile is suspended.`
+                : `Your ${targetRole} profile is still awaiting verification.`;
+          throw new ForbiddenException(reason);
+        }
+      } else {
+        targetProfile = await txTargetRepo.save(
+          txTargetRepo.create({
+            userId,
+            name: sourceProfile.name,
+            email: sourceProfile.email,
+            phone: sourceProfile.phone,
+            dateOfBirth: sourceProfile.dateOfBirth,
+            profilePicture: sourceProfile.profilePicture,
+            socialLinks: sourceProfile.socialLinks,
+            companyName: sourceProfile.companyName,
+            tpin: sourceProfile.tpin,
+            incorporationCertUrl: sourceProfile.incorporationCertUrl,
+            businessLicenseId: sourceProfile.businessLicenseId,
+            province: sourceProfile.province,
+            city: sourceProfile.city,
+            area: sourceProfile.area,
+            latitude: sourceProfile.latitude,
+            longitude: sourceProfile.longitude,
+            radius: sourceProfile.radius,
+            verificationStatus: 'VERIFIED',
+            verifiedAt: new Date(),
+            verificationRejectionReason: null,
+            rejectedAt: null,
+          }),
+        );
+      }
+
+      await userRepo.update(
+        { id: userId },
+        { role: targetRole, activeProfileId: targetProfile.id, activeProfileType: targetRole },
+      );
+
+      await this.identityAuditService.createAuditLog(
+        userId,
+        'ACTIVE_ROLE_SWITCHED',
+        `Active role switched from ${user.role} to ${targetRole}`,
+        { role: user.role, activeProfileType: user.activeProfileType },
+        { role: targetRole, activeProfileType: targetRole },
+        'role',
+      );
+
+      return targetProfile;
+    });
+  }
+
+  /**
+   * "One approval covers every side of the company." Called from the admin
+   * verify/reject flow right after the decided profile is updated — mirrors
+   * the same verification decision onto every OTHER profile row this user
+   * owns that shares the same companyName. No-op for individual accounts
+   * (companyName null) and for any user with only one profile row today —
+   * safe to always call.
+   */
+  async cascadeVerificationToSiblingProfiles(
+    userId: string,
+    decision: {
+      verificationStatus: string;
+      verifiedAt?: Date | null;
+      rejectedAt?: Date | null;
+      verificationRejectionReason?: string | null;
+    },
+  ): Promise<void> {
+    const user = await this.findById(userId);
+    if (!user?.activeProfileType || !user?.activeProfileId) return;
+
+    const decidedRepo = this.profileRepoFor(user.activeProfileType);
+    if (!decidedRepo) return;
+    const decidedProfile: any = await (decidedRepo as any).findOne({
+      where: { id: user.activeProfileId },
+    });
+    const companyName = decidedProfile?.companyName;
+    if (!companyName) return;
+
+    const otherTypes = ROLE_ACCOUNT_TYPES.filter((t) => t !== user.activeProfileType);
+    for (const type of otherTypes) {
+      const repo = this.profileRepoFor(type);
+      if (!repo) continue;
+      const siblings: any[] = await (repo as any).find({ where: { userId, companyName } });
+      for (const row of siblings) {
+        await (repo as any).update(
+          { id: row.id },
+          {
+            verificationStatus: decision.verificationStatus,
+            verifiedAt: decision.verifiedAt ?? null,
+            rejectedAt: decision.rejectedAt ?? null,
+            verificationRejectionReason: decision.verificationRejectionReason ?? null,
+          },
+        );
+        this.logger.log(
+          `cascadeVerificationToSiblingProfiles(${userId}): mirrored ${decision.verificationStatus} onto ${type} profile ${row.id}`,
+        );
+      }
+    }
   }
 
   /**
