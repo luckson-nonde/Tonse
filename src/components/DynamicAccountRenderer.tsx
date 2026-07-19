@@ -86,6 +86,8 @@ import LabourHomeView from './labour/LabourHomeView';
 import LabourJobsView from './labour/LabourJobsView';
 import LabourQuotesView from './labour/LabourQuotesView';
 import LabourScheduleView from './labour/LabourScheduleView';
+import StaffOverview from './staff/StaffOverview';
+import TechnicianJobsView from './technician/TechnicianJobsView';
 
 interface DynamicAccountRendererProps {
   schema: MasterAccountSchema;
@@ -778,6 +780,10 @@ export default function DynamicAccountRenderer({
         return <FinancialPage isInsideDashboard={true} />;
       case 'report_manager':
         return <ReportManagerView />;
+      case 'staff_overview':
+        return <StaffOverview onNavigate={onNavigate} />;
+      case 'technician_jobs':
+        return <TechnicianJobsView historyOnly={view === 'history'} />;
       case 'labour_schedule':
         return <LabourScheduleView {...data?.scheduleProps} />;
       default:

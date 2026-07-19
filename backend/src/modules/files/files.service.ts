@@ -23,6 +23,15 @@ const SENSITIVE_CATEGORIES = new Set([
   'loan-terms',
 ]);
 
+/** Phone-camera video containers accepted for job evidence (Android emits
+ *  mp4/3gp, iPhone emits QuickTime .mov). */
+const VIDEO_MIMES = new Set([
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'video/3gpp',
+]);
+
 @Injectable()
 export class FilesService {
   private readonly uploadDir = path.join(process.cwd(), 'public', 'uploads');
@@ -58,29 +67,36 @@ export class FilesService {
 
     // Validate file type. Public images stay images-only; SENSITIVE document
     // categories (KYC, licence, loan T&Cs…) also accept PDF, since real-world
-    // certificates and terms are usually PDFs, not photos.
+    // certificates and terms are usually PDFs, not photos. `job-evidence`
+    // (technician before/after capture) additionally accepts short phone
+    // videos — the only category that does.
     const isSensitive = FilesService.isSensitiveCategory(category);
+    const acceptsVideo = category === 'job-evidence';
+    const isVideo = VIDEO_MIMES.has(file.mimetype);
     const allowedMimes = [
       'image/jpeg',
       'image/png',
       'image/webp',
       'image/gif',
       ...(isSensitive ? ['application/pdf'] : []),
+      ...(acceptsVideo ? [...VIDEO_MIMES] : []),
     ];
     if (!allowedMimes.includes(file.mimetype)) {
       throw new BadRequestException(
         isSensitive
           ? 'Only image or PDF files are allowed (JPEG, PNG, WebP, GIF, PDF)'
-          : 'Only image files are allowed (JPEG, PNG, WebP, GIF)',
+          : acceptsVideo
+            ? 'Only images or short videos are allowed (JPEG, PNG, WebP, GIF, MP4, WebM, MOV, 3GP)'
+            : 'Only image files are allowed (JPEG, PNG, WebP, GIF)',
       );
     }
 
-    // Validate file size (max 10MB for documents, 5MB for images)
-    const maxSize = (isSensitive ? 10 : 5) * 1024 * 1024;
+    // Validate file size (40MB for evidence videos, 10MB for documents,
+    // 5MB for images).
+    const maxMb = acceptsVideo && isVideo ? 40 : isSensitive ? 10 : 5;
+    const maxSize = maxMb * 1024 * 1024;
     if (file.size > maxSize) {
-      throw new BadRequestException(
-        `File size must not exceed ${isSensitive ? 10 : 5}MB`,
-      );
+      throw new BadRequestException(`File size must not exceed ${maxMb}MB`);
     }
 
     // Generate unique filename

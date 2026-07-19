@@ -14,6 +14,7 @@ import {
   Landmark,
   Power,
   Ban,
+  Camera,
 } from 'lucide-react';
 import { PERMISSIONS, hasPermission } from '../utils/rbac';
 import { teamService, TeamMember } from '../services/api/teamService';
@@ -54,6 +55,13 @@ const ROLES: RolePreset[] = [
     // Only shown to lending departments (persona-as-department filter below).
     businessType: 'LENDING',
   },
+  {
+    id: 'TECHNICIAN',
+    title: 'Technician',
+    description: 'Assigned jobs only — before/after photos & video evidence',
+    icon: Camera,
+    color: 'purple',
+  },
 ];
 
 const permissionsForRole = (role: string): string[] => {
@@ -64,6 +72,10 @@ const permissionsForRole = (role: string): string[] => {
   // Loan-only: review loan requests, make/track offers.
   if (role === 'LOAN_OFFICER') {
     return [PERMISSIONS.MANAGE_LOANS];
+  }
+  // Technician: evidence capture on assigned jobs only.
+  if (role === 'TECHNICIAN') {
+    return [PERMISSIONS.MANAGE_JOBS];
   }
   // Default = QUOTATION_ONLY
   return [PERMISSIONS.MANAGE_QUOTES, PERMISSIONS.VIEW_ANALYTICS];

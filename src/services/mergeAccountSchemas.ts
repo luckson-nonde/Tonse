@@ -16,7 +16,8 @@ import { MASTER_COLLECTION_OFFICER_ACCOUNT_SCHEMA } from './collectionOfficerAcc
 import { MASTER_QUOTATION_MANAGER_ACCOUNT_SCHEMA } from './quotationManagerAccountSchema';
 import { MASTER_LOAN_PROVIDER_ACCOUNT_SCHEMA } from './loanProviderAccountSchema';
 import { MASTER_LOAN_OFFICER_ACCOUNT_SCHEMA } from './loanOfficerAccountSchema';
-import { isCollectionOfficer, isQuotationManager, isLoanOfficer } from '../utils/rbac';
+import { isCollectionOfficer, isQuotationManager, isLoanOfficer, isTechnician } from '../utils/rbac';
+import { MASTER_TECHNICIAN_ACCOUNT_SCHEMA } from './technicianAccountSchema';
 import type { ActiveProfileContext } from '../hooks/useActiveProfileContext';
 
 /** Minimal shape pickSchemasForUser needs off the authed user. */
@@ -131,6 +132,13 @@ export function pickSchemasForUser(
   // Loan Officer (lending-only staff) → dedicated minimal loan dashboard.
   if (isLoanOfficer(user as any)) {
     return [MASTER_LOAN_OFFICER_ACCOUNT_SCHEMA];
+  }
+
+  // Technician (job-evidence field staff) → dedicated minimal dashboard
+  // (Overview / My Jobs / History / Profile). Must stay before the personal-
+  // persona check, like the three staff branches above.
+  if (isTechnician(user as any)) {
+    return [MASTER_TECHNICIAN_ACCOUNT_SCHEMA];
   }
 
   // Personal persona overrides everything — even labour users see the

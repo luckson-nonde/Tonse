@@ -28,6 +28,7 @@ import { ReferralsModule } from './modules/referrals/referrals.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { CollectionModule } from './modules/collection/collection.module';
+import { JobsModule } from './modules/jobs/jobs.module';
 import { LoanModule } from './modules/loans/loans.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { ConsentsModule } from './modules/consents/consents.module';
@@ -99,6 +100,7 @@ import webpushConfig from './config/webpush.config';
     ReportsModule,
     ReviewsModule,
     CollectionModule,
+    JobsModule,
     LoanModule,
     BillingModule,
     ConsentsModule,

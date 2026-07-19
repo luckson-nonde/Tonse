@@ -54,6 +54,8 @@ export class Notification {
       'MILESTONE_UNLOCKED',
       'REPORT_FILED',
       'REPORT_RECEIVED',
+      'JOB_ASSIGNED',
+      'JOB_EVIDENCE_ADDED',
     ],
   })
   type: string;

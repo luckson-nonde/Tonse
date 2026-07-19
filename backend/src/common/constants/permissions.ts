@@ -13,6 +13,7 @@ export const PERMISSIONS = {
   MANAGE_TEAM: 'MANAGE_TEAM',
   MANAGE_COLLECTIONS: 'MANAGE_COLLECTIONS',
   MANAGE_LOANS: 'MANAGE_LOANS',
+  MANAGE_JOBS: 'MANAGE_JOBS',
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

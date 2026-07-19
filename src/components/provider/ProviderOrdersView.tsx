@@ -1,11 +1,13 @@
-import React from 'react';
-import { Clock, Check, FileText, QrCode } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Clock, Check, FileText, QrCode, Wrench } from 'lucide-react';
 import { Inquiry } from '../../types';
 import { hasPermission, PERMISSIONS } from '../../utils/rbac';
 import { uniqueKey } from '../../utils/keyUtils';
 import emptyOrdersImage from '../../assets/images/empty-states/owl_reading.webp';
 import { getEffectiveBusinessTypes } from '../../services/categories';
 import { useActiveProfileContext } from '../../hooks/useActiveProfileContext';
+import { teamService, TeamMember } from '../../services/api/teamService';
+import { jobsService } from '../../services/api/jobsService';
 
 interface ProviderOrdersViewProps {
   user: any;
@@ -30,6 +32,52 @@ export default function ProviderOrdersView({
   const filteredQuotes = displayQuotes.filter(
     (q) => q.status === 'PAID' || q.status === 'AWAITING_PICKUP'
   );
+
+  // Technician assignment — owner-only. The roster is the team members who
+  // hold MANAGE_JOBS; when there are none the control stays hidden entirely.
+  const isOwner = !user?.parentProviderId;
+  const [technicians, setTechnicians] = useState<TeamMember[]>([]);
+  const [assignments, setAssignments] = useState<Record<string, string | null>>({});
+  const [assigningId, setAssigningId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOwner) return;
+    let cancelled = false;
+    teamService
+      .list()
+      .then((members) => {
+        if (cancelled) return;
+        setTechnicians(
+          members.filter(
+            (m) => m.isActive && (m.permissions ?? []).includes(PERMISSIONS.MANAGE_JOBS),
+          ),
+        );
+      })
+      .catch(() => {
+        /* control simply stays hidden */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOwner]);
+
+  const assignedFor = (quote: any): string =>
+    (assignments[quote.id] !== undefined
+      ? assignments[quote.id]
+      : quote.assignedTechnicianId) || '';
+
+  const handleAssign = async (quote: any, technicianId: string) => {
+    const value = technicianId || null;
+    setAssigningId(String(quote.id));
+    try {
+      await jobsService.assign(String(quote.id), value);
+      setAssignments((prev) => ({ ...prev, [quote.id]: value }));
+    } catch {
+      // Leave the previous selection in place; the select re-renders from state.
+    } finally {
+      setAssigningId(null);
+    }
+  };
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -118,6 +166,30 @@ export default function ProviderOrdersView({
                       </div>
                     </div>
                   </div>
+
+                  {/* Owner-only technician assignment — the job appears in the
+                      chosen technician's My Jobs for before/after evidence. */}
+                  {isOwner && technicians.length > 0 && (
+                    <div className="mb-6 rounded-2xl border border-[#ecd9b3] bg-[#fdfaf2] p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                      <p className="flex items-center gap-1.5 text-[10px] font-bold text-[#8a6118] uppercase tracking-widest shrink-0">
+                        <Wrench className="w-3.5 h-3.5" />
+                        Assigned Technician
+                      </p>
+                      <select
+                        value={assignedFor(quote)}
+                        disabled={assigningId === String(quote.id)}
+                        onChange={(e) => handleAssign(quote, e.target.value)}
+                        className="flex-1 px-3 py-2.5 bg-white border border-[#d8c08a] rounded-xl text-[13px] font-semibold text-slate-900 outline-none focus:border-[#C9973A] disabled:opacity-60"
+                      >
+                        <option value="">Not assigned</option>
+                        {technicians.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {isAwaitingPickup ? (
                     <button

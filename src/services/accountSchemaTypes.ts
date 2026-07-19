@@ -61,7 +61,9 @@ export interface ViewDefinition {
     | 'labour_jobs'
     | 'labour_quotes'
     | 'labour_schedule'
-    | 'report_manager';
+    | 'report_manager'
+    | 'staff_overview'
+    | 'technician_jobs';
   dataKey?: string;
   permissions?: string[];
   roleFilter?: string[];

@@ -17,6 +17,7 @@ import { Inquiry } from '../../inquiries/entities/inquiry.entity';
 @Index('idx_quotes_status', ['status'])
 @Index('idx_quotes_created_at', ['createdAt'])
 @Index('idx_quotes_inquiry_provider', ['inquiryId', 'providerId']) // Removed unique: true to allow revisions
+@Index('idx_quotes_assigned_technician', ['assignedTechnicianId'])
 export class Quote {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -153,6 +154,15 @@ export class Quote {
     default: 'PRIMARY',
   })
   slotTier: string;
+
+  /**
+   * Field staff (TECHNICIAN team member) the owner assigned to execute this
+   * job. Always a user row with parentProviderId === this quote's providerId;
+   * NULL until the owner assigns. Job evidence (job_media) may only be
+   * captured by this user or the owner.
+   */
+  @Column({ type: 'uuid', nullable: true })
+  assignedTechnicianId: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

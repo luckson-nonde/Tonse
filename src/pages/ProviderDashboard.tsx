@@ -57,7 +57,7 @@ import {
   getEffectiveBusinessTypes,
   isRepairVariant,
 } from '../services/categories';
-import { hasPermission, isCollectionOfficer, isQuotationManager, PERMISSIONS } from '../utils/rbac';
+import { hasPermission, isCollectionOfficer, isQuotationManager, isLoanOfficer, isTechnician, PERMISSIONS } from '../utils/rbac';
 import { logAuditAction } from '../utils/auditLogger';
 import DynamicDataDisplay from '../components/DynamicDataDisplay';
 import Notification from '../components/Notification';
@@ -125,15 +125,32 @@ export default function ProviderDashboard() {
     // their own profile is also reachable). Handled here (the single tab-sync
     // effect) so it can't ping-pong with the generic sync below.
     if (isCollectionOfficer(user)) {
-      const target = tab === 'profile' ? 'profile' : 'collection';
+      const target =
+        tab === 'profile' ? 'profile' : tab === 'collection' ? 'collection' : 'dashboard';
       if (activeTab !== target) setActiveTab(target);
       return;
     }
     // Quotation Manager (quoting-only staff) is locked to the quoting surface.
     // leads + my-quotes render here; profile / archived-leads are dedicated
-    // routes (this component isn't mounted there). Any other tab → leads.
+    // routes (this component isn't mounted there). Any other tab → the staff
+    // Overview landing tab.
     if (isQuotationManager(user)) {
-      const target = tab === 'my-quotes' ? 'my-quotes' : 'leads';
+      const target = ['my-quotes', 'leads'].includes(tab || '') ? tab! : 'dashboard';
+      if (activeTab !== target) setActiveTab(target);
+      return;
+    }
+    // Loan Officer — same shape as the quotation manager (their schema's
+    // leads/my-quotes render the loan views). Previously had no branch at all,
+    // so they landed on 'home', a view their schema doesn't define.
+    if (isLoanOfficer(user)) {
+      const target = ['my-quotes', 'leads'].includes(tab || '') ? tab! : 'dashboard';
+      if (activeTab !== target) setActiveTab(target);
+      return;
+    }
+    // Technician (job-evidence field staff) — Overview lands, My Jobs/History
+    // are the work tabs.
+    if (isTechnician(user)) {
+      const target = ['my-jobs', 'history'].includes(tab || '') ? tab! : 'dashboard';
       if (activeTab !== target) setActiveTab(target);
       return;
     }

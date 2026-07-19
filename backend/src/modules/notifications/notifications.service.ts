@@ -21,7 +21,9 @@ export type DurableType =
   | 'RESERVE_RELEASED'
   | 'MILESTONE_UNLOCKED'
   | 'REPORT_FILED'
-  | 'REPORT_RECEIVED';
+  | 'REPORT_RECEIVED'
+  | 'JOB_ASSIGNED'
+  | 'JOB_EVIDENCE_ADDED';
 export type EphemeralType =
   | 'QUOTE_COUNT_UPDATE'
   | 'LEAD_FULL'
@@ -39,6 +41,9 @@ const PUSH_ROUTE_BY_TYPE: Record<DurableType, string> = {
   // the reporter's dashboard path depends on their role.
   REPORT_FILED: '/buyer/reporting',
   REPORT_RECEIVED: '/admin',
+  // Technician's My Jobs tab / the buyer's order history.
+  JOB_ASSIGNED: '/provider/my-jobs',
+  JOB_EVIDENCE_ADDED: '/buyer/orders',
 };
 
 /** DB enum → lowercase SSE event name (EventSource convention). */
@@ -49,6 +54,8 @@ const SSE_EVENT_NAME: Record<DurableType | EphemeralType, string> = {
   MILESTONE_UNLOCKED: 'milestone_unlocked',
   REPORT_FILED: 'report_filed',
   REPORT_RECEIVED: 'report_received',
+  JOB_ASSIGNED: 'job_assigned',
+  JOB_EVIDENCE_ADDED: 'job_evidence_added',
   QUOTE_COUNT_UPDATE: 'quote_count_update',
   LEAD_FULL: 'lead_full',
   PROVIDER_ACCEPTED: 'provider_accepted',

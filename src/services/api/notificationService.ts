@@ -15,7 +15,9 @@ export interface NotificationRecord {
     | 'RESERVE_RELEASED'
     | 'MILESTONE_UNLOCKED'
     | 'REPORT_FILED'
-    | 'REPORT_RECEIVED';
+    | 'REPORT_RECEIVED'
+    | 'JOB_ASSIGNED'
+    | 'JOB_EVIDENCE_ADDED';
   inquiryId?: string;
   quoteId?: string;
   title: string;

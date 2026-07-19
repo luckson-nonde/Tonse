@@ -14,6 +14,7 @@ import { MasterAccountSchema } from './accountSchemaTypes';
 export const MASTER_QUOTATION_MANAGER_ACCOUNT_SCHEMA: MasterAccountSchema = {
   schemaType: 'PROVIDER',
   navigation: [
+    { id: 'dashboard', label: 'Overview', icon: 'LayoutDashboard' },
     {
       id: 'leads',
       label: 'Buyer Inquiries',
@@ -35,6 +36,11 @@ export const MASTER_QUOTATION_MANAGER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'profile', label: 'Profile', icon: 'User' },
   ],
   views: {
+    dashboard: {
+      title: 'Quotation Overview',
+      subtitle: 'Your quoting desk at a glance',
+      componentType: 'staff_overview',
+    },
     leads: {
       title: 'Buyer Inquiries',
       subtitle: 'Respond to matched inquiries with a quote',

@@ -163,6 +163,24 @@ export function useNotificationStream(
         lastSeen = new Date().toISOString();
         routeDurable({ type: 'MILESTONE_UNLOCKED', ...parse(e as MessageEvent) });
       });
+      // Report + job events were durable-row/push-only before these listeners
+      // existed — without them the bell only updated on reconnect catch-up.
+      es.addEventListener('report_filed', (e) => {
+        lastSeen = new Date().toISOString();
+        routeDurable({ type: 'REPORT_FILED', ...parse(e as MessageEvent) });
+      });
+      es.addEventListener('report_received', (e) => {
+        lastSeen = new Date().toISOString();
+        routeDurable({ type: 'REPORT_RECEIVED', ...parse(e as MessageEvent) });
+      });
+      es.addEventListener('job_assigned', (e) => {
+        lastSeen = new Date().toISOString();
+        routeDurable({ type: 'JOB_ASSIGNED', ...parse(e as MessageEvent) });
+      });
+      es.addEventListener('job_evidence_added', (e) => {
+        lastSeen = new Date().toISOString();
+        routeDurable({ type: 'JOB_EVIDENCE_ADDED', ...parse(e as MessageEvent) });
+      });
       es.addEventListener('referral_progress', (e) => {
         handlersRef.current.onReferralProgress?.(parse(e as MessageEvent));
       });

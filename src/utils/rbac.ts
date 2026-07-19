@@ -7,7 +7,8 @@ export const PERMISSIONS = {
   VIEW_ANALYTICS: 'VIEW_ANALYTICS',
   MANAGE_TEAM: 'MANAGE_TEAM',
   MANAGE_COLLECTIONS: 'MANAGE_COLLECTIONS',
-  MANAGE_LOANS: 'MANAGE_LOANS'
+  MANAGE_LOANS: 'MANAGE_LOANS',
+  MANAGE_JOBS: 'MANAGE_JOBS'
 };
 
 /**
@@ -86,6 +87,24 @@ export function isLoanOfficer(user: User | null | undefined): boolean {
     perms.includes(PERMISSIONS.MANAGE_LOANS) &&
     !perms.includes(PERMISSIONS.MANAGE_QUOTES) &&
     !perms.includes(PERMISSIONS.MANAGE_COLLECTIONS) &&
+    !perms.includes(PERMISSIONS.MANAGE_TEAM)
+  );
+}
+
+/**
+ * A Technician is field staff scoped to job evidence ONLY: capture
+ * before/after photos and video on jobs the owner assigned to them. Holds
+ * MANAGE_JOBS and none of the broader permissions → gets the dedicated
+ * technician dashboard (Overview / My Jobs / History). Owners never match.
+ */
+export function isTechnician(user: User | null | undefined): boolean {
+  if (!user || !user.parentProviderId) return false;
+  const perms = user.permissions ?? [];
+  return (
+    perms.includes(PERMISSIONS.MANAGE_JOBS) &&
+    !perms.includes(PERMISSIONS.MANAGE_QUOTES) &&
+    !perms.includes(PERMISSIONS.MANAGE_COLLECTIONS) &&
+    !perms.includes(PERMISSIONS.MANAGE_LOANS) &&
     !perms.includes(PERMISSIONS.MANAGE_TEAM)
   );
 }

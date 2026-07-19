@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   ShoppingBag,
@@ -10,14 +10,94 @@ import {
   QrCode,
   Printer,
   ArrowRight,
+  Camera,
 } from 'lucide-react';
 import { Quote, Inquiry } from '../types';
 import Button from '../components/Button';
+import { jobsService, JobMediaRecord } from '../services/api/jobsService';
 
 interface OrderDetailsProps {
   order: Quote;
   inquiry?: Inquiry;
   onAction: (actionId: string, payload?: any) => void;
+}
+
+const isVideoUrl = (src: string) => /\.(mp4|webm|mov|avi|3gp)$/i.test(src);
+
+/** Before/after proof-of-work captured by the shop's technician on this job.
+ *  Renders nothing at all when the job has no evidence (most product orders),
+ *  so non-service orders stay uncluttered. */
+function ServiceEvidenceSection({ quoteId }: { quoteId: string }) {
+  const [media, setMedia] = useState<JobMediaRecord[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    jobsService
+      .media(quoteId)
+      .then((rows) => {
+        if (!cancelled) setMedia(rows);
+      })
+      .catch(() => {
+        /* section simply doesn't render */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [quoteId]);
+
+  if (media.length === 0) return null;
+
+  const phases: Array<{ key: 'BEFORE' | 'AFTER'; label: string }> = [
+    { key: 'BEFORE', label: 'Before service' },
+    { key: 'AFTER', label: 'After service' },
+  ];
+
+  return (
+    <div className="bg-white p-8 rounded-4xl border border-slate-200 shadow-sm">
+      <h3 className="text-lg font-bold text-brand-dark mb-2 flex items-center gap-2">
+        <Camera className="w-5 h-5 text-[#C9973A]" />
+        Service Evidence
+      </h3>
+      <p className="text-xs text-slate-500 mb-6">
+        Captured by the provider's technician as proof of the work done.
+      </p>
+      <div className="space-y-6">
+        {phases.map(({ key, label }) => {
+          const rows = media.filter((m) => m.phase === key);
+          if (rows.length === 0) return null;
+          return (
+            <div key={key}>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+                {label}
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {rows.map((m) =>
+                  m.mediaType === 'VIDEO' || isVideoUrl(m.url) ? (
+                    <video
+                      key={m.id}
+                      src={m.url}
+                      controls
+                      preload="metadata"
+                      className="w-full h-28 object-cover rounded-2xl bg-black col-span-2"
+                    />
+                  ) : (
+                    <a key={m.id} href={m.url} target="_blank" rel="noreferrer">
+                      <img
+                        src={m.url}
+                        alt={`${label} evidence`}
+                        loading="lazy"
+                        className="w-full h-28 object-cover rounded-2xl"
+                      />
+                    </a>
+                  ),
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export default function OrderDetails({ order, inquiry, onAction }: OrderDetailsProps) {
@@ -138,6 +218,9 @@ export default function OrderDetails({ order, inquiry, onAction }: OrderDetailsP
               </div>
             </div>
           </div>
+
+          {/* Service Evidence (renders only when the technician captured any) */}
+          {order.id != null && <ServiceEvidenceSection quoteId={String(order.id)} />}
         </div>
 
         {/* Sidebar: Protection */}

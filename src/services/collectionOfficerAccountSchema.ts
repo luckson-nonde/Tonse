@@ -14,6 +14,7 @@ import { MasterAccountSchema } from './accountSchemaTypes';
 export const MASTER_COLLECTION_OFFICER_ACCOUNT_SCHEMA: MasterAccountSchema = {
   schemaType: 'PROVIDER',
   navigation: [
+    { id: 'dashboard', label: 'Overview', icon: 'LayoutDashboard' },
     {
       id: 'collection',
       label: 'Collection',
@@ -23,6 +24,11 @@ export const MASTER_COLLECTION_OFFICER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'profile', label: 'Profile', icon: 'User' },
   ],
   views: {
+    dashboard: {
+      title: 'Collection Overview',
+      subtitle: 'Your handover desk at a glance',
+      componentType: 'staff_overview',
+    },
     collection: {
       title: 'Parcel Collection',
       subtitle: 'Scan, verify and complete order collections',

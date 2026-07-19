@@ -12,12 +12,18 @@ import { MasterAccountSchema } from './accountSchemaTypes';
 export const MASTER_LOAN_OFFICER_ACCOUNT_SCHEMA: MasterAccountSchema = {
   schemaType: 'PROVIDER',
   navigation: [
+    { id: 'dashboard', label: 'Overview', icon: 'LayoutDashboard' },
     { id: 'leads', label: 'Loan Requests', icon: 'FileText', permissions: [PERMISSIONS.MANAGE_LOANS] },
     { id: 'my-quotes', label: 'Loan Offers', icon: 'MessageSquare', permissions: [PERMISSIONS.MANAGE_LOANS] },
     { id: 'archived-leads', label: 'Archived Requests', icon: 'Archive', permissions: [PERMISSIONS.MANAGE_LOANS] },
     { id: 'profile', label: 'Profile', icon: 'User' },
   ],
   views: {
+    dashboard: {
+      title: 'Lending Overview',
+      subtitle: 'Your loan desk at a glance',
+      componentType: 'staff_overview',
+    },
     leads: {
       title: 'Loan Requests',
       subtitle: 'Review applications and make an offer or decline',

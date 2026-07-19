@@ -35,6 +35,8 @@ import {
   Heart,
   LogOut,
   Flag,
+  Camera,
+  LifeBuoy,
 } from 'lucide-react';
 import Logo from './Logo';
 import ConfirmModal from './ConfirmModal';
@@ -45,7 +47,7 @@ import SubscriptionPaywall from './SubscriptionPaywall';
 import DashboardCalendar, { CalendarTone, CounterCard } from './DashboardCalendar';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useDashboard } from '../DashboardContext';
-import { hasPermission, isCollectionOfficer, isQuotationManager, PERMISSIONS } from '../utils/rbac';
+import { hasPermission, isCollectionOfficer, isQuotationManager, isLoanOfficer, isTechnician, PERMISSIONS } from '../utils/rbac';
 import { isLoanContext, isLoanQuote } from '../utils/loan';
 import {
   getBusinessTypes,
@@ -1171,6 +1173,29 @@ export default function DashboardLayout({
           </nav>
         </div>
 
+        {/* Scoped staff get a "need help" card above the logout controls —
+            their owner (not Tonse) is the first line of support, so keep the
+            copy generic. Opaque border per the Android Mali rule. */}
+        {(isCollectionOfficer(user) || isQuotationManager(user) || isLoanOfficer(user) || isTechnician(user)) && (
+          <div className="px-4 pb-2">
+            <div className="rounded-2xl border border-[#ecd9b3] bg-[#fdfaf2] p-4 text-center">
+              <div className="w-8 h-8 rounded-xl bg-[#fdf6e9] flex items-center justify-center mx-auto mb-2">
+                <LifeBuoy className="w-4 h-4 text-[#C9973A]" />
+              </div>
+              <p className="text-[12px] font-bold text-slate-900">Need help?</p>
+              <p className="text-[10px] font-medium text-slate-400 mt-0.5 mb-3 leading-snug">
+                Questions about your work or access? Your shop owner can help.
+              </p>
+              <a
+                href="mailto:support@tonse.co.zm"
+                className="inline-block px-4 py-2 rounded-xl bg-[#1a1a2e] text-white text-[10px] font-black uppercase tracking-wider hover:bg-[#C9973A] transition-all"
+              >
+                Contact support
+              </a>
+            </div>
+          </div>
+        )}
+
         <div className="p-4 border-t border-[#f1f5f9] mt-auto min-h-[140px] flex flex-col items-center justify-center bg-white space-y-4">
           {/* Phones: the ceremonial slide guards against accidental pocket
               logouts. Desktop (sidebar goes sticky at md): dragging with a
@@ -1337,9 +1362,10 @@ export default function DashboardLayout({
 
         {/* Mobile Bottom Navigation */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#1a1612]/5 flex justify-around items-center h-17.5 z-110 px-2 pb-safe shadow-[0_-10px_30px_rgba(26,22,18,0 (truncated…).05)]">
-          {/* Collection Officers / Quotation Managers have no Home — they're
-              locked to their scoped surface. */}
-          {!isCollectionOfficer(user) && !isQuotationManager(user) && (
+          {/* Scoped staff (Collection Officers / Quotation Managers / Loan
+              Officers / Technicians) have no Home — they're locked to their
+              scoped surface and land on their staff Overview instead. */}
+          {!isCollectionOfficer(user) && !isQuotationManager(user) && !isLoanOfficer(user) && !isTechnician(user) && (
             <button
               onClick={() => handleTabClick('home')}
               className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'home' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
@@ -1421,6 +1447,28 @@ export default function DashboardLayout({
             </>
           ) : (
             <>
+              {/* Staff Overview — the shared control-centre landing tab for
+                  every scoped staff shape. */}
+              {user?.parentProviderId &&
+                (isCollectionOfficer(user) || isQuotationManager(user) || isLoanOfficer(user) || isTechnician(user)) && (
+                <button
+                  onClick={() => handleTabClick('dashboard')}
+                  className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'dashboard' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
+                >
+                  <LayoutDashboard
+                    className="w-5.5 h-5.5 mb-1"
+                    stroke="white"
+                    strokeWidth={1.5}
+                    fill="currentColor"
+                  />
+                  <span
+                    className={`text-[11px] font-sans tracking-tight ${activeTab === 'dashboard' ? 'font-bold' : 'font-normal'}`}
+                  >
+                    Overview
+                  </span>
+                </button>
+              )}
+
               {hasPermission(user, PERMISSIONS.MANAGE_QUOTES) && (
                 <>
                   <button
@@ -1504,6 +1552,84 @@ export default function DashboardLayout({
                     Collections
                   </span>
                 </button>
+              )}
+
+              {/* Technician — evidence work tabs. */}
+              {user?.parentProviderId && isTechnician(user) && (
+                <>
+                  <button
+                    onClick={() => handleTabClick('my-jobs')}
+                    className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'my-jobs' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
+                  >
+                    <Camera
+                      className="w-5.5 h-5.5 mb-1"
+                      stroke="white"
+                      strokeWidth={1.5}
+                      fill="currentColor"
+                    />
+                    <span
+                      className={`text-[11px] font-sans tracking-tight ${activeTab === 'my-jobs' ? 'font-bold' : 'font-normal'}`}
+                    >
+                      My Jobs
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => handleTabClick('history')}
+                    className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'history' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
+                  >
+                    <History
+                      className="w-5.5 h-5.5 mb-1"
+                      stroke="white"
+                      strokeWidth={1.5}
+                      fill="currentColor"
+                    />
+                    <span
+                      className={`text-[11px] font-sans tracking-tight ${activeTab === 'history' ? 'font-bold' : 'font-normal'}`}
+                    >
+                      History
+                    </span>
+                  </button>
+                </>
+              )}
+
+              {/* Loan Officer — previously had NO working mobile tabs at all
+                  (holds MANAGE_LOANS, so every MANAGE_QUOTES-gated button
+                  above is hidden). Requests + offers mirror their sidebar. */}
+              {user?.parentProviderId && isLoanOfficer(user) && (
+                <>
+                  <button
+                    onClick={() => handleTabClick('leads')}
+                    className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'leads' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
+                  >
+                    <Landmark
+                      className="w-5.5 h-5.5 mb-1"
+                      stroke="white"
+                      strokeWidth={1.5}
+                      fill="currentColor"
+                    />
+                    <span
+                      className={`text-[11px] font-sans tracking-tight ${activeTab === 'leads' ? 'font-bold' : 'font-normal'}`}
+                    >
+                      Requests
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => handleTabClick('my-quotes')}
+                    className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'my-quotes' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
+                  >
+                    <MessageSquare
+                      className="w-5.5 h-5.5 mb-1"
+                      stroke="white"
+                      strokeWidth={1.5}
+                      fill="currentColor"
+                    />
+                    <span
+                      className={`text-[11px] font-sans tracking-tight ${activeTab === 'my-quotes' ? 'font-bold' : 'font-normal'}`}
+                    >
+                      Offers
+                    </span>
+                  </button>
+                </>
               )}
 
               {user?.parentProviderId &&
@@ -1596,7 +1722,11 @@ export default function DashboardLayout({
                           ? '✅'
                           : n.type === 'REPORT_FILED'
                             ? '🚩'
-                            : '💬';
+                            : n.type === 'JOB_ASSIGNED'
+                              ? '🔧'
+                              : n.type === 'JOB_EVIDENCE_ADDED'
+                                ? '📸'
+                                : '💬';
                     const heading =
                       n.type === 'NEW_LEAD'
                         ? 'New Request'
@@ -1604,7 +1734,11 @@ export default function DashboardLayout({
                           ? 'Reserve Quote Released'
                           : n.type === 'REPORT_FILED'
                             ? 'Report Submitted'
-                            : 'Quote Received';
+                            : n.type === 'JOB_ASSIGNED'
+                              ? 'Job Assigned to You'
+                              : n.type === 'JOB_EVIDENCE_ADDED'
+                                ? 'Service Evidence Added'
+                                : 'Quote Received';
                     const ageMs = Date.now() - new Date(n.createdAt).getTime();
                     const age =
                       ageMs < 60_000
