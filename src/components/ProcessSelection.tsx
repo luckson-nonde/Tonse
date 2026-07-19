@@ -190,9 +190,10 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
             </div>
           </div>
 
-          {/* Right content */}
+          {/* Right content — no panel: cards sit directly on the cream
+              background as raised, tappable surfaces (per mockup) */}
           <div className="flex-1 w-full min-w-0">
-            <div className="bg-white border border-[#e8e4dc] rounded-[32px] p-3 lg:p-7 xl:p-8 shadow-sm shadow-[#1a1a2e]/[0.02]">
+            <div>
               {/* Option cards — the card IS the button; on mobile a tap
                   proceeds immediately, on desktop selection arms Continue */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 lg:gap-5">
@@ -208,8 +209,8 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
                       {...(lite ? {} : { whileHover: { y: -3 } })}
                       className={`tonse-card group relative text-left p-4 lg:p-6 rounded-[24px] border-2 cursor-pointer transition-all duration-300 active:scale-[0.99] ${
                         isSelected
-                          ? 'border-[#C9973A] bg-[#FBF8F0] shadow-[0_8px_28px_-14px_rgba(201,151,58,0.45)]'
-                          : 'border-[#e8e4dc] bg-white hover:border-[#E9D5B0]'
+                          ? 'border-[#C9973A] bg-[#FAF3E3] shadow-[0_8px_28px_-14px_rgba(201,151,58,0.45)]'
+                          : 'border-[#e8e4dc] bg-[#FDF9F0] hover:border-[#E9D5B0] shadow-[0_12px_28px_-18px_rgba(107,86,43,0.4)]'
                       }`}
                     >
                       {/* Icon chip · kicker · arrow (the selection cue: gold → navy) */}
@@ -286,7 +287,7 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
 
               {/* Footer — desktop-only; below lg a tap on a card proceeds
                   directly and Back lives in the sticky mobile header */}
-              <div className="hidden lg:flex mt-6 pt-5 border-t border-[#f1f5f9] lg:flex-row items-center justify-between gap-3">
+              <div className="hidden lg:flex mt-6 p-4 bg-white border border-[#e8e4dc] rounded-[24px] lg:flex-row items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div
                     className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
