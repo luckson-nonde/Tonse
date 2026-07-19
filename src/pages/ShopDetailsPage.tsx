@@ -29,16 +29,31 @@ export default function ShopDetailsPage() {
   const shopId = Number(searchParams.get('id'));
   const [isInquiryModalOpen, setIsInquiryModalOpen] = useState(false);
 
-  const shop = useLiveQuery(async () => {
-    if (!shopId) return null;
-    return await db.shops.get(shopId);
-  }, [shopId]);
+  // Buyer-facing browsing: swr reads paint instantly from cache and the
+  // revalidation listeners swap in fresh data if the shop/catalog changed.
+  const shop = useLiveQuery(
+    async () => {
+      if (!shopId) return null;
+      return await db.shops.get(shopId, { swr: true });
+    },
+    [shopId],
+    undefined,
+    { revalidatePrefix: '/shops' }
+  );
 
   const products =
-    useLiveQuery(async () => {
-      if (!shopId) return [];
-      return await db.products.where('providerId').equals(String(shopId)).toArray();
-    }, [shopId]) || [];
+    useLiveQuery(
+      async () => {
+        if (!shopId) return [];
+        return await db.products
+          .where('providerId')
+          .equals(String(shopId))
+          .toArray({ swr: true });
+      },
+      [shopId],
+      undefined,
+      { revalidatePrefix: '/products' }
+    ) || [];
 
   /**
    * TEMPORARY CLIENT-SIDE ANALYSIS LOGIC

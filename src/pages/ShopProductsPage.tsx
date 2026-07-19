@@ -9,15 +9,30 @@ export default function ShopProductsPage() {
   const [searchParams] = useSearchParams();
   const shopId = Number(searchParams.get('id'));
 
-  const shop = useLiveQuery(async () => {
-    if (!shopId) return null;
-    return await db.shops.get(shopId);
-  }, [shopId]);
+  // Buyer-facing browsing: swr reads paint instantly from cache and the
+  // revalidation listeners swap in fresh data if the shop/catalog changed.
+  const shop = useLiveQuery(
+    async () => {
+      if (!shopId) return null;
+      return await db.shops.get(shopId, { swr: true });
+    },
+    [shopId],
+    undefined,
+    { revalidatePrefix: '/shops' }
+  );
 
-  const shopProducts = useLiveQuery(async () => {
-    if (!shop) return [];
-    return await db.products.where('providerId').equals(shop.providerId).toArray();
-  }, [shop]);
+  const shopProducts = useLiveQuery(
+    async () => {
+      if (!shop) return [];
+      return await db.products
+        .where('providerId')
+        .equals(shop.providerId)
+        .toArray({ swr: true });
+    },
+    [shop],
+    undefined,
+    { revalidatePrefix: '/products' }
+  );
 
   /**
    * STANDARD ARCHITECTURE FOR TRENDING LOGIC (HOW IT SHOULD BE IN PRODUCTION)

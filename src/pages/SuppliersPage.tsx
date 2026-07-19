@@ -15,7 +15,12 @@ import { db } from '../services/api/database';
 
 export default function SuppliersPage() {
   const navigate = useNavigate();
-  const shops = useLiveQuery(() => db.shops.toArray()) || [];
+  // Browse-only surface: cache-first paint, background refresh re-runs the
+  // query via the revalidation event if the shop list changed.
+  const shops =
+    useLiveQuery(() => db.shops.toArray({ swr: true }), [], undefined, {
+      revalidatePrefix: '/shops',
+    }) || [];
 
   return (
     <div className="flex flex-col space-y-8 max-w-3xl mx-auto pb-24 px-4 pt-2">

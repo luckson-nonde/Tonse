@@ -60,14 +60,25 @@ function transformAuditLog(log: any): AuditLog {
   };
 }
 
+/**
+ * Read options for shim reads. `swr: true` opts a GET into apiCall's
+ * stale-while-revalidate path: cached data paints instantly and a background
+ * refresh broadcasts `tonse:data-revalidated` if anything changed. Only for
+ * read-only browsing surfaces — a read that must prove the caller's own
+ * mutation (management views refetching after add/delete) must NOT set it.
+ */
+export interface ReadOptions {
+  swr?: boolean;
+}
+
 // Table interfaces that mirror Dexie operations
 interface ITable<T> {
   add: (item: T | T[], queueable?: QueueableOptions) => Promise<number>;
   put: (item: T) => Promise<number>;
-  get: (id: number | string) => Promise<T | undefined>;
+  get: (id: number | string, opts?: ReadOptions) => Promise<T | undefined>;
   update: (id: number | string, changes: Partial<T>) => Promise<void>;
   delete: (id: number | string) => Promise<void>;
-  toArray: () => Promise<T[]>;
+  toArray: (opts?: ReadOptions) => Promise<T[]>;
   where: (key: string) => IQuery<T>;
   clear: () => Promise<void>;
   bulkAdd: (items: T[]) => Promise<void>;
@@ -79,7 +90,7 @@ interface IQuery<T> {
 }
 
 interface IQueryChain<T> {
-  toArray: () => Promise<T[]>;
+  toArray: (opts?: ReadOptions) => Promise<T[]>;
   sortBy: (key: string) => Promise<T[]>;
   reverse: () => IQueryChain<T>;
   and: (filterFn: (item: T) => boolean) => IQueryChain<T>;
@@ -122,9 +133,11 @@ class Table<T> implements ITable<T> {
     return this.add(item);
   }
 
-  async get(id: number | string): Promise<T | undefined> {
+  async get(id: number | string, opts?: ReadOptions): Promise<T | undefined> {
     try {
-      const response = await apiClient.get<any>(`${this.endpoint}/${id}`);
+      const response = await apiClient.get<any>(`${this.endpoint}/${id}`, {
+        swr: opts?.swr === true,
+      });
       return response.data ? this.doTransform(response.data) : undefined;
     } catch {
       return undefined;
@@ -139,9 +152,11 @@ class Table<T> implements ITable<T> {
     await apiClient.delete(`${this.endpoint}/${id}`);
   }
 
-  async toArray(): Promise<T[]> {
+  async toArray(opts?: ReadOptions): Promise<T[]> {
     try {
-      const response = await apiClient.get<any>(`${this.endpoint}`);
+      const response = await apiClient.get<any>(`${this.endpoint}`, {
+        swr: opts?.swr === true,
+      });
       // Handle nested response structure: { data: [...], total: ... }
       let rawData: any[] = [];
       if (response.data) {
@@ -207,7 +222,7 @@ class QueryChain<T> implements IQueryChain<T> {
     return this.transform ? this.transform(item) : (item as T);
   }
 
-  async toArray(): Promise<T[]> {
+  async toArray(opts?: ReadOptions): Promise<T[]> {
     try {
       const queryParams = new URLSearchParams();
       if (this.values.length === 1) {
@@ -217,7 +232,9 @@ class QueryChain<T> implements IQueryChain<T> {
       }
       queryParams.append('order', this.order);
 
-      const response = await apiClient.get<any>(`${this.endpoint}?${queryParams.toString()}`);
+      const response = await apiClient.get<any>(`${this.endpoint}?${queryParams.toString()}`, {
+        swr: opts?.swr === true,
+      });
 
       // Handle nested response structure: { data: [...], total: ... }
       let results: any[] = [];

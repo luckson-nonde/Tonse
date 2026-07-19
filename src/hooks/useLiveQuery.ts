@@ -11,6 +11,14 @@ interface UseLiveQueryOptions {
 }
 
 /**
+ * Fired by apiCall's stale-while-revalidate background refresh when fresh
+ * data differed from the cached copy it served (see client.ts). Queries that
+ * opt into swr reads pass `revalidatePrefix` so they re-run — cache-first,
+ * so the re-run is instant — and pick the fresh data up.
+ */
+const DATA_REVALIDATED_EVENT = 'tonse:data-revalidated';
+
+/**
  * Hook that fetches data and keeps it in sync
  * Replaces dexie-react-hooks' useLiveQuery
  *
@@ -20,7 +28,16 @@ interface UseLiveQueryOptions {
 export function useLiveQuery<T>(
   query: () => Promise<T | undefined> | T | undefined,
   deps?: any[],
-  defaultValue?: T
+  defaultValue?: T,
+  options?: {
+    /**
+     * Re-run the query when a `tonse:data-revalidated` event lands for an
+     * endpoint starting with this prefix (e.g. '/shops', '/products'). Pass
+     * it when the query reads with `{swr: true}` — without a listener the
+     * stale paint would never be replaced until the next remount.
+     */
+    revalidatePrefix?: string;
+  }
 ): T | undefined {
   const [data, setData] = useState<T | undefined>(defaultValue);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,8 +71,22 @@ export function useLiveQuery<T>(
 
     fetchData();
 
+    const prefix = options?.revalidatePrefix;
+    const onRevalidated = (e: Event) => {
+      const endpoint = (e as CustomEvent).detail?.endpoint;
+      if (typeof endpoint === 'string' && prefix && endpoint.startsWith(prefix)) {
+        fetchData();
+      }
+    };
+    if (prefix && typeof window !== 'undefined') {
+      window.addEventListener(DATA_REVALIDATED_EVENT, onRevalidated);
+    }
+
     return () => {
       isMountedRef.current = false;
+      if (prefix && typeof window !== 'undefined') {
+        window.removeEventListener(DATA_REVALIDATED_EVENT, onRevalidated);
+      }
     };
   }, deps || []);
 
