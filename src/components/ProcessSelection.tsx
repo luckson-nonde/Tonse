@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion } from 'motion/react';
+import { useLiteMotion } from '../hooks/useLiteMotion';
 import {
   Zap,
   ClipboardList,
@@ -26,6 +27,8 @@ interface ProcessOption {
   label: string;
   icon: React.ElementType;
   description: string;
+  /** Compact copy for the 2-up mobile cards, where the full description is hidden. */
+  shortDescription: string;
   benefits: string[];
   steps: { label: string; icon: React.ElementType }[];
   badge?: string;
@@ -39,6 +42,7 @@ const PROCESS_OPTIONS: ProcessOption[] = [
     icon: Zap,
     description:
       'Fast-track your procurement for immediate needs. Ideal for urgent repairs or simple product orders.',
+    shortDescription: 'Quote, pay, done — fast turnaround.',
     benefits: ['Real-time responses', 'One-click payments', 'Instant activation'],
     steps: [
       { label: 'Inquiry', icon: MessageSquare },
@@ -54,6 +58,7 @@ const PROCESS_OPTIONS: ProcessOption[] = [
     icon: ClipboardList,
     description:
       'Full enterprise procurement workflow. Best for complex projects requiring formal approvals and documentation.',
+    shortDescription: 'Formal POs & tax-ready paperwork.',
     benefits: ['Formal PO generation', 'Milestone tracking', 'Tax-ready invoicing'],
     steps: [
       { label: 'Inquiry', icon: MessageSquare },
@@ -142,13 +147,31 @@ const ProcessIllustration = ({ processId }: { processId: 'express' | 'standard' 
 export default function ProcessSelection({ onBack, onComplete }: ProcessSelectionProps) {
   const [selectedProcess, setSelectedProcess] = useState<'express' | 'standard' | null>(null);
   const [hoveredProcess, setHoveredProcess] = useState<'express' | 'standard' | null>(null);
+  // Android-GPU ghosting guard (see useLiteMotion.ts): on touch devices drop
+  // the transform-based hover lift and layoutId FLIP projection.
+  const lite = useLiteMotion();
+  const hasProceededRef = useRef(false);
 
   const activeProcess = hoveredProcess || selectedProcess;
+
+  // Below lg (1024px) the Continue footer is hidden, so a tap must both select
+  // and advance in one gesture. Breakpoint is resolved at click time (mirrors
+  // RoleSelection) so tablet rotation between mount and tap can't go stale.
+  const handleSelect = (id: 'express' | 'standard') => {
+    setSelectedProcess(id);
+    const isDesktop =
+      typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
+    if (!isDesktop) {
+      if (hasProceededRef.current) return;
+      hasProceededRef.current = true;
+      onComplete(id);
+    }
+  };
 
   return (
     <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto w-full min-h-screen bg-[#f5f2ed]">
       {/* Mobile-only sticky header */}
-      <div className="md:hidden sticky top-0 z-30 px-4 pt-4 pb-5 bg-[#f5f2ed]">
+      <div className="lg:hidden sticky top-0 z-30 px-4 pt-4 pb-5 bg-[#f5f2ed]">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
@@ -168,11 +191,11 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
         </div>
       </div>
 
-      <div className="p-4 md:p-8 lg:p-10 xl:p-12">
-        <div className="flex flex-col md:flex-row gap-8 lg:gap-12 items-start">
+      <div className="p-3 lg:p-10 xl:p-12">
+        <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 items-start">
           {/* Desktop left explainer — sticky */}
-          <div className="hidden md:flex flex-col gap-6 w-full md:w-[320px] lg:w-[400px] shrink-0 md:sticky md:top-12">
-            <div className="bg-white/40 backdrop-blur-sm border border-white/60 rounded-[32px] p-7 shadow-sm">
+          <div className="hidden lg:flex flex-col gap-6 w-full lg:w-[320px] xl:w-[400px] shrink-0 lg:sticky lg:top-12">
+            <div className="bg-white/40 backdrop-blur-sm border border-white rounded-[32px] p-7 shadow-sm">
               <button
                 onClick={onBack}
                 className="flex items-center gap-2 text-[#C9973A] text-[11px] font-bold uppercase tracking-wider mb-7 hover:gap-3 transition-all"
@@ -182,7 +205,7 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
               </button>
 
               <div className="space-y-4">
-                <div className="w-14 h-14 bg-[#C9973A]/10 rounded-2xl flex items-center justify-center text-[#C9973A]">
+                <div className="w-14 h-14 bg-[#FAF5EB] rounded-2xl flex items-center justify-center text-[#C9973A]">
                   <GitBranch className="w-7 h-7" />
                 </div>
                 <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#C9973A]">
@@ -198,7 +221,7 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
             </div>
 
             {/* Why this matters */}
-            <div className="bg-gradient-to-br from-[#fdf6e9]/70 to-[#fdf6e9]/30 border border-[#C9973A]/15 rounded-[32px] p-6">
+            <div className="bg-gradient-to-br from-[#fdf6e9]/70 to-[#fdf6e9]/30 border border-[#F7EFE1] rounded-[32px] p-6">
               <div className="flex items-start gap-3 mb-4">
                 <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
                   <Sparkles className="w-4 h-4" />
@@ -237,9 +260,10 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
 
           {/* Right content */}
           <div className="flex-1 w-full min-w-0">
-            <div className="bg-white border border-[#f1f5f9] rounded-[32px] p-5 md:p-7 xl:p-8 shadow-sm shadow-[#1a1a2e]/[0.02]">
-              {/* Options grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">
+            <div className="bg-white border border-[#e8e4dc] rounded-[32px] p-3 lg:p-7 xl:p-8 shadow-sm shadow-[#1a1a2e]/[0.02]">
+              {/* Options grid — 2-up at every width; density, not column count,
+                  is what changes across breakpoints */}
+              <div className="grid grid-cols-2 gap-2.5 lg:gap-5">
                 {PROCESS_OPTIONS.map((option) => {
                   const isSelected = selectedProcess === option.id;
                   const Icon = option.icon;
@@ -250,28 +274,28 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
                       type="button"
                       onMouseEnter={() => setHoveredProcess(option.id)}
                       onMouseLeave={() => setHoveredProcess(null)}
-                      onClick={() => setSelectedProcess(option.id)}
-                      whileHover={{ y: -3 }}
-                      className={`group relative text-left p-5 lg:p-6 rounded-[24px] border-2 cursor-pointer transition-all duration-300 ${
+                      onClick={() => handleSelect(option.id)}
+                      {...(lite ? {} : { whileHover: { y: -3 } })}
+                      className={`group relative text-left p-3 lg:p-6 rounded-[24px] border-2 cursor-pointer transition-all duration-300 ${
                         isSelected
-                          ? 'border-[#C9973A] bg-[#C9973A]/5 shadow-lg shadow-[#C9973A]/10'
-                          : 'border-[#f1f5f9] bg-white hover:border-[#C9973A]/30'
+                          ? 'border-[#C9973A] bg-[#FBF8F0] shadow-[0_8px_28px_-14px_rgba(201,151,58,0.45)]'
+                          : 'border-[#e8e4dc] bg-white hover:border-[#E9D5B0]'
                       }`}
                     >
                       <div className="flex flex-col h-full">
-                        <div className="flex items-center justify-between mb-4">
+                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-1.5 lg:gap-0 mb-2 lg:mb-4">
                           <div
-                            className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${
+                            className={`w-9 h-9 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${
                               isSelected
                                 ? 'bg-[#C9973A] text-white'
-                                : 'bg-[#f8fafc] text-[#94a3b8] group-hover:bg-[#C9973A]/10 group-hover:text-[#C9973A]'
+                                : 'bg-[#f8fafc] text-[#94a3b8] group-hover:bg-[#FAF5EB] group-hover:text-[#C9973A]'
                             }`}
                           >
-                            <Icon className="w-6 h-6" strokeWidth={1.75} />
+                            <Icon className="w-4 h-4 lg:w-6 lg:h-6" strokeWidth={1.75} />
                           </div>
                           {option.badge && (
                             <span
-                              className={`text-[9px] font-black uppercase tracking-[0.18em] px-2.5 py-1.5 rounded-lg ${
+                              className={`self-start text-[8px] lg:text-[9px] font-black uppercase tracking-normal lg:tracking-[0.18em] px-2 py-1 lg:px-2.5 lg:py-1.5 rounded-lg truncate max-w-full ${
                                 isSelected
                                   ? 'bg-[#C9973A] text-white'
                                   : 'bg-[#f8fafc] text-[#94a3b8]'
@@ -282,15 +306,18 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
                           )}
                         </div>
 
-                        <h3 className="text-[18px] lg:text-[20px] font-serif font-bold text-[#1a1a2e] mb-2">
+                        <h3 className="text-[13px] lg:text-[20px] font-serif font-bold text-[#1a1a2e] mb-1 lg:mb-2">
                           {option.label} Workflow
                         </h3>
 
-                        <p className="text-[12px] text-[#1a1a2e]/60 font-medium leading-relaxed mb-4">
+                        <p className="hidden lg:block text-[12px] text-[#1a1a2e]/60 font-medium leading-relaxed mb-4">
                           {option.description}
                         </p>
+                        <p className="lg:hidden text-[9px] text-[#1a1a2e]/60 font-medium leading-snug line-clamp-2">
+                          {option.shortDescription}
+                        </p>
 
-                        <div className="space-y-2 mt-auto">
+                        <div className="hidden lg:block space-y-2 mt-auto">
                           {option.benefits.map((benefit, i) => (
                             <div key={i} className="flex items-center gap-2.5">
                               <div
@@ -312,8 +339,8 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
 
                       {isSelected && (
                         <motion.div
-                          layoutId="selectedIndicator"
-                          className="absolute -top-2 -right-2 w-8 h-8 bg-[#C9973A] rounded-xl flex items-center justify-center shadow-lg shadow-[#C9973A]/30 rotate-12"
+                          layoutId={lite ? undefined : 'selectedIndicator'}
+                          className="absolute -top-2 -right-2 w-8 h-8 bg-[#C9973A] rounded-xl flex items-center justify-center shadow-[0_8px_16px_-4px_rgba(201,151,58,0.4)] rotate-12"
                         >
                           <Check className="w-4 h-4 text-white" strokeWidth={3} />
                         </motion.div>
@@ -323,18 +350,20 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
                 })}
               </div>
 
-              {/* Compact illustration */}
-              <div className="mt-5">
+              {/* Compact illustration — desktop-only; hover has no meaning on
+                  touch and mobile taps navigate away immediately */}
+              <div className="hidden lg:block mt-5">
                 <ProcessIllustration processId={activeProcess} />
               </div>
 
-              {/* Footer */}
-              <div className="mt-6 pt-5 border-t border-[#f1f5f9] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              {/* Footer — desktop-only; below lg a tap on a card proceeds
+                  directly and Back lives in the sticky mobile header */}
+              <div className="hidden lg:flex mt-6 pt-5 border-t border-[#f1f5f9] lg:flex-row items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div
                     className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                       selectedProcess
-                        ? 'bg-[#C9973A]/10 text-[#C9973A]'
+                        ? 'bg-[#FAF5EB] text-[#C9973A]'
                         : 'bg-[#f1f5f9] text-[#94a3b8]'
                     }`}
                   >
