@@ -3,17 +3,13 @@ import { motion } from 'motion/react';
 import { useLiteMotion } from '../hooks/useLiteMotion';
 import {
   Zap,
-  ClipboardList,
-  Check,
+  FileText,
   ChevronLeft,
+  ChevronRight,
+  ArrowRight,
   Sparkles,
   ShieldCheck,
-  Clock,
   FileCheck,
-  Truck,
-  Receipt,
-  CreditCard,
-  MessageSquare,
   GitBranch,
 } from 'lucide-react';
 
@@ -23,136 +19,48 @@ interface ProcessSelectionProps {
 }
 
 interface ProcessOption {
+  /** Internal id — the backend stores processType from this; display copy only
+   *  ever uses `label`. */
   id: 'express' | 'standard';
   label: string;
   icon: React.ElementType;
+  /** Kicker line shown beside the icon chip (rendered uppercase). */
+  kicker: string;
   description: string;
-  /** Compact copy for the 2-up mobile cards, where the full description is hidden. */
-  shortDescription: string;
-  benefits: string[];
-  steps: { label: string; icon: React.ElementType }[];
-  badge?: string;
-  estimate: string;
+  /** Journey steps shown as pill chips in the conveyor strip. */
+  steps: string[];
+  /** Loop duration — tuned per step count so both strips move at the same
+   *  visual pace. */
+  conveyorSeconds: number;
 }
 
 const PROCESS_OPTIONS: ProcessOption[] = [
   {
     id: 'express',
-    label: 'Express',
+    label: 'Quick buy',
     icon: Zap,
-    description:
-      'Fast-track your procurement for immediate needs. Ideal for urgent repairs or simple product orders.',
-    shortDescription: 'Quote, pay, done — fast turnaround.',
-    benefits: ['Real-time responses', 'One-click payments', 'Instant activation'],
-    steps: [
-      { label: 'Inquiry', icon: MessageSquare },
-      { label: 'Quotation', icon: Sparkles },
-      { label: 'Payment', icon: CreditCard },
-    ],
-    badge: 'Quick & Simple',
-    estimate: '30m – 2h',
+    kicker: 'Quick & simple',
+    description: 'Send an inquiry, get a quote, pay, and collect. The fastest way through.',
+    steps: ['Inquiry', 'Quotation', 'Pay', 'Collect'],
+    conveyorSeconds: 16,
   },
   {
     id: 'standard',
-    label: 'Standard',
-    icon: ClipboardList,
-    description:
-      'Full enterprise procurement workflow. Best for complex projects requiring formal approvals and documentation.',
-    shortDescription: 'Formal POs & tax-ready paperwork.',
-    benefits: ['Formal PO generation', 'Milestone tracking', 'Tax-ready invoicing'],
-    steps: [
-      { label: 'Inquiry', icon: MessageSquare },
-      { label: 'Quotation', icon: Sparkles },
-      { label: 'PO', icon: FileCheck },
-      { label: 'Confirmation', icon: ShieldCheck },
-      { label: 'Delivery', icon: Truck },
-      { label: 'Invoice', icon: Receipt },
-      { label: 'Payment', icon: CreditCard },
-    ],
-    badge: 'Enterprise Flow',
-    estimate: '1 – 3 Days',
+    label: 'Formal purchase',
+    icon: FileText,
+    kicker: 'For businesses',
+    description: 'Everything in Quick buy, plus official purchase orders and a tax invoice.',
+    steps: ['Inquiry', 'Quotation', 'Purchase order', 'Pay', 'Tax invoice'],
+    conveyorSeconds: 20,
   },
 ];
 
-const ProcessIllustration = ({ processId }: { processId: 'express' | 'standard' | null }) => {
-  if (!processId) {
-    return (
-      <div className="bg-[#f8fafc] rounded-2xl border border-dashed border-[#e2e8f0] p-5 text-center">
-        <p className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-[0.18em]">
-          Hover or select a workflow to preview the process
-        </p>
-      </div>
-    );
-  }
-
-  const option = PROCESS_OPTIONS.find((o) => o.id === processId)!;
-
-  return (
-    <div className="bg-white rounded-2xl border border-[#f1f5f9] p-5 shadow-sm shadow-[#1a1a2e]/[0.02]">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#C9973A]">
-            Live Preview
-          </p>
-          <span className="text-[#e2e8f0]">·</span>
-          <p className="text-[11px] font-bold text-[#1a1a2e]">{option.label} Workflow</p>
-        </div>
-        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#f8fafc] rounded-full">
-          <Clock className="w-3 h-3 text-[#94a3b8]" />
-          <span className="text-[9px] font-bold text-[#94a3b8] uppercase tracking-wider">
-            {option.estimate}
-          </span>
-        </div>
-      </div>
-
-      <div className="relative">
-        <div className="absolute top-5 left-2 right-2 h-0.5 bg-[#f1f5f9]" />
-        <motion.div
-          key={processId}
-          initial={{ scaleX: 0 }}
-          animate={{ scaleX: 1 }}
-          transition={{ duration: 0.6, ease: 'easeInOut' }}
-          className="absolute top-5 left-2 right-2 h-0.5 bg-gradient-to-r from-[#C9973A] to-[#1B3068] origin-left"
-        />
-
-        <div
-          className={`grid gap-2 relative ${
-            option.steps.length <= 3
-              ? 'grid-cols-3'
-              : 'grid-cols-4 sm:grid-cols-7'
-          }`}
-        >
-          {option.steps.map((step, idx) => (
-            <motion.div
-              key={step.label}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.08 }}
-              className="flex flex-col items-center text-center"
-            >
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-white border border-[#f1f5f9] shadow-sm relative z-10">
-                <step.icon className="w-4 h-4 text-[#C9973A]" strokeWidth={1.75} />
-              </div>
-              <p className="text-[8px] font-bold uppercase tracking-wider text-[#1a1a2e] mt-2 leading-tight">
-                {step.label}
-              </p>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 export default function ProcessSelection({ onBack, onComplete }: ProcessSelectionProps) {
   const [selectedProcess, setSelectedProcess] = useState<'express' | 'standard' | null>(null);
-  const [hoveredProcess, setHoveredProcess] = useState<'express' | 'standard' | null>(null);
   // Android-GPU ghosting guard (see useLiteMotion.ts): on touch devices drop
-  // the transform-based hover lift and layoutId FLIP projection.
+  // the transform-based hover lift.
   const lite = useLiteMotion();
   const hasProceededRef = useRef(false);
-
-  const activeProcess = hoveredProcess || selectedProcess;
 
   // Below lg (1024px) the Continue footer is hidden, so a tap must both select
   // and advance in one gesture. Breakpoint is resolved at click time (mirrors
@@ -168,10 +76,30 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
     }
   };
 
+  const selectedOption = selectedProcess
+    ? PROCESS_OPTIONS.find((o) => o.id === selectedProcess)
+    : null;
+  const SelectedIcon = selectedOption?.icon ?? GitBranch;
+
   return (
     <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto w-full min-h-screen bg-[#f5f2ed]">
+      {/* Conveyor strip: plain CSS keyframes (no framer-motion transforms — see
+          android-gpu-ghosting skill). Pauses on card hover; under OS
+          reduced-motion it degrades to a static wrapped row with the duplicate
+          copy and the edge mask removed. */}
+      <style>{`
+        @keyframes tonse-conveyor-slide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        .tonse-conveyor { animation: tonse-conveyor-slide 16s linear infinite; }
+        .tonse-card:hover .tonse-conveyor { animation-play-state: paused; }
+        @media (prefers-reduced-motion: reduce) {
+          .tonse-conveyor { animation: none; flex-wrap: wrap; }
+          .tonse-conveyor-dup { display: none; }
+          .tonse-conveyor-wrap { mask-image: none; -webkit-mask-image: none; }
+        }
+      `}</style>
+
       {/* Mobile-only sticky header */}
-      <div className="lg:hidden sticky top-0 z-30 px-4 pt-4 pb-5 bg-[#f5f2ed]">
+      <div className="lg:hidden sticky top-0 z-30 px-4 pt-4 pb-4 bg-[#f5f2ed]">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
@@ -181,13 +109,17 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
             <ChevronLeft className="w-5 h-5 text-[#1a1a2e]" />
           </button>
           <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">
-            STEP 04 / WORKFLOW
+            STEP 04 / HOW TO BUY
           </p>
         </div>
         <div className="mt-2">
           <h1 className="font-serif text-[22px] font-bold text-[#1a1a2e] leading-tight">
             Procurement Path
           </h1>
+          <p className="mt-1 text-[12px] text-[#1a1a2e]/60 font-medium leading-snug">
+            Pick how you want to buy. You can switch anytime before you pay.
+          </p>
+          <div className="h-px bg-gradient-to-r from-[#C9973A] to-transparent mt-3" />
         </div>
       </div>
 
@@ -209,13 +141,13 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
                   <GitBranch className="w-7 h-7" />
                 </div>
                 <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#C9973A]">
-                  Step 04 / Workflow
+                  Step 04 / How to Buy
                 </p>
                 <h1 className="font-serif text-[28px] lg:text-[32px] font-bold text-[#1a1a2e] leading-[1.1]">
                   Choose Your <span className="text-[#C9973A]">Procurement</span> Path
                 </h1>
                 <p className="text-[13px] text-[#1a1a2e]/60 leading-relaxed font-medium">
-                  From lightning-fast individual requests to comprehensive enterprise workflows, select the process that aligns with your needs.
+                  Pick how you want to buy. You can switch anytime before you pay.
                 </p>
               </div>
             </div>
@@ -239,13 +171,13 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
                 <li className="flex items-start gap-2.5">
                   <Zap className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
                   <p className="text-[12px] text-[#1a1a2e]/75 leading-relaxed">
-                    <span className="font-bold text-[#1a1a2e]">Express</span> skips paperwork — quote, pay, done. Best for urgent or low-value buys.
+                    <span className="font-bold text-[#1a1a2e]">Quick buy</span> skips paperwork — quote, pay, done. Best for urgent or low-value buys.
                   </p>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <FileCheck className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
                   <p className="text-[12px] text-[#1a1a2e]/75 leading-relaxed">
-                    <span className="font-bold text-[#1a1a2e]">Standard</span> generates POs, delivery notes and invoices for tax-ready records.
+                    <span className="font-bold text-[#1a1a2e]">Formal purchase</span> adds official purchase orders and a tax invoice for company records.
                   </p>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -261,9 +193,9 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
           {/* Right content */}
           <div className="flex-1 w-full min-w-0">
             <div className="bg-white border border-[#e8e4dc] rounded-[32px] p-3 lg:p-7 xl:p-8 shadow-sm shadow-[#1a1a2e]/[0.02]">
-              {/* Options grid — 2-up at every width; density, not column count,
-                  is what changes across breakpoints */}
-              <div className="grid grid-cols-2 gap-2.5 lg:gap-5">
+              {/* Option cards — the card IS the button; on mobile a tap
+                  proceeds immediately, on desktop selection arms Continue */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 lg:gap-5">
                 {PROCESS_OPTIONS.map((option) => {
                   const isSelected = selectedProcess === option.id;
                   const Icon = option.icon;
@@ -272,89 +204,85 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
                     <motion.button
                       key={option.id}
                       type="button"
-                      onMouseEnter={() => setHoveredProcess(option.id)}
-                      onMouseLeave={() => setHoveredProcess(null)}
                       onClick={() => handleSelect(option.id)}
                       {...(lite ? {} : { whileHover: { y: -3 } })}
-                      className={`group relative text-left p-3 lg:p-6 rounded-[24px] border-2 cursor-pointer transition-all duration-300 ${
+                      className={`tonse-card group relative text-left p-4 lg:p-6 rounded-[24px] border-2 cursor-pointer transition-all duration-300 active:scale-[0.99] ${
                         isSelected
                           ? 'border-[#C9973A] bg-[#FBF8F0] shadow-[0_8px_28px_-14px_rgba(201,151,58,0.45)]'
                           : 'border-[#e8e4dc] bg-white hover:border-[#E9D5B0]'
                       }`}
                     >
-                      <div className="flex flex-col h-full">
-                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-1.5 lg:gap-0 mb-2 lg:mb-4">
-                          <div
-                            className={`w-9 h-9 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${
-                              isSelected
-                                ? 'bg-[#C9973A] text-white'
-                                : 'bg-[#f8fafc] text-[#94a3b8] group-hover:bg-[#FAF5EB] group-hover:text-[#C9973A]'
-                            }`}
-                          >
-                            <Icon className="w-4 h-4 lg:w-6 lg:h-6" strokeWidth={1.75} />
-                          </div>
-                          {option.badge && (
-                            <span
-                              className={`self-start text-[8px] lg:text-[9px] font-black uppercase tracking-normal lg:tracking-[0.18em] px-2 py-1 lg:px-2.5 lg:py-1.5 rounded-lg truncate max-w-full ${
-                                isSelected
-                                  ? 'bg-[#C9973A] text-white'
-                                  : 'bg-[#f8fafc] text-[#94a3b8]'
+                      {/* Icon chip · kicker · arrow (the selection cue: gold → navy) */}
+                      <div className="flex items-center gap-2.5 mb-3">
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                            option.id === 'express'
+                              ? 'bg-[#C9973A] text-white'
+                              : 'bg-white border border-[#C9973A] text-[#C9973A]'
+                          }`}
+                        >
+                          <Icon className="w-4 h-4" strokeWidth={2} />
+                        </div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#C9973A] truncate">
+                          {option.kicker}
+                        </p>
+                        <div
+                          className={`ml-auto w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-white transition-colors duration-300 ${
+                            isSelected ? 'bg-[#1B3068]' : 'bg-[#C9973A]'
+                          }`}
+                        >
+                          <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
+                        </div>
+                      </div>
+
+                      <h3 className="font-serif text-[19px] lg:text-[20px] font-bold text-[#1a1a2e] mb-1.5">
+                        {option.label}
+                      </h3>
+
+                      <p className="text-[12px] lg:text-[13px] text-[#1a1a2e]/60 font-medium leading-relaxed">
+                        {option.description}
+                      </p>
+
+                      {/* Step conveyor — a slow looping train of the journey.
+                          Two identical copies make the -50% translate seamless;
+                          the second is aria-hidden and dropped under
+                          reduced-motion. */}
+                      <div className="tonse-conveyor-wrap relative mt-3.5 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_12%,black_88%,transparent)] [-webkit-mask-image:linear-gradient(to_right,transparent,black_12%,black_88%,transparent)]">
+                        <div
+                          className="tonse-conveyor flex w-max items-center"
+                          style={{ animationDuration: `${option.conveyorSeconds}s` }}
+                        >
+                          {[0, 1].map((copy) => (
+                            <div
+                              key={copy}
+                              aria-hidden={copy === 1}
+                              className={`flex items-center gap-1.5 pr-1.5 ${
+                                copy === 1 ? 'tonse-conveyor-dup' : ''
                               }`}
                             >
-                              {option.badge}
-                            </span>
-                          )}
-                        </div>
-
-                        <h3 className="text-[13px] lg:text-[20px] font-serif font-bold text-[#1a1a2e] mb-1 lg:mb-2">
-                          {option.label} Workflow
-                        </h3>
-
-                        <p className="hidden lg:block text-[12px] text-[#1a1a2e]/60 font-medium leading-relaxed mb-4">
-                          {option.description}
-                        </p>
-                        <p className="lg:hidden text-[9px] text-[#1a1a2e]/60 font-medium leading-snug line-clamp-2">
-                          {option.shortDescription}
-                        </p>
-
-                        <div className="hidden lg:block space-y-2 mt-auto">
-                          {option.benefits.map((benefit, i) => (
-                            <div key={i} className="flex items-center gap-2.5">
-                              <div
-                                className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 ${
-                                  isSelected
-                                    ? 'bg-emerald-500 text-white'
-                                    : 'bg-[#f1f5f9] text-[#94a3b8]'
-                                }`}
-                              >
-                                <Check className="w-2.5 h-2.5" strokeWidth={3} />
-                              </div>
-                              <span className="text-[10px] font-bold text-[#1a1a2e]/70 uppercase tracking-wider">
-                                {benefit}
-                              </span>
+                              {option.steps.map((step) => (
+                                <React.Fragment key={step}>
+                                  <span className="px-2.5 py-1 rounded-full bg-white border border-[#e8e4dc] text-[10px] font-bold text-[#1a1a2e] whitespace-nowrap shadow-sm">
+                                    {step}
+                                  </span>
+                                  <ChevronRight className="w-3 h-3 text-[#C9973A] shrink-0" />
+                                </React.Fragment>
+                              ))}
                             </div>
                           ))}
                         </div>
                       </div>
-
-                      {isSelected && (
-                        <motion.div
-                          layoutId={lite ? undefined : 'selectedIndicator'}
-                          className="absolute -top-2 -right-2 w-8 h-8 bg-[#C9973A] rounded-xl flex items-center justify-center shadow-[0_8px_16px_-4px_rgba(201,151,58,0.4)] rotate-12"
-                        >
-                          <Check className="w-4 h-4 text-white" strokeWidth={3} />
-                        </motion.div>
-                      )}
                     </motion.button>
                   );
                 })}
               </div>
 
-              {/* Compact illustration — desktop-only; hover has no meaning on
-                  touch and mobile taps navigate away immediately */}
-              <div className="hidden lg:block mt-5">
-                <ProcessIllustration processId={activeProcess} />
-              </div>
+              {/* Plain-language nudge — mobile only; desktop has the footer */}
+              <p className="lg:hidden mt-4 px-2 text-center text-[11px] text-[#1a1a2e]/60 font-medium leading-relaxed">
+                Tap a path to continue. Not sure?{' '}
+                <span className="font-bold text-[#1a1a2e]">Quick buy</span> covers most orders — pick{' '}
+                <span className="font-bold text-[#1a1a2e]">Formal purchase</span> if you need company or tax paperwork.
+              </p>
 
               {/* Footer — desktop-only; below lg a tap on a card proceeds
                   directly and Back lives in the sticky mobile header */}
@@ -367,22 +295,14 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
                         : 'bg-[#f1f5f9] text-[#94a3b8]'
                     }`}
                   >
-                    {selectedProcess === 'express' ? (
-                      <Zap className="w-5 h-5" />
-                    ) : selectedProcess === 'standard' ? (
-                      <ClipboardList className="w-5 h-5" />
-                    ) : (
-                      <GitBranch className="w-5 h-5" />
-                    )}
+                    <SelectedIcon className="w-5 h-5" />
                   </div>
                   <div className="min-w-0">
                     <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#94a3b8] mb-0.5">
                       Selection
                     </p>
                     <p className="text-[14px] font-serif font-bold text-[#1a1a2e] truncate">
-                      {selectedProcess
-                        ? `${selectedProcess.charAt(0).toUpperCase() + selectedProcess.slice(1)} Workflow`
-                        : 'Awaiting selection'}
+                      {selectedOption ? selectedOption.label : 'Awaiting selection'}
                     </p>
                   </div>
                 </div>
