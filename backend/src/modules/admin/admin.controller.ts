@@ -137,6 +137,11 @@ export class AdminController {
     return this.adminManagerService.update(req.user.id, id, dto);
   }
 
+  @Post('managers/:id/reset-password')
+  async resetManagerPassword(@Request() req: any, @Param('id') id: string) {
+    return this.adminManagerService.resetPassword(req.user.id, id);
+  }
+
   @Delete('managers/:id')
   async removeManager(@Request() req: any, @Param('id') id: string) {
     return this.adminManagerService.remove(req.user.id, id);

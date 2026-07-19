@@ -452,6 +452,16 @@ export const adminService = {
     return res.data ?? null;
   },
 
+  /** New temporary password — returned ONCE; the old password stops working immediately. */
+  async resetManagerPassword(
+    id: string
+  ): Promise<{ user: AdminManagerUser; generatedPassword: string } | null> {
+    const res = await apiClient.post<{ user: AdminManagerUser; generatedPassword: string }>(
+      `/admin/managers/${id}/reset-password`
+    );
+    return res.data ?? null;
+  },
+
   async deleteManager(id: string): Promise<{ success: boolean } | null> {
     const res = await apiClient.delete<{ success: boolean }>(`/admin/managers/${id}`);
     return res.data ?? null;

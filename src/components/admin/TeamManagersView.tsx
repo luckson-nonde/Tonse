@@ -14,6 +14,7 @@ import {
   Copy,
   Check,
   KeyRound,
+  Share2,
   Trash2,
 } from 'lucide-react';
 import { adminService, AdminManagerUser } from '../../services/api/adminService';
@@ -48,6 +49,8 @@ export default function TeamManagersView() {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<AdminManagerUser | null>(null);
   const [deleting, setDeleting] = useState<AdminManagerUser | null>(null);
+  const [resetting, setResetting] = useState<AdminManagerUser | null>(null);
+  const [resetCreds, setResetCreds] = useState<{ email: string; password: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -73,6 +76,23 @@ export default function TeamManagersView() {
       await load();
     } catch (e: any) {
       setError(e?.message || 'Failed to update account');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const confirmReset = async () => {
+    const target = resetting;
+    if (!target) return;
+    setBusyId(target.id);
+    try {
+      const res = await adminService.resetManagerPassword(target.id);
+      if (res?.generatedPassword) {
+        setResetCreds({ email: target.email || target.displayId || '', password: res.generatedPassword });
+      }
+      await load();
+    } catch (e: any) {
+      setError(e?.message || 'Failed to reset the password');
     } finally {
       setBusyId(null);
     }
@@ -202,6 +222,15 @@ export default function TeamManagersView() {
                           Edit access
                         </button>
                         <button
+                          onClick={() => setResetting(m)}
+                          disabled={busyId === m.id}
+                          className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-500 border border-slate-200 hover:border-[#C9973A]/40 hover:text-[#1a1a2e] transition-all disabled:opacity-50 flex items-center gap-1.5"
+                          title="Generate a new one-time password"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                          Reset password
+                        </button>
+                        <button
                           onClick={() => toggleActive(m)}
                           disabled={busyId === m.id}
                           className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-500 border border-slate-200 hover:border-[#C9973A]/40 hover:text-[#1a1a2e] transition-all disabled:opacity-50"
@@ -251,6 +280,23 @@ export default function TeamManagersView() {
         confirmText="Remove account"
         variant="danger"
       />
+      <ConfirmModal
+        isOpen={!!resetting}
+        onClose={() => setResetting(null)}
+        onConfirm={confirmReset}
+        title="Reset password?"
+        message={`The current password for ${resetting?.name || 'this account'} stops working immediately. You'll get a new one-time password to copy or share.`}
+        confirmText="Reset password"
+        variant="warning"
+      />
+      {resetCreds && (
+        <CredentialsModal
+          title="New password ready"
+          email={resetCreds.email}
+          password={resetCreds.password}
+          onClose={() => setResetCreds(null)}
+        />
+      )}
     </>
   );
 }
@@ -275,7 +321,6 @@ function CreateManagerModal({
   // Returned exactly once by the API — shown here, never retrievable again.
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
   const [createdEmail, setCreatedEmail] = useState('');
-  const [copied, setCopied] = useState(false);
 
   const togglePermission = (code: string) =>
     setPermissions((prev) =>
@@ -315,67 +360,29 @@ function CreateManagerModal({
     }
   };
 
-  const copyCredentials = async () => {
-    try {
-      await navigator.clipboard.writeText(
-        `Tonse Admin Console\nEmail: ${createdEmail}\nTemporary password: ${generatedPassword}\n(You'll be asked to set a new password at first login.)`
-      );
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard unavailable — the panel stays on screen to copy by hand */
-    }
-  };
+  if (generatedPassword) {
+    return (
+      <CredentialsModal
+        title="Account created"
+        email={createdEmail}
+        password={generatedPassword}
+        onClose={onClose}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-9999 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={generatedPassword ? undefined : onClose} />
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-serif text-[20px] font-black text-[#1a1a2e]">
-            {generatedPassword ? 'Account created' : 'New User Manager'}
-          </h3>
-          {!generatedPassword && (
-            <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100">
-              <X className="w-4.5 h-4.5" />
-            </button>
-          )}
+          <h3 className="font-serif text-[20px] font-black text-[#1a1a2e]">New User Manager</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100">
+            <X className="w-4.5 h-4.5" />
+          </button>
         </div>
 
-        {generatedPassword ? (
-          <div className="p-6 space-y-4">
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-[#fdf6e9] border border-[#ecd9b3]">
-              <KeyRound className="w-5 h-5 text-[#b07f24] shrink-0 mt-0.5" />
-              <div className="min-w-0">
-                <p className="text-[13px] font-bold text-[#8a6118]">
-                  One-time password — copy it now
-                </p>
-                <p className="text-[12px] text-[#a3782a] mt-0.5 leading-snug">
-                  It is never shown again. {createdEmail} must change it at first sign-in.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-mono text-[16px] font-bold text-[#1a1a2e] tracking-wider text-center select-all">
-                {generatedPassword}
-              </code>
-              <button
-                onClick={copyCredentials}
-                className="px-4 py-3 bg-[#C9973A] text-white rounded-xl text-[12px] font-black uppercase tracking-wider hover:bg-[#b3852f] transition-all flex items-center gap-2"
-              >
-                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                {copied ? 'Copied' : 'Copy'}
-              </button>
-            </div>
-            <button
-              onClick={onClose}
-              className="w-full py-3 rounded-xl border border-slate-200 text-[12px] font-bold text-slate-500 hover:text-[#1a1a2e] hover:border-[#C9973A]/40 transition-all"
-            >
-              Done — I've saved the password
-            </button>
-          </div>
-        ) : (
-          <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4">
             <Field label="Full name" value={name} onChange={setName} placeholder="e.g. Chanda Mwila" />
             <Field label="Email" value={email} onChange={setEmail} placeholder="name@example.com" type="email" />
             <Field label="Phone (optional)" value={phone} onChange={setPhone} placeholder="+260…" />
@@ -419,8 +426,121 @@ function CreateManagerModal({
               {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
               Create account
             </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One-time credentials modal — shown after account creation and after a
+ * password reset. Copy puts ONLY the password on the clipboard (what the
+ * label promises); Share hands the full sign-in details (console link,
+ * email, temporary password) to the native share sheet, falling back to
+ * copying those details where sharing isn't available.
+ */
+function CredentialsModal({
+  title,
+  email,
+  password,
+  onClose,
+}: {
+  title: string;
+  email: string;
+  password: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [sharedCopied, setSharedCopied] = useState(false);
+
+  const details = [
+    'Tonse Admin Console',
+    `Sign in: ${window.location.origin}/login`,
+    `Email: ${email}`,
+    `Temporary password: ${password}`,
+    "(You'll be asked to set a new password at first login.)",
+  ].join('\n');
+
+  const copyPassword = async () => {
+    try {
+      await navigator.clipboard.writeText(password);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard unavailable — the password stays on screen to copy by hand */
+    }
+  };
+
+  const shareDetails = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Tonse Admin Console', text: details });
+        return;
+      } catch (e: any) {
+        if (e?.name === 'AbortError') return; // share sheet dismissed — not an error
+        /* share failed — fall through to the clipboard */
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(details);
+      setSharedCopied(true);
+      setTimeout(() => setSharedCopied(false), 2000);
+    } catch {
+      /* clipboard unavailable — details remain visible on screen */
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-9999 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+      <div className="relative bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100">
+          <h3 className="font-serif text-[20px] font-black text-[#1a1a2e]">{title}</h3>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-[#fdf6e9] border border-[#ecd9b3]">
+            <KeyRound className="w-5 h-5 text-[#b07f24] shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-[13px] font-bold text-[#8a6118]">
+                One-time password — save it now
+              </p>
+              <p className="text-[12px] text-[#a3782a] mt-0.5 leading-snug">
+                It is never shown again. {email} must change it at first sign-in.
+              </p>
+            </div>
           </div>
-        )}
+          <div className="flex items-center gap-2">
+            <code className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-mono text-[16px] font-bold text-[#1a1a2e] tracking-wider text-center select-all">
+              {password}
+            </code>
+            <button
+              onClick={copyPassword}
+              title="Copy the password only"
+              className="px-4 py-3 bg-[#C9973A] text-white rounded-xl text-[12px] font-black uppercase tracking-wider hover:bg-[#b3852f] transition-all flex items-center gap-2"
+            >
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <div>
+            <button
+              onClick={shareDetails}
+              className="w-full py-3 rounded-xl bg-[#fdf6e9] border border-[#ecd9b3] text-[12px] font-black uppercase tracking-wider text-[#8a6118] hover:bg-[#f8ecd5] transition-all flex items-center justify-center gap-2"
+            >
+              {sharedCopied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+              {sharedCopied ? 'Details copied — paste anywhere' : 'Share sign-in details'}
+            </button>
+            <p className="mt-1.5 text-[11px] text-slate-400 text-center leading-snug">
+              Sends the sign-in link, email and password together.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-full py-3 rounded-xl border border-slate-200 text-[12px] font-bold text-slate-500 hover:text-[#1a1a2e] hover:border-[#C9973A]/40 transition-all"
+          >
+            Done — I've saved the password
+          </button>
+        </div>
       </div>
     </div>
   );

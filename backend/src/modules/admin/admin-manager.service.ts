@@ -121,6 +121,27 @@ export class AdminManagerService {
     return this.usersService.flattenWithProfile(reloaded);
   }
 
+  async resetPassword(primaryAdminId: string, managerId: string) {
+    const primary = await this.requirePrimary(primaryAdminId);
+    const manager = await this.loadOwnedManager(primary.id, managerId);
+
+    const plainPassword = generatePassword();
+    manager.password = await bcrypt.hash(plainPassword, BCRYPT_SALT_ROUNDS);
+    manager.mustChangePassword = true;
+    await this.userRepository.save(manager);
+
+    const reloaded = await this.usersService.findById(managerId);
+    const flat = await this.usersService.flattenWithProfile(reloaded);
+
+    this.logger.log(
+      `admin-manager.reset-password: primary=${primary.id} manager=${managerId}`,
+    );
+
+    // Same one-time contract as create(): the plaintext is returned once,
+    // the old password stops working immediately.
+    return { user: flat, generatedPassword: plainPassword };
+  }
+
   async remove(primaryAdminId: string, managerId: string) {
     const primary = await this.requirePrimary(primaryAdminId);
     await this.loadOwnedManager(primary.id, managerId);
