@@ -143,10 +143,15 @@ export async function createInquiry(
  * system" leak. We now hit the explicit per-buyer endpoint, which
  * the backend gates on `buyerId === req.user.id`.
  */
-export async function fetchUserInquiries(userId: string): Promise<InquiryResponse[]> {
+export async function fetchUserInquiries(
+  userId: string,
+  opts?: { swr?: boolean }
+): Promise<InquiryResponse[]> {
   if (!userId) return [];
   try {
-    const response = await apiClient.get<any[]>(`/inquiries/buyer/${userId}`);
+    const response = await apiClient.get<any[]>(`/inquiries/buyer/${userId}`, {
+      swr: opts?.swr === true,
+    });
     const data = response.data;
     if (!Array.isArray(data)) return [];
     return data.map(normalizeInquiry);
@@ -159,10 +164,13 @@ export async function fetchUserInquiries(userId: string): Promise<InquiryRespons
 /**
  * Fetch all open inquiries (for providers viewing leads)
  */
-export async function fetchOpenInquiries(): Promise<InquiryResponse[]> {
+export async function fetchOpenInquiries(
+  opts?: { swr?: boolean }
+): Promise<InquiryResponse[]> {
   try {
     const response = await apiClient.get<{ data: any[]; total: number }>(
-      '/inquiries?status=OPEN'
+      '/inquiries?status=OPEN',
+      { swr: opts?.swr === true }
     );
 
     if (!response.data?.data) {
@@ -199,7 +207,7 @@ export async function fetchLeadsForMe(filters?: {
    * their value enforced server-side regardless of what's passed here.
    */
   variant?: string;
-}): Promise<InquiryResponse[]> {
+}, opts?: { swr?: boolean }): Promise<InquiryResponse[]> {
   try {
     const qs = new URLSearchParams();
     if (filters?.status) qs.set('status', filters.status);
@@ -214,7 +222,7 @@ export async function fetchLeadsForMe(filters?: {
       data: any[];
       total: number;
       matchedCategoryIds: string[];
-    }>(url);
+    }>(url, { swr: opts?.swr === true });
 
     if (!response.data?.data) {
       return [];

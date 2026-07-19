@@ -56,7 +56,7 @@ export async function fetchUserQuotes(filters?: {
   status?: string;
   page?: number;
   limit?: number;
-}): Promise<QuoteResponse[]> {
+}, opts?: { swr?: boolean }): Promise<QuoteResponse[]> {
   try {
     const params = new URLSearchParams();
     if (filters?.inquiryId) params.append('inquiryId', filters.inquiryId);
@@ -68,7 +68,9 @@ export async function fetchUserQuotes(filters?: {
     const queryString = params.toString();
     const url = `/quotes${queryString ? '?' + queryString : ''}`;
 
-    const response = await apiClient.get<{ data: any[]; total: number }>(url);
+    const response = await apiClient.get<{ data: any[]; total: number }>(url, {
+      swr: opts?.swr === true,
+    });
 
     if (!response.data?.data) {
       return [];

@@ -3,8 +3,16 @@
  * Fetches quotes sent by providers in response to buyer inquiries
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchUserQuotes, QuoteResponse } from '../services/api/quoteService';
+
+/** See useInquiries.ts — fired by apiCall's SWR background revalidation. */
+const DATA_REVALIDATED_EVENT = 'tonse:data-revalidated';
+
+function isQuotesRevalidation(e: Event): boolean {
+  const endpoint = (e as CustomEvent).detail?.endpoint;
+  return typeof endpoint === 'string' && endpoint.startsWith('/quotes');
+}
 
 /**
  * Cross-component refresh bus for quotes — mirror of the
@@ -29,7 +37,13 @@ export function useUserQuotes(userId?: string, refetch?: boolean) {
   const [error, setError] = useState<Error | null>(null);
   const [refetchTrigger, setRefetchTrigger] = useState(0);
 
-  const refresh = () => setRefetchTrigger((prev) => prev + 1);
+  // refresh() follows the caller's own mutation — its reload must hit the
+  // network, not the SWR cache (see useInquiries.ts for the full rationale).
+  const forceNextRef = useRef(false);
+  const refresh = () => {
+    forceNextRef.current = true;
+    setRefetchTrigger((prev) => prev + 1);
+  };
 
   useEffect(() => {
     if (!userId) {
@@ -38,11 +52,13 @@ export function useUserQuotes(userId?: string, refetch?: boolean) {
       return;
     }
 
-    const loadQuotes = async () => {
+    // force=false → stale-while-revalidate (instant cached paint, background
+    // refresh); force=true → live read that must prove a just-made change.
+    const loadQuotes = async (force = false) => {
       try {
         setLoading(true);
         setError(null);
-        const data = await fetchUserQuotes();
+        const data = await fetchUserQuotes(undefined, { swr: !force });
         setQuotes(data);
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to fetch quotes'));
@@ -52,17 +68,24 @@ export function useUserQuotes(userId?: string, refetch?: boolean) {
       }
     };
 
-    loadQuotes();
+    const initialForce = forceNextRef.current;
+    forceNextRef.current = false;
+    loadQuotes(initialForce);
 
     // Poll every 30 seconds so buyer sees new quotations without manual
     // refresh; the event bus below delivers the instant path when the SSE
     // stream reports a change.
-    const interval = setInterval(loadQuotes, 30000);
-    const onChanged = () => loadQuotes();
+    const interval = setInterval(() => loadQuotes(), 30000);
+    const onChanged = () => loadQuotes(true);
+    const onRevalidated = (e: Event) => {
+      if (isQuotesRevalidation(e)) loadQuotes();
+    };
     window.addEventListener(QUOTES_CHANGED_EVENT, onChanged);
+    window.addEventListener(DATA_REVALIDATED_EVENT, onRevalidated);
     return () => {
       clearInterval(interval);
       window.removeEventListener(QUOTES_CHANGED_EVENT, onChanged);
+      window.removeEventListener(DATA_REVALIDATED_EVENT, onRevalidated);
     };
   }, [userId, refetchTrigger]);
 
