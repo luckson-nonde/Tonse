@@ -3,6 +3,7 @@ import { authService } from './services/auth/authService';
 import { tokenManager } from './services/api/client';
 import { unsubscribePush } from './services/pushService';
 import { flushSessionConsents } from './services/api/consentService';
+import { drainQueue } from './services/offlineWriteQueue';
 import { SubRole, EntityType } from './types';
 import { generateVirtualAccount } from './utils/financeUtils';
 
@@ -282,6 +283,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         tokenManager.clearTokens();
       } finally {
         setIsLoading(false);
+        // Boot-time replay: if writes were queued in a previous (offline)
+        // session, attempt to flush them now that auth has hydrated. Guarded on
+        // a live token so a logged-out boot doesn't replay into 401s. drainQueue
+        // self-guards on connectivity + an in-flight lock.
+        if (tokenManager.getAccessToken()) void drainQueue();
       }
     };
 

@@ -4,7 +4,7 @@
  * Fetches quotes sent by providers in response to buyer inquiries
  */
 
-import { apiClient } from './client';
+import { apiClient, type QueueableOptions } from './client';
 import { robustParse } from '../../utils/jsonUtils';
 
 export interface QuoteResponse {
@@ -123,10 +123,11 @@ export async function getQuote(quoteId: string): Promise<QuoteResponse> {
  */
 export async function updateQuoteStatus(
   quoteId: string,
-  status: 'ACCEPTED' | 'REJECTED' | 'ARCHIVED' | 'PENDING' | 'PAID' | 'COMPLETED' | 'HANDED_OVER' | 'SUPERSEDED'
+  status: 'ACCEPTED' | 'REJECTED' | 'ARCHIVED' | 'PENDING' | 'PAID' | 'COMPLETED' | 'HANDED_OVER' | 'SUPERSEDED',
+  queueable?: QueueableOptions
 ): Promise<QuoteResponse> {
   try {
-    const response = await apiClient.patch<any>(`/quotes/${quoteId}/status`, { status });
+    const response = await apiClient.patch<any>(`/quotes/${quoteId}/status`, { status }, { queueable });
 
     if (!response.data) {
       throw new Error(response.message || 'Failed to update quote status');
@@ -181,9 +182,12 @@ export async function markQuoteAsRead(quoteId: string): Promise<QuoteResponse> {
 /**
  * Archive a quote
  */
-export async function archiveQuote(quoteId: string): Promise<QuoteResponse> {
+export async function archiveQuote(
+  quoteId: string,
+  queueable?: QueueableOptions
+): Promise<QuoteResponse> {
   try {
-    const response = await apiClient.patch<any>(`/quotes/${quoteId}/archive`, {});
+    const response = await apiClient.patch<any>(`/quotes/${quoteId}/archive`, {}, { queueable });
 
     if (!response.data) {
       throw new Error(response.message || 'Failed to archive quote');

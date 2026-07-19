@@ -3,6 +3,8 @@
  * Simple API calls using v1
  */
 
+import { enqueueWrite } from '../offlineWriteQueue';
+
 // Base for all API calls. `/api` (set via VITE_API_URL) keeps requests
 // same-origin so the Vite dev-server proxy can forward them to the NestJS
 // backend on :3001 — this is what lets the public Cloudflare tunnel reach
@@ -24,6 +26,27 @@ interface ApiResponse<T> {
   statusCode?: number;
   error?: string;
 }
+
+/**
+ * Opt-in marker that turns a mutation into a QUEUEABLE write: if it can't reach
+ * the server (offline, or the fetch throws mid-flight), it's persisted to the
+ * offline write queue and replayed automatically once connectivity returns,
+ * instead of failing outright. Only the few call sites that pass this get the
+ * behavior — every other mutation keeps failing fast exactly as before.
+ */
+export interface QueueableOptions {
+  /** Stable per-attempt key. Sent as `Idempotency-Key` on the LIVE attempt too
+   *  (not just replays), so a request that reached the server but whose response
+   *  was lost can't double-apply on retry. */
+  idempotencyKey: string;
+  /** Human label shown in OfflineBanner's "waiting to sync" list. */
+  label: string;
+  /** Fired on the window after a successful replay so existing hooks refetch. */
+  changedEvent?: 'tonse:inquiries-changed' | 'tonse:quotes-changed';
+}
+
+/** apiCall options: a normal RequestInit plus the optional queueable marker. */
+export type ApiCallOptions = RequestInit & { queueable?: QueueableOptions };
 
 interface TokenPair {
   accessToken: string;
@@ -127,9 +150,32 @@ const refreshAccessToken = async (): Promise<TokenPair> => {
 // Main request function with JWT
 export const apiCall = async <T = any>(
   endpoint: string,
-  options: RequestInit = {}
+  options: ApiCallOptions = {}
 ): Promise<ApiResponse<T>> => {
   let accessToken = tokenManager.getAccessToken();
+
+  // `queueable` is our own field, not a fetch() option — pull it out so the
+  // rest of the request builds from a clean RequestInit.
+  const { queueable, ...fetchInit } = options;
+
+  // Persist this write to the offline queue and signal the caller with a
+  // distinct `QueuedWrite` error, so its catch block can show "saved, will send
+  // later" instead of a hard failure. Only reachable when `queueable` is set.
+  const queueAndSignal = (methodUpper: string): never => {
+    enqueueWrite({
+      id: queueable!.idempotencyKey,
+      endpoint,
+      method: methodUpper as any,
+      body: typeof fetchInit.body === 'string' ? fetchInit.body : undefined,
+      label: queueable!.label,
+      changedEvent: queueable!.changedEvent,
+    });
+    const err = new Error(
+      "You're offline — saved. This will send automatically once you're back online."
+    );
+    err.name = 'QueuedWrite';
+    throw err;
+  };
 
   // Pre-auth flows (the registration wizard, role selection, login) legitimately
   // fire best-effort AUTHENTICATED calls before any session exists — onboarding
@@ -150,9 +196,11 @@ export const apiCall = async <T = any>(
   // Offline fail-fast for MUTATIONS: a write that can't reach the server is
   // not "pending", it's not happening — say so immediately and honestly
   // instead of a hung request + generic failure. GETs still proceed so the
-  // service worker / HTTP cache can answer them.
+  // service worker / HTTP cache can answer them. EXCEPTION: a `queueable` write
+  // is genuinely "pending" — persist it and signal QueuedWrite instead.
   const method = (options.method || 'GET').toUpperCase();
   if (typeof navigator !== 'undefined' && !navigator.onLine && method !== 'GET') {
+    if (queueable) queueAndSignal(method);
     throw new Error("You're offline — this needs a connection. Your change was not saved.");
   }
 
@@ -191,11 +239,30 @@ export const apiCall = async <T = any>(
   if (accessToken) {
     (headersInit as any).Authorization = `Bearer ${accessToken}`;
   }
+
+  // Idempotency-Key on the live attempt AND every replay: the server dedupes
+  // by this key, so a queued write that actually reached the server (but whose
+  // response we never saw) can't create a duplicate when it replays.
+  if (queueable) {
+    (headersInit as any)['Idempotency-Key'] = queueable.idempotencyKey;
+  }
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers: headersInit,
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...fetchInit,
+        headers: headersInit,
+      });
+    } catch (networkErr) {
+      // fetch() only throws on a genuine network failure (offline mid-request,
+      // DNS, dropped connection) — never on an HTTP error status. Tag it as
+      // NetworkError so the queue drainer and AuthContext can tell "unreachable"
+      // apart from a real rejection; queue it if this write opted in.
+      if (queueable && method !== 'GET') queueAndSignal(method);
+      const err = new Error("You're offline — couldn't reach the server.");
+      err.name = 'NetworkError';
+      throw err;
+    }
 
     // Handle 401 Unauthorized (token might be invalid).
     // Skip the bounce-to-login redirect when the failing call IS the auth
@@ -253,10 +320,10 @@ export const apiCall = async <T = any>(
 
 // Convenience methods
 export const apiClient = {
-  get: <T = any>(endpoint: string, options?: RequestInit) =>
+  get: <T = any>(endpoint: string, options?: ApiCallOptions) =>
     apiCall<T>(endpoint, { ...options, method: 'GET' }),
 
-  post: <T = any>(endpoint: string, body?: any, options?: RequestInit) =>
+  post: <T = any>(endpoint: string, body?: any, options?: ApiCallOptions) =>
     apiCall<T>(endpoint, {
       ...options,
       method: 'POST',
@@ -269,20 +336,20 @@ export const apiClient = {
           : undefined,
     }),
 
-  put: <T = any>(endpoint: string, body?: any, options?: RequestInit) =>
+  put: <T = any>(endpoint: string, body?: any, options?: ApiCallOptions) =>
     apiCall<T>(endpoint, {
       ...options,
       method: 'PUT',
       body: body ? JSON.stringify(body) : undefined,
     }),
 
-  patch: <T = any>(endpoint: string, body?: any, options?: RequestInit) =>
+  patch: <T = any>(endpoint: string, body?: any, options?: ApiCallOptions) =>
     apiCall<T>(endpoint, {
       ...options,
       method: 'PATCH',
       body: body ? JSON.stringify(body) : undefined,
     }),
 
-  delete: <T = any>(endpoint: string, options?: RequestInit) =>
+  delete: <T = any>(endpoint: string, options?: ApiCallOptions) =>
     apiCall<T>(endpoint, { ...options, method: 'DELETE' }),
 };

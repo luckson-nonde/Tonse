@@ -20,6 +20,8 @@ import {
   Hash,
 } from 'lucide-react';
 import { updateQuoteStatus, counterLoanOffer, confirmLoanDisbursement } from '../../services/api/quoteService';
+import { type QueueableOptions } from '../../services/api/client';
+import { newIdempotencyKey } from '../../services/offlineWriteQueue';
 import { useAuth } from '../../AuthContext';
 import { loanStageIndex } from '../../utils/loan';
 import SecureFile, { isSecureFileUrl } from '../SecureFile';
@@ -52,6 +54,7 @@ export default function LoanOfferDetail({ quote, onAction }: LoanOfferDetailProp
   const [busy, setBusy] = useState<'accept' | 'reject' | 'counter' | 'confirm' | null>(null);
   const [showCounter, setShowCounter] = useState(false);
   const [error, setError] = useState('');
+  const [queuedNotice, setQueuedNotice] = useState('');
   const [cAmount, setCAmount] = useState('');
   const [cRate, setCRate] = useState('');
   const [cTenure, setCTenure] = useState('');
@@ -160,18 +163,35 @@ export default function LoanOfferDetail({ quote, onAction }: LoanOfferDetailProp
   const act = async (kind: 'accept' | 'reject' | 'counter' | 'confirm', fn: () => Promise<any>) => {
     setBusy(kind);
     setError('');
+    setQueuedNotice('');
     try {
       await fn();
       onAction('loan_action_done', { status: kind });
     } catch (e: any) {
-      setError(e?.message || 'Action failed. Please try again.');
+      // Offline: the action is queued, not done. Show an honest "queued" notice
+      // and STAY on the offer — navigating away via onAction would imply it
+      // completed before the server has actually seen it.
+      if (e?.name === 'QueuedWrite') {
+        setQueuedNotice(
+          "You're offline — this will be submitted automatically once you're back online.",
+        );
+      } else {
+        setError(e?.message || 'Action failed. Please try again.');
+      }
     } finally {
       setBusy(null);
     }
   };
 
-  const accept = () => act('accept', () => updateQuoteStatus(String(quote.id), 'ACCEPTED'));
-  const reject = () => act('reject', () => updateQuoteStatus(String(quote.id), 'REJECTED'));
+  const queueOpts = (label: string): QueueableOptions => ({
+    idempotencyKey: newIdempotencyKey(),
+    label,
+    changedEvent: 'tonse:quotes-changed',
+  });
+  const accept = () =>
+    act('accept', () => updateQuoteStatus(String(quote.id), 'ACCEPTED', queueOpts('Accept loan offer')));
+  const reject = () =>
+    act('reject', () => updateQuoteStatus(String(quote.id), 'REJECTED', queueOpts('Reject loan offer')));
   const submitCounter = () =>
     act('counter', () =>
       counterLoanOffer(String(quote.id), {
@@ -436,6 +456,7 @@ export default function LoanOfferDetail({ quote, onAction }: LoanOfferDetailProp
                 )}
 
                 {error && <p className="text-rose-300 text-sm mt-3">{error}</p>}
+                {queuedNotice && <p className="text-amber-300 text-sm mt-3">{queuedNotice}</p>}
 
                 {!showCounter ? (
                   <div className="mt-5 space-y-2.5">

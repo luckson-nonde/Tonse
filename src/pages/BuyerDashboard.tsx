@@ -17,6 +17,7 @@ import { releaseReserveQuotes } from '../services/api/notificationService';
 import { markQuoteAsRead, archiveQuote, deleteQuote, updateQuoteStatus } from '../services/api/quoteService';
 import { createOrder, fetchBuyerOrders, type OrderRecord } from '../services/api/orderService';
 import { isActiveInquiry, isActiveQuote } from '../services/lifecycleFilters';
+import { newIdempotencyKey } from '../services/offlineWriteQueue';
 import { isLoanQuote } from '../utils/loan';
 import { ViewType, MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
@@ -412,12 +413,20 @@ export default function BuyerDashboard() {
       case 'archive_quote':
       case 'delete_quote_silent': // Silent version of delete that just archives
         if (payload?.id) {
-          // Archive quote via API
+          // Archive quote via API. Queueable: an offline dismiss is held and
+          // replayed on reconnect. The catch stays silent (as before) — a
+          // QueuedWrite just surfaces in the pending-sync pill.
           try {
-            await archiveQuote(payload.id);
+            await archiveQuote(payload.id, {
+              idempotencyKey: newIdempotencyKey(),
+              label: 'Dismiss quote',
+              changedEvent: 'tonse:quotes-changed',
+            });
             refreshQuotes();
           } catch (error) {
-            console.error('Failed to archive quote:', error);
+            if ((error as Error)?.name !== 'QueuedWrite') {
+              console.error('Failed to archive quote:', error);
+            }
           }
         }
         break;
@@ -464,11 +473,19 @@ export default function BuyerDashboard() {
         // offer ACCEPTED; the lender then proceeds off-platform / Phase-2.
         if ((quote as any).condition === 'LOAN') {
           try {
-            await updateQuoteStatus(String(quote.id), 'ACCEPTED');
+            await updateQuoteStatus(String(quote.id), 'ACCEPTED', {
+              idempotencyKey: newIdempotencyKey(),
+              label: 'Accept loan offer',
+              changedEvent: 'tonse:quotes-changed',
+            });
             refreshQuotes();
             refreshInquiries();
             handleTabChange('loan_offers');
           } catch (err: any) {
+            if (err?.name === 'QueuedWrite') {
+              alert("You're offline — this loan offer will be accepted automatically once you're back online.");
+              break;
+            }
             alert(err?.message || 'Failed to accept the loan offer. Please try again.');
           }
           break;
@@ -709,13 +726,25 @@ export default function BuyerDashboard() {
         }),
       };
 
-      await createInquiry(inquiryData);
+      await createInquiry(inquiryData, {
+        idempotencyKey: newIdempotencyKey(),
+        label: `Inquiry: ${inquiryData.title}`,
+        changedEvent: 'tonse:inquiries-changed',
+      });
       console.log('✅ Inquiry created after payment:', inquiryData.title, payment);
       refreshInquiries();
 
       setPendingInquiry({ items: [] });
       handleTabChange('inquiry-success');
     } catch (error) {
+      // Offline: the write is safely queued and will publish automatically once
+      // the connection returns — so this is a SUCCESS from the buyer's view, not
+      // the "contact support" dead end that a lost inquiry-after-payment used to be.
+      if ((error as Error)?.name === 'QueuedWrite') {
+        setPendingInquiry({ items: [] });
+        handleTabChange('inquiry-success');
+        return;
+      }
       console.error('Error creating inquiry:', error);
       alert('Payment cleared but the inquiry failed to publish. Please contact support.');
     } finally {

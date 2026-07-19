@@ -46,6 +46,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useLiveQuery } from '../hooks/useLiveQuery';
 import { useMatchedLeads } from '../hooks/useInquiries';
 import { db } from '../services/api/database';
+import { newIdempotencyKey } from '../services/offlineWriteQueue';
 import { collectionService } from '../services/api/collectionService';
 import {
   getCategorySchema,
@@ -788,7 +789,11 @@ export default function ProviderDashboard() {
         processType: submittedQuoteData.processType || 'STANDARD',
       };
 
-      const quoteId = await db.quotes.add(newQuote);
+      const quoteId = await db.quotes.add(newQuote, {
+        idempotencyKey: newIdempotencyKey(),
+        label: `Quote for ${lead.title || newQuote.inquiryTitle || 'inquiry'}`,
+        changedEvent: 'tonse:quotes-changed',
+      });
       setQuotesRefreshKey(k => k + 1);
       console.log('[Quote] saved with id:', quoteId);
 
@@ -807,6 +812,13 @@ export default function ProviderDashboard() {
       setQuoteSuccessModal({ title: lead.title || 'Inquiry', price: totalPrice, expiry: submittedQuoteData.expiryDuration || '1 Month' });
       handleTabClick('my-quotes');
     } catch (error) {
+      if ((error as Error)?.name === 'QueuedWrite') {
+        setQuotingInquiryId(null);
+        setItemPrices({});
+        alert("You're offline — this quote is saved and will send automatically once you're back online.");
+        handleTabClick('my-quotes');
+        return;
+      }
       console.error('[Quote] submit error:', error);
       alert(`Failed to submit quotation: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -1198,6 +1210,15 @@ export default function ProviderDashboard() {
         <DynamicAccountRenderer
           schema={currentSchema}
           view="audit-trail"
+          data={{}}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'reporting' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="reporting"
           data={{}}
           onAction={handleAction}
           onNavigate={handleTabClick}

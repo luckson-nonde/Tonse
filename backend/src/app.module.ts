@@ -37,7 +37,9 @@ import { LedgerModule } from './modules/ledger/ledger.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
 import { AuditContextInterceptor } from './common/audit/audit-context.interceptor';
+import { IdempotencyKey } from './modules/idempotency/entities/idempotency-key.entity';
 
 // Config
 import databaseConfig from './config/database.config';
@@ -101,6 +103,8 @@ import webpushConfig from './config/webpush.config';
     BillingModule,
     ConsentsModule,
     LedgerModule,
+    // The IdempotencyInterceptor (an APP_INTERCEPTOR below) needs this repo.
+    TypeOrmModule.forFeature([IdempotencyKey]),
   ],
   providers: [
     {
@@ -110,6 +114,15 @@ import webpushConfig from './config/webpush.config';
     {
       provide: APP_INTERCEPTOR,
       useClass: LoggingInterceptor,
+    },
+    // Exactly-once replay for opt-in mutations (offline write queue). A no-op
+    // unless the request carries an `Idempotency-Key` header. Registered before
+    // Transform/ClassSerializer so its stored + replayed response is the exact
+    // final envelope; before AuditContext because a cache-hit short-circuits and
+    // never needs the ambient audit context.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: IdempotencyInterceptor,
     },
     // Establishes the per-request audit actor context (who + IP + UA) so every
     // audit write is attributed automatically. Registered before Transform so

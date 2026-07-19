@@ -4,7 +4,7 @@
  * NOTE: All data is persisted in PostgreSQL backend only - NO IndexedDB
  */
 
-import { apiClient } from './client';
+import { apiClient, type QueueableOptions } from './client';
 import { robustParse } from '../../utils/jsonUtils';
 
 export interface CreateInquiryPayload {
@@ -113,9 +113,12 @@ function normalizeInquiry(inquiry: any): InquiryResponse {
 /**
  * Create a new inquiry via PostgreSQL backend
  */
-export async function createInquiry(payload: CreateInquiryPayload): Promise<InquiryResponse> {
+export async function createInquiry(
+  payload: CreateInquiryPayload,
+  queueable?: QueueableOptions
+): Promise<InquiryResponse> {
   try {
-    const response = await apiClient.post<any>('/inquiries', payload);
+    const response = await apiClient.post<any>('/inquiries', payload, { queueable });
 
     if (!response.data) {
       throw new Error(response.message || 'Failed to create inquiry');

@@ -3,7 +3,7 @@
  * Provides the same interface as the original database but communicates with the backend
  */
 
-import { apiClient } from './client';
+import { apiClient, type QueueableOptions } from './client';
 import { robustParse } from '../../utils/jsonUtils';
 import type {
   Inquiry,
@@ -62,7 +62,7 @@ function transformAuditLog(log: any): AuditLog {
 
 // Table interfaces that mirror Dexie operations
 interface ITable<T> {
-  add: (item: T | T[]) => Promise<number>;
+  add: (item: T | T[], queueable?: QueueableOptions) => Promise<number>;
   put: (item: T) => Promise<number>;
   get: (id: number | string) => Promise<T | undefined>;
   update: (id: number | string, changes: Partial<T>) => Promise<void>;
@@ -98,12 +98,14 @@ class Table<T> implements ITable<T> {
     return this.transform ? this.transform(item) : (item as T);
   }
 
-  async add(item: T | T[]): Promise<number> {
+  async add(item: T | T[], queueable?: QueueableOptions): Promise<number> {
     const items = Array.isArray(item) ? item : [item];
 
-    // For single item, POST directly to endpoint
+    // For single item, POST directly to endpoint. Only the single-item path is
+    // queueable (offline write queue) — a queued write is one logical action,
+    // and a shared idempotency key across a bulk insert would collapse them.
     if (items.length === 1) {
-      const response = await apiClient.post<any>(this.endpoint, items[0]);
+      const response = await apiClient.post<any>(this.endpoint, items[0], { queueable });
       return response.data?.id || response.data?._id || 0;
     }
 
