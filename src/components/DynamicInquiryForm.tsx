@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { API_BASE_URL } from '../services/api/client';
+import { API_BASE_URL, apiClient } from '../services/api/client';
 import { compressImage } from '../utils/compressImage';
 import {
   ChevronLeft,
@@ -171,25 +171,19 @@ export default function DynamicInquiryForm({
         const formData = new FormData();
         formData.append('file', compressed);
 
-        const response = await fetch(`${API_BASE_URL}/files/upload?category=${uploadCategory}`, {
-          method: 'POST',
-          body: formData,
-        });
+        // apiClient attaches the JWT (and refreshes it if expired) and throws a
+        // descriptive Error on any non-OK response — caught by the outer catch.
+        const response = await apiClient.post<{ url: string }>(
+          `/files/upload?category=${uploadCategory}`,
+          formData
+        );
 
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || 'Upload failed');
-        }
-
-        const data = await response.json();
-        console.log('Upload response:', data);
-
-        // TransformInterceptor wraps response in { statusCode, message, data }
-        const fileData = data.data || data;
-        const fileUrl = fileData.url;
+        // TransformInterceptor wraps the payload in { statusCode, message, data }
+        const fileData = response.data;
+        const fileUrl = fileData?.url;
 
         if (!fileUrl) {
-          throw new Error(`No URL in response: ${JSON.stringify(data)}`);
+          throw new Error(`No URL in response: ${JSON.stringify(response)}`);
         }
 
         // Convert relative URL to absolute URL

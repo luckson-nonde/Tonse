@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Landmark, Save, Loader2, CheckCircle2, Info, Paperclip, X } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
 import type { LoanTypeKey } from '../../utils/loan';
-import { API_BASE_URL } from '../../services/api/client';
+import { API_BASE_URL, apiClient } from '../../services/api/client';
 import SecureFile from '../SecureFile';
 
 /**
@@ -68,16 +68,13 @@ export default function LoanTermsEditor() {
   const uploadDoc = async (file: File): Promise<string> => {
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch(`${API_BASE_URL}/files/upload?category=loan-terms`, {
-      method: 'POST',
-      body: fd,
-    });
-    if (!res.ok) {
-      const e = await res.json().catch(() => ({}));
-      throw new Error(e.message || 'Upload failed');
-    }
-    const data = await res.json();
-    const url = (data.data || data)?.url;
+    // apiClient attaches the JWT (refreshing if expired) and throws a
+    // descriptive Error on any non-OK response.
+    const data = await apiClient.post<{ url: string }>(
+      `/files/upload?category=loan-terms`,
+      fd
+    );
+    const url = data.data?.url;
     if (!url) throw new Error('Upload returned no URL');
     return `${API_BASE_URL}${url}`;
   };

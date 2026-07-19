@@ -173,10 +173,14 @@ export const apiCall = async <T = any>(
     }
   }
 
-  // Build headers with JWT
-  const headersInit: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
+  // Build headers with JWT. For a FormData body, DON'T set Content-Type —
+  // the browser must set `multipart/form-data; boundary=...` itself, or the
+  // backend can't parse the upload. Only JSON bodies get the explicit header.
+  const isFormData =
+    typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const headersInit: HeadersInit = isFormData
+    ? {}
+    : { 'Content-Type': 'application/json' };
 
   if (typeof options.headers === 'object' && options.headers !== null) {
     Object.entries(options.headers).forEach(([key, value]) => {
@@ -256,7 +260,13 @@ export const apiClient = {
     apiCall<T>(endpoint, {
       ...options,
       method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
+      // Pass FormData straight through (uploads); JSON-encode everything else.
+      body:
+        typeof FormData !== 'undefined' && body instanceof FormData
+          ? body
+          : body
+          ? JSON.stringify(body)
+          : undefined,
     }),
 
   put: <T = any>(endpoint: string, body?: any, options?: RequestInit) =>
