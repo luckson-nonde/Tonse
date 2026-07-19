@@ -34,6 +34,7 @@ import {
   Landmark,
   Heart,
   LogOut,
+  Flag,
 } from 'lucide-react';
 import Logo from './Logo';
 import ConfirmModal from './ConfirmModal';
@@ -267,6 +268,7 @@ const iconMap: Record<string, any> = {
   List,
   Wallet,
   Landmark,
+  Flag,
 };
 
 interface DashboardLayoutProps {
@@ -1106,6 +1108,32 @@ export default function DashboardLayout({
                 );
               }
 
+              // Reporting renders as its own "Trust & Safety" card — the
+              // admin console's gold micro-label + rounded-xl language,
+              // ported to the light sidebar. Opaque hex borders on purpose:
+              // translucent borders on rounded cards mis-rasterize on
+              // Mali-GPU Android phones.
+              if (item.id === 'reporting') {
+                return (
+                  <div key={item.id} className="px-4 pt-5 mt-4 border-t border-[#f1f5f9]">
+                    <p className="px-2 pb-2 text-[9px] font-black uppercase tracking-[0.2em] text-[#C9973A]">
+                      Trust &amp; Safety
+                    </p>
+                    <button
+                      onClick={() => handleTabClick('reporting')}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-bold transition-all ${
+                        activeTab === 'reporting'
+                          ? 'bg-[#C9973A] text-white shadow-[0_8px_20px_-8px_rgba(201,151,58,0.45)]'
+                          : 'text-slate-500 bg-[#faf7f0] border border-[#ecd9b3] hover:bg-[#fdf6e9] hover:text-[#1a1a2e]'
+                      }`}
+                    >
+                      <Flag className="w-4 h-4 shrink-0" />
+                      <span>{getLabel(item.label, item.id)}</span>
+                    </button>
+                  </div>
+                );
+              }
+
               const Icon = iconMap[item.icon] || Home;
               // Single source of truth for sidebar badges — see
               // `badgeCounts` useMemo above. Items lacking an entry get
@@ -1562,13 +1590,21 @@ export default function DashboardLayout({
                   )}
                   {notifItems.map((n) => {
                     const icon =
-                      n.type === 'NEW_LEAD' ? '📣' : n.type === 'RESERVE_RELEASED' ? '✅' : '💬';
+                      n.type === 'NEW_LEAD'
+                        ? '📣'
+                        : n.type === 'RESERVE_RELEASED'
+                          ? '✅'
+                          : n.type === 'REPORT_FILED'
+                            ? '🚩'
+                            : '💬';
                     const heading =
                       n.type === 'NEW_LEAD'
                         ? 'New Request'
                         : n.type === 'RESERVE_RELEASED'
                           ? 'Reserve Quote Released'
-                          : 'Quote Received';
+                          : n.type === 'REPORT_FILED'
+                            ? 'Report Submitted'
+                            : 'Quote Received';
                     const ageMs = Date.now() - new Date(n.createdAt).getTime();
                     const age =
                       ageMs < 60_000

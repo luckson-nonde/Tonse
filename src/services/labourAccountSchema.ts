@@ -1,4 +1,5 @@
 import { MasterAccountSchema } from './accountSchemaTypes';
+import { REPORTING_NAV_ITEM, REPORTING_VIEW } from './reportingNavFragment';
 
 export const MASTER_LABOUR_ACCOUNT_SCHEMA: MasterAccountSchema = {
   schemaType: 'LABOUR',
@@ -9,6 +10,7 @@ export const MASTER_LABOUR_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'schedule', label: 'My Schedule', icon: 'Calendar' },
     { id: 'financial', label: 'Financial', icon: 'Wallet' },
     { id: 'profile', label: 'My Profile', icon: 'User' },
+    REPORTING_NAV_ITEM,
   ],
   views: {
     dashboard: {
@@ -49,6 +51,7 @@ export const MASTER_LABOUR_ACCOUNT_SCHEMA: MasterAccountSchema = {
       title: 'My Profile',
       subtitle: 'Manage your skills, rates and availability',
       componentType: 'profile_renderer'
-    }
+    },
+    reporting: REPORTING_VIEW,
   }
 };

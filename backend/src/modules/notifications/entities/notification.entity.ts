@@ -22,6 +22,9 @@ import { User } from '../../users/entities/user.entity';
  *   MILESTONE_UNLOCKED→ promoter: a referral milestone crossed its threshold
  *                       and equity shares were awarded (must survive the
  *                       promoter being offline → durable + catch-up replay).
+ *   REPORT_FILED      → reporter: confirmation their complaint was filed.
+ *   REPORT_RECEIVED   → admins (primary + ADMIN_REPORTS managers): a new
+ *                       complaint is awaiting review.
  *
  * Ephemeral counter events (QUOTE_COUNT_UPDATE, LEAD_FULL, PROVIDER_ACCEPTED,
  * REFERRAL_PROGRESS, MILESTONE_UPDATED) are push-only — never persisted;
@@ -44,7 +47,14 @@ export class Notification {
 
   @Column({
     type: 'enum',
-    enum: ['NEW_LEAD', 'QUOTE_RECEIVED', 'RESERVE_RELEASED', 'MILESTONE_UNLOCKED'],
+    enum: [
+      'NEW_LEAD',
+      'QUOTE_RECEIVED',
+      'RESERVE_RELEASED',
+      'MILESTONE_UNLOCKED',
+      'REPORT_FILED',
+      'REPORT_RECEIVED',
+    ],
   })
   type: string;
 

@@ -60,7 +60,8 @@ export interface ViewDefinition {
     | 'labour_home'
     | 'labour_jobs'
     | 'labour_quotes'
-    | 'labour_schedule';
+    | 'labour_schedule'
+    | 'report_manager';
   dataKey?: string;
   permissions?: string[];
   roleFilter?: string[];

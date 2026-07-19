@@ -1,5 +1,6 @@
 import { PERMISSIONS } from '../utils/rbac';
 import { MasterAccountSchema } from './accountSchemaTypes';
+import { REPORTING_NAV_ITEM, REPORTING_VIEW } from './reportingNavFragment';
 
 export const MASTER_SUPPLIER_ACCOUNT_SCHEMA: MasterAccountSchema = {
   schemaType: 'PROVIDER', // Suppliers are a type of provider
@@ -30,6 +31,7 @@ export const MASTER_SUPPLIER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'team', label: 'Operations Team', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },
     { id: 'financial', label: 'Settlements', icon: 'Wallet' },
     { id: 'audit-trail', label: 'Supply Audit', icon: 'History', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
+    REPORTING_NAV_ITEM,
   ],
   views: {
     home: {
@@ -87,6 +89,7 @@ export const MASTER_SUPPLIER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       title: "Financial Settlements",
       subtitle: "Manage your virtual wallet and supply transaction security",
       componentType: 'financial_renderer'
-    }
+    },
+    reporting: REPORTING_VIEW,
   }
 };

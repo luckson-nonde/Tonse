@@ -6,9 +6,10 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { UserReport } from './entities/user-report.entity';
 import { UsersService } from '../users/users.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateReportDto } from './dto/create-report.dto';
 import { ResolveReportDto } from './dto/resolve-report.dto';
 
@@ -20,6 +21,7 @@ export class ReportsService {
     @InjectRepository(UserReport)
     private readonly reportRepository: Repository<UserReport>,
     private readonly usersService: UsersService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(reporterId: string, dto: CreateReportDto): Promise<UserReport> {
@@ -30,13 +32,17 @@ export class ReportsService {
     if (!target) {
       throw new NotFoundException('Reported user not found');
     }
-    // One OPEN report per (reporter, target) pair — a resubmit while the
-    // first is still unreviewed is a double-click or spam, not new signal.
+    // One OPEN report per (reporter, target) pair PER CONTEXT — a resubmit
+    // for the same transaction while the first is still unreviewed is a
+    // double-click or spam, not new signal; a different transaction with the
+    // same counterparty is genuinely new signal. No-context reports (shop
+    // profile) keep the old one-per-pair rule via the IS NULL match.
     const existingOpen = await this.reportRepository.findOne({
       where: {
         reporterId,
         reportedUserId: dto.reportedUserId,
         status: 'OPEN',
+        contextId: dto.contextId ?? IsNull(),
       },
     });
     if (existingOpen) {
@@ -58,7 +64,52 @@ export class ReportsService {
     this.logger.log(
       `report.create: ${reporterId} reported ${dto.reportedUserId} (${dto.category}) → ${saved.id}`,
     );
+
+    // Best-effort: the report row is the source of truth; a notification
+    // hiccup must never fail the filing itself.
+    try {
+      await this.dispatchReportNotifications(saved, reporterId);
+    } catch (e: any) {
+      this.logger.warn(`report.create: notification dispatch failed: ${e?.message}`);
+    }
+
     return saved;
+  }
+
+  /**
+   * Reporter gets a confirmation (routed to their Report Manager tab);
+   * the primary admin + every active User Manager holding ADMIN_REPORTS
+   * gets the new-report alert (routed to the admin console).
+   */
+  private async dispatchReportNotifications(
+    report: UserReport,
+    reporterId: string,
+  ): Promise<void> {
+    const identity = await this.usersService.resolveDisplayIdentities([
+      reporterId,
+      report.reportedUserId,
+    ]);
+    const reporter = identity.get(reporterId);
+    const reported = identity.get(report.reportedUserId);
+    const reporterRoute =
+      reporter?.role === 'BUYER' ? '/buyer/reporting' : '/provider/reporting';
+
+    await this.notificationsService.notifyUsers([reporterId], 'REPORT_FILED', () => ({
+      title: `Report submitted against ${reported?.name ?? 'the other party'} — our team will review it.`,
+      data: { reportId: report.id, category: report.category },
+      route: reporterRoute,
+    }));
+
+    const adminIds = await this.usersService.findReportAdminRecipients();
+    await this.notificationsService.notifyUsers(adminIds, 'REPORT_RECEIVED', () => ({
+      title: `New report: ${reporter?.name ?? 'A user'} reported ${reported?.name ?? 'a user'}`,
+      data: {
+        reportId: report.id,
+        category: report.category,
+        ...(report.contextType ? { contextType: report.contextType } : {}),
+      },
+      route: '/admin',
+    }));
   }
 
   /**
@@ -93,7 +144,7 @@ export class ReportsService {
     const userIds = Array.from(
       new Set(rows.flatMap((r) => [r.reporterId, r.reportedUserId]).filter(Boolean)),
     );
-    const identity = await this.resolveIdentities(userIds);
+    const identity = await this.usersService.resolveDisplayIdentities(userIds);
     const data = rows.map((r) => ({
       ...r,
       reporterName: identity.get(r.reporterId)?.name ?? null,
@@ -124,46 +175,4 @@ export class ReportsService {
     return saved;
   }
 
-  /**
-   * Batched identity lookup: displayId + role from users, name from
-   * whichever profile table the user's role puts it on (admins keep name
-   * on users.name — the ADMIN carve-out).
-   */
-  private async resolveIdentities(
-    userIds: string[],
-  ): Promise<Map<string, { name: string | null; displayId: string | null; role: string | null }>> {
-    const map = new Map<
-      string,
-      { name: string | null; displayId: string | null; role: string | null }
-    >();
-    if (userIds.length === 0) return map;
-
-    const userRows: Array<{
-      id: string;
-      displayId: string | null;
-      role: string;
-      name: string | null;
-    }> = await this.reportRepository.query(
-      `SELECT id, "displayId", role, name FROM users WHERE id = ANY($1::uuid[])`,
-      [userIds],
-    );
-    for (const u of userRows) {
-      map.set(u.id, { name: u.name ?? null, displayId: u.displayId, role: u.role });
-    }
-
-    const profileRows: Array<{ userId: string; name: string | null }> =
-      await this.reportRepository.query(
-        `SELECT "userId", name FROM buyer_profiles WHERE "userId" = ANY($1::uuid[])
-         UNION ALL
-         SELECT "userId", name FROM seller_profiles WHERE "userId" = ANY($1::uuid[])
-         UNION ALL
-         SELECT "userId", name FROM service_provider_profiles WHERE "userId" = ANY($1::uuid[])`,
-        [userIds],
-      );
-    for (const p of profileRows) {
-      const entry = map.get(p.userId);
-      if (entry && !entry.name && p.name) entry.name = p.name;
-    }
-    return map;
-  }
 }

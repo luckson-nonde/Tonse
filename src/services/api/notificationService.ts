@@ -9,7 +9,13 @@ import { apiClient } from './client';
 export interface NotificationRecord {
   id: string;
   userId: string;
-  type: 'NEW_LEAD' | 'QUOTE_RECEIVED' | 'RESERVE_RELEASED' | 'MILESTONE_UNLOCKED';
+  type:
+    | 'NEW_LEAD'
+    | 'QUOTE_RECEIVED'
+    | 'RESERVE_RELEASED'
+    | 'MILESTONE_UNLOCKED'
+    | 'REPORT_FILED'
+    | 'REPORT_RECEIVED';
   inquiryId?: string;
   quoteId?: string;
   title: string;

@@ -1,5 +1,6 @@
 import { PERMISSIONS } from '../utils/rbac';
 import { MasterAccountSchema } from './accountSchemaTypes';
+import { REPORTING_NAV_ITEM, REPORTING_VIEW } from './reportingNavFragment';
 
 export type ProviderViewType = 
   | 'home' 
@@ -85,6 +86,7 @@ export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'team', label: 'Team Management', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
     { id: 'audit-trail', label: 'Audit Trail', icon: 'History', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
+    REPORTING_NAV_ITEM,
   ],
   views: {
     home: {
@@ -161,7 +163,8 @@ export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       title: "Financial Account",
       subtitle: "Manage your virtual wallet and transaction security",
       componentType: 'financial_renderer'
-    }
+    },
+    reporting: REPORTING_VIEW,
   }
 };
 

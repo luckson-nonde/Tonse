@@ -8,6 +8,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { ESCROW_HOLDING_STATUSES } from '../quotes/quote-status';
 import { FunnelTrackingService } from '../referrals/services/funnel-tracking.service';
+import { UsersService } from '../users/users.service';
 import { resolveSortField, resolveSortOrder } from '../../utils/safe-sort.util';
 
 const SORTABLE_FIELDS = ['createdAt', 'updatedAt', 'totalAmount', 'status', 'deliveryDate', 'orderNumber'] as const;
@@ -21,6 +22,7 @@ export class OrdersService {
     private ordersRepository: Repository<Order>,
     private readonly dataSource: DataSource,
     private readonly funnelTrackingService: FunnelTrackingService,
+    private readonly usersService: UsersService,
   ) {}
 
   /**
@@ -165,19 +167,49 @@ export class OrdersService {
   // and friends) without a second roundtrip per row. Buyer name is
   // included so the calendar can label the gig.
   async findByBuyer(buyerId: string): Promise<Order[]> {
-    return this.ordersRepository.find({
+    const orders = await this.ordersRepository.find({
       where: { buyerId },
       relations: ['quote', 'quote.inquiry', 'seller'],
       order: { createdAt: 'DESC' },
     });
+    return this.attachCounterpartyNames(orders, 'seller');
   }
 
   async findBySeller(sellerId: string): Promise<Order[]> {
-    return this.ordersRepository.find({
+    const orders = await this.ordersRepository.find({
       where: { sellerId },
       relations: ['quote', 'quote.inquiry', 'buyer'],
       order: { createdAt: 'DESC' },
     });
+    return this.attachCounterpartyNames(orders, 'buyer');
+  }
+
+  /**
+   * The raw User relation carries no display name (names live on the
+   * profile tables; users.name is the ADMIN carve-out), so the wire shape's
+   * long-declared buyer/seller fullName/businessName arrived undefined.
+   * Batch-resolve real names and graft them onto the loaded relation.
+   */
+  private async attachCounterpartyNames(
+    orders: Order[],
+    side: 'buyer' | 'seller',
+  ): Promise<Order[]> {
+    const idOf = (o: Order) => (side === 'buyer' ? o.buyerId : o.sellerId);
+    const ids = Array.from(new Set(orders.map(idOf).filter(Boolean)));
+    if (ids.length === 0) return orders;
+
+    const identity = await this.usersService.resolveDisplayIdentities(ids);
+    for (const o of orders) {
+      const name = identity.get(idOf(o))?.name;
+      if (!name) continue;
+      const existing: any = (o as any)[side] ?? { id: idOf(o) };
+      (o as any)[side] = {
+        ...existing,
+        fullName: existing.fullName ?? name,
+        businessName: existing.businessName ?? name,
+      };
+    }
+    return orders;
   }
 
   async updateStatus(id: string, status: string): Promise<Order> {

@@ -1,8 +1,9 @@
 import { MasterAccountSchema } from './accountSchemaTypes';
+import { REPORTING_NAV_ITEM, REPORTING_VIEW } from './reportingNavFragment';
 
-export type ViewType = 
-  | 'dashboard' 
-  | 'profile' 
+export type ViewType =
+  | 'dashboard'
+  | 'profile'
   | 'inquiries'
   | 'quotes'
   | 'loan_offers'
@@ -13,7 +14,8 @@ export type ViewType =
   | 'order_details'
   | 'financial'
   | 'shops'
-  | 'favorites';
+  | 'favorites'
+  | 'reporting';
 
 export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
   schemaType: 'BUYER',
@@ -25,6 +27,7 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'shops', label: 'Browse Shops', icon: 'Store' },
     { id: 'profile', label: 'Account Settings', icon: 'User' },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
+    REPORTING_NAV_ITEM,
     // Contextual tab — hidden until the buyer actually engages the Loans
     // category (a loan inquiry) or receives a loan offer. Rendered in the
     // "Your Activity" section below the core tabs. See requiresActivity +
@@ -94,6 +97,7 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       subtitle: "Manage your virtual wallet and transaction security",
       componentType: 'financial_renderer'
     },
+    reporting: REPORTING_VIEW,
     settings: {
       title: "Preferences",
       subtitle: "Manage notifications and app behavior",

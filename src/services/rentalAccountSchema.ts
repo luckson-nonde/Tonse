@@ -1,5 +1,6 @@
 import { PERMISSIONS } from '../utils/rbac';
 import { MasterAccountSchema } from './accountSchemaTypes';
+import { REPORTING_NAV_ITEM, REPORTING_VIEW } from './reportingNavFragment';
 
 /**
  * MASTER_RENTAL_ACCOUNT_SCHEMA — dashboard for sellers whose primary
@@ -30,6 +31,7 @@ export const MASTER_RENTAL_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'team', label: 'Team Management', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
     { id: 'audit-trail', label: 'Audit Trail', icon: 'History', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
+    REPORTING_NAV_ITEM,
   ],
   views: {
     home: {
@@ -93,5 +95,6 @@ export const MASTER_RENTAL_ACCOUNT_SCHEMA: MasterAccountSchema = {
       subtitle: 'Track all activities and changes',
       componentType: 'provider_placeholder',
     },
+    reporting: REPORTING_VIEW,
   },
 };

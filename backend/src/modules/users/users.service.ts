@@ -23,6 +23,7 @@ import { ProfileMatchingService } from './services/profile-matching.service';
 import { ESCROW_HOLDING_STATUSES } from '../quotes/quote-status';
 import { FunnelTrackingService } from '../referrals/services/funnel-tracking.service';
 import { BCRYPT_SALT_ROUNDS } from '../../common/constants/security';
+import { ADMIN_PERMISSIONS } from '../auth/constants/admin-permissions';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import * as fs from 'fs';
@@ -1525,6 +1526,70 @@ export class UsersService {
   }
 
   // ===== FIND OPERATIONS =====
+
+  /**
+   * Batched display-identity lookup: displayId + role from users, name from
+   * whichever profile table the user's role puts it on (admins keep name on
+   * users.name — the ADMIN carve-out). Shared by report hydration and order
+   * counterparty labelling; without it those surfaces are walls of uuids.
+   */
+  async resolveDisplayIdentities(
+    userIds: string[],
+  ): Promise<Map<string, { name: string | null; displayId: string | null; role: string | null }>> {
+    const map = new Map<
+      string,
+      { name: string | null; displayId: string | null; role: string | null }
+    >();
+    const unique = Array.from(new Set(userIds.filter(Boolean)));
+    if (unique.length === 0) return map;
+
+    const userRows: Array<{
+      id: string;
+      displayId: string | null;
+      role: string;
+      name: string | null;
+    }> = await this.userRepository.query(
+      `SELECT id, "displayId", role, name FROM users WHERE id = ANY($1::uuid[])`,
+      [unique],
+    );
+    for (const u of userRows) {
+      map.set(u.id, { name: u.name ?? null, displayId: u.displayId, role: u.role });
+    }
+
+    const profileRows: Array<{ userId: string; name: string | null }> =
+      await this.userRepository.query(
+        `SELECT "userId", name FROM buyer_profiles WHERE "userId" = ANY($1::uuid[])
+         UNION ALL
+         SELECT "userId", name FROM seller_profiles WHERE "userId" = ANY($1::uuid[])
+         UNION ALL
+         SELECT "userId", name FROM service_provider_profiles WHERE "userId" = ANY($1::uuid[])`,
+        [unique],
+      );
+    for (const p of profileRows) {
+      const entry = map.get(p.userId);
+      if (entry && !entry.name && p.name) entry.name = p.name;
+    }
+    return map;
+  }
+
+  /**
+   * Admins who handle user reports: the primary admin (no parent) plus
+   * active User Managers granted ADMIN_REPORTS. `permissions` is a
+   * simple-array (text) column — TypeORM deserialises it on find(), so the
+   * filter happens in JS; never use SQL ANY() against that column.
+   */
+  async findReportAdminRecipients(): Promise<string[]> {
+    const admins = await this.userRepository.find({
+      where: { role: 'ADMIN', isActive: true },
+    });
+    return admins
+      .filter(
+        (a) =>
+          !a.parentProviderId ||
+          (a.permissions ?? []).includes(ADMIN_PERMISSIONS.REPORTS),
+      )
+      .map((a) => a.id);
+  }
 
   /**
    * Find user by UUID (internal system ID)

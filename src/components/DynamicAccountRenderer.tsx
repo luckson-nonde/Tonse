@@ -54,6 +54,7 @@ import LoanTermsEditor from './loan/LoanTermsEditor';
 import DeleteAccountSection from './DeleteAccountSection';
 import LoanOfferDetail from './loan/LoanOfferDetail';
 import FinancialPage from '../pages/FinancialPage';
+import ReportManagerView from './ReportManagerView';
 import { Inquiry, Quote } from '../types';
 import { getLabourProfileSchema } from '../services/labourSchemaRegistry';
 import { getProfileSchema } from '../services/userSchemas';
@@ -775,6 +776,8 @@ export default function DynamicAccountRenderer({
         return <LabourQuotesView {...data?.quotesProps} />;
       case 'financial_renderer':
         return <FinancialPage isInsideDashboard={true} />;
+      case 'report_manager':
+        return <ReportManagerView />;
       case 'labour_schedule':
         return <LabourScheduleView {...data?.scheduleProps} />;
       default:

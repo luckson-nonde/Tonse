@@ -145,6 +145,29 @@ export default function AdminDashboard() {
     [isSubAdmin, user?.permissions]
   );
 
+  // OPEN-report count badge on the Reports tab — the admin console has no
+  // notification bell, so this is the visible "new reports waiting" signal.
+  // Re-fetched on tab change so resolving reports updates it when you
+  // navigate away. Guarded by tab visibility: a sub-admin without
+  // ADMIN_REPORTS would just 403 on the count call.
+  const canSeeReports = visibleTabs.some((t) => t.id === 'reports');
+  const [openReportCount, setOpenReportCount] = useState(0);
+  useEffect(() => {
+    if (!canSeeReports) return;
+    let cancelled = false;
+    adminService
+      .listReports({ status: 'OPEN', limit: 1 })
+      .then((res) => {
+        if (!cancelled) setOpenReportCount(res.total ?? 0);
+      })
+      .catch(() => {
+        /* badge is best-effort — the queue itself is the source of truth */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canSeeReports, activeTab]);
+
   // Defense-in-depth: a sub-admin typing /admin/financial (or landing on
   // the default /admin/overview) gets bounced to their first visible tab.
   // The backend 403s those endpoints regardless — this just avoids a
@@ -186,6 +209,11 @@ export default function AdminDashboard() {
               >
                 <Icon className="w-4 h-4 shrink-0" />
                 <span>{t.label}</span>
+                {t.id === 'reports' && openReportCount > 0 && (
+                  <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center">
+                    {openReportCount > 99 ? '99+' : openReportCount}
+                  </span>
+                )}
               </button>
             );
           })}

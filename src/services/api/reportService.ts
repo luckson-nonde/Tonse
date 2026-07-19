@@ -25,9 +25,41 @@ export interface SubmitReportPayload {
   contextId?: string;
 }
 
+/** A report as returned by GET /reports/mine — the filer's own view,
+ *  hydrated with both parties' display identity. */
+export interface MyReport {
+  id: string;
+  reporterId: string;
+  reportedUserId: string;
+  category: ReportCategory;
+  description: string;
+  contextType: 'INQUIRY' | 'QUOTE' | 'ORDER' | null;
+  contextId: string | null;
+  status: 'OPEN' | 'RESOLVED' | 'DISMISSED';
+  resolutionNote: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  reportedUserName: string | null;
+  reportedUserDisplayId: string | null;
+}
+
 export const reportService = {
   async submit(payload: SubmitReportPayload) {
     const res = await apiClient.post('/reports', payload);
     return res.data ?? null;
+  },
+
+  /** The reports the signed-in user has filed (newest first). */
+  async fetchMine(
+    params: { page?: number; limit?: number } = {}
+  ): Promise<{ data: MyReport[]; total: number }> {
+    const query = new URLSearchParams();
+    if (params.page) query.set('page', String(params.page));
+    if (params.limit) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    const res = await apiClient.get<{ data: MyReport[]; total: number }>(
+      `/reports/mine${qs ? `?${qs}` : ''}`
+    );
+    return res.data ?? { data: [], total: 0 };
   },
 };

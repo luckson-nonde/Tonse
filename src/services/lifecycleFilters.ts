@@ -57,3 +57,19 @@ export const isOrderPlaced = (o: StatusBearing): boolean => {
   const status = String(o.status || '').toUpperCase();
   return ['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'COMPLETED'].includes(status);
 };
+
+/**
+ * Report Manager split. "Current" = still in fulfilment; "Past" =
+ * reached a terminal state (COMPLETED or CANCELLED). Unlike
+ * isOrderPlaced, these two partition the full status space so every
+ * order lands in exactly one of the two tabs.
+ */
+export const isCurrentOrder = (o: StatusBearing): boolean => {
+  const status = String(o.status || '').toUpperCase();
+  return ['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED'].includes(status);
+};
+
+export const isPastOrder = (o: StatusBearing): boolean => {
+  const status = String(o.status || '').toUpperCase();
+  return ['COMPLETED', 'CANCELLED'].includes(status);
+};

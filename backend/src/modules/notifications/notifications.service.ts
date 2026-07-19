@@ -19,7 +19,9 @@ export type DurableType =
   | 'NEW_LEAD'
   | 'QUOTE_RECEIVED'
   | 'RESERVE_RELEASED'
-  | 'MILESTONE_UNLOCKED';
+  | 'MILESTONE_UNLOCKED'
+  | 'REPORT_FILED'
+  | 'REPORT_RECEIVED';
 export type EphemeralType =
   | 'QUOTE_COUNT_UPDATE'
   | 'LEAD_FULL'
@@ -33,6 +35,10 @@ const PUSH_ROUTE_BY_TYPE: Record<DurableType, string> = {
   QUOTE_RECEIVED: '/buyer/my-quotes',
   RESERVE_RELEASED: '/provider/my-quotes',
   MILESTONE_UNLOCKED: '/promoter/dashboard',
+  // Fallbacks only — report notifications pass a per-call `route` because
+  // the reporter's dashboard path depends on their role.
+  REPORT_FILED: '/buyer/reporting',
+  REPORT_RECEIVED: '/admin',
 };
 
 /** DB enum → lowercase SSE event name (EventSource convention). */
@@ -41,6 +47,8 @@ const SSE_EVENT_NAME: Record<DurableType | EphemeralType, string> = {
   QUOTE_RECEIVED: 'quote_received',
   RESERVE_RELEASED: 'reserve_released',
   MILESTONE_UNLOCKED: 'milestone_unlocked',
+  REPORT_FILED: 'report_filed',
+  REPORT_RECEIVED: 'report_received',
   QUOTE_COUNT_UPDATE: 'quote_count_update',
   LEAD_FULL: 'lead_full',
   PROVIDER_ACCEPTED: 'provider_accepted',
@@ -126,13 +134,21 @@ export class NotificationsService {
       inquiryId?: string;
       quoteId?: string;
       data?: Record<string, any>;
+      /** Overrides PUSH_ROUTE_BY_TYPE for this call — for types whose click
+       *  destination depends on the recipient (e.g. reporter role). */
+      route?: string;
     },
   ): Promise<Notification[]> {
     const unique = Array.from(new Set(userIds)).filter(Boolean);
     if (unique.length === 0) return [];
-    const rows = unique.map((uid) =>
-      this.notificationsRepository.create({ userId: uid, type, ...build(uid) }),
-    );
+    // `route` steers the Web Push click URL only — it is not a column, so
+    // strip it before create() to keep it out of the persisted row.
+    const routeByUser = new Map<string, string | undefined>();
+    const rows = unique.map((uid) => {
+      const { route, ...persisted } = build(uid);
+      routeByUser.set(uid, route);
+      return this.notificationsRepository.create({ userId: uid, type, ...persisted });
+    });
     const saved = await this.notificationsRepository.save(rows);
     for (const row of saved) {
       this.push(
@@ -149,7 +165,7 @@ export class NotificationsService {
         .sendToUser(row.userId, {
           title: row.title,
           body: (row.data?.body as string) ?? '',
-          url: PUSH_ROUTE_BY_TYPE[type],
+          url: routeByUser.get(row.userId) ?? PUSH_ROUTE_BY_TYPE[type],
           tag: type,
         })
         .catch((e) => this.logger.warn(`web push dispatch failed: ${e?.message}`));

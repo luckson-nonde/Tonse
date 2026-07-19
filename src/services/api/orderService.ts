@@ -15,6 +15,8 @@ export interface OrderQuoteSnapshot {
   id: string;
   inquiryId?: string;
   inquiry?: OrderInquirySnapshot;
+  /** Denormalized at quote creation — reliable seller display name. */
+  providerName?: string;
 }
 
 export interface OrderUserSnapshot {
