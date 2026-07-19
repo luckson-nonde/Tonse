@@ -41,8 +41,19 @@ async function bootstrap() {
   // static/uploaded-file responses.
   app.use(helmet());
 
-  // Serve static files from public directory
-  app.use(express.static(path.join(__dirname, '..', 'public')));
+  // Serve static files from public directory. Uploaded photos are embedded as
+  // <img> from the static-site origin (tonse-web → tonse-api) — a cross-origin
+  // no-cors load that helmet's default Cross-Origin-Resource-Policy:
+  // same-origin blocks (ERR_BLOCKED_BY_RESPONSE.NotSameOrigin). Public uploads
+  // are world-readable by design, so mark just these responses embeddable;
+  // API routes keep helmet's stricter default.
+  app.use(
+    express.static(path.join(__dirname, '..', 'public'), {
+      setHeaders: (res) => {
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      },
+    }),
+  );
 
   // Production origins come from CORS_ORIGINS (comma-separated, e.g. the Render
   // static-site URL). Falls back to the local dev ports when unset.
