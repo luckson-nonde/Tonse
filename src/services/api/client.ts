@@ -4,6 +4,12 @@
  */
 
 import { enqueueWrite } from '../offlineWriteQueue';
+import {
+  getCachedResponse,
+  isCacheableEndpoint,
+  purgeUserCache,
+  setCachedResponse,
+} from '../offlineReadCache';
 
 // Base for all API calls. `/api` (set via VITE_API_URL) keeps requests
 // same-origin so the Vite dev-server proxy can forward them to the NestJS
@@ -20,11 +26,15 @@ export const API_BASE_URL =
     ? rawApiBase
     : `https://${rawApiBase}`;
 
-interface ApiResponse<T> {
+export interface ApiResponse<T> {
   data?: T;
   message?: string;
   statusCode?: number;
   error?: string;
+  /** Set when this response was served from the offline read cache. */
+  fromCache?: boolean;
+  /** When the cached copy was originally fetched (ms epoch). */
+  cachedAt?: number;
 }
 
 /**
@@ -46,7 +56,18 @@ export interface QueueableOptions {
 }
 
 /** apiCall options: a normal RequestInit plus the optional queueable marker. */
-export type ApiCallOptions = RequestInit & { queueable?: QueueableOptions };
+export type ApiCallOptions = RequestInit & {
+  queueable?: QueueableOptions;
+  /**
+   * Stale-while-revalidate for GETs: serve the offline read cache's copy
+   * IMMEDIATELY when one exists (tagged fromCache), and refresh it over the
+   * network in the background — dispatching `tonse:data-revalidated` if the
+   * fresh data differs, so mounted feed hooks refetch and pick it up. Opt-in
+   * per call site: a refetch that must PROVE a mutation (delete, accept)
+   * needs the live answer and must NOT set this.
+   */
+  swr?: boolean;
+};
 
 interface TokenPair {
   accessToken: string;
@@ -69,12 +90,19 @@ export const tokenManager = {
   },
 
   clearTokens: (): void => {
+    // Capture the outgoing user BEFORE removing the token — the offline read
+    // cache purge needs their `sub`, and it's gone once the token is cleared.
+    const outgoingToken = localStorage.getItem('access_token');
+    const outgoingUserId = outgoingToken
+      ? tokenManager.getTokenPayload(outgoingToken)?.sub
+      : undefined;
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     // The offline session cache is only valid alongside its tokens — every
     // path that ends the session (logout, real 401, rejected refresh) lands
     // here, so this is the single cleanup point.
     localStorage.removeItem('tonse_user_cache');
+    if (outgoingUserId) void purgeUserCache(outgoingUserId);
   },
 
   isTokenExpired: (token: string): boolean => {
@@ -95,6 +123,47 @@ export const tokenManager = {
     }
   },
 };
+
+// ── Stale-while-revalidate ──────────────────────────────────────────────────
+
+/** Endpoints with a background refresh already in flight — one per endpoint. */
+const revalidating = new Set<string>();
+
+/**
+ * Background half of SWR: re-run the GET over the network, and if the answer
+ * differs from what was just served from cache, persist it and broadcast
+ * `tonse:data-revalidated` so every mounted hook for this data refetches.
+ * Loop-safe by construction:
+ *  - the inner apiCall strips `swr`, so it always goes to the network;
+ *  - a fromCache result means the network is down (the inner call fell back
+ *    to the same cache) — no event, or offline polls would loop forever;
+ *  - listeners' refetches serve the now-fresh cache, so their confirmatory
+ *    revalidation finds no diff and goes quiet.
+ */
+async function revalidate(
+  endpoint: string,
+  options: ApiCallOptions,
+  served: any
+): Promise<void> {
+  if (revalidating.has(endpoint)) return;
+  revalidating.add(endpoint);
+  try {
+    const fresh = await apiCall(endpoint, { ...options, swr: undefined });
+    if (fresh.fromCache) return;
+    if (JSON.stringify(fresh) !== JSON.stringify(served)) {
+      // The inner call's own cache write is fire-and-forget — write again and
+      // AWAIT it so the cache is durably fresh before any listener refetches.
+      await setCachedResponse(endpoint, fresh);
+      window.dispatchEvent(
+        new CustomEvent('tonse:data-revalidated', { detail: { endpoint } })
+      );
+    }
+  } catch {
+    // Background refresh — the user already has the cached copy on screen.
+  } finally {
+    revalidating.delete(endpoint);
+  }
+}
 
 // Refresh token logic
 let refreshPromise: Promise<TokenPair> | null = null;
@@ -199,6 +268,19 @@ export const apiCall = async <T = any>(
   // service worker / HTTP cache can answer them. EXCEPTION: a `queueable` write
   // is genuinely "pending" — persist it and signal QueuedWrite instead.
   const method = (options.method || 'GET').toUpperCase();
+
+  // Stale-while-revalidate (opt-in): serve the cached copy NOW — before the
+  // token-refresh block, so a stale paint never waits on auth round-trips —
+  // and refresh it in the background. Cache miss falls through to the normal
+  // network path unchanged.
+  if (method === 'GET' && options.swr && isCacheableEndpoint(endpoint)) {
+    const cached = await getCachedResponse(endpoint);
+    if (cached) {
+      void revalidate(endpoint, options, cached.response);
+      return { ...cached.response, fromCache: true, cachedAt: cached.cachedAt };
+    }
+  }
+
   if (typeof navigator !== 'undefined' && !navigator.onLine && method !== 'GET') {
     if (queueable) queueAndSignal(method);
     throw new Error("You're offline — this needs a connection. Your change was not saved.");
@@ -211,8 +293,16 @@ export const apiCall = async <T = any>(
       accessToken = newAccessToken;
     } catch (error) {
       // Network down ≠ session dead: keep the refresh token, surface a soft
-      // error, and let the session resume when connectivity returns.
+      // error, and let the session resume when connectivity returns. A GET
+      // can still be answered from the offline read cache — without this,
+      // an expired-token GET while offline dies before fetch ever runs.
       if ((error as Error)?.name === 'NetworkError') {
+        if (method === 'GET') {
+          const cached = await getCachedResponse(endpoint);
+          if (cached) {
+            return { ...cached.response, fromCache: true, cachedAt: cached.cachedAt };
+          }
+        }
         throw new Error("You're offline — reconnect to continue.");
       }
       tokenManager.clearTokens();
@@ -257,8 +347,16 @@ export const apiCall = async <T = any>(
       // fetch() only throws on a genuine network failure (offline mid-request,
       // DNS, dropped connection) — never on an HTTP error status. Tag it as
       // NetworkError so the queue drainer and AuthContext can tell "unreachable"
-      // apart from a real rejection; queue it if this write opted in.
+      // apart from a real rejection; queue it if this write opted in. A GET
+      // falls back to the offline read cache before failing — HTTP errors
+      // (401/4xx/5xx) never reach this catch and are always surfaced live.
       if (queueable && method !== 'GET') queueAndSignal(method);
+      if (method === 'GET') {
+        const cached = await getCachedResponse(endpoint);
+        if (cached) {
+          return { ...cached.response, fromCache: true, cachedAt: cached.cachedAt };
+        }
+      }
       const err = new Error("You're offline — couldn't reach the server.");
       err.name = 'NetworkError';
       throw err;
@@ -309,6 +407,12 @@ export const apiCall = async <T = any>(
             ? 'The server had a problem. Please try again in a moment.'
             : `Request failed (${response.status}).`)
       );
+    }
+
+    // Feed the offline read cache (fire-and-forget — never blocks the caller).
+    // Only 2xx GETs land here: 204 early-returned above, errors threw.
+    if (method === 'GET' && isCacheableEndpoint(endpoint)) {
+      void setCachedResponse(endpoint, data);
     }
 
     return data;

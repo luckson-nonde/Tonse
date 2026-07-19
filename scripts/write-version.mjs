@@ -21,21 +21,40 @@ const version = {
 writeFileSync('dist/version.json', JSON.stringify(version, null, 2) + '\n');
 console.log(`write-version: dist/version.json → ${version.commit} @ ${version.builtAt}`);
 
-// Image manifest: every bundled image under dist/assets, so the service worker
-// can warm its image cache in the background after activating — making images
-// on never-yet-visited screens available offline (runtime caching alone only
-// covers what the browser has already seen online). Small-first ordering so
-// the most images land before the SW is ever killed mid-warm-up.
+// Asset manifest: everything under dist/assets the service worker should warm
+// after activating, split into two lists it caches separately:
+//   shell  — the hashed JS/CSS bundles (SHELL_CACHE). Warming these is what
+//            lets the app itself boot offline even if the user never loaded
+//            them in this build (fresh deploy, closed tab mid-first-visit).
+//   images — every bundled image (IMG_CACHE), small-first so the most images
+//            land before the SW is ever killed mid-warm-up.
+// Runtime caching alone only covers what the browser has already seen online.
 const IMG_RE = /\.(png|webp|jpe?g|gif|svg|avif)$/i;
-const assets = readdirSync('dist/assets')
+const SHELL_RE = /\.(js|css)$/i;
+const files = readdirSync('dist/assets');
+
+const shell = files
+  .filter((f) => SHELL_RE.test(f) && !f.endsWith('.map'))
+  // CSS before JS (styling loss is the most visible failure), then by name.
+  .sort(
+    (a, b) =>
+      (a.endsWith('.css') ? 0 : 1) - (b.endsWith('.css') ? 0 : 1) ||
+      a.localeCompare(b)
+  )
+  .map((f) => `/assets/${f}`);
+
+const images = files
   .filter((f) => IMG_RE.test(f))
   .map((f) => ({ url: `/assets/${f}`, size: statSync(`dist/assets/${f}`).size }))
   .sort((a, b) => a.size - b.size)
   .map((a) => a.url);
 
-writeFileSync('dist/image-manifest.json', JSON.stringify(assets) + '\n');
-const totalKb = Math.round(
-  readdirSync('dist/assets').filter((f) => IMG_RE.test(f))
-    .reduce((s, f) => s + statSync(`dist/assets/${f}`).size, 0) / 1024
+writeFileSync('dist/asset-manifest.json', JSON.stringify({ shell, images }) + '\n');
+
+const kb = (list) =>
+  Math.round(
+    list.reduce((s, url) => s + statSync(`dist${url}`).size, 0) / 1024
+  );
+console.log(
+  `write-version: dist/asset-manifest.json → ${shell.length} shell files (${kb(shell)} KB), ${images.length} images (${kb(images)} KB)`
 );
-console.log(`write-version: dist/image-manifest.json → ${assets.length} images (${totalKb} KB total)`);
