@@ -919,8 +919,11 @@ export default function DashboardLayout({
               // Personal mode + per-archetype Business modes pop in
               // line; selecting one switches the entire dashboard.
               // Buyers don't see this (their `profile` is a regular
-              // route via the BUYER schema's NavLink path below).
-              if (item.id === 'profile' && user?.role !== 'BUYER') {
+              // route via the BUYER schema's NavLink path below), and
+              // neither does staff (parentProviderId): a technician or
+              // collection officer has exactly one work profile — for
+              // them `profile` falls through to a plain NavLink.
+              if (item.id === 'profile' && user?.role !== 'BUYER' && !user?.parentProviderId) {
                 const ProfileIcon = iconMap[item.icon] || User;
                 return (
                   <div key={item.id} className="w-full">
