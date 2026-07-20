@@ -549,13 +549,33 @@ export default function ProviderDashboard() {
     handleTabClick('leads');
   }, [handleTabClick]);
 
-  // Filter leads by provider categories AND exclude already quoted ones
+  // A quote the provider has already sent but the buyer hasn't decided on
+  // yet keeps its inquiry visible in Service Requests, badged "Quoted ·
+  // Pending" — providers expect an in-flight quotation to still show under
+  // requests, not vanish the moment it's submitted. Once the quote resolves
+  // (accepted → it becomes a Paid Order; rejected/withdrawn → dead), the
+  // inquiry drops off the requests feed. A pending revision supersedes a
+  // resolved sibling on the same inquiry.
+  const pendingQuoteByInquiryId = React.useMemo(() => {
+    const map: Record<string, any> = {};
+    for (const q of myQuotes) {
+      if (q.status === 'PENDING' && !q.isArchived) map[String(q.inquiryId)] = q;
+    }
+    return map;
+  }, [myQuotes]);
+
+  // Filter leads by provider categories AND exclude RESOLVED quoted ones
   const leads = React.useMemo(() => {
     let filtered = allLeads;
 
-    // Exclude already quoted
-    const quotedIds = new Set(myQuotes.map((q) => q.inquiryId));
-    filtered = filtered.filter((lead) => !quotedIds.has(lead.id!));
+    // Drop inquiries whose quote is already resolved (won/rejected/archived);
+    // keep those with a still-pending quote so they remain on requests.
+    const resolvedInquiryIds = new Set<string>();
+    for (const q of myQuotes) {
+      if (q.status !== 'PENDING' || q.isArchived) resolvedInquiryIds.add(String(q.inquiryId));
+    }
+    for (const id of Object.keys(pendingQuoteByInquiryId)) resolvedInquiryIds.delete(id);
+    filtered = filtered.filter((lead) => !resolvedInquiryIds.has(String(lead.id)));
 
     // Filter by Archive Status
     const providerId = effectiveProviderId?.toString() || '';
@@ -581,7 +601,7 @@ export default function ProviderDashboard() {
     // client-side string parsing on a field that no longer exists.
 
     return filtered;
-  }, [allLeads, myQuotes, effectiveProviderId]);
+  }, [allLeads, myQuotes, effectiveProviderId, pendingQuoteByInquiryId]);
 
   // Collection Handshake State
   const [scanningQuoteId, setScanningQuoteId] = useState<number | null>(null);
@@ -1115,6 +1135,8 @@ export default function ProviderDashboard() {
               renderSpecifications,
               revisingQuote,
               onSetRevisingQuote: setRevisingQuote,
+              pendingQuoteByInquiryId,
+              onReviseQuote: handleReviseQuote,
             },
           }}
           onAction={handleAction}

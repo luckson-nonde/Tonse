@@ -328,6 +328,11 @@ interface ProviderLeadsViewProps {
   renderSpecifications: (data: any, category: string, title: string) => React.ReactNode;
   revisingQuote: any | null;
   onSetRevisingQuote: (quote: any | null) => void;
+  /** Inquiries this provider has an in-flight (PENDING) quote on, keyed by
+   *  inquiry id. Such leads stay on the requests feed badged "Quoted ·
+   *  Pending" with a Revise action instead of a fresh Submit Quote. */
+  pendingQuoteByInquiryId?: Record<string, any>;
+  onReviseQuote?: (quote: any) => void;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -353,6 +358,8 @@ export default function ProviderLeadsView({
   renderSpecifications,
   revisingQuote,
   onSetRevisingQuote,
+  pendingQuoteByInquiryId,
+  onReviseQuote,
 }: ProviderLeadsViewProps) {
   const [expandedLeadId, setExpandedLeadId] = useState<number | null>(null);
   // Lightbox state for the photo strip — keyed by lead id so each
@@ -575,6 +582,9 @@ export default function ProviderLeadsView({
             const allImages = collectLeadImages(lead, parsedItems);
             const hasImages = allImages.length > 0;
             const isQuoting = quotingInquiryId === lead.id;
+            // An in-flight quote this provider already sent on this inquiry.
+            const myPendingQuote =
+              pendingQuoteByInquiryId?.[String(lead.id)] ?? pendingQuoteByInquiryId?.[lead.id];
             const itemPricesTotal = parsedItems.some((_: any, i: number) => itemPrices[`${lead.id}-${i}`])
               ? parsedItems.reduce((s: number, _: any, i: number) => s + Number(itemPrices[`${lead.id}-${i}`] || 0), 0)
               : 0;
@@ -780,7 +790,22 @@ export default function ProviderLeadsView({
                             <Eye className="w-3.5 h-3.5" />
                             {renderViewCount(lead)} {renderViewCount(lead) === 1 ? 'view' : 'views'}
                           </div>
-                          {!isQuoting ? (
+                          {!isQuoting && myPendingQuote ? (
+                            // Already quoted, buyer hasn't decided — stays on
+                            // the requests feed as an in-flight quotation with
+                            // a Revise action instead of a duplicate submit.
+                            <div className="flex items-center gap-2.5">
+                              <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#fdf6e9] text-[#d49b35] border border-[#ecd9b3]">
+                                Quoted · Pending
+                              </span>
+                              <button
+                                onClick={() => onReviseQuote?.(myPendingQuote)}
+                                className="px-5 py-2.5 bg-white text-[#d49b35] border border-[#d8c08a] text-[13px] font-bold rounded-xl hover:bg-[#fdf6e9] transition-colors active:scale-[0.98]"
+                              >
+                                Revise Quotation
+                              </button>
+                            </div>
+                          ) : !isQuoting ? (
                             <button
                               onClick={() => onSetQuotingInquiryId(lead.id!)}
                               className="px-6 py-2.5 bg-[#d49b35] text-white text-[13px] font-bold rounded-xl hover:bg-[#b8851d] transition-colors shadow-sm active:scale-[0.98]"
