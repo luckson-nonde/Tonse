@@ -275,36 +275,41 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
       </AnimatePresence>
       <div className="space-y-8">
       {/* Provider Header */}
-      <div className="bg-white p-8 rounded-4xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div className="flex items-center gap-6">
-          <div className="w-20 h-20 rounded-2xl bg-brand-white border border-[#C9973A]/10 flex items-center justify-center text-[#C9973A] font-serif font-black text-3xl shadow-inner">
+      <div className="bg-white p-5 sm:p-8 rounded-3xl sm:rounded-4xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-5 md:gap-6">
+        {/* min-w-0 chain + wrapping meta row: provider names are frequently
+            emails, an unbreakable string that overflowed the card on phones. */}
+        <div className="flex items-center gap-4 sm:gap-6 min-w-0 w-full md:w-auto">
+          <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-brand-white border border-[#C9973A]/10 flex items-center justify-center text-[#C9973A] font-serif font-black text-2xl sm:text-3xl shadow-inner shrink-0">
             {(quote.providerName || 'P').charAt(0)}
           </div>
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-2xl font-serif font-black text-brand-dark">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1 min-w-0">
+              <h2
+                className="text-lg sm:text-2xl font-serif font-black text-brand-dark truncate"
+                title={quote.providerName}
+              >
                 {quote.providerName}
               </h2>
-              <ShieldCheck className="w-5 h-5 text-emerald-500" />
+              <ShieldCheck className="w-5 h-5 text-emerald-500 shrink-0" />
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <div className="flex items-center gap-1 text-[#C9973A]">
                 <Star className="w-4 h-4 fill-currentColor" />
                 <span className="text-sm font-bold">4.9</span>
                 <span className="text-xs text-slate-400 font-medium">(120 reviews)</span>
               </div>
-              <div className="flex items-center gap-1 text-slate-400">
-                <MapPin className="w-4 h-4" />
-                <span className="text-sm font-medium">Lusaka, Zambia</span>
+              <div className="flex items-center gap-1 text-slate-400 min-w-0">
+                <MapPin className="w-4 h-4 shrink-0" />
+                <span className="text-sm font-medium truncate">Lusaka, Zambia</span>
               </div>
             </div>
           </div>
         </div>
-        <div className="text-right">
+        <div className="text-left md:text-right w-full md:w-auto shrink-0">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">
             Total Offer
           </p>
-          <h3 className="text-4xl font-black text-brand-dark tracking-tighter">
+          <h3 className="text-3xl sm:text-4xl font-black text-brand-dark tracking-tighter">
             <span className="text-lg font-bold text-slate-300 mr-1">K</span>
             {quote.price.toLocaleString()}
             {(() => {
@@ -356,12 +361,12 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
           )}
 
           {/* Message & Terms */}
-          <div className="bg-white p-8 rounded-4xl border border-slate-200 shadow-sm">
+          <div className="bg-white p-5 sm:p-8 rounded-3xl sm:rounded-4xl border border-slate-200 shadow-sm">
             <h3 className="text-lg font-bold text-brand-dark mb-6 flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-[#C9973A]" />
               Provider Message
             </h3>
-            <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 italic text-slate-600 leading-relaxed mb-8">
+            <div className="p-4 sm:p-6 bg-slate-50 rounded-2xl border border-slate-100 italic text-slate-600 leading-relaxed mb-8">
               "{quote.message}"
             </div>
 
@@ -815,7 +820,7 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
 
           {/* Inquiry Reference */}
           {inquiry && (
-            <div className="bg-white p-8 rounded-4xl border border-slate-200 shadow-sm">
+            <div className="bg-white p-5 sm:p-8 rounded-3xl sm:rounded-4xl border border-slate-200 shadow-sm">
               <h3 className="text-lg font-bold text-brand-dark mb-4">Inquiry Reference</h3>
               <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
                 <h4 className="font-bold text-brand-dark mb-2">{inquiry.title}</h4>
@@ -863,7 +868,7 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
         {/* Sidebar: Actions */}
         <div className="space-y-6">
           {/* Process-Aware Action Bar */}
-          <div className="bg-brand-dark p-8 rounded-4xl text-white shadow-xl shadow-slate-200">
+          <div className="bg-brand-dark p-5 sm:p-8 rounded-3xl sm:rounded-4xl text-white shadow-xl shadow-slate-200">
             <h3 className="text-xl font-serif font-bold mb-4">
               {quote.processType === 'EXPRESS' ? 'Ready to pay?' : 'Ready to proceed?'}
             </h3>

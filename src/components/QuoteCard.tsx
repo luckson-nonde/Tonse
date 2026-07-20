@@ -115,13 +115,19 @@ export default function QuoteCard({ quote, onView, onPay, onDelete }: QuoteCardP
       )}
 
       {/* Header: Shop Info & Price */}
-      <div className="flex justify-between items-start gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex justify-between items-start gap-3 sm:gap-4">
+        {/* min-w-0 all the way down: provider names are often emails, which
+            are unbreakable strings that otherwise blow the card's width out
+            on a phone and push the price off-screen. */}
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-500 text-lg shadow-inner shrink-0">
             {(quote.providerName || 'P').charAt(0)}
           </div>
           <div className="min-w-0">
-            <h4 className="text-base font-bold text-[#1a1612] leading-tight">
+            <h4
+              className="text-[15px] sm:text-base font-bold text-[#1a1612] leading-tight truncate"
+              title={quote.providerName || 'Provider'}
+            >
               {quote.providerName || 'Provider'}
             </h4>
             {categoryContext && (
@@ -158,7 +164,7 @@ export default function QuoteCard({ quote, onView, onPay, onDelete }: QuoteCardP
           </p>
           <div className="flex items-start justify-end">
             <span className="text-sm font-bold text-slate-400 mt-1 mr-0.5">k</span>
-            <span className="text-2xl font-black text-[#1a1612] tracking-tight leading-none">
+            <span className="text-xl sm:text-2xl font-black text-[#1a1612] tracking-tight leading-none">
               {(quote.price || 0).toLocaleString()}
             </span>
           </div>
@@ -227,12 +233,17 @@ export default function QuoteCard({ quote, onView, onPay, onDelete }: QuoteCardP
           alongside View Offer. They're now scoped to the detail view —
           the card stays a focused 3-action surface so the buyer can
           decide quickly: kill it, pay it, or open it. */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 pt-1 mt-1">
-        <div className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 pt-1 mt-1 min-w-0">
+        {/* Quote ids are UUIDs — truncate rather than let one string set the
+            card's minimum width. */}
+        <div
+          className="text-[10px] font-bold text-slate-300 uppercase tracking-wider truncate shrink-0 max-w-full sm:max-w-[40%]"
+          title={`QID-${quote.id}`}
+        >
           QID-{quote.id}
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap sm:justify-end">
           {/* Performance catalog — visible whenever we have a provider id.
               Modal is empty-state aware (renders a friendly "nothing
               published yet" if the artist hasn't added clips), so this
