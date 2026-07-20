@@ -540,7 +540,14 @@ export default function ProviderLeadsView({
         {leads.length === 0 ? (
           <div className="bg-white rounded-2xl p-10 text-center border border-slate-100 flex flex-col items-center justify-center min-h-[40vh] shadow-sm">
             <img src={emptyLeadsImage} alt="No leads" className="w-36 h-36 object-contain opacity-90 mb-6" />
-            {(!user?.categories || user.categories.length === 0) ? (
+            {/* "Profile Incomplete" only when categories are GENUINELY absent
+                AND the viewer owns the profile. Use visibleCategoryNames — the
+                same resolved signal the header trusts (reads categoryIds) —
+                not the legacy user.categories, which is always empty on staff
+                accounts even though their leads DO match the parent shop's
+                categories. And staff can't edit categories (their owner does),
+                so never tell them to "add" any; show the neutral message. */}
+            {(!visibleCategoryNames && !user?.parentProviderId) ? (
               <>
                 <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#C9973A] mb-2">
                   Profile Incomplete

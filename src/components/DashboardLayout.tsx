@@ -39,7 +39,6 @@ import {
   LifeBuoy,
 } from 'lucide-react';
 import Logo from './Logo';
-import ConfirmModal from './ConfirmModal';
 import HeaderProfileMenu from './HeaderProfileMenu';
 import RoleManagerModal from './RoleManagerModal';
 import BuyerVerificationBanner from './BuyerVerificationBanner';
@@ -308,7 +307,6 @@ export default function DashboardLayout({
   useEffect(() => {
     if (activeTab === 'shops' || activeTab === 'favorites') setIsShopsMenuOpen(true);
   }, [activeTab]);
-  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isRoleManagerOpen, setIsRoleManagerOpen] = useState(false);
   // Client-side gate only, for showing/hiding the menu item — every rule is
   // re-enforced server-side in UsersService.switchOrActivateRole.
@@ -316,7 +314,6 @@ export default function DashboardLayout({
     ['BUYER', 'SELLER', 'SERVICE_PROVIDER'].includes(user?.role ?? '') &&
     !!user?.companyName &&
     !user?.parentProviderId;
-  const [isResetting, setIsResetting] = useState(false);
 
   // ── Real notifications (Uber-dispatch Tier-1 rows) ───────────────────
   // Unread badge polls lightly (~30s; deliberately not a second SSE
@@ -806,23 +803,6 @@ export default function DashboardLayout({
     navigate('/login');
   };
 
-  const handleFactoryReset = async () => {
-    try {
-      setIsResetting(true);
-      const { db } = await import('../services/api/database');
-      await db.clearAllTables();
-      setIsResetModalOpen(false);
-      // Force refresh/logout to clear local state
-      logout();
-      navigate('/login');
-      window.location.reload();
-    } catch (error) {
-      console.error('Failed to reset data:', error);
-    } finally {
-      setIsResetting(false);
-    }
-  };
-
   const NavLink = ({
     tab,
     icon: Icon,
@@ -1219,24 +1199,7 @@ export default function DashboardLayout({
             <LogOut className="w-4 h-4" />
             Logout
           </button>
-          <button
-            onClick={() => setIsResetModalOpen(true)}
-            className="text-[10px] font-bold text-slate-400 hover:text-rose-500 transition-colors uppercase tracking-widest flex items-center gap-1.5"
-          >
-            <History className="w-3 h-3" />
-            Factory Reset
-          </button>
         </div>
-
-        <ConfirmModal
-          isOpen={isResetModalOpen}
-          onClose={() => setIsResetModalOpen(false)}
-          onConfirm={handleFactoryReset}
-          title="Factory Reset"
-          message="This will permanently delete all inquiries, quotes, orders, and products. Your user account will be preserved, but all activity will be wiped. This Cannot be undone."
-          confirmText={isResetting ? "Clearing..." : "Yes, Clear All Data"}
-          variant="danger"
-        />
       </div>
 
       {/* Main Content + Calendar */}
