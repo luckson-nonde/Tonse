@@ -600,6 +600,29 @@ export default function ProviderDashboard() {
     // proper filters on the inquiry_categories join, not as fragile
     // client-side string parsing on a field that no longer exists.
 
+    // Re-attach pending-quoted inquiries the backend dropped from the feed.
+    // Submitting a quote flips the inquiry to status QUOTED (quotes.service),
+    // and GET /inquiries/leads/me only returns status=OPEN — so an inquiry
+    // this provider quoted vanishes from allLeads entirely. Rebuild those
+    // rows from the provider's OWN joined quotes (myQuotes carries .inquiry)
+    // so an in-flight quotation still shows on Service Requests, badged
+    // pending. Provider-scoped: it never surfaces other providers' leads.
+    const presentIds = new Set(filtered.map((l: any) => String(l.id)));
+    for (const q of myQuotes) {
+      if (q.status !== 'PENDING' || q.isArchived) continue;
+      const inq: any = (q as any).inquiry;
+      if (!inq?.id || presentIds.has(String(inq.id))) continue;
+      if (inq.archivedBy?.includes(providerId) || inq.deletedBy?.includes(providerId)) continue;
+      filtered.push(inq);
+      presentIds.add(String(inq.id));
+    }
+
+    // Newest first — appended rows would otherwise trail out of date order.
+    filtered.sort(
+      (a: any, b: any) =>
+        new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+    );
+
     return filtered;
   }, [allLeads, myQuotes, effectiveProviderId, pendingQuoteByInquiryId]);
 
