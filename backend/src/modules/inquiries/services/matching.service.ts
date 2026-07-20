@@ -133,7 +133,11 @@ export class MatchingService {
       matchedCategoryIds = matchedCategoryIds.filter((id) => !disabled.has(id));
     }
 
-    if (matchedCategoryIds.length === 0) {
+    // A provider with no category subscriptions still receives inquiries
+    // TARGETED directly at them (e.g. a Purchase Order sent to this shop for
+    // its own product) — so only short-circuit when there's also no provider
+    // scope to match a targeted inquiry against.
+    if (matchedCategoryIds.length === 0 && !filters.providerUserId) {
       this.logger.log(
         `Leads query: profile=${selector.type}/${selector.profileId} matchedCategories=[] → 0 inquiries (none selected or all disabled)`,
       );
@@ -170,9 +174,16 @@ export class MatchingService {
 
     // Targeting: a directed inquiry (targetedProviderId set) is visible only to
     // that provider; broadcast inquiries (NULL) reach every matching provider.
+    // We also capture the placeholder so the category gate below can be
+    // bypassed for an inquiry targeted at THIS provider — a Purchase Order for
+    // the shop's own product must arrive even if the shop isn't subscribed to
+    // that product's category.
+    let targetedMembership = '';
     if (filters.providerUserId) {
-      where += ` AND (i."targetedProviderId" IS NULL OR i."targetedProviderId" = $${++p})`;
+      const pu = `$${++p}`;
       params.push(filters.providerUserId);
+      where += ` AND (i."targetedProviderId" IS NULL OR i."targetedProviderId" = ${pu})`;
+      targetedMembership = ` OR i."targetedProviderId" = ${pu}`;
     }
 
     // Variant filter — narrow to inquiries whose category carries the
@@ -203,14 +214,14 @@ export class MatchingService {
     // dedup happens in a sub-select on i.id alone instead.
     const inquirySql = `
       SELECT i.* FROM inquiries i
-      WHERE i.id IN (${variantSubquery})
+      WHERE (i.id IN (${variantSubquery})${targetedMembership})
       ${where}
       ORDER BY i."createdAt" DESC
       LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}
     `;
     const countSql = `
       SELECT COUNT(*)::int AS count FROM inquiries i
-      WHERE i.id IN (${variantSubquery})
+      WHERE (i.id IN (${variantSubquery})${targetedMembership})
       ${where}
     `;
 

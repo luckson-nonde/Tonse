@@ -554,6 +554,60 @@ export default function BuyerDashboard() {
     }
   };
 
+  // Product-anchored Purchase Order: a targeted EXPRESS inquiry carrying the
+  // chosen products as `items`, marked orderKind PURCHASE_ORDER. The shop's
+  // quotation manager prices it (one quote, maxQuotes=1), then the buyer pays
+  // through the normal EXPRESS quote→order flow. No buyer-side price — the
+  // shop supplies it. Throws so ShopProfileView can surface the error inline.
+  const handleSendPurchaseOrder = async (
+    shop: ShopResult,
+    items: Array<{ productId: string; title: string; quantity: number; category?: string }>,
+    note?: string,
+  ) => {
+    if (!user?.id) throw new Error('Please sign in to send a purchase order.');
+    if (!items.length) throw new Error('Add at least one product to the order.');
+
+    // categoryIds must be non-empty (DTO) AND valid catalog ids. The shop's
+    // own subscriptions are guaranteed-valid; targeting delivers the PO
+    // regardless of category, so this is purely to satisfy validation.
+    const shopCats = (shop.categoryIds ?? []).filter(Boolean);
+    const fallbackCats = items.map((i) => i.category).filter(Boolean) as string[];
+    const categoryIds = shopCats.length ? shopCats : Array.from(new Set(fallbackCats));
+    if (!categoryIds.length) {
+      throw new Error('This shop has no catalog categories set up yet.');
+    }
+
+    const totalUnits = items.reduce((s, i) => s + i.quantity, 0);
+    const payload: CreateInquiryPayload = {
+      title: `Purchase Order · ${items.length} item${items.length !== 1 ? 's' : ''} from ${shop.name}`.slice(0, 255),
+      // Description must be ≥10 chars; a short note falls back to a summary.
+      description:
+        note && note.trim().length >= 10
+          ? note.trim()
+          : `Purchase order for ${totalUnits} unit(s) across ${items.length} product(s). Please confirm the price and availability.`,
+      items: JSON.stringify(
+        items.map((i) => ({ productId: i.productId, title: i.title, quantity: i.quantity })),
+      ),
+      categoryIds,
+      location: shop.location || 'Zambia',
+      province: shop.province,
+      city: shop.city,
+      status: 'OPEN',
+      preferences: JSON.stringify({}),
+      attributes: JSON.stringify({ orderKind: 'PURCHASE_ORDER', note: note?.trim() || '' }),
+      processType: 'EXPRESS',
+      targetedProviderId: shop.sellerId,
+    };
+
+    await createInquiry(payload, {
+      idempotencyKey: newIdempotencyKey(),
+      label: `Purchase Order: ${shop.name}`,
+      changedEvent: 'tonse:inquiries-changed',
+    });
+    refreshInquiries();
+    handleTabChange('inquiries');
+  };
+
   const handleInquiryComplete = (selectedCategories: any) => {
     if (selectedCategories.isLabour) {
       setPendingInquiry((prev) => ({ ...prev, ...selectedCategories }));
@@ -945,6 +999,7 @@ export default function BuyerDashboard() {
             profileId={selectedShopProfileId}
             onBack={() => handleTabChange('shops')}
             onSendInquiry={(shop) => handleAction('send_inquiry_to_shop', shop)}
+            onSendPurchaseOrder={handleSendPurchaseOrder}
           />
         ) : null;
       default:

@@ -65,6 +65,37 @@ export async function fetchShops(filters: {
   return res.data ?? { data: [], total: 0 };
 }
 
+// ── Shop catalog (products a buyer can build a Purchase Order from) ──────
+
+export interface ShopProduct {
+  id: string;
+  sellerId: string;
+  name: string;
+  description: string;
+  category: string;
+  subCategory?: string;
+  /** Listed price — NOT shown to the buyer in the PO flow (the shop prices
+   *  the order), kept for the seller's own reference. */
+  price?: number;
+  stock?: number;
+  images?: string[];
+  brand?: string;
+  condition?: string;
+  isActive?: boolean;
+}
+
+/** Every product in a shop's catalog (newest first). `sellerId` is the shop
+ *  owner's users.id — ShopProfile.sellerId, NOT the profile row id. */
+export async function fetchShopProducts(sellerId: string): Promise<ShopProduct[]> {
+  try {
+    const res = await apiClient.get<ShopProduct[]>(`/products/seller/${sellerId}`);
+    const list = Array.isArray(res.data) ? res.data : [];
+    return list.filter((p) => p.isActive !== false);
+  } catch {
+    return [];
+  }
+}
+
 // ── Favorites (Browse Shops → Favorites) ────────────────────────────────
 // Persisted per-user on the backend (shop_favorites). Keyed by ShopResult.id.
 

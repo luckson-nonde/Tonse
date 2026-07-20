@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package, Users, Clock, FileText, Flag } from 'lucide-react';
+import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package, Users, Clock, FileText, Flag, ShoppingCart } from 'lucide-react';
 import ReportUserModal from '../ReportUserModal';
 import emptyLeadsImage from '../../assets/images/empty-states/owl_reading.webp';
 import { uniqueKey } from '../../utils/keyUtils';
@@ -669,6 +669,30 @@ export default function ProviderLeadsView({
 
                   {/* Title */}
                   <p className="text-[15px] font-bold text-slate-800 leading-snug -mt-1">{lead.title}</p>
+
+                  {/* Purchase Order: a product-anchored, targeted request. Show
+                      the badge + each product/qty so the quotation manager
+                      knows exactly what to price. */}
+                  {(lead as any).attributes?.orderKind === 'PURCHASE_ORDER' && (
+                    <div className="self-start w-full -mt-0.5">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#fdf6e9] text-[#8a6118] border border-[#ecd9b3]">
+                        <ShoppingCart className="w-3 h-3" />
+                        Purchase Order · {parsedItems.length} product{parsedItems.length !== 1 ? 's' : ''}
+                      </span>
+                      {parsedItems.length > 0 && (
+                        <div className="mt-2 rounded-xl border border-[#ecd9b3] bg-[#fdfaf2] divide-y divide-[#f0e4c8]">
+                          {parsedItems.map((it: any, i: number) => (
+                            <div key={i} className="flex items-center justify-between gap-3 px-3 py-2">
+                              <span className="text-[12px] font-semibold text-slate-800 truncate">
+                                {it.title || it.name || 'Item'}
+                              </span>
+                              <span className="text-[11px] font-bold text-[#8a6118] shrink-0">× {it.quantity ?? 1}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Live dispatch counter — quotes taken / slots, reserve
                       state, and the response countdown. Ticks in real time

@@ -138,14 +138,21 @@ export class InquiriesService {
   /** Reverse-match the fresh inquiry to provider userIds and push the
    *  durable NEW_LEAD notification that drives the incoming-request alert. */
   private async dispatchNewLeadNotifications(inquiry: Inquiry): Promise<void> {
-    const providerIds = await this.matchingService.findMatchedProviderUserIdsForInquiry(
-      inquiry.id,
-      inquiry.city ?? null,
-    );
+    // Targeted inquiry (e.g. a Purchase Order sent to one shop): the alert
+    // goes ONLY to that provider. The category broadcast below would otherwise
+    // leak the request's snapshot to every matching shop even though the
+    // pull-side leads list correctly hides it from them.
+    const providerIds = inquiry.targetedProviderId
+      ? [inquiry.targetedProviderId]
+      : await this.matchingService.findMatchedProviderUserIdsForInquiry(
+          inquiry.id,
+          inquiry.city ?? null,
+        );
     // Never dispatch the buyer's own request back at them (a user can hold
     // both buyer and provider profiles).
     const audience = providerIds.filter((id) => id !== inquiry.buyerId);
     if (audience.length === 0) return;
+    const orderKind = (inquiry.attributes as any)?.orderKind ?? null;
     await this.notificationsService.notifyUsers(audience, 'NEW_LEAD', () => ({
       title: inquiry.title,
       inquiryId: inquiry.id,
@@ -167,6 +174,10 @@ export class InquiriesService {
         createdAt: inquiry.createdAt,
         quoteCount: 0,
         reserveCount: 0,
+        // Purchase-order marker + line items so the shop's alert/lead can
+        // render "Purchase Order · N products" instead of a generic inquiry.
+        orderKind,
+        items: inquiry.items ?? [],
       },
     }));
   }

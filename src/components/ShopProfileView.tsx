@@ -19,16 +19,42 @@ import {
   FileText,
   Calendar,
   Flag,
+  ShoppingCart,
+  Plus,
+  Minus,
+  Package,
+  X,
+  Send,
 } from 'lucide-react';
-import { getShopProfile, type ShopProfile, type ShopResult } from '../services/api/shopService';
+import {
+  getShopProfile,
+  fetchShopProducts,
+  type ShopProfile,
+  type ShopResult,
+  type ShopProduct,
+} from '../services/api/shopService';
 import { reviewService, type ShopReview } from '../services/api/reviewService';
 import ReportUserModal from './ReportUserModal';
 import { Star } from 'lucide-react';
+
+export interface PurchaseOrderLine {
+  productId: string;
+  title: string;
+  quantity: number;
+  category?: string;
+}
 
 interface ShopProfileViewProps {
   profileId: string;
   onBack: () => void;
   onSendInquiry: (shop: ShopResult) => void;
+  /** Send a product-anchored Purchase Order to this shop. Resolves once the
+   *  PO inquiry is created (the parent then navigates to My Inquiries). */
+  onSendPurchaseOrder: (
+    shop: ShopResult,
+    items: PurchaseOrderLine[],
+    note?: string,
+  ) => Promise<void>;
 }
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
@@ -63,10 +89,24 @@ function memberSince(iso: string | undefined) {
   return `${years} year${years !== 1 ? 's' : ''}`;
 }
 
-export default function ShopProfileView({ profileId, onBack, onSendInquiry }: ShopProfileViewProps) {
+export default function ShopProfileView({
+  profileId,
+  onBack,
+  onSendInquiry,
+  onSendPurchaseOrder,
+}: ShopProfileViewProps) {
   const [profile, setProfile] = useState<ShopProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [showReport, setShowReport] = useState(false);
+
+  // Purchase Order (product-anchored) state.
+  const [products, setProducts] = useState<ShopProduct[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [cart, setCart] = useState<Record<string, number>>({}); // productId → qty
+  const [showPOReview, setShowPOReview] = useState(false);
+  const [poNote, setPoNote] = useState('');
+  const [submittingPO, setSubmittingPO] = useState(false);
+  const [poError, setPoError] = useState<string | null>(null);
   const [reviews, setReviews] = useState<{ data: ShopReview[]; total: number; average: number }>({
     data: [],
     total: 0,
@@ -92,6 +132,44 @@ export default function ShopProfileView({ profileId, onBack, onSendInquiry }: Sh
       .catch(() => { /* reviews are additive — profile stays useful without them */ });
     return () => { cancelled = true; };
   }, [profile?.sellerId]);
+
+  // Shop catalog for the Purchase Order flow. Keyed on sellerId (users.id),
+  // the same id targeted inquiries are directed at.
+  useEffect(() => {
+    if (!profile?.sellerId) return;
+    let cancelled = false;
+    setProductsLoading(true);
+    fetchShopProducts(profile.sellerId)
+      .then((p) => { if (!cancelled) setProducts(p); })
+      .finally(() => { if (!cancelled) setProductsLoading(false); });
+    return () => { cancelled = true; };
+  }, [profile?.sellerId]);
+
+  const cartCount = Object.values(cart).reduce((s, q) => s + q, 0);
+  const cartLineCount = Object.keys(cart).filter((id) => cart[id] > 0).length;
+  const setQty = (id: string, qty: number) =>
+    setCart((c) => {
+      const next = { ...c };
+      if (qty <= 0) delete next[id];
+      else next[id] = qty;
+      return next;
+    });
+
+  const handleSendPO = async () => {
+    if (!profile || cartLineCount === 0) return;
+    const items: PurchaseOrderLine[] = products
+      .filter((p) => (cart[p.id] ?? 0) > 0)
+      .map((p) => ({ productId: p.id, title: p.name, quantity: cart[p.id], category: p.category }));
+    setSubmittingPO(true);
+    setPoError(null);
+    try {
+      await onSendPurchaseOrder(profile as ShopResult, items, poNote.trim() || undefined);
+      // Parent navigates to My Inquiries on success; this view unmounts.
+    } catch (e: any) {
+      setPoError(e?.message || 'Could not send the purchase order. Please try again.');
+      setSubmittingPO(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -285,6 +363,91 @@ export default function ShopProfileView({ profileId, onBack, onSendInquiry }: Sh
               ))}
             </div>
 
+            {/* Purchase Order — pick products, the shop confirms the price */}
+            {(productsLoading || products.length > 0) && (
+              <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#C9973A]">Purchase Order</p>
+                    <p className="text-[12px] text-slate-400 font-medium mt-0.5">
+                      Pick what you want — {profile.name} confirms the price, then you pay.
+                    </p>
+                  </div>
+                  <ShoppingCart className="w-5 h-5 text-[#C9973A] shrink-0" />
+                </div>
+
+                {productsLoading ? (
+                  <div className="py-10 flex justify-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-[#C9973A]" />
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {products.map((p) => {
+                      const qty = cart[p.id] ?? 0;
+                      return (
+                        <div
+                          key={p.id}
+                          className={`flex items-center gap-3 p-3 rounded-2xl border transition-colors ${qty > 0 ? 'bg-[#fdf6e9] border-[#ecd9b3]' : 'bg-slate-50/60 border-slate-100'}`}
+                        >
+                          <div className="w-12 h-12 rounded-xl bg-white border border-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
+                            {p.images?.[0] ? (
+                              <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <Package className="w-5 h-5 text-slate-300" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] font-bold text-[#1a1a2e] truncate">{p.name}</p>
+                            <p className="text-[11px] text-slate-400 font-medium truncate">
+                              {p.category}
+                              {typeof p.stock === 'number'
+                                ? ` · ${p.stock > 0 ? `${p.stock} in stock` : 'made to order'}`
+                                : ''}
+                            </p>
+                          </div>
+                          {qty > 0 ? (
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                onClick={() => setQty(p.id, qty - 1)}
+                                aria-label="Reduce quantity"
+                                className="w-7 h-7 rounded-lg bg-white border border-[#d8c08a] text-[#C9973A] flex items-center justify-center hover:bg-[#fdf6e9]"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="w-6 text-center text-[13px] font-bold text-[#1a1a2e]">{qty}</span>
+                              <button
+                                onClick={() => setQty(p.id, qty + 1)}
+                                aria-label="Increase quantity"
+                                className="w-7 h-7 rounded-lg bg-white border border-[#d8c08a] text-[#C9973A] flex items-center justify-center hover:bg-[#fdf6e9]"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setQty(p.id, 1)}
+                              className="shrink-0 px-3 py-1.5 rounded-lg bg-[#1a1612] text-white text-[11px] font-bold hover:bg-black transition-colors flex items-center gap-1.5"
+                            >
+                              <Plus className="w-3 h-3" /> Add
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {cartLineCount > 0 && (
+                  <button
+                    onClick={() => { setPoError(null); setShowPOReview(true); }}
+                    className="mt-5 w-full py-3 rounded-xl bg-[#C9973A] text-white text-sm font-bold hover:bg-[#b8851d] transition-colors flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <ShoppingCart className="w-4 h-4" /> Review Purchase Order · {cartCount} item{cartCount !== 1 ? 's' : ''}
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Legitimacy indicators */}
             <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#C9973A] mb-5">Business Legitimacy</p>
@@ -456,6 +619,73 @@ export default function ShopProfileView({ profileId, onBack, onSendInquiry }: Sh
           reportedUserName={profile.name}
           onClose={() => setShowReport(false)}
         />
+      )}
+
+      {/* Purchase Order review + send */}
+      {showPOReview && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
+          onClick={() => !submittingPO && setShowPOReview(false)}
+        >
+          <div
+            className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl border border-slate-100 shadow-xl p-6 max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#C9973A]">Purchase Order</p>
+                <h3 className="font-serif text-[19px] font-bold text-[#1a1a2e]">Send to {profile.name}</h3>
+              </div>
+              <button
+                onClick={() => !submittingPO && setShowPOReview(false)}
+                aria-label="Close"
+                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-[12px] text-slate-500 mb-4 leading-relaxed">
+              You're telling {profile.name} what you want and how many. They'll reply with the price, then you can pay.
+            </p>
+
+            <div className="space-y-2 mb-4">
+              {products
+                .filter((p) => (cart[p.id] ?? 0) > 0)
+                .map((p) => (
+                  <div key={p.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[13px] font-semibold text-[#1a1a2e] truncate">{p.name}</span>
+                    <span className="text-[12px] font-bold text-[#C9973A] shrink-0">× {cart[p.id]}</span>
+                  </div>
+                ))}
+            </div>
+
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              Note (optional)
+            </label>
+            <textarea
+              value={poNote}
+              onChange={(e) => setPoNote(e.target.value)}
+              rows={3}
+              placeholder="Delivery address, preferred variant, timing…"
+              className="w-full rounded-xl border border-slate-200 p-3 text-[13px] text-[#1a1a2e] outline-none focus:border-[#C9973A] resize-none mb-2"
+            />
+
+            {poError && <p className="text-[12px] text-rose-600 font-medium mb-3">{poError}</p>}
+
+            <button
+              onClick={handleSendPO}
+              disabled={submittingPO}
+              className="w-full py-3 rounded-xl bg-[#1a1612] text-white text-sm font-bold hover:bg-black transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {submittingPO ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</>
+              ) : (
+                <><Send className="w-4 h-4" /> Send Purchase Order</>
+              )}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
