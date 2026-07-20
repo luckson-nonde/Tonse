@@ -429,6 +429,16 @@ export class InquiriesService {
   }
 
   /**
+   * Public decoration for other modules that embed inquiries in their
+   * responses (e.g. the quotes list joins each quote's inquiry): junction
+   * categories + buyer display name, both batched. Mutates in place.
+   */
+  async decorateForDisplay(inquiries: Inquiry[]): Promise<Inquiry[]> {
+    const withCats = await this.hydrateCategoryFields(inquiries);
+    return this.hydrateBuyerInfo(withCats);
+  }
+
+  /**
    * Decorate inquiries with `buyerName` resolved from `buyer_profiles`
    * (where the human-readable name actually lives — `users` row has
    * no name column in this schema). The buyer-detail panel was

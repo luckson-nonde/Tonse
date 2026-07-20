@@ -292,6 +292,12 @@ export default function ProviderDashboard() {
       );
       const enrichedQuotes = await Promise.all(
         sortedQuotes.map(async (quote) => {
+          // GET /quotes already joins the inquiry server-side. Keep it —
+          // re-fetching GET /inquiries/:id 403s for providers on broadcast
+          // inquiries (post-IDOR lockdown: only owner/admin/targeted provider
+          // may read one), and overwriting with undefined blanked the whole
+          // My Quotes / Paid Orders lists (cards bail on a missing inquiry).
+          if ((quote as any).inquiry) return quote;
           const inquiry = await db.inquiries.get(quote.inquiryId);
           return { ...quote, inquiry };
         })

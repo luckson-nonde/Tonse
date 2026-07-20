@@ -222,6 +222,13 @@ export class QuotesService {
     queryBuilder.orderBy(`quote.${sortField}`, sortOrder);
 
     const [data, total] = await queryBuilder.getManyAndCount();
+    // Joined inquiries are raw rows — decorate with junction categories and
+    // the buyer's display name so provider quote/order cards can render the
+    // counterparty and resolve the right category schema.
+    const joined = data.map((q) => q.inquiry).filter(Boolean);
+    if (joined.length > 0) {
+      await this.inquiriesService.decorateForDisplay(joined);
+    }
     return { data, total };
   }
 
