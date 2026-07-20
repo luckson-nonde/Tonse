@@ -132,7 +132,11 @@ export class ShopsService {
           'SELLER'                                                   AS shop_type
         FROM users u
         JOIN seller_profiles sp ON sp."userId" = u.id
-        WHERE u.role = 'SELLER'
+        -- parentProviderId IS NULL keeps EMPLOYEE accounts (quotation
+        -- manager, collection officer, technician, loan officer) out of the
+        -- shops directory: they carry their owner's role + a profile row but
+        -- are staff of a shop, not shops themselves.
+        WHERE u.role = 'SELLER' AND u."parentProviderId" IS NULL
 
         UNION ALL
 
@@ -156,7 +160,8 @@ export class ShopsService {
           'SERVICE_PROVIDER'                                           AS shop_type
         FROM users u
         JOIN service_provider_profiles spp ON spp."userId" = u.id
-        WHERE u.role = 'SERVICE_PROVIDER'
+        -- Exclude staff accounts (see the SELLER branch note above).
+        WHERE u.role = 'SERVICE_PROVIDER' AND u."parentProviderId" IS NULL
       ),
       cat_junctions AS (
         SELECT "sellerProfileId"          AS profile_id, "categoryId" AS category_id
@@ -289,7 +294,9 @@ export class ShopsService {
           'SELLER'                                                     AS shop_type
         FROM seller_profiles sp
         JOIN users u ON u.id = sp."userId"
-        WHERE sp.id = $1
+        -- Staff accounts are not shops: a direct link or a stale favorite
+        -- pointing at an employee's profile id resolves to nothing.
+        WHERE sp.id = $1 AND u."parentProviderId" IS NULL
 
         UNION ALL
 
@@ -314,7 +321,8 @@ export class ShopsService {
           'SERVICE_PROVIDER'                                           AS shop_type
         FROM service_provider_profiles spp
         JOIN users u ON u.id = spp."userId"
-        WHERE spp.id = $1
+        -- Exclude staff accounts (see the SELLER branch note above).
+        WHERE spp.id = $1 AND u."parentProviderId" IS NULL
       ),
       cat_junctions AS (
         SELECT "sellerProfileId"          AS profile_id, "categoryId" AS category_id
