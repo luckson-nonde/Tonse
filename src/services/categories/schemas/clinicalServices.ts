@@ -23,6 +23,7 @@ export const pharmaciesSchema: FieldSchema[] = [
   { name: "genericsAccepted", label: "Generic Substitutes OK?", type: "toggle", required: false, keepInExpress: true, helpText: "Allow the pharmacy to offer an equivalent generic brand if the exact one is out of stock.", group: "What You Need" },
   { name: "fulfilment", label: "Collection or Delivery?", type: "select", required: true, options: ["I'll collect from the pharmacy", "Deliver to me", "Whichever is faster"], group: "Fulfilment" },
   { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - needed now", "Today", "Within 2 days", "This week"], group: "Fulfilment" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Fulfilment", dependsOn: { field: "urgency", value: ["Within 2 days", "This week"] } },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Fulfilment" },
   { name: "additionalDetails", label: "Additional Notes", type: "textarea", required: false, placeholder: "Allergies the pharmacist should know about, preferred brands, dosage questions...", group: "Fulfilment" }
 ];

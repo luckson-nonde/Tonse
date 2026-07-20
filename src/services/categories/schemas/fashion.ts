@@ -9,7 +9,8 @@ export const fashionSchema: FieldSchema[] = [
   { name: "condition", label: "Condition", type: "select", required: true, options: ["New", "Used - Good", "Any"] },
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, helpText: "Optional - leave blank to receive price offers from shops" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] }
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
 ];
 
 export const shoesFootwearSchema: FieldSchema[] = [
@@ -24,6 +25,7 @@ export const shoesFootwearSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific style details..." }
 ];
 
@@ -38,6 +40,7 @@ export const accessoriesJewelrySchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Size, engraving, color details..." }
 ];
 

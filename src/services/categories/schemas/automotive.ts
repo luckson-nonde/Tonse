@@ -10,7 +10,8 @@ export const carPartsNewSchema: FieldSchema[] = [
   { name: "partNumber", label: "Part Number (if known)", type: "text", required: false, placeholder: "e.g. 04465-02220" },
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, helpText: "Optional - leave blank to receive price offers from shops" },
-  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] }
+  { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
 ];
 
 export const carPartsBreakersSchema: FieldSchema[] = [
@@ -23,6 +24,7 @@ export const carPartsBreakersSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, helpText: "Optional - leave blank to receive price offers from shops" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Describe the part and its condition requirements" }
 ];
 
@@ -51,6 +53,7 @@ export const vehiclesBuySchema: FieldSchema[] = [
   { name: "tradeIn", label: "Have a Trade-in?", type: "toggle", required: false, helpText: "Toggle on if you have a vehicle to part-exchange", group: "Buyer Context" },
   { name: "tradeInDetails", label: "Trade-in Details", type: "textarea", required: false, placeholder: "Make, model, year, mileage, condition", group: "Buyer Context", dependsOn: { field: "tradeIn", value: true } },
   { name: "urgency", label: "Timeline", type: "select", required: true, options: ["Immediately", "Within 1 month", "Within 3 months", "Just exploring"], group: "Buyer Context" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Buyer Context", dependsOn: { field: "urgency", value: ["Within 1 month", "Within 3 months"] } },
   { name: "additionalDetails", label: "Anything else?", type: "textarea", required: false, placeholder: "Any other requirements or questions for the dealer", group: "Buyer Context" }
 ];
 
@@ -66,6 +69,7 @@ export const carAccessoriesSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1, group: "Accessory Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific color, size, compatibility requirements...", group: "Budget and Urgency" }
 ];
 
@@ -96,6 +100,7 @@ export const motorcyclesPartsSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1, group: "Motorcycle Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific requirements or additional information...", group: "Budget and Urgency" }
 ];
 
@@ -109,6 +114,7 @@ export const automotiveToolsSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1, group: "Tool Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific requirements, power source, compatibility needs...", group: "Budget and Urgency" }
 ];
 

@@ -66,6 +66,12 @@ export function generateZodSchema(fields: FieldSchema[]) {
         fieldSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format');
         break;
 
+      case 'datetime':
+        // Combined day+time, ISO-local ("2026-08-02T14:00") — the shape
+        // derivedGigEvents.splitDateTime already parses into date + time.
+        fieldSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Pick a date and time');
+        break;
+
       case 'image_upload':
         fieldSchema = z.any();
         break;
@@ -113,7 +119,9 @@ export function generateZodSchema(fields: FieldSchema[]) {
   return base.superRefine((data: any, ctx: z.RefinementCtx) => {
     for (const f of conditionalRequired) {
       const dep = f.dependsOn!;
-      const visible = data[dep.field] === dep.value;
+      const visible = Array.isArray(dep.value)
+        ? dep.value.includes(data[dep.field])
+        : data[dep.field] === dep.value;
       const fieldName = f.name || (f as any).id;
       if (visible && isEmptyValue(data[fieldName])) {
         ctx.addIssue({

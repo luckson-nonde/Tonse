@@ -238,6 +238,9 @@ export default function ProviderDashboard() {
           'archived-leads',
           'financial',
           'venue-spaces',
+          'dashboard',
+          'my-jobs',
+          'history',
         ].includes(tab)
       ) {
         navigate(`/provider/${tab}`);
@@ -1236,6 +1239,18 @@ export default function ProviderDashboard() {
         <DynamicAccountRenderer
           schema={currentSchema}
           view="reporting"
+          data={{}}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : ['dashboard', 'my-jobs', 'history'].includes(activeTab) ? (
+        // Staff surfaces (Overview landing + technician job tabs). Without
+        // this branch the final else hardcodes view="home", which none of the
+        // four staff schemas define — every staff login hit "View Not Found".
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view={activeTab}
           data={{}}
           onAction={handleAction}
           onNavigate={handleTabClick}

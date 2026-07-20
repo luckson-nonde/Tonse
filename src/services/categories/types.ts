@@ -1,7 +1,7 @@
 export interface FieldSchema {
   name: string;
   label: string;
-  type: 'text' | 'textarea' | 'number' | 'select' | 'multiselect' | 'date' | 'daterange' | 'currency' | 'image_upload' | 'toggle' | 'counter' | 'gps';
+  type: 'text' | 'textarea' | 'number' | 'select' | 'multiselect' | 'date' | 'datetime' | 'daterange' | 'currency' | 'image_upload' | 'toggle' | 'counter' | 'gps';
   placeholder?: string;
   required: boolean;
   options?: string[];
@@ -11,6 +11,8 @@ export interface FieldSchema {
   group?: string;
   dependsOn?: {
     field: string;
+    /** Exact match for a scalar; ANY-of match when an array (e.g. every
+     *  urgency option that means "not immediate" reveals the same field). */
     value: any;
   };
   /** Force this field to stay visible in EXPRESS mode even when not required.

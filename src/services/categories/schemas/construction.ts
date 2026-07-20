@@ -10,6 +10,7 @@ export const buildingMaterialsSchema: FieldSchema[] = [
   { name: "deliveryRequested", label: "Do you need delivery? (Additional fees may apply)", type: "toggle", required: false, helpText: "Default: You will pick up from the shop. Toggle if you need items delivered.", group: "Delivery and Timeline" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Project size, site access, any specific requirements...", group: "Budget and Urgency" }
 ];
 
@@ -22,6 +23,7 @@ export const plumbingFixturesSchema: FieldSchema[] = [
   { name: "issueDescription", label: "Describe the Issue or Requirement", type: "textarea", required: true, placeholder: "e.g. Burst pipe in kitchen, Need new toilet installed, Water not reaching upper floor", group: "Service Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any other details that would help the provider...", group: "Budget and Urgency" }
 ];
 
@@ -35,6 +37,7 @@ export const electricalSuppliesSchema: FieldSchema[] = [
   { name: "materialsRequired", label: "Materials Required?", type: "toggle", required: false, helpText: "Toggle if you need the provider to supply materials", group: "Work Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Right Now", "Immediately", "Within a week", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Property size, number of rooms, existing electrical setup...", group: "Budget and Urgency" }
 ];
 
@@ -48,6 +51,7 @@ export const hardwareToolsSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1, group: "Tool Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific requirements, power source, compatibility needs...", group: "Budget and Urgency" }
 ];
 
@@ -57,6 +61,7 @@ export const constructionMachinerySchema: FieldSchema[] = [
   { name: "machineryType", label: "Type of Machinery", type: "select", required: true, options: ["Excavator / Digger", "Bulldozer", "Grader", "Tipper Truck", "Concrete Mixer", "Crane", "Forklift", "Compactor / Roller", "Generator", "Scaffolding", "Concrete Pump", "Other"], group: "Machinery Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "location_name", label: "Project / Site Location", type: "text", required: true, placeholder: "e.g. Lusaka, Kafue, Ndola", group: "Project Details" },
   { name: "projectDescription", label: "Project Description", type: "textarea", required: true, placeholder: "e.g. Excavation for foundation of 4 bedroom house, Road grading 2km stretch", group: "Project Details" },
   { name: "duration", label: "Duration Needed (Days)", type: "counter", required: true, min: 1, group: "Project Details" },

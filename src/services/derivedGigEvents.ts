@@ -48,6 +48,7 @@ const DATE_KEYS = [
   'startDate',
   'requiredDate',
   'preferredDate',
+  'preferredDateTime',
   'date',
 ];
 

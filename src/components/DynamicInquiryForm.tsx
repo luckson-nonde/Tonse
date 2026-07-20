@@ -4,7 +4,6 @@ import { compressImage } from '../utils/compressImage';
 import {
   ChevronLeft,
   ImagePlus,
-  CalendarDays,
   Minus,
   Plus,
   AlertCircle,
@@ -27,6 +26,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { FieldSchema, RENTAL_CATALOG_ITEMS } from '../services/categories';
 import { generateZodSchema } from '../services/schemaGenerator';
 import CustomDropdown from './CustomDropdown';
+import DateTimePicker from './DateTimePicker';
 
 interface DynamicInquiryFormProps {
   schema: FieldSchema[];
@@ -213,8 +213,13 @@ export default function DynamicInquiryForm({
 
   // Only count required fields that are actually VISIBLE — a conditional
   // (dependsOn) field that's hidden shouldn't hold the progress bar back.
-  const isFieldVisible = (f: FieldSchema) =>
-    !f.dependsOn || (formValues as any)[f.dependsOn.field] === f.dependsOn.value;
+  const isFieldVisible = (f: FieldSchema) => {
+    if (!f.dependsOn) return true;
+    const current = (formValues as any)[f.dependsOn.field];
+    return Array.isArray(f.dependsOn.value)
+      ? f.dependsOn.value.includes(current)
+      : current === f.dependsOn.value;
+  };
   const requiredFields = activeSchema.filter((f) => f.required && isFieldVisible(f));
   const filledRequiredFields = requiredFields.filter((f) => {
     const val = (formValues as any)[f.name];
@@ -226,12 +231,9 @@ export default function DynamicInquiryForm({
     requiredFields.length > 0 ? (filledRequiredFields.length / requiredFields.length) * 100 : 0;
 
   const renderField = (field: FieldSchema, isTemp: boolean = false) => {
-    // Check dependency
-    if (field.dependsOn) {
-      const dependentValue = (formValues as any)[field.dependsOn.field];
-      if (dependentValue !== field.dependsOn.value) {
-        return null;
-      }
+    // Check dependency (shared helper — scalar or any-of-array match)
+    if (!isFieldVisible(field)) {
+      return null;
     }
 
     const error = (errors as any)[field.name]?.message as string | undefined;
@@ -387,17 +389,23 @@ export default function DynamicInquiryForm({
             }
             case 'date':
               return (
-                <div
-                  className={`flex items-center bg-white border-[1.5px] rounded-xl px-4 py-3.5 transition-all duration-200 focus-within:border-[#C9973A]/50 focus-within:shadow-[0_0_0_3px_rgba(201,151,58,0.08)] ${error ? 'border-brand-error shadow-[0_0_0_3px_rgba(239,68,68,0.08)]' : 'border-[#e2e8f0]'}`}
-                >
-                  <input
-                    type="date"
-                    value={(value as string) || ''}
-                    onChange={(e) => onChange(e.target.value)}
-                    className="flex-1 bg-transparent border-none outline-none font-sans text-[15px] text-[#1a1a2e]"
-                  />
-                  <CalendarDays className="w-4.5 h-4.5 text-[#C9973A] pointer-events-none" />
-                </div>
+                <DateTimePicker
+                  mode="date"
+                  value={(value as string) || ''}
+                  onChange={onChange}
+                  placeholder={field.placeholder}
+                  error={!!error}
+                />
+              );
+            case 'datetime':
+              return (
+                <DateTimePicker
+                  mode="datetime"
+                  value={(value as string) || ''}
+                  onChange={onChange}
+                  placeholder={field.placeholder}
+                  error={!!error}
+                />
               );
             case 'toggle':
               return (
@@ -923,6 +931,8 @@ export default function DynamicInquiryForm({
                       field.type === 'textarea' ||
                       field.type === 'image_upload' ||
                       field.type === 'multiselect' ||
+                      field.type === 'date' ||
+                      field.type === 'datetime' ||
                       (field.type === 'select' &&
                         field.options &&
                         field.options.length <= 4)
@@ -959,6 +969,8 @@ export default function DynamicInquiryForm({
                             field.type === 'textarea' ||
                             field.type === 'image_upload' ||
                             field.type === 'multiselect' ||
+                            field.type === 'date' ||
+                            field.type === 'datetime' ||
                             (field.type === 'select' &&
                               field.options &&
                               field.options.length <= 4)

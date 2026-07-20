@@ -13,6 +13,7 @@ export const ispSchema: FieldSchema[] = [
   { name: "contractPreference", label: "Contract Preference", type: "select", required: false, options: ["Month to Month", "6 Month Contract", "12 Month Contract", "24 Month Contract", "No Preference"], group: "Budget and Preferences" },
   { name: "budget_limit", label: "Monthly Budget (ZMW)", type: "currency", required: false, group: "Budget and Preferences" },
   { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Preferences" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Preferences", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Building type, floor level, any specific requirements...", group: "Budget and Preferences" }
 ];
 
@@ -26,6 +27,7 @@ export const mobileNetworkServicesSchema: FieldSchema[] = [
   { name: "companyName", label: "Company / Organisation Name", type: "text", required: false, placeholder: "e.g. ABC Company Ltd", group: "Service Details" },
   { name: "budget_limit", label: "Monthly Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Number portability needed, specific features required, coverage area concerns...", group: "Budget and Urgency" }
 ];
 
@@ -41,6 +43,7 @@ export const satelliteVsatInstallationSchema: FieldSchema[] = [
   { name: "powerAvailable", label: "Reliable Power Available?", type: "toggle", required: false, helpText: "Toggle if site has reliable electricity. If not, solar options may be discussed", group: "Technical Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "When Do You Need Installation?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "GPS coordinates if remote, access road details, power situation...", group: "Budget and Urgency" }
 ];
 

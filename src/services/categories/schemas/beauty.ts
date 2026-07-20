@@ -10,6 +10,7 @@ export const skincareSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any allergies, ingredients to avoid, or specific needs..." }
 ];
 
@@ -24,6 +25,7 @@ export const makeupCosmeticsSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific requirements, occasion, or allergies..." }
 ];
 
@@ -38,6 +40,7 @@ export const haircareSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Hair length, color, any allergies or preferences..." }
 ];
 
@@ -53,6 +56,7 @@ export const fragrancesSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"] },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any similar scents you like, gift wrapping needed, etc..." }
 ];
 

@@ -11,6 +11,7 @@ export const lightingLampsSchema: FieldSchema[] = [
   { name: "installationRequired", label: "Installation Required?", type: "toggle", required: false, helpText: "Toggle if you need the lighting fitted and installed", group: "Order Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Room dimensions, ceiling height, wattage requirements...", group: "Budget and Urgency" }
 ];
 
@@ -25,6 +26,7 @@ export const wallArtMirrorsSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1, group: "Order Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Wall dimensions, existing decor style, any specific themes...", group: "Budget and Urgency" }
 ];
 
@@ -39,6 +41,7 @@ export const rugsCarpetsSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1, group: "Order Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Traffic level in room, children or pets at home, any specific requirements...", group: "Budget and Urgency" }
 ];
 
@@ -54,6 +57,7 @@ export const curtainsBlindsSchema: FieldSchema[] = [
   { name: "isCustomMade", label: "Custom Made?", type: "toggle", required: false, helpText: "Toggle if you need made-to-measure curtains", group: "Order Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Existing curtain rail type, room style, any specific requirements...", group: "Budget and Urgency" }
 ];
 

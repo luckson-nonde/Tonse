@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { format, parseISO } from 'date-fns';
 import { FieldSchema } from '../services/categories';
 
 interface DynamicDataDisplayProps {
@@ -104,6 +105,24 @@ export default function DynamicDataDisplay({ schema, attributes }: DynamicDataDi
       return (
         <span className="font-mono font-semibold text-[#C9973A]">
           ZMW {Number(item.value).toLocaleString()}
+        </span>
+      );
+    }
+
+    // Picker values are ISO strings — show them as humans read them, not
+    // raw "2026-08-02T14:00". Anything malformed falls through unformatted.
+    if (item.type === 'datetime' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(item.value))) {
+      const parsed = parseISO(String(item.value));
+      return (
+        <span className="text-slate-900 font-black">
+          {format(parsed, 'EEE, d MMM yyyy')} · {format(parsed, 'HH:mm')}
+        </span>
+      );
+    }
+    if (item.type === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(String(item.value))) {
+      return (
+        <span className="text-slate-900 font-black">
+          {format(parseISO(String(item.value)), 'EEE, d MMM yyyy')}
         </span>
       );
     }

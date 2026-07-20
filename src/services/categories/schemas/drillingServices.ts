@@ -13,6 +13,7 @@ export const boreholeDrillingSchema: FieldSchema[] = [
   { name: "tankStandNeeded", label: "Tank Stand Needed?", type: "toggle", required: false, group: "Technical Requirements" },
   { name: "budget_limit", label: "Total Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Requirements", type: "textarea", required: false, placeholder: "Geological info if known, specific pump brand, water testing requirements...", group: "Budget and Urgency" }
 ];
 
@@ -45,6 +46,7 @@ export const geotechnicalDrillingSchema: FieldSchema[] = [
   { name: "siteAccessibility", label: "Site Accessibility", type: "select", required: true, options: ["Easy Access", "Restricted Space (Indoor/Basement)", "Sloped / Difficult Terrain", "Over Water / Barge Needed"], group: "Site Conditions" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "How Soon?", type: "select", required: true, options: ["Immediately", "Within 1 week", "Within 1 month", "Planning Ahead"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within 1 week", "Within 1 month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Specific standards (ASTM/BS), reporting requirements, site safety inductions...", group: "Budget and Urgency" }
 ];
 

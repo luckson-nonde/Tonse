@@ -10,6 +10,7 @@ export const businessComputersSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity Needed", type: "counter", required: true, min: 1, group: "Order Details" },
   { name: "budget_limit", label: "Budget per Unit (ZMW)", type: "currency", required: false, group: "Order Details" },
   { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Order Details" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Order Details", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Requirements", type: "textarea", required: false, placeholder: "OS preference, specific ports needed, warranty requirements...", group: "Order Details" }
 ];
 
@@ -22,6 +23,7 @@ export const serversStorageSchema: FieldSchema[] = [
   { name: "redundancy", label: "Redundancy Requirements", type: "select", required: false, options: ["Standard (Single PSU/RAID)", "High Availability (Dual PSU/Failover)", "Mission Critical", "Not Sure"], group: "Technical Specs" },
   { name: "budget_limit", label: "Project Budget (ZMW)", type: "currency", required: false, group: "Order Details" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Order Details" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Order Details", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Rack space available, OS requirements, support level needed...", group: "Order Details" }
 ];
 
@@ -35,6 +37,7 @@ export const networkingHardwareSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1, group: "Order Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Order Details" },
   { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Order Details" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Order Details", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "SFP+ requirements, specific security features, outdoor vs indoor...", group: "Order Details" }
 ];
 
@@ -45,6 +48,7 @@ export const softwareLicensesSchema: FieldSchema[] = [
   { name: "edition", label: "Edition / Version", type: "select", required: false, options: ["Basic / Home", "Standard / Business", "Professional", "Enterprise / Premium", "Not Sure"], group: "Software Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Order Details" },
   { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Order Details" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Order Details", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Current license key if renewal, specific modules needed...", group: "Order Details" }
 ];
 
@@ -58,6 +62,7 @@ export const printersOfficeEquipmentSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1, group: "Order Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Order Details" },
   { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Order Details" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Order Details", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Network/WiFi printing needed, duplex (double-sided) printing, specific tray requirements...", group: "Order Details" }
 ];
 

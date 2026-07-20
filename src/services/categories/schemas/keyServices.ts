@@ -28,5 +28,6 @@ export const keyReplacementSchema: FieldSchema[] = [
   { name: "calloutNeeded", label: "Call-Out to Your Location?", type: "toggle", required: false, keepInExpress: true, helpText: "Should the locksmith come to you, or will you visit their shop?", group: "Fulfilment" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Fulfilment" },
   { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Emergency - Locked Out Now", "Today", "Within 2 days", "This week"], group: "Fulfilment" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Fulfilment", dependsOn: { field: "urgency", value: ["Within 2 days", "This week"] } },
   { name: "additionalDetails", label: "Additional Notes", type: "textarea", required: false, placeholder: "Anything the locksmith should know — key code on the lock, spare available, security concerns...", group: "Fulfilment" }
 ];
