@@ -307,12 +307,15 @@ export default function ShopProfileView({
                 >
                   Send Inquiry <ArrowRight className="w-4 h-4" />
                 </button>
-                <button
-                  onClick={openPO}
-                  className="w-full py-3 text-sm font-bold rounded-xl bg-[#C9973A] text-white hover:bg-[#b8851d] shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
-                >
-                  <ShoppingCart className="w-4 h-4" /> Send Purchase Order
-                </button>
+                {/* Only shops with a listed catalog offer Purchase Orders. */}
+                {profile.hasProducts && (
+                  <button
+                    onClick={openPO}
+                    className="w-full py-3 text-sm font-bold rounded-xl bg-[#C9973A] text-white hover:bg-[#b8851d] shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
+                  >
+                    <ShoppingCart className="w-4 h-4" /> Send Purchase Order
+                  </button>
+                )}
               </div>
 
               {/* Report — sellerId is the shop owner's users.id (profile.id

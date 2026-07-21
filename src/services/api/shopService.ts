@@ -26,6 +26,9 @@ export interface ShopResult {
   archetypes?: string[];
   verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED' | 'INCOMPLETE';
   shopType?: 'SELLER' | 'SERVICE_PROVIDER';
+  /** True when the shop has ≥1 active product listed. Gates the "Send
+   *  Purchase Order" affordance — only shops with a catalog show it. */
+  hasProducts?: boolean;
 }
 
 export interface ShopProfile extends Omit<ShopResult, 'socialLinks'> {

@@ -215,7 +215,14 @@ export class ShopsService {
         COALESCE(
           array_agg(DISTINCT c.archetype::text) FILTER (WHERE c.archetype IS NOT NULL),
           '{}'
-        )                                                                     AS archetypes
+        )                                                                     AS archetypes,
+        -- Drives the "Send Purchase Order" affordance: it only shows for
+        -- shops that have listed products (p.seller_id is a GROUP BY key, so
+        -- this correlated EXISTS is valid).
+        EXISTS (
+          SELECT 1 FROM products pr2
+          WHERE pr2."sellerId" = p.seller_id AND pr2."isActive" = true
+        )                                                                     AS "hasProducts"
       FROM providers p
       LEFT JOIN cat_junctions   cj ON cj.profile_id = p.profile_id
       LEFT JOIN categories       c  ON c.id          = cj.category_id
@@ -376,7 +383,12 @@ export class ShopsService {
         COALESCE(
           array_agg(DISTINCT c.name) FILTER (WHERE c.name IS NOT NULL),
           '{}'
-        )                                                              AS "categoryNames"
+        )                                                              AS "categoryNames",
+        -- Purchase Order affordance: only shops with listed products show it.
+        EXISTS (
+          SELECT 1 FROM products pr2
+          WHERE pr2."sellerId" = p.seller_id AND pr2."isActive" = true
+        )                                                              AS "hasProducts"
       FROM profile_data p
       LEFT JOIN cat_junctions cj ON cj.profile_id = p.profile_id
       LEFT JOIN categories     c  ON c.id          = cj.category_id

@@ -210,7 +210,7 @@ export default function ShopCard({
         >
           Send Inquiry <ArrowRight className="w-3.5 h-3.5" />
         </button>
-        {onSendPurchaseOrder && (
+        {onSendPurchaseOrder && shop.hasProducts && (
           <button
             onClick={() => onSendPurchaseOrder(shop)}
             className="w-full py-3 text-[13px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 bg-[#C9973A] text-white hover:bg-[#b8851d] shadow-md"
