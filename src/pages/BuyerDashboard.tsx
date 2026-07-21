@@ -561,7 +561,7 @@ export default function BuyerDashboard() {
   // shop supplies it. Throws so ShopProfileView can surface the error inline.
   const handleSendPurchaseOrder = async (
     shop: ShopResult,
-    items: Array<{ productId: string; title: string; quantity: number; category?: string }>,
+    items: Array<{ productId?: string; title: string; quantity: number; category?: string }>,
     note?: string,
   ) => {
     if (!user?.id) throw new Error('Please sign in to send a purchase order.');
@@ -586,7 +586,11 @@ export default function BuyerDashboard() {
           ? note.trim()
           : `Purchase order for ${totalUnits} unit(s) across ${items.length} product(s). Please confirm the price and availability.`,
       items: JSON.stringify(
-        items.map((i) => ({ productId: i.productId, title: i.title, quantity: i.quantity })),
+        items.map((i) => ({
+          title: i.title,
+          quantity: i.quantity,
+          ...(i.productId ? { productId: i.productId } : {}),
+        })),
       ),
       categoryIds,
       location: shop.location || 'Zambia',

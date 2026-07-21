@@ -38,11 +38,16 @@ import ReportUserModal from './ReportUserModal';
 import { Star } from 'lucide-react';
 
 export interface PurchaseOrderLine {
-  productId: string;
+  /** Present only when the line was picked from the shop's catalog; typed
+   *  (free-text) items have none. */
+  productId?: string;
   title: string;
   quantity: number;
   category?: string;
 }
+
+/** A PO line in the composer — a PurchaseOrderLine plus a stable React key. */
+type POLine = PurchaseOrderLine & { key: string };
 
 interface ShopProfileViewProps {
   profileId: string;
@@ -99,11 +104,13 @@ export default function ShopProfileView({
   const [loading, setLoading] = useState(true);
   const [showReport, setShowReport] = useState(false);
 
-  // Purchase Order (product-anchored) state.
+  // Purchase Order state. Lines are unified across typed (free-text) items and
+  // catalog picks — a shop needn't have a catalog to receive a PO.
   const [products, setProducts] = useState<ShopProduct[]>([]);
-  const [productsLoading, setProductsLoading] = useState(false);
-  const [cart, setCart] = useState<Record<string, number>>({}); // productId → qty
-  const [showPOReview, setShowPOReview] = useState(false);
+  const [showPOModal, setShowPOModal] = useState(false);
+  const [lines, setLines] = useState<POLine[]>([]);
+  const [customTitle, setCustomTitle] = useState('');
+  const [customQty, setCustomQty] = useState(1);
   const [poNote, setPoNote] = useState('');
   const [submittingPO, setSubmittingPO] = useState(false);
   const [poError, setPoError] = useState<string | null>(null);
@@ -138,28 +145,48 @@ export default function ShopProfileView({
   useEffect(() => {
     if (!profile?.sellerId) return;
     let cancelled = false;
-    setProductsLoading(true);
     fetchShopProducts(profile.sellerId)
       .then((p) => { if (!cancelled) setProducts(p); })
-      .finally(() => { if (!cancelled) setProductsLoading(false); });
+      .catch(() => { /* catalog is optional — typed items still work */ });
     return () => { cancelled = true; };
   }, [profile?.sellerId]);
 
-  const cartCount = Object.values(cart).reduce((s, q) => s + q, 0);
-  const cartLineCount = Object.keys(cart).filter((id) => cart[id] > 0).length;
-  const setQty = (id: string, qty: number) =>
-    setCart((c) => {
-      const next = { ...c };
-      if (qty <= 0) delete next[id];
-      else next[id] = qty;
-      return next;
+  const totalUnits = lines.reduce((s, l) => s + l.quantity, 0);
+
+  const setLineQty = (key: string, qty: number) =>
+    setLines((ls) =>
+      qty <= 0 ? ls.filter((l) => l.key !== key) : ls.map((l) => (l.key === key ? { ...l, quantity: qty } : l)),
+    );
+  const removeLine = (key: string) => setLines((ls) => ls.filter((l) => l.key !== key));
+
+  // Catalog "Add": increment the existing line for this product, else append.
+  const addProduct = (p: ShopProduct) =>
+    setLines((ls) => {
+      const existing = ls.find((l) => l.productId === p.id);
+      if (existing) return ls.map((l) => (l === existing ? { ...l, quantity: l.quantity + 1 } : l));
+      return [...ls, { key: `prod-${p.id}`, productId: p.id, title: p.name, quantity: 1, category: p.category }];
     });
 
+  // Typed "Add": a free-text line, no productId. Keyed by a monotonic counter
+  // (Date.now is unavailable in some sandboxes but fine in the browser).
+  const addCustom = () => {
+    const title = customTitle.trim();
+    if (!title) return;
+    setLines((ls) => [...ls, { key: `custom-${ls.length}-${title}`, title, quantity: Math.max(1, customQty) }]);
+    setCustomTitle('');
+    setCustomQty(1);
+  };
+
+  const openPO = () => { setPoError(null); setShowPOModal(true); };
+
   const handleSendPO = async () => {
-    if (!profile || cartLineCount === 0) return;
-    const items: PurchaseOrderLine[] = products
-      .filter((p) => (cart[p.id] ?? 0) > 0)
-      .map((p) => ({ productId: p.id, title: p.name, quantity: cart[p.id], category: p.category }));
+    if (!profile || lines.length === 0) return;
+    const items: PurchaseOrderLine[] = lines.map((l) => ({
+      ...(l.productId ? { productId: l.productId } : {}),
+      title: l.title,
+      quantity: l.quantity,
+      category: l.category,
+    }));
     setSubmittingPO(true);
     setPoError(null);
     try {
@@ -259,13 +286,22 @@ export default function ShopProfileView({
                 {profile.area ? `, ${profile.area}` : ''}
               </div>
 
-              {/* CTA */}
-              <button
-                onClick={() => onSendInquiry(profile as ShopResult)}
-                className="w-full py-3 text-sm font-bold rounded-xl bg-[#1a1612] text-white hover:bg-black shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
-              >
-                Send Inquiry <ArrowRight className="w-4 h-4" />
-              </button>
+              {/* CTAs — Send Inquiry (open request) + Send Purchase Order
+                  (tell the shop exactly what you want to buy). */}
+              <div className="w-full space-y-2.5">
+                <button
+                  onClick={() => onSendInquiry(profile as ShopResult)}
+                  className="w-full py-3 text-sm font-bold rounded-xl bg-[#1a1612] text-white hover:bg-black shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
+                >
+                  Send Inquiry <ArrowRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={openPO}
+                  className="w-full py-3 text-sm font-bold rounded-xl bg-[#C9973A] text-white hover:bg-[#b8851d] shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
+                >
+                  <ShoppingCart className="w-4 h-4" /> Send Purchase Order
+                </button>
+              </div>
 
               {/* Report — sellerId is the shop owner's users.id (profile.id
                   is the profile row, not a reportable user) */}
@@ -362,91 +398,6 @@ export default function ShopProfileView({
                 </div>
               ))}
             </div>
-
-            {/* Purchase Order — pick products, the shop confirms the price */}
-            {(productsLoading || products.length > 0) && (
-              <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6">
-                <div className="flex items-center justify-between mb-5">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#C9973A]">Purchase Order</p>
-                    <p className="text-[12px] text-slate-400 font-medium mt-0.5">
-                      Pick what you want — {profile.name} confirms the price, then you pay.
-                    </p>
-                  </div>
-                  <ShoppingCart className="w-5 h-5 text-[#C9973A] shrink-0" />
-                </div>
-
-                {productsLoading ? (
-                  <div className="py-10 flex justify-center">
-                    <Loader2 className="w-6 h-6 animate-spin text-[#C9973A]" />
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {products.map((p) => {
-                      const qty = cart[p.id] ?? 0;
-                      return (
-                        <div
-                          key={p.id}
-                          className={`flex items-center gap-3 p-3 rounded-2xl border transition-colors ${qty > 0 ? 'bg-[#fdf6e9] border-[#ecd9b3]' : 'bg-slate-50/60 border-slate-100'}`}
-                        >
-                          <div className="w-12 h-12 rounded-xl bg-white border border-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
-                            {p.images?.[0] ? (
-                              <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <Package className="w-5 h-5 text-slate-300" />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[13px] font-bold text-[#1a1a2e] truncate">{p.name}</p>
-                            <p className="text-[11px] text-slate-400 font-medium truncate">
-                              {p.category}
-                              {typeof p.stock === 'number'
-                                ? ` · ${p.stock > 0 ? `${p.stock} in stock` : 'made to order'}`
-                                : ''}
-                            </p>
-                          </div>
-                          {qty > 0 ? (
-                            <div className="flex items-center gap-2 shrink-0">
-                              <button
-                                onClick={() => setQty(p.id, qty - 1)}
-                                aria-label="Reduce quantity"
-                                className="w-7 h-7 rounded-lg bg-white border border-[#d8c08a] text-[#C9973A] flex items-center justify-center hover:bg-[#fdf6e9]"
-                              >
-                                <Minus className="w-3.5 h-3.5" />
-                              </button>
-                              <span className="w-6 text-center text-[13px] font-bold text-[#1a1a2e]">{qty}</span>
-                              <button
-                                onClick={() => setQty(p.id, qty + 1)}
-                                aria-label="Increase quantity"
-                                className="w-7 h-7 rounded-lg bg-white border border-[#d8c08a] text-[#C9973A] flex items-center justify-center hover:bg-[#fdf6e9]"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setQty(p.id, 1)}
-                              className="shrink-0 px-3 py-1.5 rounded-lg bg-[#1a1612] text-white text-[11px] font-bold hover:bg-black transition-colors flex items-center gap-1.5"
-                            >
-                              <Plus className="w-3 h-3" /> Add
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {cartLineCount > 0 && (
-                  <button
-                    onClick={() => { setPoError(null); setShowPOReview(true); }}
-                    className="mt-5 w-full py-3 rounded-xl bg-[#C9973A] text-white text-sm font-bold hover:bg-[#b8851d] transition-colors flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    <ShoppingCart className="w-4 h-4" /> Review Purchase Order · {cartCount} item{cartCount !== 1 ? 's' : ''}
-                  </button>
-                )}
-              </div>
-            )}
 
             {/* Legitimacy indicators */}
             <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6">
@@ -621,23 +572,23 @@ export default function ShopProfileView({
         />
       )}
 
-      {/* Purchase Order review + send */}
-      {showPOReview && (
+      {/* Purchase Order composer — type what you want (catalog optional) */}
+      {showPOModal && (
         <div
           className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
-          onClick={() => !submittingPO && setShowPOReview(false)}
+          onClick={() => !submittingPO && setShowPOModal(false)}
         >
           <div
-            className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl border border-slate-100 shadow-xl p-6 max-h-[85vh] overflow-y-auto"
+            className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl border border-slate-100 shadow-xl p-6 max-h-[88vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#C9973A]">Purchase Order</p>
                 <h3 className="font-serif text-[19px] font-bold text-[#1a1a2e]">Send to {profile.name}</h3>
               </div>
               <button
-                onClick={() => !submittingPO && setShowPOReview(false)}
+                onClick={() => !submittingPO && setShowPOModal(false)}
                 aria-label="Close"
                 className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400"
               >
@@ -646,19 +597,113 @@ export default function ShopProfileView({
             </div>
 
             <p className="text-[12px] text-slate-500 mb-4 leading-relaxed">
-              You're telling {profile.name} what you want and how many. They'll reply with the price, then you can pay.
+              Tell {profile.name} what you want and how many. They'll reply with the price, then you can pay.
             </p>
 
-            <div className="space-y-2 mb-4">
-              {products
-                .filter((p) => (cart[p.id] ?? 0) > 0)
-                .map((p) => (
-                  <div key={p.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <span className="text-[13px] font-semibold text-[#1a1a2e] truncate">{p.name}</span>
-                    <span className="text-[12px] font-bold text-[#C9973A] shrink-0">× {cart[p.id]}</span>
-                  </div>
-                ))}
+            {/* Typed item — the primary path (works for any shop) */}
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              What do you need?
+            </label>
+            <div className="flex items-stretch gap-2 mb-4">
+              <input
+                value={customTitle}
+                onChange={(e) => setCustomTitle(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } }}
+                placeholder="e.g. Toyota Corolla key, 25kg cement…"
+                className="flex-1 min-w-0 rounded-xl border border-slate-200 px-3 py-2.5 text-[13px] text-[#1a1a2e] outline-none focus:border-[#C9973A]"
+              />
+              <div className="flex items-center gap-1 rounded-xl border border-[#d8c08a] bg-white px-1.5 shrink-0">
+                <button
+                  onClick={() => setCustomQty((q) => Math.max(1, q - 1))}
+                  aria-label="Reduce quantity"
+                  className="w-6 h-6 rounded-md text-[#C9973A] flex items-center justify-center hover:bg-[#fdf6e9]"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+                <span className="w-5 text-center text-[13px] font-bold text-[#1a1a2e]">{customQty}</span>
+                <button
+                  onClick={() => setCustomQty((q) => q + 1)}
+                  aria-label="Increase quantity"
+                  className="w-6 h-6 rounded-md text-[#C9973A] flex items-center justify-center hover:bg-[#fdf6e9]"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <button
+                onClick={addCustom}
+                disabled={!customTitle.trim()}
+                className="shrink-0 px-3 rounded-xl bg-[#1a1612] text-white text-[12px] font-bold hover:bg-black transition-colors disabled:opacity-40"
+              >
+                Add
+              </button>
             </div>
+
+            {/* Catalog shortcut — only when the shop has listed products */}
+            {products.length > 0 && (
+              <div className="mb-4">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Or pick from their catalog</p>
+                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                  {products.map((p) => (
+                    <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50/60 border border-slate-100">
+                      <div className="w-9 h-9 rounded-lg bg-white border border-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
+                        {p.images?.[0] ? (
+                          <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Package className="w-4 h-4 text-slate-300" />
+                        )}
+                      </div>
+                      <span className="flex-1 min-w-0 text-[13px] font-semibold text-[#1a1a2e] truncate">{p.name}</span>
+                      <button
+                        onClick={() => addProduct(p)}
+                        className="shrink-0 px-2.5 py-1 rounded-lg bg-[#fdf6e9] text-[#8a6118] border border-[#ecd9b3] text-[11px] font-bold hover:bg-[#f7ecd2] flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" /> Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Line items */}
+            {lines.length > 0 && (
+              <div className="mb-4">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Your order · {totalUnits} unit{totalUnits !== 1 ? 's' : ''}
+                </p>
+                <div className="space-y-2">
+                  {lines.map((l) => (
+                    <div key={l.key} className="flex items-center gap-2 p-2.5 rounded-xl bg-[#fdf6e9] border border-[#ecd9b3]">
+                      <span className="flex-1 min-w-0 text-[13px] font-semibold text-[#1a1a2e] truncate">{l.title}</span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => setLineQty(l.key, l.quantity - 1)}
+                          aria-label="Reduce quantity"
+                          className="w-6 h-6 rounded-md bg-white border border-[#d8c08a] text-[#C9973A] flex items-center justify-center hover:bg-white"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="w-5 text-center text-[13px] font-bold text-[#1a1a2e]">{l.quantity}</span>
+                        <button
+                          onClick={() => setLineQty(l.key, l.quantity + 1)}
+                          aria-label="Increase quantity"
+                          className="w-6 h-6 rounded-md bg-white border border-[#d8c08a] text-[#C9973A] flex items-center justify-center hover:bg-white"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => removeLine(l.key)}
+                          aria-label="Remove item"
+                          className="w-6 h-6 rounded-md text-slate-400 hover:text-rose-500 flex items-center justify-center"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
               Note (optional)
@@ -666,7 +711,7 @@ export default function ShopProfileView({
             <textarea
               value={poNote}
               onChange={(e) => setPoNote(e.target.value)}
-              rows={3}
+              rows={2}
               placeholder="Delivery address, preferred variant, timing…"
               className="w-full rounded-xl border border-slate-200 p-3 text-[13px] text-[#1a1a2e] outline-none focus:border-[#C9973A] resize-none mb-2"
             />
@@ -675,13 +720,13 @@ export default function ShopProfileView({
 
             <button
               onClick={handleSendPO}
-              disabled={submittingPO}
-              className="w-full py-3 rounded-xl bg-[#1a1612] text-white text-sm font-bold hover:bg-black transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+              disabled={submittingPO || lines.length === 0}
+              className="w-full py-3 rounded-xl bg-[#C9973A] text-white text-sm font-bold hover:bg-[#b8851d] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {submittingPO ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</>
               ) : (
-                <><Send className="w-4 h-4" /> Send Purchase Order</>
+                <><Send className="w-4 h-4" /> Send Purchase Order{lines.length > 0 ? ` · ${lines.length} item${lines.length !== 1 ? 's' : ''}` : ''}</>
               )}
             </button>
           </div>
