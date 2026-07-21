@@ -87,6 +87,9 @@ export default function BuyerDashboard() {
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | number | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | number | null>(null);
   const [selectedShopProfileId, setSelectedShopProfileId] = useState<string | null>(null);
+  // When a shop card's "Send Purchase Order" opens the profile, auto-open the
+  // PO composer on arrival.
+  const [poAutoOpen, setPoAutoOpen] = useState(false);
   const [inquiryToDelete, setInquiryToDelete] = useState<any | null>(null);
   const [quoteToDelete, setQuoteToDelete] = useState<any | null>(null);
   // Set when the buyer clicks "Make a Payment" on a quote card. The
@@ -528,6 +531,16 @@ export default function BuyerDashboard() {
         handleTabChange('shops');
         break;
       case 'view_shop_profile': {
+        setPoAutoOpen(false);
+        setSelectedShopProfileId((payload as ShopResult).id);
+        handleTabChange('shop-profile');
+        break;
+      }
+      case 'open_po_for_shop': {
+        // Card "Send Purchase Order" → open the profile with the PO composer
+        // already up (the composer lives on the profile, where the catalog +
+        // shop identity are loaded).
+        setPoAutoOpen(true);
         setSelectedShopProfileId((payload as ShopResult).id);
         handleTabChange('shop-profile');
         break;
@@ -987,6 +1000,7 @@ export default function BuyerDashboard() {
           <BrowseShopsView
             onSendInquiry={(shop) => handleAction('send_inquiry_to_shop', shop)}
             onViewProfile={(shop) => handleAction('view_shop_profile', shop)}
+            onSendPurchaseOrder={(shop) => handleAction('open_po_for_shop', shop)}
           />
         );
       case 'favorites':
@@ -995,6 +1009,7 @@ export default function BuyerDashboard() {
             favoritesOnly
             onSendInquiry={(shop) => handleAction('send_inquiry_to_shop', shop)}
             onViewProfile={(shop) => handleAction('view_shop_profile', shop)}
+            onSendPurchaseOrder={(shop) => handleAction('open_po_for_shop', shop)}
           />
         );
       case 'shop-profile':
@@ -1004,6 +1019,7 @@ export default function BuyerDashboard() {
             onBack={() => handleTabChange('shops')}
             onSendInquiry={(shop) => handleAction('send_inquiry_to_shop', shop)}
             onSendPurchaseOrder={handleSendPurchaseOrder}
+            autoOpenPO={poAutoOpen}
           />
         ) : null;
       default:

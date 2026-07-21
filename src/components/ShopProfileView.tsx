@@ -60,6 +60,9 @@ interface ShopProfileViewProps {
     items: PurchaseOrderLine[],
     note?: string,
   ) => Promise<void>;
+  /** Open the PO composer immediately on mount (arrived via a card's
+   *  "Send Purchase Order" button). */
+  autoOpenPO?: boolean;
 }
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
@@ -99,6 +102,7 @@ export default function ShopProfileView({
   onBack,
   onSendInquiry,
   onSendPurchaseOrder,
+  autoOpenPO = false,
 }: ShopProfileViewProps) {
   const [profile, setProfile] = useState<ShopProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -126,6 +130,14 @@ export default function ShopProfileView({
       .then(setProfile)
       .finally(() => setLoading(false));
   }, [profileId]);
+
+  // Arrived via a card's "Send Purchase Order" → open the composer straight away.
+  useEffect(() => {
+    if (autoOpenPO) {
+      setPoError(null);
+      setShowPOModal(true);
+    }
+  }, [autoOpenPO, profileId]);
 
   // Sequential by necessity: reviews key off the seller's users.id
   // (profile.sellerId — NOT profileId, the profile row), which only

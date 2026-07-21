@@ -11,6 +11,7 @@ import { useFavoriteShops } from '../hooks/useFavoriteShops';
 interface BrowseShopsViewProps {
   onSendInquiry: (shop: ShopResult) => void;
   onViewProfile: (shop: ShopResult) => void;
+  onSendPurchaseOrder: (shop: ShopResult) => void;
   /** When true, show only the buyer's favorited shops (Favorites tab). */
   favoritesOnly?: boolean;
 }
@@ -31,6 +32,7 @@ const SERVICE_TYPE_ARCHETYPES = [
 export default function BrowseShopsView({
   onSendInquiry,
   onViewProfile,
+  onSendPurchaseOrder,
   favoritesOnly = false,
 }: BrowseShopsViewProps) {
   const { user } = useAuth();
@@ -287,6 +289,7 @@ export default function BrowseShopsView({
                 shop={shop}
                 onSendInquiry={onSendInquiry}
                 onViewProfile={onViewProfile}
+                onSendPurchaseOrder={onSendPurchaseOrder}
                 isFavorite={isFavorite(shop.id)}
                 onToggleFavorite={(s) => toggleFavorite(s.id)}
               />

@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, Star, ArrowRight, BadgeCheck, Heart } from 'lucide-react';
+import { MapPin, Star, ArrowRight, BadgeCheck, Heart, ShoppingCart } from 'lucide-react';
 import type { ShopResult } from '../services/api/shopService';
 import { getBusinessTypeLabel, type BusinessType } from '../services/categories';
 
@@ -7,6 +7,9 @@ interface ShopCardProps {
   shop: ShopResult;
   onSendInquiry: (shop: ShopResult) => void;
   onViewProfile: (shop: ShopResult) => void;
+  /** Open the Purchase Order composer for this shop (typed items + price
+   *  request). When omitted the button isn't rendered. */
+  onSendPurchaseOrder?: (shop: ShopResult) => void;
   /** Favorite (♥) state + toggle. When onToggleFavorite is omitted the heart
    *  isn't rendered (e.g. surfaces where favoriting doesn't apply). */
   isFavorite?: boolean;
@@ -33,6 +36,7 @@ export default function ShopCard({
   shop,
   onSendInquiry,
   onViewProfile,
+  onSendPurchaseOrder,
   isFavorite = false,
   onToggleFavorite,
 }: ShopCardProps) {
@@ -206,6 +210,14 @@ export default function ShopCard({
         >
           Send Inquiry <ArrowRight className="w-3.5 h-3.5" />
         </button>
+        {onSendPurchaseOrder && (
+          <button
+            onClick={() => onSendPurchaseOrder(shop)}
+            className="w-full py-3 text-[13px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 bg-[#C9973A] text-white hover:bg-[#b8851d] shadow-md"
+          >
+            <ShoppingCart className="w-3.5 h-3.5" /> Send Purchase Order
+          </button>
+        )}
         <button
           onClick={() => onViewProfile(shop)}
           className="py-1 text-[11px] font-semibold text-slate-400 hover:text-[#C9973A] transition-colors"
