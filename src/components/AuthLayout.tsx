@@ -78,7 +78,7 @@ export default function AuthLayout({
         <div className="relative z-10 mt-12 text-center">
           {footerText || (
             <p className="text-[11px] font-normal text-[#1a1612]/30 uppercase tracking-[0.2em]">
-              © 2026 <span className="text-brand-yellow">TONSE</span> Marketplace. All rights reserved.
+              © 2026 <span className="text-brand-yellow">ProQuote</span> Zambia Marketplace. All rights reserved.
             </p>
           )}
         </div>

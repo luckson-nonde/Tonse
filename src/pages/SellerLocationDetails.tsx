@@ -53,7 +53,7 @@ export default function SellerLocationDetails() {
         maxWidth="max-w-[700px]"
         footerText={
           <p className="text-[10px] font-normal text-brand-yellow/60">
-            TONSE MARKETPLACE ONBOARDING © 2026
+            PROQUOTE ZAMBIA MARKETPLACE ONBOARDING © 2026
           </p>
         }
         onBack={() => navigate(`/register?role=${user?.role || 'SELLER'}`)}

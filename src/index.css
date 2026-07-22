@@ -56,7 +56,7 @@ body {
   scrollbar-width: none;
 }
 
-/* Tonse-branded slim scrollbar — used in scrollable pickers (category grid, etc.) */
+/* ProQuote-branded slim scrollbar — used in scrollable pickers (category grid, etc.) */
 .tonse-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(201, 151, 58, 0.35) transparent;

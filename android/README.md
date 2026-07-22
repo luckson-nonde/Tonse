@@ -1,4 +1,4 @@
-# Tonse Hub — Android app (Trusted Web Activity)
+# ProQuote Zambia — Android app (Trusted Web Activity)
 
 Packages the deployed PWA (`https://tonse-web.onrender.com`) as a native Android
 app. The TWA runs the real site full-screen (no browser chrome), Web Push keeps
@@ -52,7 +52,7 @@ https://developers.google.com/digital-asset-links/tools/generator
 
 Two native paths. **Bubbles is the Play-compliant default; the overlay is the
 "always visible" hammer.** Both are launchers — live inquiry counts stay in the
-PWA + push notifications; the bubble's job is to reopen Tonse instantly.
+PWA + push notifications; the bubble's job is to reopen ProQuote instantly.
 
 ### Option A (recommended): Android Bubbles API — no special permission
 
@@ -75,10 +75,10 @@ val bubbleData = NotificationCompat.BubbleMetadata.Builder(
     .setSuppressNotification(false)
     .build()
 
-val person = Person.Builder().setName("Tonse").setImportant(true).build()
+val person = Person.Builder().setName("ProQuote").setImportant(true).build()
 
 val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-    .setContentTitle("Tonse is running")
+    .setContentTitle("ProQuote is running")
     .setContentText("Waiting for inquiries")
     .setSmallIcon(R.mipmap.ic_launcher)
     .setCategory(Notification.CATEGORY_MESSAGE)

@@ -1,4 +1,4 @@
-# Running TONSE in Docker
+# Running ProQuote in Docker
 
 A single `docker compose up` runs the whole platform: the React frontend
 (nginx), the NestJS backend, and PostgreSQL. The browser only ever talks to

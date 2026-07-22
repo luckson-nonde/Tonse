@@ -1,4 +1,4 @@
-# TONSE Marketplace - Full Stack Web Application
+# ProQuote Zambia Marketplace - Full Stack Web Application
 
 > Enterprise-grade B2B marketplace platform with JWT authentication, PostgreSQL, TypeORM, and complete folder structure organization.
 
@@ -513,7 +513,7 @@ npm run test:e2e         # Run E2E tests
 
 ## 📝 License
 
-Built with ❤️ for TONSE Marketplace
+Built with ❤️ for ProQuote Zambia Marketplace
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## 🏗️ Overview
 
-This document outlines the complete folder structure for the TONSE Marketplace full-stack application.
+This document outlines the complete folder structure for the ProQuote Zambia Marketplace full-stack application.
 
 ```
 tonse-hub/

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # ---------------------------------------------------------------------------
-# TONSE backend (NestJS) — multi-stage build
+# ProQuote backend (NestJS) — multi-stage build
 # ---------------------------------------------------------------------------
 
 # ---- Stage 1: build (needs devDependencies: nest CLI + typescript) ----

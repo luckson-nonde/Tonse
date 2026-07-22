@@ -147,10 +147,10 @@ export default function LoanOfferDetail({ quote, onAction }: LoanOfferDetailProp
       <h3>Agreed Terms</h3>
       <table>${rowsHtml}</table>
       ${tnc ? `<h3>Lender's Terms &amp; Conditions</h3><div class="tnc">${esc(tnc)}</div>` : ''}
-      ${d.termsDocUrl ? `<p class="tnc" style="margin-top:12px"><strong>A signed Terms &amp; Conditions document is attached to this offer</strong> — open it from the loan offer in the TONSE app.</p>` : ''}
+      ${d.termsDocUrl ? `<p class="tnc" style="margin-top:12px"><strong>A signed Terms &amp; Conditions document is attached to this offer</strong> — open it from the loan offer in the ProQuote app.</p>` : ''}
       <div class="foot">
         <p><span class="status">Accepted</span></p>
-        <p>This document records the loan offer terms accepted by the borrower on the TONSE marketplace. It is a summary for the parties' reference; disbursement and repayment are arranged directly between the lender and the borrower. Generated ${esc(date)}.</p>
+        <p>This document records the loan offer terms accepted by the borrower on the ProQuote marketplace. It is a summary for the parties' reference; disbursement and repayment are arranged directly between the lender and the borrower. Generated ${esc(date)}.</p>
       </div>
     </body></html>`);
     w.document.close();

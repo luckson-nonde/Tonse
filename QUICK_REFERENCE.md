@@ -1,4 +1,4 @@
-# TONSE Marketplace - Developer Quick Reference Card
+# ProQuote Zambia Marketplace - Developer Quick Reference Card
 
 ## 🚀 Commands Cheat Sheet
 
@@ -178,7 +178,7 @@ APP_PORT=3000
 ### Frontend (.env.local)
 ```env
 VITE_API_URL=http://localhost:3000/api
-VITE_APP_NAME=TONSE Marketplace
+VITE_APP_NAME=ProQuote Zambia Marketplace
 ```
 
 ### Generate Keys

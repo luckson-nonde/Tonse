@@ -1,7 +1,7 @@
 /**
  * The PSP boundary.
  *
- * TONSE never custodies funds — a licensed provider does. Everything the
+ * ProQuote never custodies funds — a licensed provider does. Everything the
  * platform needs from that provider goes through this interface, so the money
  * flows can be built and tested end-to-end today against a Sandbox adapter and
  * switch to live Lenco by changing one env var, with no redesign.
@@ -25,7 +25,7 @@ export interface FeeQuote {
   /** The deal amount that must reach the holding account. */
   amount: string;
   /** The provider's fee. With bearer 'customer' the payer is charged amount+fee
-   *  and the provider keeps the fee — it never reaches TONSE. */
+   *  and the provider keeps the fee — it never reaches ProQuote. */
   fee: string;
   /** What the payer is actually charged. */
   totalCharged: string;

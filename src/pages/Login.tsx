@@ -200,7 +200,7 @@ export default function Login() {
       </button>
 
       <p className="text-center text-[14px] font-sans text-slate-500">
-        New to Tonse?{' '}
+        New to ProQuote?{' '}
         <button
           type="button"
           onClick={() => navigate('/role-selection')}

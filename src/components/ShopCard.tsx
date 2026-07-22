@@ -26,7 +26,7 @@ interface ShopCardProps {
  * image (the seller's newest product photo) straddling the header seam,
  * rendered only when a real image exists → centered identity block with
  * a large rating number over stars (real review aggregates; "New on
- * Tonse" until the first review) → grey category pills → one dominant
+ * ProQuote" until the first review) → grey category pills → one dominant
  * Send Inquiry button with a quiet View-profile link under it.
  *
  * Border/ring colors are opaque on purpose — translucent borders on
@@ -160,7 +160,7 @@ export default function ShopCard({
         ) : (
           <div className="mt-2.5 flex flex-col items-center gap-1">
             <span className="font-serif text-[15px] font-bold text-[#C9973A] leading-none">
-              New on Tonse
+              New on ProQuote
             </span>
             <div className="flex items-center gap-0.5">
               {[1, 2, 3, 4, 5].map((n) => (

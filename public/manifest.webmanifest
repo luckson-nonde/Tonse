@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Tonse Hub",
-  "short_name": "Tonse",
-  "description": "Tonse Hub marketplace — send and receive inquiries, quotes and orders.",
+  "name": "ProQuote Zambia",
+  "short_name": "ProQuote",
+  "description": "ProQuote Zambia marketplace — send and receive inquiries, quotes and orders.",
   "lang": "en",
   "dir": "ltr",
   "start_url": "/",

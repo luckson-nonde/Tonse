@@ -79,19 +79,19 @@ export default function PaymentPage() {
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6">
         {paymentMethod === 'card' ? (
           <div className="space-y-4">
-            {/* PCI: no card details are collected on a TONSE page. They are
+            {/* PCI: no card details are collected on a ProQuote page. They are
                 entered on the payment provider's own secure page, so we never
                 see, transmit or store a PAN/CVV. Mirrors PaymentSheet. */}
             <div className="p-5 rounded-2xl border border-slate-100 bg-slate-50">
               <p className="text-sm font-bold text-slate-900">Bank Card</p>
               <p className="mt-2 text-[13px] leading-relaxed text-slate-500 font-medium">
                 Card details are entered on the next screen via our PCI-compliant payment
-                provider. <span className="font-bold text-slate-900">TONSE never sees or stores
+                provider. <span className="font-bold text-slate-900">ProQuote never sees or stores
                 your card number.</span>
               </p>
             </div>
             {/* "Save card" removed: card storage is the provider's job via
-                tokenisation — offering it here implies TONSE holds card data. */}
+                tokenisation — offering it here implies ProQuote holds card data. */}
 
             {/* Amount Input for Card */}
             <div className="pt-4 border-t border-slate-100">

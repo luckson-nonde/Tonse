@@ -907,7 +907,7 @@ export default function InquiryPreferences({ categoryType, onBack, onNext, targe
                 </div>
                 <div className="pt-0.5">
                   <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#C9973A] mb-1">
-                    Tonse Tip
+                    ProQuote Tip
                   </p>
                   <h3 className="font-serif text-[18px] font-bold text-[#1a1a2e] leading-snug">
                     Why preferences matter

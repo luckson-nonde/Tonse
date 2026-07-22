@@ -5,7 +5,7 @@
 cd "$(dirname "$0")"
 
 echo ""
-echo "🧹 TONSE Marketplace - Cleanup Script"
+echo "🧹 ProQuote Zambia Marketplace - Cleanup Script"
 echo "====================================="
 echo ""
 echo "Moving legacy files to archive folder..."

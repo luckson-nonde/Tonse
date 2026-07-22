@@ -1,4 +1,4 @@
-# TONSE Marketplace - Full Stack Web Application
+# ProQuote Zambia Marketplace - Full Stack Web Application
 
 A complete marketplace platform with JWT authentication, PostgreSQL database, TypeORM, and field-level encryption.
 

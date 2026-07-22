@@ -1,4 +1,4 @@
-# TONSE Backend API Documentation
+# ProQuote Backend API Documentation
 
 **Status**: ✅ Fully Implemented (10 Modules, 60+ Endpoints)  
 **Framework**: NestJS 10.3+  

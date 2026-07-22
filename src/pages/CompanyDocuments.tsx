@@ -453,7 +453,7 @@ export default function CompanyDocuments() {
 
           <p className="text-[11px] text-[#1a1612]/45 flex items-center gap-2 ml-1">
             <ShieldCheck className="w-3.5 h-3.5 text-[#C9973A]/60" strokeWidth={2} />
-            Stored encrypted · only Tonse compliance reviewers can read.
+            Stored encrypted · only ProQuote compliance reviewers can read.
           </p>
         </section>
 

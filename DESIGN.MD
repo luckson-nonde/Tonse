@@ -1,10 +1,10 @@
-# Tonse-Hub System Design & Architecture
+# ProQuote Zambia System Design & Architecture
 
 ## System Identity Architecture
 
 ### Overview
 
-Tonse-Hub implements a **Three-Tier Identity System** that provides multiple layers of identification for users while maintaining security, auditability, and user experience.
+ProQuote Zambia implements a **Three-Tier Identity System** that provides multiple layers of identification for users while maintaining security, auditability, and user experience.
 
 ---
 

@@ -1,6 +1,6 @@
 # Lenco API Documentation
 
-This document serves as a reference for the Lenco Financial API integration within the TONSE platform.
+This document serves as a reference for the Lenco Financial API integration within the ProQuote platform.
 
 ## API Configuration
 - **Base URL**: `https://api.lenco.co/access/v2`

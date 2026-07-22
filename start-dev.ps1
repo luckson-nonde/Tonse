@@ -1,4 +1,4 @@
-# Starts the full Tonse Hub dev stack, detached from the launching terminal:
+# Starts the full ProQuote Zambia dev stack, detached from the launching terminal:
 #   - NestJS backend        http://localhost:3001  (npm run start:prod in backend/)
 #   - Vite dev server       http://localhost:3000  (all interfaces, LAN-reachable)
 #   - Cloudflare quick tunnel -> public *.trycloudflare.com URL (printed when ready;

@@ -5,7 +5,7 @@ import { CATEGORIES_DB } from '../services/categories';
 import { useCategoryAvailability } from '../services/categories/availability';
 
 /**
- * MarketplaceShowcase — the permanent "what's inside TONSE" panel shown on
+ * MarketplaceShowcase — the permanent "what's inside ProQuote" panel shown on
  * every authentication screen (Login + all registration steps), so users see
  * the marketplace's categories and live businesses before they even sign in.
  *
@@ -193,7 +193,7 @@ export default function MarketplaceShowcase({
         </div>
 
         <div className="flex items-center justify-between text-[11px] font-medium text-white/40 shrink-0">
-          <span>© 2026 TONSE Marketplace</span>
+          <span>© 2026 ProQuote Zambia Marketplace</span>
           <span className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
             End-to-end encrypted

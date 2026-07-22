@@ -2111,7 +2111,7 @@ function FinancialView() {
       <ViewHeader
         eyebrow="Section 05 / Money"
         title="Financial"
-        subtitle="What's held in escrow, every money event, and whether the books balance. Funds are custodied by the payment provider — this is TONSE's mirror of them."
+        subtitle="What's held in escrow, every money event, and whether the books balance. Funds are custodied by the payment provider — this is ProQuote's mirror of them."
       />
 
       <div className="flex gap-1.5 mb-6 p-1 bg-slate-100/70 rounded-xl w-fit">

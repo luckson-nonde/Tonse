@@ -454,7 +454,7 @@ function CredentialsModal({
   const [sharedCopied, setSharedCopied] = useState(false);
 
   const details = [
-    'Tonse Admin Console',
+    'ProQuote Admin Console',
     `Sign in: ${window.location.origin}/login`,
     `Email: ${email}`,
     `Temporary password: ${password}`,
@@ -474,7 +474,7 @@ function CredentialsModal({
   const shareDetails = async () => {
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'Tonse Admin Console', text: details });
+        await navigator.share({ title: 'ProQuote Admin Console', text: details });
         return;
       } catch (e: any) {
         if (e?.name === 'AbortError') return; // share sheet dismissed — not an error

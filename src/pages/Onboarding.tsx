@@ -24,7 +24,7 @@ const SLIDES = [
     id: 3,
     title: 'Verified & Secure.',
     description:
-      'Trade with confidence knowing every business on TONSE undergoes rigorous verification.',
+      'Trade with confidence knowing every business on ProQuote undergoes rigorous verification.',
     image:
       'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=800&h=1200',
   },

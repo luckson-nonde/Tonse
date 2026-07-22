@@ -1,4 +1,4 @@
-# TONSE Marketplace - Complete Project Setup Summary
+# ProQuote Zambia Marketplace - Complete Project Setup Summary
 
 ## 🎉 Project Completion Status
 

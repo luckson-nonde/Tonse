@@ -1,8 +1,8 @@
 {
   "name": "tonse-backend",
   "version": "1.0.0",
-  "description": "TONSE Marketplace API - NestJS + PostgreSQL + TypeORM",
-  "author": "Tonse Team",
+  "description": "ProQuote Zambia Marketplace API - NestJS + PostgreSQL + TypeORM",
+  "author": "ProQuote Team",
   "private": true,
   "license": "MIT",
   "scripts": {

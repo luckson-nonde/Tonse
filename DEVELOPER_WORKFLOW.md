@@ -1,4 +1,4 @@
-# TONSE Marketplace - Developer Workflow Guide
+# ProQuote Zambia Marketplace - Developer Workflow Guide
 
 ## 🎯 Common Development Workflows
 

@@ -1,6 +1,6 @@
 # ⚡ Quick Start
 
-> Get Tonse Hub running locally in ~5 minutes (plus `npm install` time). Verified against the actual codebase on 2026-07-02. This merges the former `QUICK_START.md` + `QUICK_START_SETUP.md`.
+> Get ProQuote Zambia running locally in ~5 minutes (plus `npm install` time). Verified against the actual codebase on 2026-07-02. This merges the former `QUICK_START.md` + `QUICK_START_SETUP.md`.
 
 **Ports & conventions (important — older docs got these wrong):**
 - **Backend API:** `http://localhost:3001` — routes are **unprefixed** (no `/api`). `main.ts` has no `setGlobalPrefix()`, so it's `/auth/login`, `/inquiries`, etc. (not `/api/auth/...`).

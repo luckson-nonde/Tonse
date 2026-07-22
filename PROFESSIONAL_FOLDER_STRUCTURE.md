@@ -1,4 +1,4 @@
-# TONSE Marketplace - Professional Folder Structure
+# ProQuote Zambia Marketplace - Professional Folder Structure
 
 ## 📁 Complete Project Architecture (Production Standard)
 
@@ -574,7 +574,7 @@ Frontend:
 
 ## ✨ Summary
 
-Your TONSE Marketplace app follows **enterprise-grade professional standards**:
+Your ProQuote Zambia Marketplace app follows **enterprise-grade professional standards**:
 
 ✅ **70+ directories** - Well-organized hierarchy
 ✅ **Modular architecture** - 9 independent modules ready to grow

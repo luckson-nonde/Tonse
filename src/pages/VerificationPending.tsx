@@ -15,7 +15,7 @@ export default function VerificationPending() {
           We are currently reviewing your documents and store photos. This usually takes <span className="font-bold text-slate-900">24-48 hours</span>.
         </span>
       }
-      headerSubtitle="TONSE Marketplace"
+      headerSubtitle="ProQuote Zambia Marketplace"
     >
       <div className="flex flex-col items-center">
         {/* Animated/Styled Icon Container */}

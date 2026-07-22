@@ -1,8 +1,8 @@
 #!/bin/bash
-# Complete startup script for TONSE Marketplace
+# Complete startup script for ProQuote Zambia Marketplace
 # Runs all necessary commands in sequence
 
-echo "🚀 TONSE Marketplace - Complete Startup Script"
+echo "🚀 ProQuote Zambia Marketplace - Complete Startup Script"
 echo "================================================"
 echo ""
 

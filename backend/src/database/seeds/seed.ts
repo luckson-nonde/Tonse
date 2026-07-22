@@ -6,7 +6,7 @@
  * Credentials come from environment variables (backend/.env, gitignored):
  *   ADMIN_EMAIL      required
  *   ADMIN_PASSWORD   required, min 8 chars — never committed, never logged
- *   ADMIN_NAME       optional (default "Tonse Admin")
+ *   ADMIN_NAME       optional (default "ProQuote Admin")
  *   ADMIN_PHONE      optional
  *   ADMIN_NRC        optional placeholder NRC
  *
@@ -29,7 +29,7 @@ import { BCRYPT_SALT_ROUNDS } from '../../common/constants/security';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? '';
-const ADMIN_NAME = process.env.ADMIN_NAME ?? 'Tonse Admin';
+const ADMIN_NAME = process.env.ADMIN_NAME ?? 'ProQuote Admin';
 const ADMIN_PHONE = process.env.ADMIN_PHONE ?? '+260970000000';
 // Fake-but-unique NRC so the three-tier identity uniqueness checks pass.
 // Real NRCs use the format `123456/78/9`; this placeholder is intentionally

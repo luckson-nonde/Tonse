@@ -20,11 +20,16 @@ import { collectionService } from '../services/api/collectionService';
 
 /**
  * Pull the bare 6-char collection code out of a scanned QR string
- * (`TONSE-COLLECT-QT-<uuid>-<code>`) or return raw manual input unchanged.
+ * (`PROQUOTE-COLLECT-QT-<uuid>-<code>`; QR codes printed before the rebrand
+ * used `TONSE-COLLECT-…` and must keep scanning) or return raw manual input
+ * unchanged.
  */
 function extractCode(raw: string): string {
   const t = (raw || '').trim();
-  if (t.toUpperCase().startsWith('TONSE-COLLECT')) return t.substring(t.lastIndexOf('-') + 1);
+  const upper = t.toUpperCase();
+  if (upper.startsWith('PROQUOTE-COLLECT') || upper.startsWith('TONSE-COLLECT')) {
+    return t.substring(t.lastIndexOf('-') + 1);
+  }
   return t;
 }
 

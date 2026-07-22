@@ -1,4 +1,4 @@
-# 🚀 TONSE Marketplace - App Running!
+# 🚀 ProQuote Zambia Marketplace - App Running!
 
 ## ✅ Current Status
 

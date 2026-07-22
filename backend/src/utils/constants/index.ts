@@ -1,5 +1,5 @@
 // Application constants
-export const APP_NAME = 'TONSE Marketplace';
+export const APP_NAME = 'ProQuote Zambia Marketplace';
 export const APP_VERSION = '1.0.0';
 export const MAX_PAGE_SIZE = 100;
 export const DEFAULT_PAGE_SIZE = 20;

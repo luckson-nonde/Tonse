@@ -32,10 +32,10 @@ export interface ConsentConfig {
 }
 
 export const DEFAULT_PRIVACY_BODY =
-  'Your information is encrypted, securely stored, and only used for verification, platform security, and legal compliance. TONSE never sells your personal information.';
+  'Your information is encrypted, securely stored, and only used for verification, platform security, and legal compliance. ProQuote never sells your personal information.';
 
 export const DEFAULT_CONSENT_LABEL =
-  'I understand why this information is required and consent to the collection, verification, secure storage, and processing of my information in accordance with the TONSE Privacy Policy and Terms of Service.';
+  'I understand why this information is required and consent to the collection, verification, secure storage, and processing of my information in accordance with the ProQuote Privacy Policy and Terms of Service.';
 
 export const consentConfigs: Record<string, ConsentConfig> = {
   identity: {

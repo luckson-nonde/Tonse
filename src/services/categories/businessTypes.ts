@@ -4,7 +4,7 @@ import { CATEGORIES_DB } from './catalog';
 // ─────────────────────────────────────────────────────────────────────────────
 // Business-type derivation
 //
-// Tonse's onboarding captures four signals about a seller:
+// ProQuote's onboarding captures four signals about a seller:
 //   1. role     — auth identity (BUYER / SELLER / SUPPLIER / SERVICE_PROVIDER…)
 //   2. subRole  — variant within the role (PRODUCT_SELLER / SERVICE_SELLER /
 //                 HYBRID_SELLER / SUPPLIER_SELLER…)

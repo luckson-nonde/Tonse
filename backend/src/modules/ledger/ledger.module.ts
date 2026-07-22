@@ -7,7 +7,7 @@ import { LedgerService } from './ledger.service';
 import { LedgerBootstrapService } from './ledger-bootstrap.service';
 
 /**
- * The double-entry ledger — TONSE's mirror of money the PSP custodies.
+ * The double-entry ledger — ProQuote's mirror of money the PSP custodies.
  *
  * Exported so the flows that move money (collection/release, payments/webhook,
  * refunds) can post journals inside their own transactions. Nothing else may

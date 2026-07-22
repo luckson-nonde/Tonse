@@ -14,7 +14,7 @@ export type FeeBearer = 'customer' | 'merchant';
 /**
  * The PSP-side record of a money movement — our copy of what the provider did.
  *
- * Separate from the ledger on purpose: the ledger is TONSE's ACCOUNTING view
+ * Separate from the ledger on purpose: the ledger is ProQuote's ACCOUNTING view
  * (balanced, append-only), while this is the OPERATIONAL view (provider refs,
  * retries, raw payloads, fees). One PSP transaction produces zero or more
  * journals; a PENDING collection has no journal at all until it succeeds.
@@ -61,7 +61,7 @@ export class PspTransaction {
    * MEMO ONLY — deliberately not a ledger entry. With `feeBearer = 'customer'`
    * the payer is charged amount + fee, the PSP keeps the fee, and only `amount`
    * is remitted to us. Journaling that fee would inflate the books with money
-   * TONSE never held and break reconciliation against the PSP balance. It lives
+   * ProQuote never held and break reconciliation against the PSP balance. It lives
    * here so the admin can still see the full picture: gross charged, fee, net.
    */
   @Column({ type: 'numeric', precision: 14, scale: 2, default: 0 })

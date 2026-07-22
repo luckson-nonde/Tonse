@@ -1,4 +1,4 @@
-# TONSE Marketplace - Architecture & Dependencies
+# ProQuote Zambia Marketplace - Architecture & Dependencies
 
 ## 🏗️ Backend Architecture Overview
 

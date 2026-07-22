@@ -114,7 +114,7 @@ export default function ShopProfilePage() {
           await db.shops.add({
             providerId: typeof user.id === 'number' ? user.id : parseInt(user.id || '0', 10),
             ...shopUpdates,
-            description: 'Shop on TONSE Marketplace',
+            description: 'Shop on ProQuote Zambia Marketplace',
             category: user.categories?.[0] || 'General',
             rating: 5,
             reviewCount: 0,

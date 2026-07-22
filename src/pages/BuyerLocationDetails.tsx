@@ -46,7 +46,7 @@ export default function BuyerLocationDetails() {
       headerSubtitle="Complete Your Profile"
       maxWidth="max-w-[700px]"
       footerText={
-        <p className="text-[10px] font-normal text-brand-yellow/60">TONSE MARKETPLACE © 2026</p>
+        <p className="text-[10px] font-normal text-brand-yellow/60">PROQUOTE ZAMBIA MARKETPLACE © 2026</p>
       }
       onBack={() => navigate(`/register?role=BUYER`)}
     >

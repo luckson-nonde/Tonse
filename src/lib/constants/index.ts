@@ -1,6 +1,6 @@
 // Frontend lib/constants exports
 export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
-export const APP_NAME = 'TONSE Marketplace';
+export const APP_NAME = 'ProQuote Zambia Marketplace';
 export const TOKEN_STORAGE_KEY = 'auth_token';
 export const REFRESH_TOKEN_KEY = 'refresh_token';
 export const USER_STORAGE_KEY = 'user';

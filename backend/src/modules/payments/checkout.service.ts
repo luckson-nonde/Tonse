@@ -131,7 +131,7 @@ export class CheckoutService {
         bearer,
         phone: dto.phone,
         operator: dto.operator,
-        description: `TONSE ${quote.inquiryTitle}`.slice(0, 100),
+        description: `ProQuote ${quote.inquiryTitle}`.slice(0, 100),
       });
     } catch (e) {
       await this.pspTx.update({ reference }, { status: 'FAILED', lastError: (e as Error).message });

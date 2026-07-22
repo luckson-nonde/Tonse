@@ -215,7 +215,7 @@ Save as `tonse.postman_collection.json`:
 ```json
 {
   "info": {
-    "name": "TONSE Marketplace API",
+    "name": "ProQuote Zambia Marketplace API",
     "version": "1.0"
   },
   "auth": {

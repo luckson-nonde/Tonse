@@ -109,7 +109,7 @@ export class PromotersService {
   }
 
   /**
-   * Admin rotate: mint a fresh readable key (TONSE-XXXXX-XXXXX, same
+   * Admin rotate: mint a fresh readable key (PROQUOTE-XXXXX-XXXXX, same
    * unambiguous charset as referral codes) and upsert the single settings
    * row. The old key stops working the moment this commits.
    */
@@ -131,7 +131,7 @@ export class PromotersService {
     const CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const bytes = crypto.randomBytes(10);
     const chars = Array.from(bytes, (b) => CHARSET[b % 32]);
-    return `TONSE-${chars.slice(0, 5).join('')}-${chars.slice(5, 10).join('')}`;
+    return `PROQUOTE-${chars.slice(0, 5).join('')}-${chars.slice(5, 10).join('')}`;
   }
 
   // ── Signup (invite-gated, auto-provisioning) ─────────────────────────

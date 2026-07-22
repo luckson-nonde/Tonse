@@ -1,4 +1,4 @@
-# 🚀 TONSE Marketplace - Startup Guide
+# 🚀 ProQuote Zambia Marketplace - Startup Guide
 
 ## Quick Start Commands
 

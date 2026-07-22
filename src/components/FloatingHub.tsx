@@ -290,7 +290,7 @@ export default function FloatingHub() {
   }
 
   // ── Minimized: scrim + draggable bubble ─────────────────────────────────
-  const displayName = (user?.companyName || user?.name || 'Tonse').trim();
+  const displayName = (user?.companyName || user?.name || 'ProQuote').trim();
   const initial = displayName.charAt(0).toUpperCase() || 'T';
   const iosHint = isIosNonStandalone();
 
@@ -333,11 +333,11 @@ export default function FloatingHub() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-slate-800">
-              {iosHint ? 'Add Tonse to your Home Screen' : 'Get notified even when this tab is closed'}
+              {iosHint ? 'Add ProQuote to your Home Screen' : 'Get notified even when this tab is closed'}
             </p>
             <p className="mt-0.5 text-xs text-slate-500">
               {iosHint
-                ? 'On iPhone/iPad, install Tonse (Share → Add to Home Screen) to receive alerts in the background.'
+                ? 'On iPhone/iPad, install ProQuote (Share → Add to Home Screen) to receive alerts in the background.'
                 : "We'll ping you the moment a new inquiry arrives — no need to keep this open."}
             </p>
             {!iosHint && (
@@ -363,7 +363,7 @@ export default function FloatingHub() {
       )}
 
       {/* Install-app card (one-time, shown after the push banner is settled).
-          This is the TONSE-DESIGNED layer of the install flow — the final
+          This is the ProQuote-DESIGNED layer of the install flow — the final
           confirm dialog after "Install app" is Chrome's own UI and cannot be
           styled by any website. */}
       {showInstallBanner && (
@@ -400,7 +400,7 @@ export default function FloatingHub() {
           {/* Body */}
           <div className="px-5 py-4">
             <p className="text-sm text-slate-600">
-              Tonse on your device — opens full-screen from your home screen or
+              ProQuote on your device — opens full-screen from your home screen or
               taskbar, stays signed in, and shows new-inquiry alerts right on the
               icon.
             </p>
@@ -450,8 +450,8 @@ export default function FloatingHub() {
           if (draggedRef.current) return;
           restore();
         }}
-        title="Restore Tonse"
-        aria-label="Restore Tonse"
+        title="Restore ProQuote"
+        aria-label="Restore ProQuote"
         className="pointer-events-auto absolute bottom-6 right-6 flex h-16 w-16 cursor-grab items-center justify-center rounded-full bg-[#1B3068] text-white shadow-2xl ring-2 ring-white/20 active:cursor-grabbing"
       >
         <span className="font-serif text-2xl font-bold text-[#c9973a]">{initial}</span>

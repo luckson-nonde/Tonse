@@ -1,4 +1,4 @@
-# ✨ TONSE Marketplace - Cleanup Summary
+# ✨ ProQuote Zambia Marketplace - Cleanup Summary
 
 ## 🧹 What Was Done
 

@@ -71,7 +71,7 @@ export default function StoreVerification() {
         maxWidth="max-w-[700px]"
         footerText={
           <p className="text-[10px] font-bold text-indigo-200/60">
-            TONSE MARKETPLACE ONBOARDING © 2026
+            PROQUOTE ZAMBIA MARKETPLACE ONBOARDING © 2026
           </p>
         }
         onBack={() => navigate('/seller/location')}
