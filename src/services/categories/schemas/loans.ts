@@ -114,15 +114,15 @@ export const loanCollateralSchema: FieldSchema[] = [
   { name: 'vehicleModel', label: 'Vehicle Model', type: 'text', required: true, group: 'Vehicle Details', dependsOn: { field: 'collateralType', value: 'Vehicle' } },
   { name: 'vehicleYear', label: 'Year of Manufacture', type: 'number', required: true, min: 1980, max: 2026, group: 'Vehicle Details', dependsOn: { field: 'collateralType', value: 'Vehicle' } },
   { name: 'vehicleRegNo', label: 'Registration Number', type: 'text', required: true, group: 'Vehicle Details', dependsOn: { field: 'collateralType', value: 'Vehicle' } },
-  { name: 'vehicleWhiteBook', label: 'White Book / Registration Doc', type: 'image_upload', required: true, group: 'Vehicle Details', dependsOn: { field: 'collateralType', value: 'Vehicle' } },
+  { name: 'vehicleWhiteBook', label: 'White Book / Registration Doc', type: 'image_upload', allowPdf: true, required: true, group: 'Vehicle Details', dependsOn: { field: 'collateralType', value: 'Vehicle' } },
   // Property / Land
   { name: 'propertyType', label: 'Property Type', type: 'select', required: true, options: ['Residential', 'Commercial', 'Land / Plot'], group: 'Property Details', dependsOn: { field: 'collateralType', value: 'Property / Land' } },
   { name: 'titleDeedNumber', label: 'Title Deed / Certificate Number', type: 'text', required: true, group: 'Property Details', dependsOn: { field: 'collateralType', value: 'Property / Land' } },
   { name: 'propertyLocation', label: 'Property Location', type: 'text', required: true, placeholder: 'Plot no., area, town', group: 'Property Details', dependsOn: { field: 'collateralType', value: 'Property / Land' } },
-  { name: 'titleDeedDoc', label: 'Title Deed Document', type: 'image_upload', required: true, group: 'Property Details', dependsOn: { field: 'collateralType', value: 'Property / Land' } },
+  { name: 'titleDeedDoc', label: 'Title Deed Document', type: 'image_upload', allowPdf: true, required: true, group: 'Property Details', dependsOn: { field: 'collateralType', value: 'Property / Land' } },
   // Equipment / Machinery
   { name: 'equipmentDescription', label: 'Equipment Description', type: 'textarea', required: true, placeholder: 'Type, make, serial number, condition', group: 'Equipment Details', dependsOn: { field: 'collateralType', value: 'Equipment / Machinery' } },
-  { name: 'equipmentProof', label: 'Proof of Ownership', type: 'image_upload', required: true, group: 'Equipment Details', dependsOn: { field: 'collateralType', value: 'Equipment / Machinery' } },
+  { name: 'equipmentProof', label: 'Proof of Ownership', type: 'image_upload', allowPdf: true, required: true, group: 'Equipment Details', dependsOn: { field: 'collateralType', value: 'Equipment / Machinery' } },
   // Other
   { name: 'otherCollateralDetails', label: 'Collateral Details', type: 'textarea', required: true, placeholder: 'Describe the asset and proof of ownership', group: 'Collateral', dependsOn: { field: 'collateralType', value: 'Other' } },
   { name: 'existingLoans', label: 'Do you have other active loans?', type: 'toggle', required: false, group: 'Financials' },
@@ -137,8 +137,8 @@ export const loanSalarySchema: FieldSchema[] = [
   { name: 'jobTitle', label: 'Job Title', type: 'text', required: true, group: 'Employment' },
   { name: 'netMonthlySalary', label: 'Net Monthly Salary (ZMW)', type: 'currency', required: true, helpText: 'Take-home pay after deductions', group: 'Employment' },
   { name: 'monthsEmployed', label: 'Months in Current Job', type: 'number', required: true, min: 0, max: 600, group: 'Employment' },
-  { name: 'payslip', label: 'Latest Payslip', type: 'image_upload', required: true, group: 'Documents' },
-  { name: 'bankStatement', label: 'Bank Statement (3 months)', type: 'image_upload', required: false, group: 'Documents' },
+  { name: 'payslip', label: 'Latest Payslip', type: 'image_upload', allowPdf: true, required: true, group: 'Documents' },
+  { name: 'bankStatement', label: 'Bank Statement (3 months)', type: 'image_upload', allowPdf: true, required: false, group: 'Documents' },
   { name: 'existingLoans', label: 'Do you have other active loans?', type: 'toggle', required: false, group: 'Financials' },
   ...contactFields,
 ];
@@ -151,8 +151,8 @@ export const loanGovernmentSchema: FieldSchema[] = [
   { name: 'jobTitle', label: 'Position / Grade', type: 'text', required: true, group: 'Public Employment' },
   { name: 'netMonthlySalary', label: 'Net Monthly Salary (ZMW)', type: 'currency', required: true, group: 'Public Employment' },
   { name: 'monthsEmployed', label: 'Months in Service', type: 'number', required: true, min: 0, max: 600, group: 'Public Employment' },
-  { name: 'payslip', label: 'Latest Payslip', type: 'image_upload', required: true, group: 'Documents' },
-  { name: 'introductionLetter', label: 'Employer Introduction Letter', type: 'image_upload', required: false, group: 'Documents' },
+  { name: 'payslip', label: 'Latest Payslip', type: 'image_upload', allowPdf: true, required: true, group: 'Documents' },
+  { name: 'introductionLetter', label: 'Employer Introduction Letter', type: 'image_upload', allowPdf: true, required: false, group: 'Documents' },
   {
     name: 'payrollDeductionConsent',
     label: 'I consent to repayment via salary/payroll deduction',

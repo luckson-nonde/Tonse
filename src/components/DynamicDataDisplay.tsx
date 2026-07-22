@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { FieldSchema } from '../services/categories';
+import SecureFile, { isSecureFileUrl } from './SecureFile';
 
 interface DynamicDataDisplayProps {
   schema: FieldSchema[];
@@ -62,6 +63,22 @@ export default function DynamicDataDisplay({ schema, attributes }: DynamicDataDi
       return (
         <div className="grid grid-cols-3 gap-2 mt-2">
           {imageUrls.map((url, idx) => {
+            // Auth-gated docs (payslips, statements) need the Bearer token and
+            // may be PDFs — SecureFile handles both. A plain <img> would 401.
+            if (isSecureFileUrl(url)) {
+              return (
+                <div
+                  key={`${url}-${idx}`}
+                  className="aspect-square rounded-lg overflow-hidden border border-slate-100 shadow-sm"
+                >
+                  <SecureFile
+                    url={url}
+                    alt={`${item.label} ${idx + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              );
+            }
             const isFailedImage = failedImages.has(url);
             return !isFailedImage ? (
               <div

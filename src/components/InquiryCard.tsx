@@ -226,24 +226,42 @@ export default function InquiryCard({
                     {getLabel(key)}
                   </p>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                    {urls.map((url, idx) => (
-                      <a
-                        key={`${url}-${idx}`}
-                        href={url}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 bg-white block transition-shadow hover:shadow-md"
-                      >
-                        <img
-                          src={url}
-                          alt={`${getLabel(key)} ${idx + 1}`}
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover"
-                        />
-                      </a>
-                    ))}
+                    {urls.map((url, idx) =>
+                      // Sensitive docs (payslips, statements) are auth-gated and
+                      // may be PDFs — SecureFile fetches them with the token and
+                      // renders an image or a "PDF · Open" tile. A plain <a>/<img>
+                      // here would 401. Public reference photos stay as-is.
+                      isSecureFileUrl(url) ? (
+                        <div
+                          key={`${url}-${idx}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="aspect-square rounded-lg overflow-hidden border border-slate-200 bg-white"
+                        >
+                          <SecureFile
+                            url={url}
+                            alt={`${getLabel(key)} ${idx + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <a
+                          key={`${url}-${idx}`}
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 bg-white block transition-shadow hover:shadow-md"
+                        >
+                          <img
+                            src={url}
+                            alt={`${getLabel(key)} ${idx + 1}`}
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover"
+                          />
+                        </a>
+                      ),
+                    )}
                   </div>
                 </div>
               );

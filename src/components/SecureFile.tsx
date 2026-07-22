@@ -25,6 +25,7 @@ interface SecureFileProps {
 
 export default function SecureFile({ url, alt = 'Document', className, asLink }: SecureFileProps) {
   const [objUrl, setObjUrl] = useState<string | null>(null);
+  const [mime, setMime] = useState('');
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
@@ -45,6 +46,9 @@ export default function SecureFile({ url, alt = 'Document', className, asLink }:
         if (revoked) return;
         created = URL.createObjectURL(blob);
         setObjUrl(created);
+        // blob.type mirrors the backend's Content-Type (derived from the
+        // stored file extension), which is how we tell a PDF from an image.
+        setMime(blob.type);
         setState('ready');
       } catch {
         if (!revoked) setState('error');
@@ -55,6 +59,10 @@ export default function SecureFile({ url, alt = 'Document', className, asLink }:
       if (created) URL.revokeObjectURL(created);
     };
   }, [url]);
+
+  // A document (not an image) can't be shown in an <img>; fall back to a
+  // .pdf suffix sniff when the blob type is missing/generic.
+  const isPdf = mime === 'application/pdf' || /\.pdf(\?|#|$)/i.test(url);
 
   if (asLink) {
     if (state === 'loading')
@@ -92,6 +100,20 @@ export default function SecureFile({ url, alt = 'Document', className, asLink }:
       <div className={`flex items-center justify-center bg-rose-50 text-rose-400 ${className || 'w-full h-40 rounded-xl'}`}>
         <AlertTriangle className="w-5 h-5" />
       </div>
+    );
+  // PDFs can't render in an <img> — show an "open in new tab" document tile.
+  if (isPdf)
+    return (
+      <a
+        href={objUrl}
+        target="_blank"
+        rel="noreferrer"
+        title={alt}
+        className={`flex flex-col items-center justify-center gap-1.5 bg-[#C9973A]/5 border border-[#C9973A]/20 text-[#8a6118] hover:bg-[#C9973A]/10 transition-colors ${className || 'w-full h-40 rounded-xl'}`}
+      >
+        <FileText className="w-6 h-6" />
+        <span className="text-[11px] font-bold">PDF · Open</span>
+      </a>
     );
   return <img src={objUrl} alt={alt} className={className || 'w-full rounded-xl'} />;
 }

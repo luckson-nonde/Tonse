@@ -27,6 +27,8 @@ import { FieldSchema, RENTAL_CATALOG_ITEMS } from '../services/categories';
 import { generateZodSchema } from '../services/schemaGenerator';
 import CustomDropdown from './CustomDropdown';
 import DateTimePicker from './DateTimePicker';
+import SecureFile, { isSecureFileUrl } from './SecureFile';
+import { formatBytes } from '../utils/fileMeta';
 
 interface DynamicInquiryFormProps {
   schema: FieldSchema[];
@@ -54,7 +56,11 @@ export default function DynamicInquiryForm({
   const [uploadingFields, setUploadingFields] = useState<Set<string>>(new Set());
   const [itemsError, setItemsError] = useState<string | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // One hidden <input> per image_upload field, keyed by field name. A single
+  // shared ref would point at whichever field mounted last, so on a form with
+  // more than one document field (e.g. a loan's payslip + bank statement)
+  // clicking one dropzone would open the other field's picker.
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const activeSchema =
     processType === 'EXPRESS'
@@ -150,8 +156,13 @@ export default function DynamicInquiryForm({
     setUploadingFields((prev) => new Set(prev).add(name));
 
     try {
+      const field = schema.find((f) => f.name === name);
       const currentImages = ((formValues as any)[name] as string[]) || [];
-      const newFiles = Array.from(files).slice(0, 5 - currentImages.length);
+      // Clamp to zero: a bare `maxFiles - currentImages.length` can go negative
+      // and slice from the array's END instead of taking nothing.
+      const maxFiles = field?.maxFiles ?? 5;
+      const remainingSlots = Math.max(0, maxFiles - currentImages.length);
+      const newFiles = Array.from(files).slice(0, remainingSlots);
       const uploadedUrls: string[] = [];
 
       // Sensitive documents (payslip, bank statement, NRC, licence, collateral,
@@ -161,13 +172,39 @@ export default function DynamicInquiryForm({
         /payslip|bank|nrc|licen[cs]e|deed|collateral|white.?book|proof|statement|introduction|kyc/i.test(name);
       const uploadCategory = isSensitiveDoc ? 'kyc' : 'inquiries';
 
+      // Accept images always; PDFs only where the field opts in. Mirrors the
+      // backend allow-list (files.service.ts) so we fail fast with a clear
+      // message instead of a generic 400 after the round-trip.
+      const allowedTypes = [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/gif',
+        ...(field?.allowPdf ? ['application/pdf'] : []),
+      ];
+      const maxBytes = (isSensitiveDoc ? 10 : 5) * 1024 * 1024;
+
       // Upload files one by one
       for (const file of newFiles) {
+        if (file.type && !allowedTypes.includes(file.type)) {
+          alert(
+            `"${file.name}" isn't a supported format. Upload ${field?.allowPdf ? 'a JPG, PNG, or PDF' : 'a JPG or PNG image'}.`,
+          );
+          continue;
+        }
+
         // Compress before upload: raw phone captures are multi-MB; the server
         // stores whatever we send (no server-side resizing), so this is the
-        // storage-bloat guard. Prescription photos stay a readable 1600px —
-        // stored as an image only, never OCR'd.
+        // storage-bloat guard. Non-images (PDFs) pass through untouched.
+        // Prescription photos stay a readable 1600px — stored as an image
+        // only, never OCR'd.
         const compressed = await compressImage(file);
+        if (compressed.size > maxBytes) {
+          alert(
+            `"${file.name}" is ${formatBytes(compressed.size)} — the limit is ${formatBytes(maxBytes)}.`,
+          );
+          continue;
+        }
         const formData = new FormData();
         formData.append('file', compressed);
 
@@ -434,10 +471,13 @@ export default function DynamicInquiryForm({
               );
             case 'image_upload':
               const isUploading = uploadingFields.has(field.name);
+              const maxFiles = field.maxFiles ?? 5;
+              const uploadNoun = field.allowPdf ? 'files' : 'photos';
+              const formatHint = field.allowPdf ? 'JPG, PNG, PDF' : 'JPG, PNG';
               return (
                 <div className="flex flex-col gap-1">
                   <div
-                    onClick={() => !isUploading && fileInputRef.current?.click()}
+                    onClick={() => !isUploading && fileInputRefs.current[field.name]?.click()}
                     className={`bg-white border-2 border-dashed rounded-2xl p-[32px_20px] flex flex-col items-center gap-2.5 ${isUploading ? 'cursor-not-allowed opacity-60 border-slate-300' : 'cursor-pointer border-[rgba(201,151,58,0.35)]'}`}
                   >
                     {isUploading ? (
@@ -447,16 +487,18 @@ export default function DynamicInquiryForm({
                     )}
                     <div className="text-center">
                       <p className="font-sans text-[14px] font-medium text-[#1a1a2e]">
-                        {isUploading ? 'Uploading...' : 'Tap to upload photos'}
+                        {isUploading ? 'Uploading...' : `Tap to upload ${uploadNoun}`}
                       </p>
                       <p className="font-sans text-[11px] text-[#94a3b8]">
-                        Up to 5 images • JPG, PNG
+                        Up to {maxFiles} {uploadNoun} • {formatHint}
                       </p>
                     </div>
                     <input
-                      ref={fileInputRef}
+                      ref={(el) => {
+                        fileInputRefs.current[field.name] = el;
+                      }}
                       type="file"
-                      accept="image/*"
+                      accept={field.allowPdf ? 'image/*,application/pdf' : 'image/*'}
                       multiple
                       disabled={isUploading}
                       className="hidden"
@@ -470,14 +512,22 @@ export default function DynamicInquiryForm({
                           key={`${url}-${idx}`}
                           className="relative aspect-square rounded-[10px] overflow-hidden"
                         >
-                          <img
-                            src={url}
-                            alt={`Upload ${idx}`}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              console.error('Image load error:', url);
-                            }}
-                          />
+                          {isSecureFileUrl(url) ? (
+                            <SecureFile
+                              url={url}
+                              alt={`${field.label} ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <img
+                              src={url}
+                              alt={`Upload ${idx}`}
+                              className="w-full h-full object-cover"
+                              onError={() => {
+                                console.error('Image load error:', url);
+                              }}
+                            />
+                          )}
                           <button
                             type="button"
                             onClick={() => removeImage(field.name, idx)}
