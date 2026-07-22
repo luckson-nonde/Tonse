@@ -101,6 +101,18 @@ function ServiceEvidenceSection({ quoteId }: { quoteId: string }) {
 }
 
 export default function OrderDetails({ order, inquiry, onAction }: OrderDetailsProps) {
+  // `order` is a raw Quote (price top-level) when opened from a quote flow,
+  // but the buyer's Order History rows (BuyerDashboard) are inquiry-shaped
+  // with the paid amount nested on `paidQuote` and the seller on
+  // `sellerName`. Read whichever is present — a missing amount must never
+  // crash the dashboard.
+  const paid = (order as any).paidQuote as
+    | { price?: number | string; orderNumber?: string }
+    | undefined;
+  const price = Number(paid?.price ?? order.price ?? 0) || 0;
+  const orderNumber = paid?.orderNumber || `ORD-${order.id}`;
+  const providerName = order.providerName || (order as any).sellerName;
+
   return (
     <div className="space-y-8">
       {/* Order Status Header */}
@@ -113,7 +125,7 @@ export default function OrderDetails({ order, inquiry, onAction }: OrderDetailsP
             <h2 className="text-2xl font-serif font-black text-emerald-900">
               Order Paid & Secured
             </h2>
-            <p className="text-emerald-700/70 font-medium">Order ID: ORD-{order.id}</p>
+            <p className="text-emerald-700/70 font-medium">Order ID: {orderNumber}</p>
           </div>
         </div>
         <div className="flex gap-3">
@@ -146,7 +158,7 @@ export default function OrderDetails({ order, inquiry, onAction }: OrderDetailsP
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
                       Pickup Point
                     </p>
-                    <p className="text-sm font-bold text-brand-dark">{order.providerName} Store</p>
+                    <p className="text-sm font-bold text-brand-dark">{providerName ? `${providerName} Store` : 'Seller Store'}</p>
                     <p className="text-xs text-slate-500">Lusaka, Cairo Road Branch</p>
                   </div>
                 </div>
@@ -195,24 +207,24 @@ export default function OrderDetails({ order, inquiry, onAction }: OrderDetailsP
                     <p className="text-xs text-slate-500">{order.condition}</p>
                   </div>
                 </div>
-                <span className="font-black text-brand-dark">K{order.price.toLocaleString()}</span>
+                <span className="font-black text-brand-dark">K{price.toLocaleString()}</span>
               </div>
 
               <div className="pt-4 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Subtotal</span>
-                  <span className="font-bold text-brand-dark">K{order.price.toLocaleString()}</span>
+                  <span className="font-bold text-brand-dark">K{price.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Escrow Fee (1%)</span>
                   <span className="font-bold text-brand-dark">
-                    K{(order.price * 0.01).toLocaleString()}
+                    K{(price * 0.01).toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between text-lg pt-4 border-t border-slate-100">
                   <span className="font-serif font-bold text-brand-dark">Grand Total</span>
                   <span className="font-black text-[#C9973A]">
-                    K{(order.price * 1.01).toLocaleString()}
+                    K{(price * 1.01).toLocaleString()}
                   </span>
                 </div>
               </div>
