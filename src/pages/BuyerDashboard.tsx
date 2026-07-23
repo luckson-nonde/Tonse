@@ -346,7 +346,7 @@ export default function BuyerDashboard() {
   const handleAction = async (actionId: string, payload?: any) => {
     switch (actionId) {
       case 'new_inquiry':
-        handleTabChange('process-selection');
+        handleTabChange('category-selection');
         break;
       case 'delete_inquiry':
         setInquiryToDelete(payload);
@@ -825,19 +825,6 @@ export default function BuyerDashboard() {
 
   const renderInquiryFlow = () => {
     switch (activeTab) {
-      case 'process-selection':
-        return (
-          <ProcessSelection
-            onComplete={(processType) => {
-              setPendingInquiry((prev) => ({
-                ...prev,
-                processType: processType.toUpperCase() as 'EXPRESS' | 'STANDARD',
-              }));
-              handleTabChange('category-selection');
-            }}
-            onBack={() => handleTabChange('dashboard')}
-          />
-        );
       case 'category-selection': {
         const shopCatIds = pendingInquiry.targetedShop?.categoryIds ?? [];
         const shopParentId: string | undefined = (() => {
@@ -851,7 +838,7 @@ export default function BuyerDashboard() {
         })();
         return (
           <BuyerCategoryPicker
-            onBack={() => handleTabChange('process-selection')}
+            onBack={() => handleTabChange('dashboard')}
             onComplete={handleInquiryComplete}
             preselectedParentId={shopParentId}
           />
@@ -888,16 +875,6 @@ export default function BuyerDashboard() {
           schema = getCategorySchema(rawCategoryName || '');
         }
 
-        // EXPRESS-mode filtering is handled inside DynamicInquiryForm
-        // ([components/DynamicInquiryForm.tsx] activeSchema). The
-        // earlier hardcoded `coreFieldNames` list duplicated that work
-        // and stripped any field whose name wasn't in a fixed allow-list,
-        // ignoring the per-field `keepInExpress` flag entirely. That's
-        // why a richly-defined schema like eventDecorSchema rendered as
-        // only Decor Style — every optional decor-specific field got
-        // killed here before the form even saw it. One filter, one
-        // place, single source of truth.
-
         return (
           <div className="space-y-4">
             {pendingInquiry.targetedShop && (
@@ -917,22 +894,34 @@ export default function BuyerDashboard() {
             <DynamicInquiryForm
               schema={schema}
               categoryName={rawCategoryName || 'Inquiry'}
-              processType={pendingInquiry.processType}
               isLoading={isSubmitting}
               onSubmit={(data) => {
                 setPendingInquiry((prev) => ({ ...prev, attributes: data }));
-                handleTabChange('inquiry-preferences');
+                handleTabChange('process-selection');
               }}
               onBack={() => handleTabChange('category-selection')}
             />
           </div>
+        );
+      case 'process-selection':
+        return (
+          <ProcessSelection
+            onComplete={(processType) => {
+              setPendingInquiry((prev) => ({
+                ...prev,
+                processType: processType.toUpperCase() as 'EXPRESS' | 'STANDARD',
+              }));
+              handleTabChange('inquiry-preferences');
+            }}
+            onBack={() => handleTabChange('create-inquiry')}
+          />
         );
       case 'inquiry-preferences':
         return (
           <InquiryPreferences
             categoryType={categoryType as any}
             categoryKey={pendingInquiry.categories?.[0]}
-            onBack={() => handleTabChange('create-inquiry')}
+            onBack={() => handleTabChange('process-selection')}
             onNext={(prefs) => {
               const shop = pendingInquiry.targetedShop;
               const isThisShopOnly = !!shop && prefs.targetOption === 'this_shop';
@@ -1028,9 +1017,9 @@ export default function BuyerDashboard() {
   };
 
   const isFlowTab = [
-    'process-selection',
     'category-selection',
     'create-inquiry',
+    'process-selection',
     'inquiry-preferences',
     'location-details',
     'inquiry-payment',

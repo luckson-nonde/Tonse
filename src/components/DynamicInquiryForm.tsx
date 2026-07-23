@@ -36,7 +36,6 @@ interface DynamicInquiryFormProps {
   onSubmit: (data: Record<string, any>) => void;
   onBack: () => void;
   isLoading?: boolean;
-  processType?: 'EXPRESS' | 'STANDARD';
 }
 
 export default function DynamicInquiryForm({
@@ -45,7 +44,6 @@ export default function DynamicInquiryForm({
   onSubmit,
   onBack,
   isLoading,
-  processType,
 }: DynamicInquiryFormProps) {
   const [view, setView] = useState<'form' | 'catalog'>('form');
   const [selectedItems, setSelectedItems] = useState<Record<string, any>>({});
@@ -62,19 +60,7 @@ export default function DynamicInquiryForm({
   // clicking one dropzone would open the other field's picker.
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const activeSchema =
-    processType === 'EXPRESS'
-      ? schema.filter(
-          (f) =>
-            f.required ||
-            f.keepInExpress ||
-            f.name === 'images' ||
-            f.name === 'budget_limit' ||
-            f.name === 'description'
-        )
-      : schema;
-
-  const zodSchema = generateZodSchema(activeSchema);
+  const zodSchema = generateZodSchema(schema);
   const {
     control,
     handleSubmit,
@@ -83,7 +69,7 @@ export default function DynamicInquiryForm({
     formState: { errors },
   } = useForm<any>({
     resolver: zodResolver(zodSchema),
-    defaultValues: activeSchema.reduce(
+    defaultValues: schema.reduce(
       (acc, field) => ({
         ...acc,
         [field.name]:
@@ -257,7 +243,7 @@ export default function DynamicInquiryForm({
       ? f.dependsOn.value.includes(current)
       : current === f.dependsOn.value;
   };
-  const requiredFields = activeSchema.filter((f) => f.required && isFieldVisible(f));
+  const requiredFields = schema.filter((f) => f.required && isFieldVisible(f));
   const filledRequiredFields = requiredFields.filter((f) => {
     const val = (formValues as any)[f.name];
     return (
@@ -823,7 +809,7 @@ export default function DynamicInquiryForm({
   const groupedFields: Record<string, FieldSchema[]> = {};
   const ungroupedFields: FieldSchema[] = [];
 
-  activeSchema.forEach((field) => {
+  schema.forEach((field) => {
     if (field.group) {
       if (!groupedFields[field.group]) {
         groupedFields[field.group] = [];

@@ -109,7 +109,7 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
             <ChevronLeft className="w-5 h-5 text-[#1a1a2e]" />
           </button>
           <p className="font-sans text-[10px] uppercase tracking-[0.14em] text-[#C9973A] font-bold">
-            STEP 04 / HOW TO BUY
+            HOW TO BUY
           </p>
         </div>
         <div className="mt-2">
@@ -141,7 +141,7 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
                   <GitBranch className="w-7 h-7" />
                 </div>
                 <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#C9973A]">
-                  Step 04 / How to Buy
+                  How to Buy
                 </p>
                 <h1 className="font-serif text-[28px] lg:text-[32px] font-bold text-[#1a1a2e] leading-[1.1]">
                   Choose Your <span className="text-[#C9973A]">Procurement</span> Path
