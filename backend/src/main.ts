@@ -7,6 +7,7 @@ import * as cors from 'cors';
 import * as path from 'path';
 import * as express from 'express';
 import { assertPiiCryptoReady } from './common/crypto/pii-crypto';
+import { getUploadsDir } from './config/storage.config';
 
 async function bootstrap() {
   // Fail fast on missing PII_ENCRYPTION_KEY (production fail-closed). The key
@@ -41,18 +42,24 @@ async function bootstrap() {
   // static/uploaded-file responses.
   app.use(helmet());
 
-  // Serve static files from public directory. Uploaded photos are embedded as
-  // <img> from the static-site origin (tonse-web → tonse-api) — a cross-origin
-  // no-cors load that helmet's default Cross-Origin-Resource-Policy:
-  // same-origin blocks (ERR_BLOCKED_BY_RESPONSE.NotSameOrigin). Public uploads
-  // are world-readable by design, so mark just these responses embeddable;
-  // API routes keep helmet's stricter default.
+  // Uploaded photos are embedded as <img> from the static-site origin
+  // (tonse-web → tonse-api) — a cross-origin no-cors load that helmet's default
+  // Cross-Origin-Resource-Policy: same-origin blocks
+  // (ERR_BLOCKED_BY_RESPONSE.NotSameOrigin). Public uploads are world-readable
+  // by design, so mark just these responses embeddable; API routes keep
+  // helmet's stricter default.
+  const embeddable = (res: express.Response) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  };
+
+  // /uploads is mounted explicitly because in production it lives on a
+  // persistent disk OUTSIDE the bundled public/ dir (see storage.config.ts).
+  // Registered first so it wins regardless of where the files actually sit.
+  app.use('/uploads', express.static(getUploadsDir(), { setHeaders: embeddable }));
+
+  // Remaining bundled static assets.
   app.use(
-    express.static(path.join(__dirname, '..', 'public'), {
-      setHeaders: (res) => {
-        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-      },
-    }),
+    express.static(path.join(__dirname, '..', 'public'), { setHeaders: embeddable }),
   );
 
   // Production origins come from CORS_ORIGINS (comma-separated, e.g. the Render

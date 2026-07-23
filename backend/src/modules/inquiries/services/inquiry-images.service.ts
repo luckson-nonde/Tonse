@@ -11,6 +11,7 @@ import { Inquiry } from '../entities/inquiry.entity';
 import * as fs from 'fs';
 import * as path from 'path';
 import sharp from 'sharp';
+import { getUploadsDir } from '../../../config/storage.config';
 
 /**
  * Inquiry Images Service
@@ -18,7 +19,9 @@ import sharp from 'sharp';
  */
 @Injectable()
 export class InquiryImagesService {
-  private readonly uploadsDir = path.join(__dirname, '../../../../public/uploads/inquiries');
+  // Shares the configured uploads root so inquiry photos land on the same
+  // persistent disk as every other public upload (see storage.config.ts).
+  private readonly uploadsDir = path.join(getUploadsDir(), 'inquiries');
   private readonly maxFileSize = 5 * 1024 * 1024; // 5MB per image
   private readonly maxImages = 10; // Max images per inquiry
   private readonly allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];

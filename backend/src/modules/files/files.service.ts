@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { Multer } from 'multer';
 import { encryptBuffer, decryptBuffer } from '../../common/crypto/pii-crypto';
+import { getSecureUploadsDir, getUploadsDir } from '../../config/storage.config';
 
 /**
  * Categories whose uploads are SENSITIVE PII (identity + financial documents).
@@ -34,9 +35,11 @@ const VIDEO_MIMES = new Set([
 
 @Injectable()
 export class FilesService {
-  private readonly uploadDir = path.join(process.cwd(), 'public', 'uploads');
+  // Both resolve to a mounted persistent disk in production (see
+  // storage.config.ts); otherwise to the historical in-container paths.
+  private readonly uploadDir = getUploadsDir();
   // Outside public/ so it is never served statically; only the auth endpoint reads it.
-  private readonly secureDir = path.join(process.cwd(), 'secure-uploads');
+  private readonly secureDir = getSecureUploadsDir();
 
   constructor() {
     if (!fs.existsSync(this.uploadDir)) {

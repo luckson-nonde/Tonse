@@ -45,17 +45,35 @@ services:
     healthCheckPath: /categories/status
     numInstances: 1            # KEEP AT 1 — the live SSE notification registry is in-memory per process
     autoDeploy: true
-    # Persistent uploads need a paid plan + a single instance. Uncomment to keep
-    # multer's public/uploads across deploys (otherwise it is ephemeral):
+    # ---- Persistent uploads (REQUIRED to keep files across deploys) --------
+    # Without this the container filesystem is wiped on every redeploy/restart:
+    # reference photos AND every encrypted KYC document (payslips, bank
+    # statements, title deeds) are lost, so already-submitted loan requests
+    # render as "unavailable".
+    #
+    # Render allows exactly ONE disk per service, so mount a single volume and
+    # point both upload dirs at subpaths of it via UPLOADS_DIR /
+    # SECURE_UPLOADS_DIR below (an earlier version of this block mounted only
+    # /app/public/uploads, which silently left the secure documents ephemeral).
+    #
+    # Needs a PAID instance type — flip `plan: free` to `plan: starter` above,
+    # then uncomment this block AND the two *_DIR env vars further down.
     # disk:
-    #   name: tonse-uploads
-    #   mountPath: /app/public/uploads
+    #   name: proquote-uploads
+    #   mountPath: /var/data
     #   sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: "3001"           # main.ts honors it; matches the Dockerfile EXPOSE/healthcheck
+      # --- Upload storage: uncomment TOGETHER with the `disk:` block above.
+      #     Both must live under the single disk mountPath or uploads stay
+      #     ephemeral. Unset, they fall back to the in-container paths.
+      # - key: UPLOADS_DIR
+      #   value: /var/data/uploads
+      # - key: SECURE_UPLOADS_DIR
+      #   value: /var/data/secure-uploads
       # --- Database (auto-wired from the managed Postgres above) ---
       - key: DB_HOST
         fromDatabase: { name: tonse-db, property: host }
