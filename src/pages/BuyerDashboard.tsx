@@ -99,11 +99,11 @@ export default function BuyerDashboard() {
   // back-navigation doesn't keep firing the modal.
   const [autoPayQuoteId, setAutoPayQuoteId] = useState<string | number | null>(null);
 
-  // Update selectedInquiryId when URL changes
+  // Keep selectedInquiryId in sync with the URL in both directions, so
+  // browser Back/Forward (which bypasses handleTabChange) also correctly
+  // clears the selection when the id drops out of the URL.
   useEffect(() => {
-    if (inquiryId) {
-      setSelectedInquiryId(inquiryId);
-    }
+    setSelectedInquiryId(inquiryId || null);
   }, [inquiryId]);
 
   // Fetch inquiries from PostgreSQL backend (NO IndexedDB)
@@ -336,6 +336,13 @@ export default function BuyerDashboard() {
 
   const handleTabChange = (tab: string, id?: string) => {
     setActiveTab(tab);
+    // 'inquiries' with no id means "show the list" — clear any stale
+    // selection so the inquiry_details view (derived from activeTab +
+    // selectedInquiryId together) doesn't keep re-showing the last-viewed
+    // inquiry instead of the list.
+    if (tab === 'inquiries' && !id) {
+      setSelectedInquiryId(null);
+    }
     const basePath = '/buyer';
     // Include inquiry ID in URL for details pages
     const path = id

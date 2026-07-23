@@ -7,8 +7,6 @@ import {
   Tag,
   MessageSquare,
   Clock,
-  CheckCircle,
-  AlertCircle,
   ArrowRight,
   FileText,
   Zap,
@@ -46,10 +44,10 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
   const daysOld = Math.floor((Date.now() - inquiryDate.getTime()) / (1000 * 60 * 60 * 24));
 
   return (
-    <div className="space-y-8">
-      {/* Enhanced Status Banner with Timeline */}
+    <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6 lg:space-y-8">
+      {/* Status Hero */}
       <div
-        className="p-8 rounded-4xl border-2 overflow-hidden relative"
+        className="p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl lg:rounded-4xl border-2 overflow-hidden relative"
         style={{ backgroundColor: `${statusInfo.color}08`, borderColor: statusInfo.color }}
       >
         {/* Background gradient accent */}
@@ -58,53 +56,56 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
           style={{ backgroundColor: statusInfo.color }}
         />
 
-        <div className="relative flex items-center justify-between gap-6">
-          <div className="flex items-center gap-6 flex-1">
+        <div className="relative flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+          <div className="flex items-center gap-3 sm:gap-4 lg:gap-6 flex-1 min-w-0">
             {/* Status Icon */}
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.3 }}
-              className="w-20 h-20 rounded-3xl flex items-center justify-center text-white shadow-lg shrink-0"
+              className="w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 rounded-2xl sm:rounded-3xl flex items-center justify-center text-white shadow-lg shrink-0"
               style={{ backgroundColor: statusInfo.color }}
             >
               {React.createElement((LucideIcons as any)[statusInfo.icon], {
-                className: 'w-10 h-10',
+                className: 'w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10',
               })}
             </motion.div>
 
             {/* Status Info */}
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <h3 className="text-3xl font-bold" style={{ color: statusInfo.color }}>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center flex-wrap gap-2 sm:gap-3 mb-1 sm:mb-2">
+                <h3
+                  className="text-xl sm:text-2xl lg:text-3xl font-bold"
+                  style={{ color: statusInfo.color }}
+                >
                   {statusInfo.label}
                 </h3>
                 {daysOld > 7 && (
-                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 flex items-center gap-1">
+                  <span className="px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-bold bg-amber-100 text-amber-700 flex items-center gap-1 shrink-0">
                     <Zap className="w-3 h-3" /> Pending {daysOld} days
                   </span>
                 )}
               </div>
-              <p className="text-sm text-slate-500 font-semibold">
+              <p className="text-xs sm:text-sm text-slate-500 font-semibold truncate">
                 Inquiry ID:{' '}
                 <span className="font-mono font-bold text-slate-700">
                   {inquiry.displayId ||
                     `QID-${inquiry.id?.toString().substring(0, 6).toUpperCase()}`}
                 </span>
               </p>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-[11px] sm:text-xs text-slate-400 mt-1">
                 Posted {inquiryDate.toLocaleDateString()} at {inquiryDate.toLocaleTimeString()}
               </p>
             </div>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-2 shrink-0">
+          <div className="flex flex-wrap gap-2">
             {statusInfo.nextActions.map((action) => (
               <Button
                 key={action}
                 onClick={() => onAction(action.toLowerCase(), inquiry)}
-                className={`px-6 py-3 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
+                className={`flex-1 sm:flex-initial min-w-[92px] justify-center px-4 sm:px-6 py-2.5 sm:py-3 text-[11px] sm:text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
                   action === 'VIEW_QUOTES'
                     ? 'text-white border-none shadow-lg hover:shadow-xl transform hover:scale-105'
                     : 'border-2 text-white hover:bg-slate-50 hover:shadow-md'
@@ -124,7 +125,7 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
             <Button
               variant="danger"
               onClick={() => onAction('delete_inquiry', inquiry)}
-              className="px-4 py-3 text-xs font-bold bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 border border-rose-200 hover:border-rose-300 rounded-xl transition-all"
+              className="flex-1 sm:flex-initial min-w-[92px] justify-center px-4 py-2.5 sm:py-3 text-[11px] sm:text-xs font-bold bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 border border-rose-200 hover:border-rose-300 rounded-xl transition-all"
             >
               Delete
             </Button>
@@ -132,74 +133,23 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
         {/* Main Content */}
-        <div className="lg:col-span-2 space-y-8">
-          {/* Buyer Information */}
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6 lg:space-y-8">
+          {/* Inquiry Overview */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.1 }}
-            className="bg-linear-to-br from-white to-slate-50 p-8 rounded-4xl border-2 border-slate-100 shadow-md hover:shadow-lg transition-shadow"
-          >
-            <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[#C9973A]/10 flex items-center justify-center">
-                <MessageSquare className="w-5 h-5 text-[#C9973A]" />
-              </div>
-              Buyer Profile
-            </h2>
-            {/* Buyer profile. `buyerName` is hydrated server-side by
-                `InquiriesService.hydrateBuyerInfo` (joins users on
-                buyerId). When still missing — e.g. legacy inquiries
-                or a backend that hasn't been restarted yet — fall back
-                to a short ID-derived label rather than the meaningless
-                "Unknown Buyer" string. The display ID is stable and
-                searchable; "Unknown" is just confusing. */}
-            <div className="flex items-center gap-6 bg-slate-100/50 p-8 rounded-3xl border border-slate-200">
-              <div className="w-20 h-20 rounded-2xl bg-linear-to-br from-[#C9973A] to-[#9d7328] flex items-center justify-center text-white text-4xl font-bold shadow-lg shrink-0">
-                {inquiry.buyerName?.charAt(0).toUpperCase() ||
-                  String(inquiry.buyerId || 'B').charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                  Buyer Name
-                </p>
-                <p className="text-2xl font-bold text-slate-900 mb-3 break-words">
-                  {inquiry.buyerName ||
-                    (inquiry.buyerId
-                      ? `Buyer #${String(inquiry.buyerId).slice(0, 8)}`
-                      : 'Buyer')}
-                </p>
-                <div className="flex items-center gap-4 text-sm flex-wrap">
-                  {inquiry.buyerId && (
-                    <span className="text-xs text-slate-500 font-medium break-all">
-                      <span className="text-slate-700 font-bold">ID:</span> #
-                      {String(inquiry.buyerId).slice(0, 8)}
-                    </span>
-                  )}
-                  <span className="text-slate-300">•</span>
-                  <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3 text-green-500" /> Verified Buyer
-                  </span>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Enhanced Inquiry Overview */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
-            className="bg-linear-to-br from-slate-50 to-white p-8 rounded-4xl border-2 border-[#C9973A]/20 shadow-md"
+            className="bg-linear-to-br from-slate-50 to-white p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl lg:rounded-4xl border-2 border-[#C9973A]/20 shadow-md"
           >
             {/* Title and Category */}
-            <div className="mb-6">
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <h2 className="text-3xl lg:text-4xl font-serif font-black text-slate-900 leading-tight flex-1">
+            <div className="mb-4 sm:mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <h2 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-serif font-black text-slate-900 leading-tight flex-1">
                   {inquiry.title}
                 </h2>
-                <span className="px-4 py-2 rounded-full text-xs font-bold bg-[#C9973A]/10 text-[#C9973A] whitespace-nowrap">
+                <span className="self-start px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs font-bold bg-[#C9973A]/10 text-[#C9973A] whitespace-nowrap shrink-0">
                   {inquiry.category?.replace(/-/g, ' ').toUpperCase()}
                 </span>
               </div>
@@ -211,39 +161,39 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                   both eras. */}
               {inquiry.description &&
                 inquiry.description.trim() !== 'No description provided.' && (
-                  <p className="text-slate-600 leading-relaxed text-lg">
+                  <p className="text-slate-600 leading-relaxed text-sm sm:text-base lg:text-lg">
                     {inquiry.description}
                   </p>
                 )}
             </div>
 
             {/* Key Details Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-8 border-t-2 border-[#C9973A]/10">
-              <div className="flex flex-col items-start gap-2">
-                <div className="p-3 bg-[#C9973A]/10 rounded-xl">
-                  <MapPin className="w-5 h-5 text-[#C9973A]" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 pt-4 sm:pt-6 lg:pt-8 border-t-2 border-[#C9973A]/10">
+              <div className="flex flex-col items-start gap-1.5 sm:gap-2">
+                <div className="p-2.5 sm:p-3 bg-[#C9973A]/10 rounded-xl">
+                  <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-[#C9973A]" />
                 </div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   Location
                 </p>
-                <p className="text-sm font-bold text-slate-900">{inquiry.location}</p>
+                <p className="text-xs sm:text-sm font-bold text-slate-900">{inquiry.location}</p>
               </div>
 
-              <div className="flex flex-col items-start gap-2">
-                <div className="p-3 bg-[#C9973A]/10 rounded-xl">
-                  <Calendar className="w-5 h-5 text-[#C9973A]" />
+              <div className="flex flex-col items-start gap-1.5 sm:gap-2">
+                <div className="p-2.5 sm:p-3 bg-[#C9973A]/10 rounded-xl">
+                  <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-[#C9973A]" />
                 </div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   Created
                 </p>
-                <p className="text-sm font-bold text-slate-900">
+                <p className="text-xs sm:text-sm font-bold text-slate-900">
                   {inquiryDate.toLocaleDateString()}
                 </p>
               </div>
 
-              <div className="flex flex-col items-start gap-2">
-                <div className="p-3 bg-blue-500/10 rounded-xl">
-                  <Eye className="w-5 h-5 text-blue-600" />
+              <div className="flex flex-col items-start gap-1.5 sm:gap-2">
+                <div className="p-2.5 sm:p-3 bg-blue-500/10 rounded-xl">
+                  <Eye className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                 </div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   {isLoan ? 'Lenders Viewed' : 'Views'}
@@ -252,38 +202,38 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                     placeholder. The previous `Math.random()` here meant
                     every render mutated the displayed number — visible
                     to anyone re-opening the same inquiry. */}
-                <p className="text-sm font-bold text-slate-900">
+                <p className="text-xs sm:text-sm font-bold text-slate-900">
                   {inquiry.viewCount ?? 0}
                 </p>
               </div>
 
-              <div className="flex flex-col items-start gap-2">
-                <div className="p-3 bg-purple-500/10 rounded-xl">
-                  <ThumbsUp className="w-5 h-5 text-purple-600" />
+              <div className="flex flex-col items-start gap-1.5 sm:gap-2">
+                <div className="p-2.5 sm:p-3 bg-purple-500/10 rounded-xl">
+                  <ThumbsUp className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
                 </div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   Status Age
                 </p>
-                <p className="text-sm font-bold text-slate-900">{daysOld}d ago</p>
+                <p className="text-xs sm:text-sm font-bold text-slate-900">{daysOld}d ago</p>
               </div>
             </div>
           </motion.div>
 
-          {/* Enhanced Specifications Section */}
+          {/* Specifications Section */}
           {parsedAttributes && Object.keys(parsedAttributes).length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.3 }}
-              className="bg-white p-8 rounded-4xl border-2 border-slate-100 shadow-md"
+              transition={{ duration: 0.3, delay: 0.2 }}
+              className="bg-white p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl lg:rounded-4xl border-2 border-slate-100 shadow-md"
             >
-              <h3 className="text-xl font-bold text-slate-900 mb-8 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[#C9973A]/10 flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-[#C9973A]" />
+              <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-4 sm:mb-6 lg:mb-8 flex items-center gap-2.5 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-[#C9973A]/10 flex items-center justify-center shrink-0">
+                  <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-[#C9973A]" />
                 </div>
                 Specifications & Details
               </h3>
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {Object.entries(parsedAttributes).map(([key, value]) => {
                   // Skip empty strings and whitespace-only strings
                   if (typeof value === 'string' && !value.trim()) {
@@ -296,16 +246,16 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                   if (secureVals.length > 0) {
                     return (
                       <div key={key}>
-                        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2.5 sm:mb-3 flex items-center gap-2">
                           <Tag className="w-4 h-4 text-[#C9973A]" />
                           {key.replace(/([A-Z])/g, ' $1').trim()}
                         </p>
-                        <div className="flex flex-wrap gap-4">
+                        <div className="flex flex-wrap gap-3 sm:gap-4">
                           {secureVals.map((u, i) => (
                             <SecureFile
                               key={i}
                               url={u}
-                              className="w-40 h-40 object-cover rounded-2xl border-2 border-slate-200"
+                              className="w-28 h-28 sm:w-36 sm:h-36 lg:w-40 lg:h-40 object-cover rounded-2xl border-2 border-slate-200"
                             />
                           ))}
                         </div>
@@ -333,11 +283,11 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                   if (imageUrls.length > 0) {
                     return (
                       <div key={key}>
-                        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-3 sm:mb-4 flex items-center gap-2">
                           <Tag className="w-4 h-4 text-[#C9973A]" />
                           {key.replace(/([A-Z])/g, ' $1').trim()}
                         </p>
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                           {imageUrls.map((url, idx) => (
                             <motion.div
                               key={`${url}-${idx}`}
@@ -391,8 +341,8 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                       key={key}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
-                      className={`p-4 bg-linear-to-r from-slate-50/50 to-transparent rounded-2xl border border-slate-100/50 hover:border-[#C9973A]/30 transition-all group ${
-                        isLongText ? 'flex flex-col gap-2' : 'flex justify-between items-center'
+                      className={`p-3 sm:p-4 bg-linear-to-r from-slate-50/50 to-transparent rounded-2xl border border-slate-100/50 hover:border-[#C9973A]/30 transition-all group ${
+                        isLongText ? 'flex flex-col gap-2' : 'flex justify-between items-center gap-3'
                       }`}
                     >
                       <span className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2 shrink-0">
@@ -403,7 +353,7 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                         className={`text-sm font-bold text-slate-900 ${
                           isLongText
                             ? 'leading-relaxed break-words'
-                            : 'ml-4 shrink-0 text-right'
+                            : 'shrink-0 text-right'
                         }`}
                       >
                         {valueText}
@@ -417,30 +367,30 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
         </div>
 
         {/* Sidebar: Quotes Summary & Support */}
-        <div className="space-y-6">
-          {/* Enhanced Quotes Card */}
+        <div className="space-y-4 sm:space-y-6">
+          {/* Quotes Card */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
-            className="bg-white p-8 rounded-4xl border-2 border-slate-100 shadow-md"
+            transition={{ duration: 0.3, delay: 0.15 }}
+            className="bg-white p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl lg:rounded-4xl border-2 border-slate-100 shadow-md"
           >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <MessageSquare className="w-5 h-5 text-blue-600" />
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2.5 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                  <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                 </div>
                 {isLoan ? 'Offers Received' : 'Quotes Received'}
               </h3>
               {quotes.length > 0 && (
-                <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-bold">
+                <span className="px-2.5 sm:px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs sm:text-sm font-bold shrink-0">
                   {quotes.length}
                 </span>
               )}
             </div>
 
             {quotes.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-2.5 sm:space-y-3">
                 {quotes.slice(0, 5).map((quote, idx) => (
                   <motion.div
                     key={quote.id}
@@ -448,41 +398,41 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: idx * 0.05 }}
                     onClick={() => onAction('view_quote', quote)}
-                    className="p-4 rounded-2xl border border-slate-100 hover:border-blue-300 hover:bg-blue-50/50 transition-all cursor-pointer group shadow-sm hover:shadow-md"
+                    className="p-3 sm:p-4 rounded-2xl border border-slate-100 hover:border-blue-300 hover:bg-blue-50/50 transition-all cursor-pointer group shadow-sm hover:shadow-md"
                   >
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
+                    <div className="flex justify-between items-start mb-2.5 sm:mb-3 gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors truncate">
                           {quote.providerName}
                         </p>
                         <p className="text-xs text-slate-500 font-medium mt-1">
                           {isLoan ? 'Loan Offer' : quote.condition}
                         </p>
                       </div>
-                      <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 transition-colors mt-1" />
+                      <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 transition-colors mt-1 shrink-0" />
                     </div>
                     <div className="flex items-baseline justify-between">
                       <span className="text-xs text-slate-400 font-medium">{isLoan ? 'Approved' : 'Amount'}</span>
-                      <span className="text-lg font-black text-blue-600">
+                      <span className="text-base sm:text-lg font-black text-blue-600">
                         {isLoan ? 'ZMW ' : 'K'}{Number(quote.price || 0).toLocaleString()}
                       </span>
                     </div>
                   </motion.div>
                 ))}
                 {quotes.length > 5 && (
-                  <button className="w-full py-3 px-4 rounded-xl border-2 border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-colors mt-2">
-                    View All {quotes.length} Quotes →
-                  </button>
+                  <p className="text-center text-xs font-bold text-slate-400 pt-1">
+                    +{quotes.length - 5} more
+                  </p>
                 )}
               </div>
             ) : (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="py-8 text-center"
+                className="py-6 sm:py-8 text-center"
               >
-                <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-                  <Clock className="w-7 h-7 text-slate-400" />
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                  <Clock className="w-6 h-6 sm:w-7 sm:h-7 text-slate-400" />
                 </div>
                 <p className="text-sm font-semibold text-slate-600 mb-2">
                   {isLoan ? 'Awaiting Lender Offers' : 'Awaiting Provider Responses'}
@@ -501,57 +451,21 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
             )}
           </motion.div>
 
-          {/* Inquiry Stats Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.25 }}
-            className="bg-linear-to-br from-slate-50 to-white p-6 rounded-4xl border-2 border-slate-100 shadow-md"
-          >
-            <h4 className="font-bold text-slate-900 mb-4 text-sm flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-500" /> Quick Stats
-            </h4>
-            {/* Quick Stats — every value is sourced from real inquiry
-                fields. The previous "Engagement %" was a randomised
-                fake metric and the previous "Views" was also random;
-                both removed in favour of values that actually mean
-                something (active duration, real view count, quotes
-                received). */}
-            <div className="space-y-3">
-              <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                <span className="text-xs font-medium text-slate-600">Active Duration</span>
-                <span className="text-sm font-bold text-slate-900">
-                  {daysOld === 0 ? 'Today' : `${daysOld} day${daysOld === 1 ? '' : 's'}`}
-                </span>
-              </div>
-              <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                <span className="text-xs font-medium text-slate-600">Views</span>
-                <span className="text-sm font-bold text-slate-900">
-                  {inquiry.viewCount ?? 0}
-                </span>
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-xs font-medium text-slate-600">{isLoan ? 'Offers Received' : 'Quotes Received'}</span>
-                <span className="text-sm font-bold text-slate-900">{quotes.length}</span>
-              </div>
-            </div>
-          </motion.div>
-
           {/* Support Card */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.3 }}
-            className="bg-linear-to-br from-slate-900 to-slate-800 p-6 rounded-4xl text-white shadow-lg"
+            transition={{ duration: 0.3, delay: 0.2 }}
+            className="bg-linear-to-br from-slate-900 to-slate-800 p-4 sm:p-6 rounded-2xl sm:rounded-3xl lg:rounded-4xl text-white shadow-lg"
           >
-            <h4 className="font-serif font-bold text-lg mb-2">Need Assistance?</h4>
-            <p className="text-slate-300 text-sm mb-6 leading-relaxed">
+            <h4 className="font-serif font-bold text-base sm:text-lg mb-2">Need Assistance?</h4>
+            <p className="text-slate-300 text-xs sm:text-sm mb-4 sm:mb-6 leading-relaxed">
               Our dedicated support team is here to help optimize your inquiry and connect you with
               the right providers.
             </p>
             <Button
               variant="outline"
-              className="w-full border-white/30 text-white hover:bg-white/10 font-bold rounded-xl transition-all"
+              className="w-full border-white/30 text-white hover:bg-white/10 font-bold rounded-xl transition-all text-xs sm:text-sm py-2.5 sm:py-3"
             >
               Contact Support
             </Button>
