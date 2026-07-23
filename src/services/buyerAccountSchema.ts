@@ -47,9 +47,9 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
         { id: 'completed_orders', label: 'Completed Orders', value: 0, icon: 'CheckCircle' },
       ],
       actions: [
-        // "New Inquiry" (not "Create New Inquiry") so the label fits the
+        // "Send Inquiry" (not "Create New Inquiry") so the label fits the
         // half-width pill on a 360px phone — matches the inquiries view.
-        { id: 'new_inquiry', label: 'New Inquiry', icon: 'Plus', type: 'navigate', target: '/categories', variant: 'primary' },
+        { id: 'new_inquiry', label: 'Send Inquiry', icon: 'Plus', type: 'navigate', target: '/categories', variant: 'primary' },
         { id: 'browse_shops', label: 'Browse Shops', icon: 'Store', type: 'navigate', target: '/shops', variant: 'secondary' },
       ]
     },
@@ -59,7 +59,7 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       componentType: 'list_renderer',
       dataKey: 'inquiries',
       actions: [
-        { id: 'new_inquiry', label: 'New Inquiry', icon: 'Plus', type: 'navigate', target: '/categories', variant: 'primary' },
+        { id: 'new_inquiry', label: 'Send Inquiry', icon: 'Plus', type: 'navigate', target: '/categories', variant: 'primary' },
         { id: 'browse_shops', label: 'Browse Shops', icon: 'Store', type: 'navigate', target: '/shops', variant: 'secondary' },
       ]
     },

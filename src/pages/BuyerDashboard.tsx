@@ -286,6 +286,7 @@ export default function BuyerDashboard() {
       if (order) {
         return {
           id: `o-${i.id}`,
+          inquiryId: i.id,
           title: i.title,
           subtitle: 'Order Placed',
           time: 'Recently',
@@ -298,6 +299,7 @@ export default function BuyerDashboard() {
       if (liveQuote) {
         return {
           id: `q-${i.id}`,
+          inquiryId: i.id,
           title: i.title,
           subtitle:
             String((liveQuote as any).condition || '').toUpperCase() === 'LOAN'
@@ -309,6 +311,7 @@ export default function BuyerDashboard() {
       }
       return {
         id: `i-${i.id}`,
+        inquiryId: i.id,
         title: i.title,
         subtitle: 'Inquiry Created',
         time: 'Recently',

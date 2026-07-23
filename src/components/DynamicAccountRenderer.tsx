@@ -411,6 +411,7 @@ export default function DynamicAccountRenderer({
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: idx * 0.1 }}
+                  onClick={() => onAction('view_details', { id: activity.inquiryId })}
                   className="p-6 flex items-center justify-between hover:bg-gradient-to-r hover:from-amber-50/40 to-transparent transition-colors duration-300 cursor-pointer group"
                 >
                   <div className="flex items-center gap-4">
@@ -462,35 +463,41 @@ export default function DynamicAccountRenderer({
 
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between px-2">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 px-2">
           <div>
             <h2 className="text-3xl font-serif font-black text-brand-dark">
               {resolveValue(viewSchema.title)}
             </h2>
             <p className="text-slate-500">{resolveValue(viewSchema.subtitle)}</p>
           </div>
-          <div className="hidden md:flex gap-3">
-            {viewSchema.actions?.map((action, idx) => (
-              <Button
-                key={uniqueKey('action-top', action.id, idx)}
-                variant={action.variant}
-                onClick={() => onAction(action.id)}
-                className={`flex items-center gap-2.5 px-6 py-3 rounded-full font-bold shadow-lg transition-all duration-300 hover:-translate-y-0.5 ${
-                  action.variant === 'primary'
-                    ? '!bg-[#C9973A] !text-white hover:!bg-[#1e3a8a] shadow-[#C9973A]/30 hover:shadow-[#1e3a8a]/30'
-                    // `!` overrides are load-bearing (same as the primary branch):
-                    // Button's own variant="secondary" ships bg-brand-dark +
-                    // text-white, and without !important the class-order
-                    // coin-flip left WHITE text on the white pill (invisible
-                    // until hover recolored it).
-                    : '!bg-white border-2 !border-slate-200 !text-slate-700 hover:!border-[#1e3a8a] hover:!text-[#1e3a8a]'
-                }`}
-              >
-                {renderIcon(action.icon || 'Plus', 'w-4.5 h-4.5')}
-                {action.label}
-              </Button>
-            ))}
-          </div>
+          {/* Always visible — even once the list is populated — so the buyer
+              can send another inquiry without scrolling back to an empty
+              state. Stacks full-width below the title on mobile; sits at the
+              top-right next to the title from md up. */}
+          {(viewSchema.actions?.length ?? 0) > 0 && (
+            <div className="flex flex-row gap-3">
+              {viewSchema.actions?.map((action, idx) => (
+                <Button
+                  key={uniqueKey('action-top', action.id, idx)}
+                  variant={action.variant}
+                  onClick={() => onAction(action.id)}
+                  className={`flex-1 md:flex-initial min-w-0 flex items-center justify-center gap-2 sm:gap-2.5 px-4 sm:px-6 py-2.5 sm:py-3 rounded-full font-bold text-sm sm:text-base whitespace-nowrap shadow-lg transition-all duration-300 hover:-translate-y-0.5 ${
+                    action.variant === 'primary'
+                      ? '!bg-[#C9973A] !text-white hover:!bg-[#1e3a8a] shadow-[#C9973A]/30 hover:shadow-[#1e3a8a]/30'
+                      // `!` overrides are load-bearing (same as the primary branch):
+                      // Button's own variant="secondary" ships bg-brand-dark +
+                      // text-white, and without !important the class-order
+                      // coin-flip left WHITE text on the white pill (invisible
+                      // until hover recolored it).
+                      : '!bg-white border-2 !border-slate-200 !text-slate-700 hover:!border-[#1e3a8a] hover:!text-[#1e3a8a]'
+                  }`}
+                >
+                  {renderIcon(action.icon || 'Plus', 'w-4 h-4 sm:w-4.5 sm:h-4.5 shrink-0')}
+                  {action.label}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -502,6 +509,7 @@ export default function DynamicAccountRenderer({
                     key={uniqueKey('inquiry', item.id, idx)}
                     inquiry={item}
                     state={item.status?.toLowerCase() || 'open'}
+                    hideSpecifications
                     onAction={() => onAction('view_details', item)}
                     onDelete={() => onAction('delete_inquiry', item)}
                     onReleaseReserve={() => onAction('release_reserve', item)}

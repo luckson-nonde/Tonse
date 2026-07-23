@@ -13,6 +13,12 @@ interface InquiryCardProps {
   paidQuote?: any;
   onAction: () => void;
   onDelete: () => void;
+  /** List-view collapse: hides the inline attribute/spec grid so the card
+   *  shows only identity + status at a glance. The full breakdown already
+   *  renders on the details page this card's action navigates to. Only
+   *  passed from the Inquiries list — Order History still shows attributes
+   *  inline since OrderDetails doesn't render them at all. */
+  hideSpecifications?: boolean;
   /** Buyer action: surface the reserved (overflow) quote batch. Rendered
    *  only when `inquiry.reserveCount > 0`. */
   onReleaseReserve?: () => void;
@@ -31,6 +37,7 @@ export default function InquiryCard({
   paidQuote,
   onAction,
   onDelete,
+  hideSpecifications,
   onReleaseReserve,
   onRate,
   alreadyRated,
@@ -213,6 +220,7 @@ export default function InquiryCard({
           </p>
         </div>
 
+        {!hideSpecifications && (
         <div className="grid grid-cols-2 gap-3 mb-6">
           {displayAttributes.map(([key, value]) => {
             // Image attachments render as a thumbnail grid (tap to open the
@@ -286,6 +294,7 @@ export default function InquiryCard({
             );
           })}
         </div>
+        )}
 
         {state === 'open' && (
           <div className="bg-[#f4efe8] rounded-xl p-3 flex items-center gap-2 text-slate-500 text-sm font-medium font-sans">
