@@ -23,7 +23,8 @@ export type DurableType =
   | 'REPORT_FILED'
   | 'REPORT_RECEIVED'
   | 'JOB_ASSIGNED'
-  | 'JOB_EVIDENCE_ADDED';
+  | 'JOB_EVIDENCE_ADDED'
+  | 'ORDER_PAID';
 export type EphemeralType =
   | 'QUOTE_COUNT_UPDATE'
   | 'LEAD_FULL'
@@ -56,6 +57,7 @@ const SSE_EVENT_NAME: Record<DurableType | EphemeralType, string> = {
   REPORT_RECEIVED: 'report_received',
   JOB_ASSIGNED: 'job_assigned',
   JOB_EVIDENCE_ADDED: 'job_evidence_added',
+  ORDER_PAID: 'order_paid',
   QUOTE_COUNT_UPDATE: 'quote_count_update',
   LEAD_FULL: 'lead_full',
   PROVIDER_ACCEPTED: 'provider_accepted',

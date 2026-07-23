@@ -180,6 +180,19 @@ export class LoanService {
     if (quote.status !== 'ACCEPTED') {
       throw new ForbiddenException('The borrower must accept the offer before you can progress it');
     }
+    // Purchase-financing loans must disburse through the financing settlement
+    // (which funds the financed product order's escrow), never a bare stage
+    // bump here — that would mark the loan DISBURSED while the seller is never
+    // paid. Send the lender to the financing confirm endpoint instead.
+    if (target === 'DISBURSED' && quote.inquiryId) {
+      const inquiry = await this.inquiriesService.findOne(quote.inquiryId);
+      if ((inquiry as any)?.attributes?.financedQuoteId) {
+        throw new BadRequestException(
+          'This is a purchase-financing loan — confirm disbursement via ' +
+            '/financing/offers/:id/confirm-disbursement so the product order is funded',
+        );
+      }
+    }
     const d = quote.dynamicFields || {};
     const current = d.stage || 'ACCEPTED';
     // Forward-only; allow only single-step or later, never backward.

@@ -15,6 +15,7 @@ import { SandboxPaymentProvider } from './providers/sandbox.provider';
 import { LencoPaymentProvider } from './providers/lenco.provider';
 import { PAYMENT_PROVIDER } from './providers/payment-provider.interface';
 import { LedgerModule } from '../ledger/ledger.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 /**
  * Payments.
@@ -28,6 +29,7 @@ import { LedgerModule } from '../ledger/ledger.module';
   imports: [
     TypeOrmModule.forFeature([Payment, PspTransaction, WebhookEventRecord, Quote, Inquiry, Order]),
     LedgerModule,
+    NotificationsModule,
   ],
   providers: [
     PaymentsService,

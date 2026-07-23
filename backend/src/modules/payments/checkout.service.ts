@@ -17,6 +17,8 @@ import { Inquiry } from '../inquiries/entities/inquiry.entity';
 import { Order } from '../orders/entities/order.entity';
 import { LedgerService } from '../ledger/ledger.service';
 import { ACCOUNT } from '../ledger/ledger-accounts';
+import { isEscrowHolding } from '../quotes/quote-status';
+import { NotificationsService } from '../notifications/notifications.service';
 import { toNgwee } from '../../common/money/money';
 import {
   Channel,
@@ -55,6 +57,7 @@ export class CheckoutService {
     @Inject(PAYMENT_PROVIDER)
     private readonly provider: PaymentProvider,
     private readonly ledger: LedgerService,
+    private readonly notifications: NotificationsService,
     private readonly dataSource: DataSource,
     private readonly config: ConfigService,
   ) {}
@@ -91,6 +94,15 @@ export class CheckoutService {
     if ((quote as any).condition === 'LOAN') {
       // Loans settle off-platform — they never enter escrow.
       throw new BadRequestException('Loan offers are not paid through escrow');
+    }
+    // Financed checkout in flight: block a parallel cash payment so the buyer
+    // can't both finance AND pay for the same quote (which would leave them with
+    // an unnecessary loan against an already-funded order). Cancel financing to
+    // pay another way.
+    if ((quote.dynamicFields as any)?.financing?.status === 'REQUESTED') {
+      throw new ConflictException(
+        'This quote has a financing request in progress — cancel it to pay another way',
+      );
     }
 
     // AMOUNT COMES FROM THE QUOTE, never the client.
@@ -332,6 +344,14 @@ export class CheckoutService {
     verifiedFee: string | undefined,
     raw: Record<string, any> | undefined,
   ): Promise<void> {
+    let paid: {
+      buyerId: string;
+      sellerId: string;
+      quoteId: string;
+      inquiryId: string | null;
+      inquiryTitle: string;
+      amount: string;
+    } | null = null;
     await this.dataSource.transaction(async (m) => {
       const [tx]: PspTransaction[] = await m.query(
         'SELECT * FROM psp_transactions WHERE reference = $1 FOR UPDATE',
@@ -408,9 +428,174 @@ export class CheckoutService {
       if (quote.inquiryId) {
         await m.getRepository(Inquiry).update(quote.inquiryId, { status: 'CLOSED' });
       }
+
+      paid = {
+        buyerId: tx.counterpartyId,
+        sellerId: quote.providerId,
+        quoteId: quote.id,
+        inquiryId: quote.inquiryId ?? null,
+        inquiryTitle: quote.inquiryTitle,
+        amount: verifiedAmount,
+      };
     });
 
     this.logger.log(`Escrow funded for ${reference}`);
+    // Post-commit: tell buyer + seller the item is paid. Fire-and-forget.
+    if (paid) this.emitOrderPaid({ ...paid, source: 'CASH' });
+  }
+
+  /**
+   * Tell buyer + seller a quote's escrow is funded ("the item is paid for").
+   * Fire-and-forget, POST-COMMIT: a notification failure must never unwind a
+   * funded payment. Also closes a prior gap — funding emitted nothing, so the
+   * seller only discovered a paid parcel by polling the collection queue.
+   */
+  private emitOrderPaid(ctx: {
+    buyerId: string;
+    sellerId: string;
+    quoteId: string;
+    inquiryId: string | null;
+    inquiryTitle: string;
+    amount: string;
+    source: 'CASH' | 'LOAN';
+  }): void {
+    const financed = ctx.source === 'LOAN';
+    void this.notifications
+      .notifyUsers([ctx.buyerId], 'ORDER_PAID', () => ({
+        title: financed
+          ? `Your loan was approved — "${ctx.inquiryTitle}" is paid for`
+          : `Payment confirmed — "${ctx.inquiryTitle}" is paid for`,
+        inquiryId: ctx.inquiryId ?? undefined,
+        quoteId: ctx.quoteId,
+        data: { role: 'buyer', amount: ctx.amount, source: ctx.source },
+      }))
+      .catch((e) => this.logger.warn(`ORDER_PAID buyer notify failed: ${(e as Error).message}`));
+    void this.notifications
+      .notifyUsers([ctx.sellerId], 'ORDER_PAID', () => ({
+        title: financed
+          ? `"${ctx.inquiryTitle}" has been paid for (buyer financing) — proceed`
+          : `"${ctx.inquiryTitle}" has been paid for — proceed`,
+        inquiryId: ctx.inquiryId ?? undefined,
+        quoteId: ctx.quoteId,
+        data: { role: 'seller', amount: ctx.amount, source: ctx.source },
+      }))
+      .catch((e) => this.logger.warn(`ORDER_PAID seller notify failed: ${(e as Error).message}`));
+  }
+
+  /**
+   * Fund a quote's escrow from an OFF-PLATFORM source — a lender's approved loan
+   * disbursement (financed checkout) — rather than a PSP collection. The lender
+   * transfers the principal into the PSP holding account out-of-band, then
+   * confirms; THIS call records the escrow. It posts the same ESCROW_FUNDED
+   * journal, creates the Order and flips the quote → PAID / inquiry → CLOSED, so
+   * the seller's downstream flow is byte-for-byte identical to a cash sale.
+   * `memo.source = 'LOAN'` names the funder in the ledger.
+   *
+   * Idempotent: if the quote is already escrow-holding the call is a no-op and
+   * returns `{ alreadyFunded: true }`; the journal's own idempotency key
+   * (`escrow-funded-loan:<scope>`) is the second line of defence.
+   *
+   * TRUST BOUNDARY: escrow is recorded on the lender's CONFIRMATION, not an
+   * independently-verified PSP receipt. Production hardening would gate this
+   * behind an admin/PSP reconciliation of the incoming transfer.
+   */
+  async fundEscrowFromExternal(params: {
+    quoteId: string;
+    buyerId: string;
+    idempotencyScope: string;
+    memo?: Record<string, any>;
+  }): Promise<{ orderId: string | null; alreadyFunded: boolean; amount: string }> {
+    let outcome: { orderId: string | null; alreadyFunded: boolean; amount: string } | null = null;
+    let paid: {
+      buyerId: string;
+      sellerId: string;
+      quoteId: string;
+      inquiryId: string | null;
+      inquiryTitle: string;
+      amount: string;
+    } | null = null;
+
+    await this.dataSource.transaction(async (m) => {
+      const quote = await m.getRepository(Quote).findOne({
+        where: { id: params.quoteId },
+        relations: ['inquiry'],
+      });
+      if (!quote) throw new NotFoundException('Quote not found');
+
+      // Idempotent: escrow already funded → no-op (a retried confirmation, or a
+      // race with a concurrent confirm).
+      if (isEscrowHolding(quote.status)) {
+        outcome = { orderId: null, alreadyFunded: true, amount: String(quote.price) };
+        return;
+      }
+      if (quote.status !== 'ACCEPTED' && quote.status !== 'PENDING') {
+        throw new ConflictException(`This quote can't be funded from status ${quote.status}`);
+      }
+
+      const amount = String(quote.price);
+      const amountNgwee = toNgwee(amount);
+
+      // Same journal as a cash sale — the money physically sits in PSP_HOLDING
+      // (the lender paid into it) and we owe it to this deal. The funder is
+      // recorded in the memo, not a different account, so escrow reconciliation
+      // and the seller's release path are unchanged.
+      await this.ledger.postJournal(
+        {
+          type: 'ESCROW_FUNDED',
+          idempotencyKey: `escrow-funded-loan:${params.idempotencyScope}`,
+          quoteId: quote.id,
+          currency: 'ZMW',
+          description: `Escrow funded (loan) for ${quote.inquiryTitle}`,
+          memo: { source: 'LOAN', ...(params.memo ?? {}) },
+          lines: [
+            {
+              accountCode: ACCOUNT.PSP_HOLDING,
+              direction: 'DEBIT',
+              amountNgwee,
+              quoteId: quote.id,
+            },
+            {
+              accountCode: ACCOUNT.ESCROW_LIABILITY,
+              direction: 'CREDIT',
+              amountNgwee,
+              quoteId: quote.id,
+              counterpartyId: params.buyerId,
+            },
+          ],
+        },
+        m,
+      );
+
+      const orderNumber = `ORD-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+      const order = await m.getRepository(Order).save(
+        m.getRepository(Order).create({
+          orderNumber,
+          quoteId: quote.id,
+          buyerId: params.buyerId,
+          sellerId: quote.providerId,
+          totalAmount: Number(amount),
+        } as any),
+      );
+
+      await m.getRepository(Quote).update(quote.id, { status: 'PAID' });
+      if (quote.inquiryId) {
+        await m.getRepository(Inquiry).update(quote.inquiryId, { status: 'CLOSED' });
+      }
+
+      outcome = { orderId: (order as any).id, alreadyFunded: false, amount };
+      paid = {
+        buyerId: params.buyerId,
+        sellerId: quote.providerId,
+        quoteId: quote.id,
+        inquiryId: quote.inquiryId ?? null,
+        inquiryTitle: quote.inquiryTitle,
+        amount,
+      };
+    });
+
+    if (paid) this.emitOrderPaid({ ...paid, source: 'LOAN' });
+    if (!outcome) throw new Error('Financed escrow funding did not complete');
+    return outcome;
   }
 
   /**

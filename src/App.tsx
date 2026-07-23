@@ -34,6 +34,7 @@ import ProviderDashboard from './pages/ProviderDashboard';
 import FinancialPage from './pages/FinancialPage';
 import QuoteDetailsPage from './pages/QuoteDetailsPage';
 import CollectionCodePage from './pages/CollectionCodePage';
+import FinancingRequestPage from './pages/FinancingRequestPage';
 import PaymentPage from './pages/PaymentPage';
 import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import ArchivedQuotesPage from './pages/ArchivedQuotesPage';
@@ -253,6 +254,16 @@ export default function App() {
                   <ProtectedRoute allowedRoles={['BUYER']}>
                     <PageTransition transitionKey="quote-details">
                       <QuoteDetailsPage />
+                    </PageTransition>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/buyer/financing"
+                element={
+                  <ProtectedRoute allowedRoles={['BUYER']}>
+                    <PageTransition transitionKey="financing">
+                      <FinancingRequestPage />
                     </PageTransition>
                   </ProtectedRoute>
                 }

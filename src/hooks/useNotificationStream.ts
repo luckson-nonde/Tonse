@@ -25,6 +25,9 @@ export interface NotificationStreamHandlers {
   onLeadFull?: (payload: { inquiryId: string }) => void;
   /** Buyer: a quote arrived on one of their inquiries. */
   onQuoteReceived?: (payload: Record<string, any>) => void;
+  /** Buyer + seller: a quote's escrow was funded — the item is paid for
+   *  (cash checkout OR a lender's financed disbursement). Durable. */
+  onOrderPaid?: (payload: { quoteId?: string; inquiryId?: string; title?: string } & Record<string, any>) => void;
   /** Provider: their reserve quote became visible to the buyer. */
   onReserveReleased?: (payload: Record<string, any>) => void;
   /** Buyer: live "X providers accepted" tick (ephemeral). */
@@ -101,6 +104,7 @@ export function useNotificationStream(
       else if (n.type === 'QUOTE_RECEIVED') handlersRef.current.onQuoteReceived?.(payload);
       else if (n.type === 'RESERVE_RELEASED') handlersRef.current.onReserveReleased?.(payload);
       else if (n.type === 'MILESTONE_UNLOCKED') handlersRef.current.onMilestoneUnlocked?.(payload as any);
+      else if (n.type === 'ORDER_PAID') handlersRef.current.onOrderPaid?.(payload as any);
     };
 
     const catchUp = async () => {
@@ -145,6 +149,10 @@ export function useNotificationStream(
       es.addEventListener('quote_received', (e) => {
         lastSeen = new Date().toISOString();
         routeDurable({ type: 'QUOTE_RECEIVED', ...parse(e as MessageEvent) });
+      });
+      es.addEventListener('order_paid', (e) => {
+        lastSeen = new Date().toISOString();
+        routeDurable({ type: 'ORDER_PAID', ...parse(e as MessageEvent) });
       });
       es.addEventListener('reserve_released', (e) => {
         lastSeen = new Date().toISOString();

@@ -7,10 +7,11 @@ import {
   CreditCard,
   Check,
   Loader2,
+  Landmark,
 } from 'lucide-react';
 import Button from './Button';
 
-export type PaymentMethod = 'wallet' | 'mobile_money' | 'card';
+export type PaymentMethod = 'wallet' | 'mobile_money' | 'card' | 'lending';
 export type MobileMoneyProvider = 'MTN' | 'Airtel' | 'Zamtel';
 
 export interface PaymentSheetSubmitPayload {
@@ -52,6 +53,12 @@ export interface PaymentSheetProps {
    *  If unset, the wallet tab is hidden even if it's in `methods`. */
   onWalletSelected?: () => void;
 
+  /** Fires when the user picks the 'lending' tab (pay via a lending
+   *  institution — government workers). Like wallet, it's a redirect action:
+   *  route the buyer to the financing-request flow. If unset, the lending
+   *  tab is hidden even if it's in `methods`. */
+  onLendingSelected?: () => void;
+
   /** Primary CTA copy. Receives the resolved amount (input mode lets you
    *  format with the live value). */
   actionLabel: string | ((amount: number) => string);
@@ -91,18 +98,28 @@ export default function PaymentSheet({
   methods = ['mobile_money', 'card'],
   defaultMethod,
   onWalletSelected,
+  onLendingSelected,
   actionLabel,
   onSubmit,
   context,
   busy: externalBusy = false,
 }: PaymentSheetProps) {
-  // Wallet tab is only available when the host has wired the redirect.
-  const visibleMethods = methods.filter((m) => m !== 'wallet' || !!onWalletSelected);
+  // Wallet + lending tabs are redirect actions — only shown when the host has
+  // wired the corresponding handler.
+  const visibleMethods = methods.filter(
+    (m) =>
+      (m !== 'wallet' || !!onWalletSelected) && (m !== 'lending' || !!onLendingSelected),
+  );
 
+  // The selected/charged method is always a chargeable one (mobile money / card);
+  // wallet + lending only ever fire their redirect and never become `method`.
+  const isRedirectMethod = (m: PaymentMethod) => m === 'wallet' || m === 'lending';
   const initialMethod: PaymentMethod = (() => {
-    if (defaultMethod && visibleMethods.includes(defaultMethod)) return defaultMethod;
-    const firstNonWallet = visibleMethods.find((m) => m !== 'wallet');
-    return firstNonWallet ?? visibleMethods[0] ?? 'mobile_money';
+    if (defaultMethod && visibleMethods.includes(defaultMethod) && !isRedirectMethod(defaultMethod)) {
+      return defaultMethod;
+    }
+    const firstChargeable = visibleMethods.find((m) => !isRedirectMethod(m));
+    return firstChargeable ?? 'mobile_money';
   })();
 
   const [method, setMethod] = useState<PaymentMethod>(initialMethod);
@@ -143,6 +160,10 @@ export default function PaymentSheet({
     setError(null);
     if (m === 'wallet') {
       onWalletSelected?.();
+      return;
+    }
+    if (m === 'lending') {
+      onLendingSelected?.();
       return;
     }
     setMethod(m);
@@ -314,6 +335,8 @@ export default function PaymentSheet({
                   const meta =
                     m === 'wallet'
                       ? { Icon: Wallet, label: 'Wallet' }
+                      : m === 'lending'
+                      ? { Icon: Landmark, label: 'Loan' }
                       : m === 'card'
                       ? { Icon: CreditCard, label: 'Bank Card' }
                       : { Icon: Wifi, label: 'Mobile' };
