@@ -254,13 +254,22 @@ export const apiCall = async <T = any>(
   // where registration "refreshes halfway on the location / account-creation
   // step and bounces to login"). Let the call reject instead so the caller's
   // own try/catch swallows it; authenticated app routes keep the bounce.
+  //
+  // /discover is the same class of bug, one level worse: it's a genuinely
+  // PUBLIC route (LandingGate only gates it on the site-settings flag, never
+  // on auth state), so AuthContext's boot-time session check runs there for
+  // every guest. A visitor with a stale/expired token from an earlier session
+  // on this browser would otherwise get hard-redirected to /login the instant
+  // they land on Discover — typing the URL back in "still brings you back to
+  // login" is exactly this. Prefix match covers /discover/:id too.
   const authFlowPath =
     typeof window !== 'undefined' &&
     (window.location.pathname === '/register' ||
       window.location.pathname === '/role-selection' ||
       window.location.pathname === '/login' ||
       window.location.pathname.startsWith('/forgot-password') ||
-      window.location.pathname.startsWith('/reset-password'));
+      window.location.pathname.startsWith('/reset-password') ||
+      window.location.pathname.startsWith('/discover'));
 
   // Offline fail-fast for MUTATIONS: a write that can't reach the server is
   // not "pending", it's not happening — say so immediately and honestly
