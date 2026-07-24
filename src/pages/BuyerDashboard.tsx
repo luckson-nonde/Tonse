@@ -194,6 +194,14 @@ export default function BuyerDashboard() {
           // OrderQuoteSnapshot.status. NOT the same as `orderStatus` below,
           // which is the Order entity's own (effectively inert) status.
           status: o.quote?.status,
+          // Real collection PIN (backend-generated on payment) so the order
+          // detail screen can render a genuine, scannable QR instead of a
+          // placeholder. Prefer the eager-loaded quote; fall back to the
+          // buyer's own loaded quotes list.
+          collectionCode:
+            (o.quote as any)?.collectionCode ??
+            quotes.find((q) => String(q.id) === String(o.quote?.id ?? o.quoteId))
+              ?.collectionCode,
         },
         orderId: o.id,
         orderStatus: o.status,
@@ -203,7 +211,7 @@ export default function BuyerDashboard() {
         alreadyRated: ratedOrderIds.has(o.id),
       };
     });
-  }, [backendOrders, inquiries, ratedOrderIds]);
+  }, [backendOrders, inquiries, quotes, ratedOrderIds]);
 
 
   // TODO: Transactions endpoint not yet implemented on backend
