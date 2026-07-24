@@ -99,6 +99,15 @@ export default function BuyerDashboard() {
   // for the Pay button. Cleared by QuoteDetails after one open so a
   // back-navigation doesn't keep firing the modal.
   const [autoPayQuoteId, setAutoPayQuoteId] = useState<string | number | null>(null);
+  // One-shot arrival hint for the Transaction History page's default tab —
+  // set when a dashboard metric tile ("Ready to Collect"/"Completed") is
+  // clicked, cleared once TransactionHistoryView consumes it on mount.
+  // Landing-tab hint for Transaction History (history-only now — "Awaiting
+  // Collection" moved to its own Active Transactions page). Set by the
+  // "Completed" dashboard tile → lands on Purchased Items.
+  const [transactionHistoryInitialTab, setTransactionHistoryInitialTab] = useState<
+    'PURCHASED' | 'REQUESTS' | 'EXPIRED' | null
+  >(null);
 
   // Keep selectedInquiryId in sync with the URL in both directions, so
   // browser Back/Forward (which bypasses handleTabChange) also correctly
@@ -420,8 +429,9 @@ export default function BuyerDashboard() {
       // My Inquiries / Received Quotes lists deliberately hide.
       allInquiries: inquiries,
       allQuotes: quotes,
+      transactionHistoryInitialTab,
     };
-  }, [inquiries, quotes, orders, selectedInquiryId, selectedQuoteId, selectedOrderId, balance, escrowBalance, autoPayQuoteId]);
+  }, [inquiries, quotes, orders, selectedInquiryId, selectedQuoteId, selectedOrderId, balance, escrowBalance, autoPayQuoteId, transactionHistoryInitialTab]);
 
   const handleTabChange = (tab: string, id?: string) => {
     setActiveTab(tab);
@@ -497,6 +507,19 @@ export default function BuyerDashboard() {
         // doesn't keep popping the modal.
         setAutoPayQuoteId(null);
         break;
+      case 'view_transaction_tab':
+        // Dashboard's "Ready to Collect"/"Completed" tiles both land on
+        // Transaction History — this hint picks the matching sub-tab.
+        setTransactionHistoryInitialTab(payload || null);
+        handleTabChange('orders');
+        break;
+      case 'transaction_tab_handled':
+        // TransactionHistoryView fires this once it has consumed the hint
+        // (post-mount), so a later visit via the sidebar nav (not a tile
+        // click) correctly defaults back to Awaiting Collection instead of
+        // sticking on whichever tab was last requested.
+        setTransactionHistoryInitialTab(null);
+        break;
       case 'rate_shop':
         if (payload?.sellerId && payload?.orderId) {
           setRatingTarget({
@@ -549,13 +572,14 @@ export default function BuyerDashboard() {
         }
         break;
       case 'accept_quote':
-        // EXPRESS pay-on-quote success: an Order row was just created
-        // by PaymentModal; refresh everything and land the buyer on the
-        // Orders tab so they see the paid item in their history.
+        // EXPRESS pay-on-quote success: an Order row was just created by
+        // PaymentModal. A freshly-paid order is awaiting collection, so land
+        // the buyer on Active Transactions (not the History archive) where the
+        // item they just paid for actually shows.
         refreshQuotes();
         refreshInquiries();
         refreshOrders();
-        handleTabChange('orders');
+        handleTabChange('active_transactions');
         break;
       case 'loan_action_done':
         // Borrower accepted / rejected / countered a loan offer (LoanOfferDetail
@@ -602,7 +626,8 @@ export default function BuyerDashboard() {
           refreshQuotes();
           refreshInquiries();
           refreshOrders();
-          handleTabChange('orders');
+          // Just-created order is awaiting collection → Active Transactions.
+          handleTabChange('active_transactions');
         } catch (err: any) {
           alert(err?.response?.data?.message || err?.message || 'Failed to generate purchase order. Please try again.');
         }

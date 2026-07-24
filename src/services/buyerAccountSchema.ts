@@ -23,7 +23,11 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'dashboard', label: 'Overview', icon: 'LayoutDashboard' },
     { id: 'inquiries', label: 'My Inquiries', icon: 'MessageSquare' },
     { id: 'quotes', label: 'Received Quotes', icon: 'FileText' },
-    { id: 'orders', label: 'Transaction History', icon: 'ShoppingBag' },
+    // Two independent pages (NOT tabs on one screen): Active = paid orders
+    // still awaiting collection; History = collected purchases + expired
+    // quotes + closed/cancelled requests.
+    { id: 'active_transactions', label: 'Active Transactions', icon: 'ShoppingBag' },
+    { id: 'orders', label: 'Transaction History', icon: 'History' },
     { id: 'shops', label: 'Browse Shops', icon: 'Store' },
     { id: 'profile', label: 'Account Settings', icon: 'User' },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
@@ -87,9 +91,14 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       componentType: 'list_renderer',
       dataKey: 'loanOffers'
     },
+    active_transactions: {
+      title: "Active Transactions",
+      subtitle: "Paid orders waiting to be collected",
+      componentType: 'active_transactions_renderer',
+    },
     orders: {
       title: "Transaction History",
-      subtitle: "Track paid orders awaiting collection, purchases, requests, and expired quotes",
+      subtitle: "Collected purchases, expired quotes, and closed requests",
       componentType: 'transaction_history_renderer',
     },
     shops: {

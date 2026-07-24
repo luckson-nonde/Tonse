@@ -431,7 +431,14 @@ export default function DashboardLayout({
       counts.inquiries = activeInquiries;
       counts.quotes = activeQuotes;
       counts.loan_offers = pendingLoanOffers;
-      counts.orders = sidebarOrders.length; // Order History shows every backend order
+      // Active Transactions badge = paid orders still awaiting collection
+      // (actionable "come collect these"). Transaction History is a passive
+      // archive (collected + expired + closed), so it gets no nudge badge.
+      counts.active_transactions = (sidebarOrders ?? []).filter((o: any) =>
+        ['PAID', 'PENDING_COLLECTION', 'AWAITING_PICKUP'].includes(
+          String(o?.quote?.status || '').toUpperCase(),
+        ),
+      ).length;
       return counts;
     }
 

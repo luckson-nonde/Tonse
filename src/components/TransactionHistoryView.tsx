@@ -1,20 +1,19 @@
 /**
- * Transaction History — the buyer's renamed/restructured "Order History"
- * page. Splits every paid order + dead-end inquiry + lapsed quote into four
- * tabs instead of one flat, everything-looks-the-same list:
+ * Transaction History — the buyer's record of everything that is no longer an
+ * ACTIVE transaction. Paid-but-uncollected orders live on the separate
+ * "Active Transactions" page (ActiveTransactionsView); this page is purely
+ * the archive, split into three tabs:
  *
- *   Awaiting Collection  paid, not yet collected (Quote.status PAID /
- *                         PENDING_COLLECTION / AWAITING_PICKUP) — the
- *                         easy-access tab for the actual pickup moment.
  *   Purchased Items       paid AND collected (Quote.status COMPLETED /
- *                         HANDED_OVER) — the permanent archive.
- *   Requests              dead-ends: a CLOSED inquiry with no order, or a
- *                         QUOTED inquiry where every quote has lapsed
- *                         (rejected/archived/expired) — today these vanish
- *                         from every other list in the dashboard with no
- *                         trace anywhere.
+ *                         HANDED_OVER) — the permanent archive of completed
+ *                         purchases.
+ *   Requests              dead-ends: a CLOSED inquiry with no order (the buyer
+ *                         cancelled / stopped wanting quotes), or a QUOTED
+ *                         inquiry where every quote has lapsed
+ *                         (rejected/archived/expired) — otherwise these vanish
+ *                         from every other list with no trace.
  *   Expired               a still-PENDING/ACCEPTED quote whose provider-set
- *                         "Quote Valid For" window has elapsed unpaid (see
+ *                         "Quote Valid For" window elapsed unpaid (see
  *                         src/utils/quoteExpiry.ts). Loans excluded — they
  *                         have their own dedicated Loan Offers surface.
  *
@@ -25,7 +24,7 @@
  * fetches of its own, same as ReportManagerView fetching its own but unlike
  * it, this one reuses what's already loaded for the rest of the dashboard.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import InquiryCard from './InquiryCard';
 import QuoteCard from './QuoteCard';
 import { isActiveBuyerQuote } from '../services/lifecycleFilters';
@@ -33,30 +32,38 @@ import { isQuoteExpired } from '../utils/quoteExpiry';
 import { isLoanQuote, isLoanContext } from '../utils/loan';
 import defaultEmptyImage from '../assets/images/empty-states/owl_reading.webp';
 
-type TxTab = 'AWAITING' | 'PURCHASED' | 'REQUESTS' | 'EXPIRED';
+type TxTab = 'PURCHASED' | 'REQUESTS' | 'EXPIRED';
 
-const AWAITING_STATUSES = ['PAID', 'PENDING_COLLECTION', 'AWAITING_PICKUP'];
 const COLLECTED_STATUSES = ['COMPLETED', 'HANDED_OVER'];
+// TODO: no live code path writes CANCELLED/REFUNDED to a Quote today, so
+// they're not in either bucket above — harmless for now, but the day a
+// cancel/refund flow ships, a cancelled/refunded paid order would silently
+// vanish from every Transaction History tab instead of landing in one.
 
 interface TransactionHistoryViewProps {
   data?: any;
   onAction: (actionId: string, payload?: any) => void;
+  /** One-shot arrival hint from a dashboard metric tile ("Ready to
+   *  Collect"/"Completed") — picks the tab to land on instead of always
+   *  defaulting to Awaiting Collection. Consumed once on mount. */
+  initialTab?: TxTab | null;
 }
 
-export default function TransactionHistoryView({ data, onAction }: TransactionHistoryViewProps) {
-  const [tab, setTab] = useState<TxTab>('AWAITING');
+export default function TransactionHistoryView({ data, onAction, initialTab }: TransactionHistoryViewProps) {
+  const [tab, setTab] = useState<TxTab>(initialTab || 'PURCHASED');
+
+  useEffect(() => {
+    if (initialTab) {
+      onAction('transaction_tab_handled');
+    }
+    // Only ever meant to apply once, at the arrival that set the hint —
+    // deliberately not re-running if initialTab or onAction identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const orders: any[] = data?.orders ?? [];
   const allInquiries: any[] = data?.allInquiries ?? [];
   const allQuotes: any[] = data?.allQuotes ?? [];
-
-  const awaitingCollection = useMemo(
-    () =>
-      orders.filter((o) =>
-        AWAITING_STATUSES.includes(String(o?.paidQuote?.status || '').toUpperCase()),
-      ),
-    [orders],
-  );
 
   const purchasedItems = useMemo(
     () =>
@@ -109,7 +116,6 @@ export default function TransactionHistoryView({ data, onAction }: TransactionHi
   );
 
   const TABS: Array<{ key: TxTab; label: string; count: number }> = [
-    { key: 'AWAITING', label: 'Awaiting Collection', count: awaitingCollection.length },
     { key: 'PURCHASED', label: 'Purchased Items', count: purchasedItems.length },
     { key: 'REQUESTS', label: 'Requests', count: requests.length },
     { key: 'EXPIRED', label: 'Expired', count: expiredQuotes.length },
@@ -154,7 +160,7 @@ export default function TransactionHistoryView({ data, onAction }: TransactionHi
       <div className="px-2">
         <h2 className="text-3xl font-serif font-black text-brand-dark">Transaction History</h2>
         <p className="text-slate-500">
-          Track paid orders awaiting collection, purchases, requests, and expired quotes
+          Your collected purchases, expired quotes, and closed requests
         </p>
       </div>
 
@@ -174,14 +180,6 @@ export default function TransactionHistoryView({ data, onAction }: TransactionHi
           ))}
         </div>
       </div>
-
-      {tab === 'AWAITING' &&
-        (awaitingCollection.length > 0
-          ? renderOrderCards(awaitingCollection)
-          : renderEmpty(
-              'Nothing awaiting collection',
-              "Orders you've paid for stay here until you collect them.",
-            ))}
 
       {tab === 'PURCHASED' &&
         (purchasedItems.length > 0

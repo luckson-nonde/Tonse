@@ -57,6 +57,7 @@ import DeleteAccountSection from './DeleteAccountSection';
 import LoanOfferDetail from './loan/LoanOfferDetail';
 import FinancialPage from '../pages/FinancialPage';
 import VentureAccountView from './provider/VentureAccountView';
+import ActiveTransactionsView from './ActiveTransactionsView';
 import TransactionHistoryView from './TransactionHistoryView';
 import ReportManagerView from './ReportManagerView';
 import { Inquiry, Quote } from '../types';
@@ -260,8 +261,10 @@ export default function DynamicAccountRenderer({
                   onClick={() => {
                     if (metric.id === 'active_inquiries') onNavigate('inquiries');
                     else if (metric.id === 'quotes_received') onNavigate('quotes');
-                    else if (metric.id === 'ready_to_collect') onNavigate('orders');
-                    else if (metric.id === 'completed_orders') onNavigate('orders');
+                    // Both land on the Transaction History page, but on the
+                    // tab that actually matches the tile's own label.
+                    else if (metric.id === 'ready_to_collect') onNavigate('active_transactions');
+                    else if (metric.id === 'completed_orders') onAction('view_transaction_tab', 'PURCHASED');
                   }}
                   className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-premium hover:border-[#e2c185] hover:shadow-premium-lg transition-all duration-300 cursor-pointer group"
                 >
@@ -733,8 +736,16 @@ export default function DynamicAccountRenderer({
         return <FinancialPage isInsideDashboard={true} />;
       case 'venture_account_renderer':
         return <VentureAccountView />;
+      case 'active_transactions_renderer':
+        return <ActiveTransactionsView data={data} onAction={onAction} />;
       case 'transaction_history_renderer':
-        return <TransactionHistoryView data={data} onAction={onAction} />;
+        return (
+          <TransactionHistoryView
+            data={data}
+            onAction={onAction}
+            initialTab={data?.transactionHistoryInitialTab}
+          />
+        );
       case 'report_manager':
         return <ReportManagerView />;
       case 'staff_overview':

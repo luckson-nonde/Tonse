@@ -62,6 +62,7 @@ export interface ViewDefinition {
     | 'venue_spaces_renderer'
     | 'financial_renderer'
     | 'venture_account_renderer'
+    | 'active_transactions_renderer'
     | 'transaction_history_renderer'
     | 'labour_home'
     | 'labour_jobs'
