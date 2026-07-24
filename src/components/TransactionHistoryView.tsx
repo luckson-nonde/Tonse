@@ -25,6 +25,7 @@
  * it, this one reuses what's already loaded for the rest of the dashboard.
  */
 import React, { useEffect, useMemo, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import InquiryCard from './InquiryCard';
 import QuoteCard from './QuoteCard';
 import { isActiveBuyerQuote } from '../services/lifecycleFilters';
@@ -115,11 +116,12 @@ export default function TransactionHistoryView({ data, onAction, initialTab }: T
     [allQuotes],
   );
 
-  const TABS: Array<{ key: TxTab; label: string; count: number }> = [
-    { key: 'PURCHASED', label: 'Purchased Items', count: purchasedItems.length },
-    { key: 'REQUESTS', label: 'Requests', count: requests.length },
-    { key: 'EXPIRED', label: 'Expired', count: expiredQuotes.length },
+  const TABS: Array<{ key: TxTab; label: string; count: number; hint: string }> = [
+    { key: 'PURCHASED', label: 'Purchased', count: purchasedItems.length, hint: 'Paid orders you’ve already collected.' },
+    { key: 'REQUESTS', label: 'Requests', count: requests.length, hint: 'Inquiries that closed or lost every quote.' },
+    { key: 'EXPIRED', label: 'Expired', count: expiredQuotes.length, hint: 'Quotes that lapsed before you paid.' },
   ];
+  const activeHint = TABS.find((t) => t.key === tab)?.hint;
 
   const renderEmpty = (title: string, description: string) => (
     <div className="bg-white p-6 sm:p-16 rounded-4xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center min-h-[40vh]">
@@ -158,94 +160,147 @@ export default function TransactionHistoryView({ data, onAction, initialTab }: T
   return (
     <div className="space-y-6">
       <div className="px-2">
-        <h2 className="text-3xl font-serif font-black text-brand-dark">Transaction History</h2>
-        <p className="text-slate-500">
+        <h2 className="text-2xl sm:text-3xl font-serif font-black text-brand-dark">Transaction History</h2>
+        <p className="text-sm sm:text-base text-slate-500">
           Your collected purchases, expired quotes, and closed requests
         </p>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-3 sm:px-4 pt-3 flex items-center gap-1 sm:gap-1.5 border-b border-slate-100 overflow-x-auto">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`px-3 sm:px-4 py-2.5 rounded-t-xl text-[11px] font-black uppercase tracking-wider whitespace-nowrap transition-all ${
-                tab === t.key ? 'bg-[#1B3068] text-white' : 'text-slate-400 hover:text-[#1B3068]'
-              }`}
-            >
-              {t.label}
-              <span className="ml-1.5 font-bold opacity-70">{t.count}</span>
-            </button>
-          ))}
+      {/* Segmented tab control — full-width, every tab visible on mobile (no
+          horizontal scroll). A navy thumb slides to the active tab (framer
+          layoutId) so a switch is unmistakable, and a caption below spells out
+          what the active tab holds. */}
+      <div>
+        <div
+          role="tablist"
+          aria-label="Transaction history sections"
+          className="grid grid-cols-3 gap-1.5 p-1.5 bg-slate-100 rounded-2xl"
+        >
+          {TABS.map((t) => {
+            const active = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(t.key)}
+                className="relative flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl min-h-[54px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3068]/40"
+              >
+                {active && (
+                  <motion.span
+                    layoutId="txTabThumb"
+                    transition={{ type: 'spring', stiffness: 500, damping: 38 }}
+                    className="absolute inset-0 bg-[#1B3068] rounded-xl shadow-md"
+                  />
+                )}
+                <span
+                  className={`relative z-10 text-[12px] sm:text-sm font-bold transition-colors ${
+                    active ? 'text-white' : 'text-slate-600'
+                  }`}
+                >
+                  {t.label}
+                </span>
+                <span
+                  className={`relative z-10 inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-[10px] font-black transition-colors ${
+                    active ? 'bg-white/20 text-white' : 'bg-white text-slate-500'
+                  }`}
+                >
+                  {t.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={`hint-${tab}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="px-2 mt-3 text-xs text-slate-400 font-medium"
+          >
+            {activeHint}
+          </motion.p>
+        </AnimatePresence>
       </div>
 
-      {tab === 'PURCHASED' &&
-        (purchasedItems.length > 0
-          ? renderOrderCards(purchasedItems)
-          : renderEmpty(
-              'No purchases yet',
-              'Once you collect a paid order, it moves here as a permanent record.',
-            ))}
+      {/* Content — re-keyed per tab so switching fades/slides the panel in. */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={tab}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.18 }}
+        >
+          {tab === 'PURCHASED' &&
+            (purchasedItems.length > 0
+              ? renderOrderCards(purchasedItems)
+              : renderEmpty(
+                  'No purchases yet',
+                  'Once you collect a paid order, it moves here as a permanent record.',
+                ))}
 
-      {tab === 'REQUESTS' &&
-        (requests.length > 0 ? (
-          <ul className="divide-y divide-slate-100 bg-white border border-slate-200 rounded-3xl overflow-hidden">
-            {requests.map((inq, idx) => (
-              <li
-                key={`request-${inq.id ?? idx}`}
-                className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-brand-dark truncate">
-                    {inq.title || 'Untitled Inquiry'}
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1 truncate">
-                    {String(inq.category || inq.categoryIds?.[0] || '').replace(/-/g, ' ')}
-                    {' · '}
-                    {inq.createdAt ? new Date(inq.createdAt).toLocaleDateString() : ''}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 whitespace-nowrap">
-                    {String(inq.status || '').toUpperCase() === 'CLOSED' ? 'Closed' : 'No Response'}
-                  </span>
-                  <button
-                    onClick={() => onAction('view_details', inq)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors whitespace-nowrap"
+          {tab === 'REQUESTS' &&
+            (requests.length > 0 ? (
+              <ul className="divide-y divide-slate-100 bg-white border border-slate-200 rounded-3xl overflow-hidden">
+                {requests.map((inq, idx) => (
+                  <li
+                    key={`request-${inq.id ?? idx}`}
+                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4"
                   >
-                    View Details
-                  </button>
-                </div>
-              </li>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-brand-dark truncate">
+                        {inq.title || 'Untitled Inquiry'}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1 truncate">
+                        {String(inq.category || inq.categoryIds?.[0] || '').replace(/-/g, ' ')}
+                        {' · '}
+                        {inq.createdAt ? new Date(inq.createdAt).toLocaleDateString() : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 whitespace-nowrap">
+                        {String(inq.status || '').toUpperCase() === 'CLOSED' ? 'Closed' : 'No Response'}
+                      </span>
+                      <button
+                        onClick={() => onAction('view_details', inq)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors whitespace-nowrap"
+                      >
+                        View Details
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              renderEmpty(
+                'No dead-end requests',
+                'Inquiries that close without an order, or lose every quote, show up here.',
+              )
             ))}
-          </ul>
-        ) : (
-          renderEmpty(
-            'No dead-end requests',
-            'Inquiries that close without an order, or lose every quote, show up here.',
-          )
-        ))}
 
-      {tab === 'EXPIRED' &&
-        (expiredQuotes.length > 0 ? (
-          <div className="space-y-4">
-            {expiredQuotes.map((quote, idx) => (
-              <QuoteCard
-                key={`expired-${quote.id ?? idx}`}
-                quote={quote}
-                onView={() => onAction('view_quote', quote)}
-                onDelete={() => onAction('delete_quote', quote)}
-              />
+          {tab === 'EXPIRED' &&
+            (expiredQuotes.length > 0 ? (
+              <div className="space-y-4">
+                {expiredQuotes.map((quote, idx) => (
+                  <QuoteCard
+                    key={`expired-${quote.id ?? idx}`}
+                    quote={quote}
+                    onView={() => onAction('view_quote', quote)}
+                    onDelete={() => onAction('delete_quote', quote)}
+                  />
+                ))}
+              </div>
+            ) : (
+              renderEmpty(
+                'No expired quotes',
+                "A quote that goes unpaid past its provider's validity window shows up here.",
+              )
             ))}
-          </div>
-        ) : (
-          renderEmpty(
-            'No expired quotes',
-            "A quote that goes unpaid past its provider's validity window shows up here.",
-          )
-        ))}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
