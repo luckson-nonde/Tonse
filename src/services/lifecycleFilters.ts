@@ -21,11 +21,15 @@
  * `*Response` shapes our hooks return (status typed as string).
  */
 
+import { isQuoteExpired } from '../utils/quoteExpiry';
+
 interface StatusBearing {
   status?: string | null;
 }
 interface ArchivableQuote extends StatusBearing {
   isArchived?: boolean;
+  createdAt?: string | number | Date | null;
+  expiryDuration?: string | null;
 }
 
 /**
@@ -37,16 +41,34 @@ export const isActiveInquiry = (i: StatusBearing): boolean =>
   String(i.status || '').toUpperCase() === 'OPEN';
 
 /**
- * Stage 2 predicate. True for quotes the buyer can still act on (pay,
- * reject, accept). Hides PAID (already turned into an order),
- * COMPLETED (parcel handed over), ARCHIVED (buyer dismissed),
- * REJECTED, and SUPERSEDED (older revisions when the provider
- * resubmits).
+ * Stage 2 predicate. True for quotes that are still live and unresolved
+ * (pay, reject, accept). Hides PAID (already turned into an order),
+ * COMPLETED (parcel handed over), ARCHIVED (dismissed), REJECTED, and
+ * SUPERSEDED (older revisions when the provider resubmits).
+ *
+ * Shared by BOTH sides of the deal — the buyer's Received Quotes page/badge
+ * AND the seller's My Quotes page/badge/calendar dot all key off this same
+ * predicate so badge counts never drift from what the corresponding page
+ * shows. Do NOT fold buyer-only concepts (like quote expiry) into this —
+ * see isActiveBuyerQuote below.
  */
 export const isActiveQuote = (q: ArchivableQuote): boolean => {
   const status = String(q.status || '').toUpperCase();
   return ['PENDING', 'ACCEPTED'].includes(status) && !q.isArchived;
 };
+
+/**
+ * Buyer-only refinement of isActiveQuote: also hides quotes whose
+ * provider-set "Quote Valid For" window has elapsed unpaid (see
+ * src/utils/quoteExpiry.ts) — surfaced separately on the buyer's
+ * Transaction History "Expired" tab instead. Expiry is a buyer-facing
+ * concept only ("you need a new quotation") — the seller's My Quotes page
+ * has no equivalent, which is why this isn't folded into isActiveQuote
+ * itself (that would desync the seller's badge/calendar from their own
+ * unfiltered My Quotes list).
+ */
+export const isActiveBuyerQuote = (q: ArchivableQuote): boolean =>
+  isActiveQuote(q) && !isQuoteExpired(q);
 
 /**
  * Stage 3 predicate. True for orders that exist as paid placements,

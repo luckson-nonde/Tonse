@@ -16,9 +16,10 @@ import { useNotificationStream } from '../hooks/useNotificationStream';
 import { releaseReserveQuotes } from '../services/api/notificationService';
 import { markQuoteAsRead, archiveQuote, deleteQuote, updateQuoteStatus } from '../services/api/quoteService';
 import { createOrder, fetchBuyerOrders, type OrderRecord } from '../services/api/orderService';
-import { isActiveInquiry, isActiveQuote } from '../services/lifecycleFilters';
+import { isActiveInquiry, isActiveBuyerQuote } from '../services/lifecycleFilters';
 import { newIdempotencyKey } from '../services/offlineWriteQueue';
 import { isLoanQuote } from '../utils/loan';
+import { formatRelativeTime } from '../utils/time';
 import { ViewType, MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
 import BuyerCategoryPicker from '../components/buyer/BuyerCategoryPicker';
@@ -162,19 +163,28 @@ export default function BuyerDashboard() {
   // bare order shape when the related quote/inquiry hasn't loaded yet.
   const orders = useMemo(() => {
     return backendOrders.map((o) => {
-      const quote = quotes.find((q) => String(q.id) === String(o.quoteId));
-      const inquiry = quote ? inquiries.find((i) => String(i.id) === String(quote.inquiryId)) : undefined;
+      // The backend already eager-loads the linked quote onto each order
+      // (`relations: ['quote', ...]`) — read its inquiryId/status straight
+      // off that instead of cross-referencing the buyer's separately-polled
+      // `quotes` state, which only needed to stay in sync by coincidence.
+      const inquiry = o.quote?.inquiryId
+        ? inquiries.find((i) => String(i.id) === String(o.quote!.inquiryId))
+        : undefined;
       return {
         ...(inquiry || {}),
         id: inquiry?.id ?? o.quoteId,
         title: inquiry?.title || `Order ${o.orderNumber}`,
         createdAt: inquiry?.createdAt || o.createdAt,
         paidQuote: {
-          id: quote?.id ?? o.id,
+          id: o.quote?.id ?? o.quoteId,
           price: o.totalAmount,
           updatedAt: o.updatedAt,
           orderNumber: o.orderNumber,
-          status: o.status,
+          // The real collection-flow status (PAID/PENDING_COLLECTION/
+          // AWAITING_PICKUP/COMPLETED/HANDED_OVER) — see
+          // OrderQuoteSnapshot.status. NOT the same as `orderStatus` below,
+          // which is the Order entity's own (effectively inert) status.
+          status: o.quote?.status,
         },
         orderId: o.id,
         orderStatus: o.status,
@@ -184,7 +194,7 @@ export default function BuyerDashboard() {
         alreadyRated: ratedOrderIds.has(o.id),
       };
     });
-  }, [backendOrders, quotes, inquiries, ratedOrderIds]);
+  }, [backendOrders, inquiries, ratedOrderIds]);
 
 
   // TODO: Transactions endpoint not yet implemented on backend
@@ -265,7 +275,10 @@ export default function BuyerDashboard() {
         undefined;
       return { ...q, inquiryCategory, inquiryAttributes: inq.attributes };
     });
-    const activeQuotes = enrichedQuotes.filter(isActiveQuote);
+    // Buyer-perspective: also excludes quotes whose "Quote Valid For"
+    // window has lapsed unpaid — those move to Transaction History's
+    // Expired tab instead of lingering here looking actionable.
+    const activeQuotes = enrichedQuotes.filter(isActiveBuyerQuote);
     // A loan OFFER (condition LOAN) or DECLINE (condition DECLINED) is a Quote
     // that lives in its own "Loan Offers" surface (custom card + LoanOfferDetail),
     // NOT alongside marketplace quotes — a loan is accepted/countered, never
@@ -284,40 +297,109 @@ export default function BuyerDashboard() {
         (o) => o.id === i.id || (o as any).paidQuote?.inquiryId === i.id,
       );
       if (order) {
+        // Distinguish a paid-but-uncollected order from a collected one by the
+        // real collection status (paidQuote.status), so the feed says
+        // "collected" only when the item actually was.
+        const oStatus = String((order as any).paidQuote?.status || '').toUpperCase();
+        const collected = oStatus === 'COMPLETED' || oStatus === 'HANDED_OVER';
+        const amount = Number((order as any).paidQuote?.price) || 0;
+        const when = (order as any).paidQuote?.updatedAt || (order as any).createdAt;
         return {
           id: `o-${i.id}`,
           inquiryId: i.id,
           title: i.title,
-          subtitle: 'Order Placed',
-          time: 'Recently',
-          icon: 'Truck',
+          subtitle: collected
+            ? 'Completed · collected'
+            : `Order placed · Paid ZMW ${amount.toLocaleString()}`,
+          time: formatRelativeTime(when),
+          icon: collected ? 'CheckCircle' : 'ShoppingBag',
+          tone: collected ? 'green' : 'blue',
         };
       }
       const liveQuote = quotes.find(
         (q) => q.inquiryId === i.id && !q.isArchived,
       );
       if (liveQuote) {
+        const isLoan = String((liveQuote as any).condition || '').toUpperCase() === 'LOAN';
         return {
           id: `q-${i.id}`,
           inquiryId: i.id,
           title: i.title,
-          subtitle:
-            String((liveQuote as any).condition || '').toUpperCase() === 'LOAN'
-              ? `Offer Received · ZMW ${(liveQuote.price || 0).toLocaleString()}`
-              : `Quote Received · K${(liveQuote.price || 0).toLocaleString()}`,
-          time: 'Recently',
+          subtitle: isLoan
+            ? `Offer received · ZMW ${(liveQuote.price || 0).toLocaleString()}`
+            : `Quote received · ZMW ${(liveQuote.price || 0).toLocaleString()}`,
+          time: formatRelativeTime(
+            (liveQuote as any).updatedAt || (liveQuote as any).createdAt,
+          ),
           icon: 'FileText',
+          tone: 'gold',
         };
       }
       return {
         id: `i-${i.id}`,
         inquiryId: i.id,
         title: i.title,
-        subtitle: 'Inquiry Created',
-        time: 'Recently',
+        subtitle: 'Inquiry sent · awaiting quotes',
+        time: formatRelativeTime((i as any).createdAt),
         icon: 'MessageSquare',
+        tone: 'gold',
       };
     });
+
+    // ── Overview tile stats (value + caption under each number) ──────────
+    // Split paid orders by their collection status: COMPLETED/HANDED_OVER are
+    // truly collected; everything else is still awaiting pickup ("ready to
+    // collect"). The order entity's own `status` never advances, so it can't
+    // be used for this — paidQuote.status is the source of truth.
+    const COLLECTED = new Set(['COMPLETED', 'HANDED_OVER']);
+    const statusOf = (o: any) => String(o?.paidQuote?.status || '').toUpperCase();
+    const completedOrdersList = orders.filter((o) => COLLECTED.has(statusOf(o)));
+    const readyToCollectList = orders.filter((o) => !COLLECTED.has(statusOf(o)));
+    const unreadQuotes = marketplaceQuotes.filter((q: any) => !q.isRead).length;
+    const firstActive: any = activeInquiries[0];
+    const notifiedCount = Number(firstActive?.preferences?.quoteCount) || 0;
+    const lastCompletedAt = completedOrdersList
+      .map((o: any) => o?.paidQuote?.updatedAt || o?.createdAt)
+      .filter(Boolean)
+      .sort()
+      .pop();
+
+    const metricStats: Record<string, { value: number; hint: string }> = {
+      active_inquiries: {
+        value: activeInquiries.length,
+        hint:
+          activeInquiries.length === 0
+            ? 'Send your first inquiry'
+            : notifiedCount > 0
+              ? `${notifiedCount} shops notified`
+              : 'Sellers are quoting',
+      },
+      quotes_received: {
+        value: marketplaceQuotes.length,
+        hint:
+          marketplaceQuotes.length === 0
+            ? 'Sellers are replying'
+            : unreadQuotes > 0
+              ? `${unreadQuotes} new`
+              : 'Ready to compare',
+      },
+      ready_to_collect: {
+        value: readyToCollectList.length,
+        hint:
+          readyToCollectList.length === 0
+            ? 'Nothing to collect'
+            : 'Show your QR at the shop',
+      },
+      completed_orders: {
+        value: completedOrdersList.length,
+        hint:
+          completedOrdersList.length === 0
+            ? 'None yet'
+            : lastCompletedAt
+              ? `Last one ${formatRelativeTime(lastCompletedAt)}`
+              : 'All collected',
+      },
+    };
 
     return {
       inquiries: activeInquiries,
@@ -331,6 +413,13 @@ export default function BuyerDashboard() {
       selectedOrder: orders.find((o) => o.id === selectedOrderId),
       autoPayQuoteId,
       recentActivity,
+      metricStats,
+      // Raw, unfiltered slices (every status, not just the active-stage
+      // ones above) — Transaction History's Requests/Expired tabs need to
+      // see closed inquiries and lapsed/rejected quotes that the main
+      // My Inquiries / Received Quotes lists deliberately hide.
+      allInquiries: inquiries,
+      allQuotes: quotes,
     };
   }, [inquiries, quotes, orders, selectedInquiryId, selectedQuoteId, selectedOrderId, balance, escrowBalance, autoPayQuoteId]);
 

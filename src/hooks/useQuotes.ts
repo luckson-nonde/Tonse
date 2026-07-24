@@ -58,7 +58,14 @@ export function useUserQuotes(userId?: string, refetch?: boolean) {
       try {
         setLoading(true);
         setError(null);
-        const data = await fetchUserQuotes(undefined, { swr: !force });
+        // Explicit limit — the backend defaults to page size 10 when none is
+        // passed, which silently capped every consumer of this hook (badge
+        // counts, calendar dots, Received Quotes, and now Transaction
+        // History's Requests/Expired tabs) to the buyer's 10 most-recently-
+        // created quotes account-wide. A live, still-payable quote on an
+        // older inquiry could fall outside that window and read as "no
+        // response" — this is a correctness fix, not just a display cutoff.
+        const data = await fetchUserQuotes({ limit: 200 }, { swr: !force });
         setQuotes(data);
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to fetch quotes'));

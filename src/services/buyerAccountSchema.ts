@@ -23,7 +23,7 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'dashboard', label: 'Overview', icon: 'LayoutDashboard' },
     { id: 'inquiries', label: 'My Inquiries', icon: 'MessageSquare' },
     { id: 'quotes', label: 'Received Quotes', icon: 'FileText' },
-    { id: 'orders', label: 'Order History', icon: 'ShoppingBag' },
+    { id: 'orders', label: 'Transaction History', icon: 'ShoppingBag' },
     { id: 'shops', label: 'Browse Shops', icon: 'Store' },
     { id: 'profile', label: 'Account Settings', icon: 'User' },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
@@ -41,11 +41,23 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       subtitle: "Track your active inquiries and received quotations",
       componentType: 'dashboard_grid',
       showWalletCard: true,
+      // Four activity tiles. Values + the small caption under each number are
+      // computed at runtime from live data (see `metricStats` in
+      // BuyerDashboard.tsx) — the `value: 0` here is only a placeholder.
+      // "Ready to Collect" (paid, not yet handed over) and "Completed"
+      // (collected) are split by the order's collection status, NOT the
+      // order's own `status` (which never advances past PENDING).
       metrics: [
         { id: 'active_inquiries', label: 'Active Inquiries', value: 0, icon: 'MessageSquare' },
-        { id: 'pending_quotes', label: 'Pending Quotes', value: 0, icon: 'FileText' },
-        { id: 'completed_orders', label: 'Completed Orders', value: 0, icon: 'CheckCircle' },
+        { id: 'quotes_received', label: 'Quotes Received', value: 0, icon: 'FileText' },
+        { id: 'ready_to_collect', label: 'Ready to Collect', value: 0, icon: 'QrCode' },
+        { id: 'completed_orders', label: 'Completed', value: 0, icon: 'CheckCircle' },
       ],
+      // Promo copy for the "Need a price?" card (schema-driven so the wording
+      // lives here, not buried in the renderer JSX).
+      ctaTitle: 'Need a price?',
+      ctaSubtitle:
+        'Send one inquiry and every verified shop in your area sends you a quote — no walking shop to shop.',
       actions: [
         // "Send Inquiry" (not "Create New Inquiry") so the label fits the
         // half-width pill on a 360px phone — matches the inquiries view.
@@ -76,10 +88,9 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       dataKey: 'loanOffers'
     },
     orders: {
-      title: "Order History",
-      subtitle: "View your past transactions and archived quotes",
-      componentType: 'list_renderer',
-      dataKey: 'orders'
+      title: "Transaction History",
+      subtitle: "Track paid orders awaiting collection, purchases, requests, and expired quotes",
+      componentType: 'transaction_history_renderer',
     },
     shops: {
       title: "Shops & Retailers",

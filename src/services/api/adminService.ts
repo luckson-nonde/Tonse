@@ -364,6 +364,19 @@ export const adminService = {
     return res.data ?? null;
   },
 
+  // ───── Site / Landing page (primary admin only) ────────────────────────────
+
+  async getSiteSettings(): Promise<AdminSiteSettings | null> {
+    const res = await apiClient.get<AdminSiteSettings>('/admin/site-settings');
+    return res.data ?? null;
+  },
+
+  /** Partial update — only the fields present are changed. Audit-logged server-side. */
+  async updateSiteSettings(payload: UpdateSiteSettingsInput): Promise<AdminSiteSettings | null> {
+    const res = await apiClient.patch<AdminSiteSettings>('/admin/site-settings', payload);
+    return res.data ?? null;
+  },
+
   // ───── Promoter programme (milestones + oversight) ────────────────────────
 
   async getMilestones(): Promise<AdminMilestone[]> {
@@ -510,6 +523,12 @@ export type UpdateBillingSettingsInput = Partial<
     'subscriptionsEnabled' | 'quoteTiers' | 'targetedInquiryFee' | 'monthlyFee'
   >
 >;
+
+export interface AdminSiteSettings {
+  landingPageEnabled: boolean;
+}
+
+export type UpdateSiteSettingsInput = Partial<Pick<AdminSiteSettings, 'landingPageEnabled'>>;
 
 export interface AdminMilestone {
   id: string;

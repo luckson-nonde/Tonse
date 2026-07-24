@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { MotionConfig } from 'motion/react';
 import { AuthProvider, useAuth } from './AuthContext';
 import { useLiteMotion } from './hooks/useLiteMotion';
+import { useLandingPageEnabled } from './hooks/useLandingPageEnabled';
+import { getHomePathForRole } from './utils/roleHome';
 import { DashboardProvider } from './DashboardContext';
 import { BackgroundModeProvider } from './BackgroundModeContext';
 import { CategoryAvailabilityProvider } from './services/categories/availability';
@@ -45,6 +47,8 @@ import ForcePasswordChange from './pages/ForcePasswordChange';
 import AuditTrailPage from './pages/AuditTrailPage';
 import ArchivedLeadsPage from './pages/ArchivedLeadsPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
+import DiscoverPage from './pages/DiscoverPage';
+import PublicShopProfile from './pages/PublicShopProfile';
 
 function ProtectedRoute({
   children,
@@ -69,6 +73,9 @@ function ProtectedRoute({
 
 function RootRedirect() {
   const { user, isLoading } = useAuth();
+  // Only consulted for a logged-OUT visitor (see below) — an authenticated
+  // user's redirect never waits on this fetch.
+  const { enabled: landingEnabled, isLoading: landingLoading } = useLandingPageEnabled();
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' ? window.innerWidth < 1024 : false
   );
@@ -79,7 +86,7 @@ function RootRedirect() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  if (isLoading)
+  if (isLoading || (!user && landingLoading))
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div>
@@ -100,16 +107,42 @@ function RootRedirect() {
     return <Navigate to="/onboarding" replace />;
   }
 
-  if (!user) return <Navigate to="/login" replace />;
+  // Logged-out visitors go to the public shop directory when an admin has
+  // turned it on, and to /login otherwise — unchanged from before this
+  // feature existed. A logged-in user's "/" is always their dashboard,
+  // flag or no flag; Discover is something they opt into explicitly via
+  // the profile menu, never something sprung on an existing session.
+  if (!user) return <Navigate to={landingEnabled ? '/discover' : '/login'} replace />;
   if (user.mustChangePassword) return <Navigate to="/force-password-change" replace />;
-  if (user.role === 'ADMIN') return <Navigate to="/admin" replace />;
-  if (user.role === 'PROMOTER') return <Navigate to="/promoter" replace />;
-  if (user.role === 'BUYER') return <Navigate to="/buyer" replace />;
-  // Phase 2: SERVICE_PROVIDER (incl. former LABOUR users) and SELLER (incl.
-  // former EVENTS / ENTERTAINMENT / SUPPLIER) all land on the unified
-  // provider dashboard. Sub-experiences are differentiated downstream by
-  // getBusinessType() reading subRole + categories.
-  return <Navigate to="/provider" replace />;
+  return <Navigate to={getHomePathForRole(user)} replace />;
+}
+
+/**
+ * Gates /discover and /discover/:id on the same landingPageEnabled switch
+ * RootRedirect checks — so direct navigation to either URL is blocked too
+ * when an admin has turned the feature off, not just the "/" entry point.
+ * Checks ONLY the flag, not auth state: a logged-in user can freely browse
+ * Discover while the flag is on (see HeaderProfileMenu's "Browse Shops").
+ * When the flag is off, a logged-in visitor bounces to their own dashboard
+ * (never to /login — they already have a session); a guest bounces to
+ * /login exactly as today.
+ */
+function LandingGate({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  const { enabled, isLoading: landingLoading } = useLandingPageEnabled();
+
+  if (isLoading || landingLoading)
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div>
+      </div>
+    );
+
+  if (!enabled) {
+    return <Navigate to={user ? getHomePathForRole(user) : '/login'} replace />;
+  }
+
+  return <>{children}</>;
 }
 
 export default function App() {
@@ -170,6 +203,30 @@ export default function App() {
                       <ForcePasswordChange />
                     </PageTransition>
                   </ProtectedRoute>
+                }
+              />
+              {/* Public shop directory — gated by LandingGate on the
+                  site_settings.landingPageEnabled admin switch. Reachable by
+                  guests AND logged-in users (see HeaderProfileMenu's "Browse
+                  Shops"); ProtectedRoute is deliberately NOT used here. */}
+              <Route
+                path="/discover"
+                element={
+                  <LandingGate>
+                    <PageTransition transitionKey="discover">
+                      <DiscoverPage />
+                    </PageTransition>
+                  </LandingGate>
+                }
+              />
+              <Route
+                path="/discover/:id"
+                element={
+                  <LandingGate>
+                    <PageTransition transitionKey="discover-shop">
+                      <PublicShopProfile />
+                    </PageTransition>
+                  </LandingGate>
                 }
               />
               <Route path="/" element={<RootRedirect />} />

@@ -289,6 +289,7 @@ export class ShopsService {
           sp.email,
           sp.phone,
           sp."profilePicture"                                          AS logo,
+          sp."coverImage"                                              AS cover_image,
           sp.city,
           sp.province,
           sp.area,
@@ -316,6 +317,7 @@ export class ShopsService {
           spp.email,
           spp.phone,
           spp."profilePicture"                                         AS logo,
+          spp."coverImage"                                             AS cover_image,
           spp.city,
           spp.province,
           spp.area,
@@ -357,6 +359,7 @@ export class ShopsService {
         p.email,
         p.phone,
         p.logo,
+        p.cover_image                                                  AS "coverImage",
         p.city,
         p.province,
         p.area,
@@ -394,7 +397,7 @@ export class ShopsService {
       LEFT JOIN categories     c  ON c.id          = cj.category_id
       LEFT JOIN review_agg    ra ON ra.provider_user_id = p.seller_id
       GROUP BY p.profile_id, p.seller_id, p.display_name, p.company_name,
-               p.personal_name, p.email, p.phone, p.logo, p.city, p.province,
+               p.personal_name, p.email, p.phone, p.logo, p.cover_image, p.city, p.province,
                p.area, p.social_links, p.verification_status, p.verified_at,
                p.has_tpin, p.sub_role, p.created_at, p.shop_type
       LIMIT 1

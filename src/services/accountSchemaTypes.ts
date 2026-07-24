@@ -28,6 +28,10 @@ export interface ViewDefinition {
   metrics?: DashboardMetric[];
   showWalletCard?: boolean;
   showAnalyticsChart?: boolean;
+  // Optional promo-card copy for the dashboard_grid view (the "Need a price?"
+  // card). When set, overrides the renderer's default heading/subtext.
+  ctaTitle?: string;
+  ctaSubtitle?: string;
   componentType:
     | 'dashboard_grid'
     | 'list_renderer'
@@ -57,6 +61,8 @@ export interface ViewDefinition {
     | 'audit_trail_renderer'
     | 'venue_spaces_renderer'
     | 'financial_renderer'
+    | 'venture_account_renderer'
+    | 'transaction_history_renderer'
     | 'labour_home'
     | 'labour_jobs'
     | 'labour_quotes'

@@ -16,6 +16,7 @@ import { LedgerModule } from '../ledger/ledger.module';
 import { ReferralsModule } from '../referrals/referrals.module';
 import { ReportsModule } from '../reports/reports.module';
 import { BillingModule } from '../billing/billing.module';
+import { SiteSettingsModule } from '../site-settings/site-settings.module';
 
 @Module({
   imports: [
@@ -39,6 +40,8 @@ import { BillingModule } from '../billing/billing.module';
     ReportsModule,
     // Platform monetization switch + prices (Subscriptions tab).
     BillingModule,
+    // Public /discover landing-page on/off switch (Landing Page tab).
+    SiteSettingsModule,
   ],
   providers: [AdminService, AdminManagerService],
   controllers: [AdminController],

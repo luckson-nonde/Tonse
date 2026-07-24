@@ -31,8 +31,10 @@ import { CollectionModule } from './modules/collection/collection.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { LoanModule } from './modules/loans/loans.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { SiteSettingsModule } from './modules/site-settings/site-settings.module';
 import { ConsentsModule } from './modules/consents/consents.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
+import { VentureModule } from './modules/venture/venture.module';
 
 // Common
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -103,8 +105,10 @@ import webpushConfig from './config/webpush.config';
     JobsModule,
     LoanModule,
     BillingModule,
+    SiteSettingsModule,
     ConsentsModule,
     LedgerModule,
+    VentureModule,
     // The IdempotencyInterceptor (an APP_INTERCEPTOR below) needs this repo.
     TypeOrmModule.forFeature([IdempotencyKey]),
   ],

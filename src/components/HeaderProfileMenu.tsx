@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, Settings, ArrowLeftRight } from 'lucide-react';
+import { User, Settings, ArrowLeftRight, Store } from 'lucide-react';
 import { useAuth } from '../AuthContext';
+import { useLandingPageEnabled } from '../hooks/useLandingPageEnabled';
 
 interface HeaderProfileMenuProps {
   onSettingsClick: () => void;
@@ -23,6 +25,8 @@ export default function HeaderProfileMenu({
   showRoleManager,
 }: HeaderProfileMenuProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const { enabled: discoverEnabled } = useLandingPageEnabled();
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -70,6 +74,19 @@ export default function HeaderProfileMenu({
               <Settings className="w-4 h-4" />
               Settings
             </button>
+
+            {discoverEnabled && (
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  navigate('/discover');
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                <Store className="w-4 h-4" />
+                Browse Shops
+              </button>
+            )}
 
             {showRoleManager && (
               <button

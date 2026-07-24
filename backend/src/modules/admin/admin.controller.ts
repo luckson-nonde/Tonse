@@ -20,6 +20,7 @@ import { CreateAdminManagerDto } from './dto/create-admin-manager.dto';
 import { UpdateAdminManagerDto } from './dto/update-admin-manager.dto';
 import { ResolveReportDto } from '../reports/dto/resolve-report.dto';
 import { UpdateBillingSettingsDto } from '../billing/dto/update-billing-settings.dto';
+import { UpdateSiteSettingsDto } from '../site-settings/dto/update-site-settings.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AdminPermissionsGuard } from '../auth/guards/admin-permissions.guard';
@@ -193,6 +194,21 @@ export class AdminController {
     @Body() dto: UpdateBillingSettingsDto,
   ) {
     return this.adminService.updateBillingSettings(dto, this.actor(req));
+  }
+
+  // ───── Site / Landing page (undecorated ⇒ primary-admin-only) ──────────
+
+  @Get('site-settings')
+  async getSiteSettings() {
+    return this.adminService.getSiteSettingsForAdmin();
+  }
+
+  @Patch('site-settings')
+  async updateSiteSettings(
+    @Request() req: any,
+    @Body() dto: UpdateSiteSettingsDto,
+  ) {
+    return this.adminService.updateSiteSettings(dto, this.actor(req));
   }
 
   // ───── Promoter programme (milestones + oversight) ──────────────────────

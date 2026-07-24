@@ -47,12 +47,14 @@ import {
   Copy,
   Flag,
   CreditCard,
+  Globe,
 } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
 import { ADMIN_PERMISSIONS } from '../../utils/rbac';
 import TeamManagersView from '../../components/admin/TeamManagersView';
 import ReportsView from '../../components/admin/ReportsView';
 import SubscriptionManagerView from '../../components/admin/SubscriptionManagerView';
+import LandingPageSettingsView from '../../components/admin/LandingPageSettingsView';
 // StatTile / FunnelCard / Switch were extracted to DashboardPrimitives so the
 // promoter dashboard shares them — same components, zero behavior change.
 import { StatTile, FunnelCard, Switch } from '../../components/admin/DashboardPrimitives';
@@ -84,6 +86,7 @@ type AdminTab =
   | 'reports'
   | 'categories'
   | 'subscriptions'
+  | 'landing-page'
   | 'milestones'
   | 'inquiries'
   | 'quotes'
@@ -114,6 +117,7 @@ const TABS: {
   { id: 'reports', label: 'Reports', icon: Flag, permission: ADMIN_PERMISSIONS.REPORTS },
   { id: 'categories', label: 'Category Control', icon: SlidersHorizontal },
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
+  { id: 'landing-page', label: 'Landing Page', icon: Globe },
   { id: 'milestones', label: 'Milestones', icon: Sparkles },
   { id: 'inquiries', label: 'Inquiries', icon: MessageSquare },
   { id: 'quotes', label: 'Quotes', icon: FileText },
@@ -269,6 +273,7 @@ export default function AdminDashboard() {
             {activeTab === 'reports' && tabVisible && <ReportsView />}
             {activeTab === 'categories' && tabVisible && <CategoryControlView />}
             {activeTab === 'subscriptions' && tabVisible && <SubscriptionManagerView />}
+            {activeTab === 'landing-page' && tabVisible && <LandingPageSettingsView />}
             {activeTab === 'milestones' && tabVisible && <MilestonesView />}
             {activeTab === 'inquiries' && tabVisible && <InquiriesView />}
             {activeTab === 'quotes' && tabVisible && <QuotesView />}

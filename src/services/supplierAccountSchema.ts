@@ -87,8 +87,8 @@ export const MASTER_SUPPLIER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     },
     financial: {
       title: "Financial Settlements",
-      subtitle: "Manage your virtual wallet and supply transaction security",
-      componentType: 'financial_renderer'
+      subtitle: "Track funds released from completed sales",
+      componentType: 'venture_account_renderer'
     },
     reporting: REPORTING_VIEW,
   }

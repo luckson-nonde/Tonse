@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { Mail, Key, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { Mail, Key, Eye, EyeOff, CheckCircle2, Loader2 } from 'lucide-react';
 import AuthSplitLayout from '../components/AuthSplitLayout';
 import FloatingInput from '../components/FloatingInput';
 import Logo from '../components/Logo';
+import { createInquiry } from '../services/api/inquiryService';
+import { getPendingInquiry, clearPendingInquiry } from '../services/pendingInquiry';
 
 export default function Login() {
   const { login } = useAuth();
@@ -18,11 +20,18 @@ export default function Login() {
   // ...and hands the just-created email via router state (kept out of the URL)
   // so the user only needs to type their password.
   const prefillEmail = (location.state as { email?: string } | null)?.email ?? '';
+  // Set by PublicShopProfile when a guest submits its "Request a Quote" form
+  // while logged out — the actual draft rides in localStorage (pendingInquiry.ts),
+  // this is just the name shown in the banner below.
+  const pendingIntentShopName = (location.state as { pendingIntentShopName?: string } | null)
+    ?.pendingIntentShopName;
   const [email, setEmail] = useState(prefillEmail);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [resumeStatus, setResumeStatus] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
+  const [resumeShopName, setResumeShopName] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,9 +41,35 @@ export default function Login() {
       const loggedIn = await login(email, password);
       if (loggedIn?.parentProviderId) {
         navigate('/provider?tab=leads');
-      } else {
-        navigate('/');
+        return;
       }
+
+      // Resume point for the guest quote-request flow: if a draft is
+      // waiting, send it now that we have a session instead of dropping the
+      // visitor on a blank dashboard — "continuing at that particular step".
+      const pending = getPendingInquiry();
+      if (pending) {
+        if (loggedIn?.role === 'BUYER') {
+          setResumeShopName(pending.shopName);
+          setResumeStatus('sending');
+          try {
+            await createInquiry(pending.draft);
+            clearPendingInquiry();
+            setResumeStatus('sent');
+            setTimeout(() => navigate('/buyer/dashboard'), 1400);
+          } catch {
+            clearPendingInquiry();
+            setResumeStatus('failed');
+            setTimeout(() => navigate('/'), 1800);
+          }
+          return;
+        }
+        // Logged into a non-BUYER account — that role can't file an
+        // inquiry, so the draft can't be resumed. Discard silently.
+        clearPendingInquiry();
+      }
+
+      navigate('/');
     } catch (err: any) {
       const raw = err?.message || '';
       if (/failed to fetch|network|networkerror/i.test(raw)) {
@@ -81,6 +116,33 @@ export default function Login() {
         <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm rounded-xl font-medium mb-6 flex items-start gap-2.5">
           <CheckCircle2 className="w-5 h-5 shrink-0" strokeWidth={2} />
           <span>Your account was created successfully — sign in to continue.</span>
+        </div>
+      )}
+
+      {pendingIntentShopName && resumeStatus === 'idle' && (
+        <div className="p-4 bg-amber-50 border border-amber-100 text-amber-700 text-sm rounded-xl font-medium mb-6">
+          Log in to send your inquiry to <strong>{pendingIntentShopName}</strong> — we'll send it the
+          moment you're signed in.
+        </div>
+      )}
+
+      {resumeStatus === 'sending' && (
+        <div className="p-4 bg-blue-50 border border-blue-100 text-blue-700 text-sm rounded-xl font-medium mb-6 flex items-center gap-2.5">
+          <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+          <span>Sending your inquiry to {resumeShopName}…</span>
+        </div>
+      )}
+
+      {resumeStatus === 'sent' && (
+        <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm rounded-xl font-medium mb-6 flex items-center gap-2.5">
+          <CheckCircle2 className="w-5 h-5 shrink-0" strokeWidth={2} />
+          <span>Sent! Taking you to your dashboard…</span>
+        </div>
+      )}
+
+      {resumeStatus === 'failed' && (
+        <div className="p-4 bg-rose-50 border border-rose-100 text-rose-600 text-sm rounded-xl font-medium mb-6">
+          We couldn't send that inquiry automatically — you can resend it from your dashboard.
         </div>
       )}
 

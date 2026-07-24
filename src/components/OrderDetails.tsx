@@ -107,31 +107,59 @@ export default function OrderDetails({ order, inquiry, onAction }: OrderDetailsP
   // `sellerName`. Read whichever is present — a missing amount must never
   // crash the dashboard.
   const paid = (order as any).paidQuote as
-    | { price?: number | string; orderNumber?: string }
+    | { price?: number | string; orderNumber?: string; status?: string; updatedAt?: string }
     | undefined;
   const price = Number(paid?.price ?? order.price ?? 0) || 0;
   const orderNumber = paid?.orderNumber || `ORD-${order.id}`;
   const providerName = order.providerName || (order as any).sellerName;
 
+  // Real collection-flow status (Quote.status): falls back to the raw
+  // Quote's own `.status` when opened from a non-inquiry-shaped source.
+  // Matches the same COMPLETED/HANDED_OVER check InquiryCard uses.
+  const quoteStatus = String(paid?.status ?? order.status ?? '').toUpperCase();
+  const isCollected = ['COMPLETED', 'HANDED_OVER'].includes(quoteStatus);
+
   return (
     <div className="space-y-8">
       {/* Order Status Header */}
-      <div className="bg-emerald-50 p-8 rounded-4xl border border-emerald-100 flex flex-col md:flex-row justify-between items-center gap-6">
+      <div
+        className={`p-8 rounded-4xl border flex flex-col md:flex-row justify-between items-center gap-6 ${
+          isCollected
+            ? 'bg-emerald-50 border-emerald-100'
+            : 'bg-blue-50 border-blue-100'
+        }`}
+      >
         <div className="flex items-center gap-6">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-200">
+          <div
+            className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg ${
+              isCollected
+                ? 'bg-emerald-500 shadow-emerald-200'
+                : 'bg-blue-500 shadow-blue-200'
+            }`}
+          >
             <CheckCircle className="w-8 h-8" />
           </div>
           <div>
-            <h2 className="text-2xl font-serif font-black text-emerald-900">
-              Order Paid & Secured
+            <h2
+              className={`text-2xl font-serif font-black ${
+                isCollected ? 'text-emerald-900' : 'text-blue-900'
+              }`}
+            >
+              {isCollected ? 'Order Collected' : 'Order Paid — Awaiting Collection'}
             </h2>
-            <p className="text-emerald-700/70 font-medium">Order ID: {orderNumber}</p>
+            <p className={isCollected ? 'text-emerald-700/70 font-medium' : 'text-blue-700/70 font-medium'}>
+              Order ID: {orderNumber}
+            </p>
           </div>
         </div>
         <div className="flex gap-3">
           <Button
             variant="outline"
-            className="bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+            className={
+              isCollected
+                ? 'bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-100'
+            }
           >
             <Printer className="w-4 h-4 mr-2" /> Print Receipt
           </Button>
@@ -175,19 +203,48 @@ export default function OrderDetails({ order, inquiry, onAction }: OrderDetailsP
                     </p>
                   </div>
                 </div>
+                {isCollected && (
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-emerald-50 rounded-xl">
+                      <CheckCircle className="w-5 h-5 text-emerald-500" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                        Collected On
+                      </p>
+                      <p className="text-sm font-bold text-brand-dark">
+                        {paid?.updatedAt ? new Date(paid.updatedAt).toLocaleDateString() : '—'}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex flex-col items-center justify-center text-center">
-                <div className="bg-white p-4 rounded-2xl shadow-sm mb-4">
-                  <QrCode className="w-24 h-24 text-brand-dark" />
+              {isCollected ? (
+                <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100 flex flex-col items-center justify-center text-center">
+                  <div className="bg-white p-4 rounded-2xl shadow-sm mb-4">
+                    <CheckCircle className="w-16 h-16 text-emerald-500" />
+                  </div>
+                  <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest mb-1">
+                    Collected
+                  </p>
+                  <p className="text-sm font-bold text-emerald-800 max-w-[220px]">
+                    This item has already been collected and funds released.
+                  </p>
                 </div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-                  Collection Code
-                </p>
-                <p className="text-2xl font-black text-[#C9973A] tracking-[0.2em]">
-                  TNS-{order.id?.toString().padStart(4, '0')}
-                </p>
-              </div>
+              ) : (
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex flex-col items-center justify-center text-center">
+                  <div className="bg-white p-4 rounded-2xl shadow-sm mb-4">
+                    <QrCode className="w-24 h-24 text-brand-dark" />
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                    Collection Code
+                  </p>
+                  <p className="text-2xl font-black text-[#C9973A] tracking-[0.2em]">
+                    TNS-{order.id?.toString().padStart(4, '0')}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

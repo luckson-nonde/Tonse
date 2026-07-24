@@ -170,6 +170,99 @@ export class CheckoutService {
   }
 
   /**
+   * Start a deposit into the caller's own venture account — money in with no
+   * quote behind it. Same shape as `checkout()` (persist-before-call, amount
+   * from the request since there's no quote to read it from), minus the
+   * quote lookup. `psp_transactions.quoteId` stays NULL, which is what
+   * `handleWebhook()` uses to route the eventual webhook here instead of to
+   * `fundEscrow()`.
+   */
+  async initiateVentureDeposit(
+    sellerId: string,
+    dto: { amount: string; channel?: Channel; phone?: string; operator?: string },
+  ): Promise<{
+    reference: string;
+    status: string;
+    amount: string;
+    fee: string;
+    totalCharged: string;
+    instruction?: string;
+  }> {
+    const amountNgwee = toNgwee(dto.amount);
+    if (amountNgwee <= 0) {
+      throw new BadRequestException('Deposit amount must be greater than zero');
+    }
+
+    const bearer = this.config.get<'customer' | 'merchant'>('psp.feeBearer') || 'customer';
+    const channel: Channel = dto.channel || 'mobile-money';
+    const fees = await this.provider.quoteFees({ amount: dto.amount, channel, bearer });
+
+    const reference = `VDP-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+
+    // Persist BEFORE the outbound call — same reason as checkout(): a webhook
+    // can arrive before this HTTP response returns.
+    await this.pspTx.save(
+      this.pspTx.create({
+        reference,
+        provider: this.provider.name,
+        type: 'COLLECTION',
+        status: 'PENDING',
+        amount: fees.amount,
+        feeAmount: fees.fee,
+        feeBearer: bearer,
+        currency: fees.currency,
+        quoteId: null,
+        counterpartyId: sellerId,
+        payerMsisdn: dto.phone ?? null,
+        channel,
+        idempotencyKey: `venture-deposit:${reference}`,
+      } as any),
+    );
+
+    let result;
+    try {
+      result = await this.provider.initiateCollection({
+        reference,
+        amount: fees.amount,
+        currency: fees.currency,
+        channel,
+        bearer,
+        phone: dto.phone,
+        operator: dto.operator,
+        description: 'ProQuote venture account deposit',
+      });
+    } catch (e) {
+      await this.pspTx.update({ reference }, { status: 'FAILED', lastError: (e as Error).message });
+      throw e;
+    }
+
+    await this.pspTx.update(
+      { reference },
+      {
+        providerReference: result.providerReference ?? null,
+        status:
+          result.status === 'successful'
+            ? 'SUCCESSFUL'
+            : result.status === 'failed'
+              ? 'FAILED'
+              : result.status === 'pay-offline'
+                ? 'PAY_OFFLINE'
+                : 'PENDING',
+        rawPayload: result.raw ?? null,
+      },
+    );
+
+    return {
+      reference,
+      status: result.status,
+      amount: fees.amount,
+      fee: fees.fee,
+      totalCharged: fees.totalCharged,
+      instruction: result.instruction,
+    };
+  }
+
+  /**
    * Handle a verified webhook event. Idempotent twice over: the
    * (provider, eventId) unique index rejects a redelivery, and the journal's
    * own idempotency key rejects a double-post.
@@ -205,7 +298,18 @@ export class CheckoutService {
       return { handled: false, reason: `not successful (${verified.status})` };
     }
 
-    await this.fundEscrow(event.reference, verified.amount, verified.fee, verified.raw);
+    // Route on what kind of collection this was. `quoteId` is only ever set
+    // for a checkout(); initiateVentureDeposit() always leaves it NULL — that
+    // absence is the discriminator, not a flag, so there's no way for a
+    // deposit to accidentally be mistaken for (or vice versa) a quote payment.
+    const tx = await this.pspTx.findOne({ where: { reference: event.reference } });
+    if (!tx) throw new NotFoundException(`Unknown PSP transaction ${event.reference}`);
+
+    if (tx.quoteId) {
+      await this.fundEscrow(event.reference, verified.amount, verified.fee, verified.raw);
+    } else {
+      await this.fundVentureDeposit(event.reference, verified.amount, verified.fee, verified.raw);
+    }
     await this.markEventProcessed(event.eventId);
     return { handled: true };
   }
@@ -307,6 +411,68 @@ export class CheckoutService {
     });
 
     this.logger.log(`Escrow funded for ${reference}`);
+  }
+
+  /**
+   * The moment a venture-account deposit becomes real. Mirrors `fundEscrow`'s
+   * locking/idempotency shape exactly, but there is no quote, Order or
+   * Inquiry involved — just a direct credit to the depositor's own balance.
+   */
+  private async fundVentureDeposit(
+    reference: string,
+    verifiedAmount: string,
+    verifiedFee: string | undefined,
+    raw: Record<string, any> | undefined,
+  ): Promise<void> {
+    await this.dataSource.transaction(async (m) => {
+      const [tx]: PspTransaction[] = await m.query(
+        'SELECT * FROM psp_transactions WHERE reference = $1 FOR UPDATE',
+        [reference],
+      );
+      if (!tx) throw new NotFoundException(`Unknown PSP transaction ${reference}`);
+      if (tx.status === 'SUCCESSFUL') return; // idempotent — never double-credit
+
+      const amountNgwee = toNgwee(verifiedAmount);
+
+      // Dr PSP_HOLDING / Cr SELLER_PAYABLE — same accounts and same
+      // fee-as-memo-only treatment as fundEscrow, just with no quote
+      // dimension since this money isn't attached to any deal.
+      await this.ledger.postJournal(
+        {
+          type: 'VENTURE_DEPOSIT',
+          idempotencyKey: `venture-deposit:${tx.id}`,
+          pspTransactionId: tx.id,
+          currency: tx.currency,
+          description: 'Venture account deposit',
+          memo: {
+            pspReference: tx.providerReference,
+            pspFee: verifiedFee ?? tx.feeAmount,
+            feeBearer: tx.feeBearer,
+          },
+          lines: [
+            {
+              accountCode: ACCOUNT.PSP_HOLDING,
+              direction: 'DEBIT',
+              amountNgwee,
+            },
+            {
+              accountCode: ACCOUNT.SELLER_PAYABLE,
+              direction: 'CREDIT',
+              amountNgwee,
+              counterpartyId: tx.counterpartyId,
+            },
+          ],
+        },
+        m,
+      );
+
+      await m.query(
+        `UPDATE psp_transactions SET status='SUCCESSFUL', "settledAt"=NOW(), "rawPayload"=$2 WHERE reference=$1`,
+        [reference, raw ? JSON.stringify(raw) : null],
+      );
+    });
+
+    this.logger.log(`Venture deposit funded for ${reference}`);
   }
 
   /** Payment status for the buyer's polling UI. */

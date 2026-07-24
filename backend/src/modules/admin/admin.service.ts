@@ -16,6 +16,8 @@ import { ReportsService } from '../reports/reports.service';
 import { ResolveReportDto } from '../reports/dto/resolve-report.dto';
 import { BillingService } from '../billing/billing.service';
 import { UpdateBillingSettingsDto } from '../billing/dto/update-billing-settings.dto';
+import { SiteSettingsService } from '../site-settings/site-settings.service';
+import { UpdateSiteSettingsDto } from '../site-settings/dto/update-site-settings.dto';
 
 /**
  * Acting-admin identity, threaded from req.user by the controller so
@@ -40,7 +42,8 @@ export class AdminService {
     private readonly milestonesService: MilestonesService,
     private readonly promotersService: PromotersService,
     private readonly reportsService: ReportsService,
-    private readonly billingService: BillingService
+    private readonly billingService: BillingService,
+    private readonly siteSettingsService: SiteSettingsService
   ) {}
 
   // ───── Escrow ───────────────────────────────────────────────────────────
@@ -554,6 +557,28 @@ export class AdminService {
       details: `Monetization settings changed: ${JSON.stringify(dto)}`,
     });
     return this.getBillingSettingsForAdmin();
+  }
+
+  // ───── Site / Landing page ───────────────────────────────────────────────
+  // Same composition pattern as billing settings: SiteSettingsModule owns the
+  // singleton row; AdminService fronts it behind the class-wide ADMIN guard
+  // and writes the audit trail.
+
+  async getSiteSettingsForAdmin() {
+    return this.siteSettingsService.getPublicSettings();
+  }
+
+  async updateSiteSettings(dto: UpdateSiteSettingsDto, actingAdmin?: ActingAdmin) {
+    const settings = await this.siteSettingsService.updateSettings(dto);
+    await this.auditAdminAction({
+      action: 'SITE_SETTINGS_UPDATED',
+      entityType: 'SITE_SETTINGS',
+      entityId: settings.id,
+      actingAdmin,
+      status: settings.landingPageEnabled ? 'ENABLED' : 'DISABLED',
+      details: `Site settings changed: ${JSON.stringify(dto)}`,
+    });
+    return this.getSiteSettingsForAdmin();
   }
 
   // ───── Promoter programme (milestones + oversight) ──────────────────────

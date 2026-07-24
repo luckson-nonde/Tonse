@@ -28,6 +28,8 @@ import {
   Archive,
   ChevronLeft,
   Store,
+  QrCode,
+  ArrowUpRight,
 } from 'lucide-react';
 import { INQUIRY_STATUS_SCHEMA } from '../services/buyerAccountSchema';
 import { MasterAccountSchema } from '../services/accountSchemaTypes';
@@ -54,6 +56,8 @@ import LoanTermsEditor from './loan/LoanTermsEditor';
 import DeleteAccountSection from './DeleteAccountSection';
 import LoanOfferDetail from './loan/LoanOfferDetail';
 import FinancialPage from '../pages/FinancialPage';
+import VentureAccountView from './provider/VentureAccountView';
+import TransactionHistoryView from './TransactionHistoryView';
 import ReportManagerView from './ReportManagerView';
 import { Inquiry, Quote } from '../types';
 import { getLabourProfileSchema } from '../services/labourSchemaRegistry';
@@ -80,6 +84,26 @@ const ICON_MAP: Record<string, any> = {
   MapPin,
   Calendar,
   Store,
+  QrCode,
+};
+
+// Per-tile accent for the buyer Overview activity grid. Backgrounds are opaque
+// hexes/palette tints (NOT translucent border-…/NN on the rounded card) so the
+// tiles don't smear on Android/Mali GPUs — see the android-ghosting playbook.
+const METRIC_PALETTE: Record<string, { chip: string }> = {
+  active_inquiries: { chip: 'bg-[#fdf6e9] text-[#c9973a]' },
+  quotes_received: { chip: 'bg-blue-50 text-blue-600' },
+  ready_to_collect: { chip: 'bg-violet-50 text-violet-600' },
+  completed_orders: { chip: 'bg-emerald-50 text-emerald-600' },
+  default: { chip: 'bg-slate-100 text-slate-500' },
+};
+
+// Status-dot color for the Recent Activity feed, keyed by the `tone` the
+// buyer dashboard tags each item with.
+const ACTIVITY_DOT: Record<string, string> = {
+  gold: 'bg-[#c9973a]',
+  blue: 'bg-blue-500',
+  green: 'bg-emerald-500',
 };
 
 import LabourHomeView from './labour/LabourHomeView';
@@ -145,6 +169,13 @@ export default function DynamicAccountRenderer({
   };
 
   const renderDashboardGrid = () => {
+    // Masked virtual-account number (derived from the phone, last 6 digits
+    // shown as "•••• NNN NNN") — replaces the raw phone on the balance card.
+    const acctDigits = generateVirtualAccount(user?.phone).replace(/\D/g, '');
+    const maskedAccount =
+      acctDigits.length >= 6
+        ? `•••• ${acctDigits.slice(-6, -3)} ${acctDigits.slice(-3)}`
+        : '•••• ••••';
     return (
       <div className="space-y-6 lg:space-y-8">
         {/* Virtual Account Card */}
@@ -158,178 +189,105 @@ export default function DynamicAccountRenderer({
             {/* Subtle premium gradient/pattern overlays */}
             <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 100% 0%, rgba(255,255,255,0.15) 0%, transparent 60%)' }}></div>
             
-            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 mb-6">
-                  <Wallet className="w-5 h-5 text-white" strokeWidth={2} />
-                  <p className="text-white/90 text-[11px] font-bold font-sans uppercase tracking-[0.25em]">
-                    Virtual Account Balance
+            <div className="relative z-10">
+              <div className="flex items-start justify-between gap-4 mb-6">
+                <div className="flex items-center gap-2.5">
+                  <Wallet className="w-4 h-4 text-white/90" strokeWidth={2} />
+                  <p className="text-white/80 text-[10px] sm:text-[11px] font-bold font-sans uppercase tracking-[0.25em]">
+                    Account Balance
                   </p>
                 </div>
-                
-                <h2 className="text-[clamp(2rem,6vw,3.5rem)] font-serif font-black mb-4 tracking-tight leading-none truncate">
-                  ZMW {formatCurrency(data?.balance || 0)}
-                </h2>
-
-                <div className="flex flex-col gap-4">
-                  <p className="text-white/60 font-mono tracking-[0.2em] text-xs">
-                    {user?.phone}
-                  </p>
-                  
-                  <div className="flex items-center gap-3">
-                    <div className="px-5 py-1.5 rounded-full bg-[#2a407a] border border-white/10 text-[10px] font-black uppercase tracking-[0.15em] text-white/90">
-                      {user?.role || 'BUYER'} ACCOUNT
-                    </div>
-                  </div>
+                {/* Single role pill (no functional BUYER/SELLER toggle). */}
+                <div className="px-3.5 py-1.5 rounded-full bg-[#2a407a] border border-[#3a508f] text-[9px] sm:text-[10px] font-black uppercase tracking-[0.15em] text-white/90 shrink-0">
+                  {user?.role || 'BUYER'} ACCOUNT
                 </div>
               </div>
 
-              <div className="flex items-center gap-6">
-                <div className="flex -space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-[#E53E3E] border-2 border-[#1B3068] flex items-center justify-center text-white text-xs font-bold shadow-lg">
-                    B
-                  </div>
-                  <div className="w-10 h-10 rounded-full bg-[#B26A2D] border-2 border-[#1B3068] flex items-center justify-center text-white text-xs font-bold shadow-lg">
-                    P
-                  </div>
-                </div>
-                
+              <h2 className="text-[clamp(2rem,7vw,3.25rem)] font-serif font-black mb-5 tracking-tight leading-none truncate">
+                ZMW {formatCurrency(data?.balance || 0)}
+              </h2>
+
+              <div className="flex items-end justify-between gap-4">
+                <p className="text-white/55 font-mono tracking-[0.28em] text-xs sm:text-sm">
+                  {maskedAccount}
+                </p>
                 <Button
                   variant="outline"
-                  className="border-white/40 text-white hover:bg-white/10 hover:border-white rounded-xl px-6 py-2.5 font-bold text-[13px] transition-all duration-300"
+                  className="border-white/40 text-white hover:bg-white/10 hover:border-white rounded-xl px-6 py-2.5 font-bold text-[13px] transition-all duration-300 shrink-0"
                 >
-                  Manage Account
+                  Manage
                 </Button>
               </div>
             </div>
           </motion.div>
         )}
 
-        {/* Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-7 lg:gap-8">
-          {viewSchema.metrics?.map((metric, idx) => {
-            let metricValue = metric.value;
-            if (metric.id === 'active_inquiries') {
-              metricValue =
-                data?.inquiries?.filter(
-                  (i: any) => !['CLOSED', 'CANCELLED', 'PAID'].includes(i.status)
-                ).length || 0;
-            } else if (metric.id === 'pending_quotes') {
-              metricValue = data?.quotes?.filter((q: any) => q.status === 'PENDING').length || 0;
-            } else if (metric.id === 'completed_orders') {
-              metricValue = data?.orders?.length || 0;
-            }
-
-            // Determine color scheme based on metric type
-            let bgColor = 'bg-blue-50';
-            let borderColor = 'border-blue-200';
-            let iconBg = 'bg-blue-100';
-            let iconColor = 'text-blue-600';
-
-            if (metric.id === 'active_inquiries') {
-              bgColor = 'bg-amber-50';
-              borderColor = 'border-amber-200';
-              iconBg = 'bg-gradient-to-br from-amber-100 to-amber-50';
-              iconColor = 'text-amber-600';
-            } else if (metric.id === 'pending_quotes') {
-              bgColor = 'bg-purple-50';
-              borderColor = 'border-purple-200';
-              iconBg = 'bg-gradient-to-br from-purple-100 to-purple-50';
-              iconColor = 'text-purple-600';
-            } else if (metric.id === 'completed_orders') {
-              bgColor = 'bg-emerald-50';
-              borderColor = 'border-emerald-200';
-              iconBg = 'bg-gradient-to-br from-emerald-100 to-emerald-50';
-              iconColor = 'text-emerald-600';
-            }
-
-            return (
-              <motion.div
-                key={uniqueKey('metric', metric.id, idx)}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-50px' }}
-                transition={{ duration: 0.5, delay: idx * 0.1 }}
-                whileHover={{
-                  y: -6,
-                  boxShadow: '0 20px 40px rgba(0, 0, 0, 0.12), 0 12px 32px rgba(0, 0, 0, 0.08)',
-                }}
-                onClick={() => {
-                  // Navigate to appropriate view based on metric type
-                  // Buyer metrics
-                  if (metric.id === 'active_inquiries') {
-                    onNavigate('inquiries');
-                  } else if (metric.id === 'pending_quotes') {
-                    onNavigate('quotes');
-                  } else if (metric.id === 'completed_orders') {
-                    onNavigate('orders');
-                  }
-                  // Provider metrics
-                  else if (metric.id === 'inquiries_received' || metric.id === 'new_requests') {
-                    onNavigate('leads');
-                  } else if (metric.id === 'quotes_sent' || metric.id === 'total_quoted_value') {
-                    onNavigate('my-quotes');
-                  } else if (metric.id === 'pending_collection') {
-                    onNavigate('paid-orders');
-                  } else if (metric.id === 'upcoming_events') {
-                    onNavigate('schedule');
-                  } else if (metric.id === 'inventory_items') {
-                    onNavigate('products');
-                  }
-                  // Labour metrics
-                  else if (metric.id === 'job_requests') {
-                    onNavigate('job_requests');
-                  } else if (metric.id === 'active_proposals') {
-                    onNavigate('my_quotes');
-                  } else if (metric.id === 'confirmed_jobs') {
-                    onNavigate('schedule');
-                  }
-                }}
-                className={`${bgColor} p-6 rounded-3xl border-2 ${borderColor} shadow-premium hover:shadow-premium-lg transition-all duration-300 cursor-pointer relative overflow-hidden group`}
-              >
-                {/* Animated background gradient */}
-                <div className="absolute inset-0 bg-gradient-to-br from-white/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-
-                <div className="relative z-10">
-                  <div className="flex justify-between items-start mb-6">
+        {/* Activity tiles — value + caption come from live data
+            (data.metricStats, computed in BuyerDashboard); the per-id block
+            below is only a fallback for schemas that don't supply it. */}
+        <div>
+          <p className="px-1 mb-3 text-[11px] font-bold text-slate-400 uppercase tracking-[0.22em]">
+            Your Activity
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-5">
+            {viewSchema.metrics?.map((metric, idx) => {
+              const stat = data?.metricStats?.[metric.id];
+              let metricValue: number | string | undefined = stat?.value;
+              if (metricValue == null) {
+                if (metric.id === 'active_inquiries') {
+                  metricValue =
+                    data?.inquiries?.filter(
+                      (i: any) => !['CLOSED', 'CANCELLED', 'PAID'].includes(i.status),
+                    ).length || 0;
+                } else if (metric.id === 'quotes_received') {
+                  metricValue = data?.quotes?.length || 0;
+                } else if (metric.id === 'completed_orders') {
+                  metricValue = data?.orders?.length || 0;
+                } else {
+                  metricValue = metric.value ?? 0;
+                }
+              }
+              const hint: string | undefined = stat?.hint;
+              const palette = METRIC_PALETTE[metric.id] || METRIC_PALETTE.default;
+              return (
+                <motion.div
+                  key={uniqueKey('metric', metric.id, idx)}
+                  initial={{ opacity: 0, y: 16 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-40px' }}
+                  transition={{ duration: 0.4, delay: idx * 0.06 }}
+                  whileHover={{ y: -4 }}
+                  onClick={() => {
+                    if (metric.id === 'active_inquiries') onNavigate('inquiries');
+                    else if (metric.id === 'quotes_received') onNavigate('quotes');
+                    else if (metric.id === 'ready_to_collect') onNavigate('orders');
+                    else if (metric.id === 'completed_orders') onNavigate('orders');
+                  }}
+                  className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-premium hover:border-[#e2c185] hover:shadow-premium-lg transition-all duration-300 cursor-pointer group"
+                >
+                  <div className="flex items-start justify-between mb-4 sm:mb-5">
                     <div
-                      className={`p-4 ${iconBg} rounded-2xl border border-current border-opacity-20 shadow-premium transform group-hover:scale-110 transition-transform duration-300`}
+                      className={`w-11 h-11 rounded-2xl flex items-center justify-center ${palette.chip}`}
                     >
-                      {renderIcon(metric.icon, `w-7 h-7 ${iconColor}`)}
+                      {renderIcon(metric.icon, 'w-5 h-5')}
                     </div>
-                    {metric.trend && (
-                      <motion.span
-                        initial={{ opacity: 0, x: 10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className={`text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-premium ${metric.trend.isPositive ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}
-                      >
-                        {metric.trend.isPositive ? '↑' : '↓'}
-                        {metric.trend.value}%
-                      </motion.span>
-                    )}
+                    <ArrowUpRight className="w-4 h-4 text-slate-300 group-hover:text-brand-gold transition-colors duration-300" />
                   </div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.15em] mb-2">
+                  <h3 className="text-3xl sm:text-4xl font-serif font-black text-brand-dark leading-none">
+                    {metricValue}
+                  </h3>
+                  <p className="mt-2 text-[13px] font-bold text-brand-dark">
                     {metric.label}
                   </p>
-                  <div className="flex items-baseline gap-2">
-                    <h3 className="text-5xl font-serif font-black text-brand-dark">
-                      {metricValue}
-                    </h3>
-                    {metric.unit && (
-                      <span className="text-sm text-slate-400 font-medium">{metric.unit}</span>
-                    )}
-                  </div>
-                  {metricValue === 0 && (
-                    <p className="text-xs text-slate-400 mt-3 italic">
-                      {metric.id === 'active_inquiries' && 'No active inquiries yet'}
-                      {metric.id === 'pending_quotes' && 'No pending quotes'}
-                      {metric.id === 'completed_orders' && 'No orders completed'}
+                  {hint && (
+                    <p className="mt-0.5 text-[11px] text-slate-400 font-medium truncate">
+                      {hint}
                     </p>
                   )}
-                </div>
-              </motion.div>
-            );
-          })}
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Quick Actions */}
@@ -346,13 +304,13 @@ export default function DynamicAccountRenderer({
           <div className="relative z-10">
             <div className="mb-3">
               <h3 className="text-2xl md:text-3xl font-serif font-bold text-brand-dark mb-2">
-                Ready to start something new?
+                {viewSchema.ctaTitle || 'Ready to start something new?'}
               </h3>
               <div className="w-16 h-1.5 bg-gradient-to-r from-brand-gold via-brand-accent to-transparent rounded-full"></div>
             </div>
             <p className="text-slate-600 mb-8 max-w-md leading-relaxed font-medium">
-              Create a new inquiry to receive tailored quotes from our network of verified
-              providers.
+              {viewSchema.ctaSubtitle ||
+                'Create a new inquiry to receive tailored quotes from our network of verified providers.'}
             </p>
             {/* One line even on mobile (no wrap): each action gets flex-1 so
                 the pair renders at matching sizes; desktop keeps auto-width. */}
@@ -402,30 +360,33 @@ export default function DynamicAccountRenderer({
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-br from-slate-50 to-white rounded-3xl border-2 border-dashed border-slate-200 shadow-premium hover:shadow-premium-md hover:border-brand-gold/40 transition-all duration-300 divide-y divide-slate-100 overflow-hidden"
+            className="bg-white rounded-3xl border border-slate-200 shadow-premium divide-y divide-slate-100 overflow-hidden"
           >
             {data?.recentActivity?.length > 0 ? (
               data.recentActivity.map((activity: any, idx: number) => (
                 <motion.div
                   key={uniqueKey('activity', activity.id, idx)}
-                  initial={{ opacity: 0, x: -20 }}
+                  initial={{ opacity: 0, x: -16 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.1 }}
+                  transition={{ delay: idx * 0.08 }}
                   onClick={() => onAction('view_details', { id: activity.inquiryId })}
-                  className="p-6 flex items-center justify-between hover:bg-gradient-to-r hover:from-amber-50/40 to-transparent transition-colors duration-300 cursor-pointer group"
+                  className="px-4 sm:px-5 py-4 flex items-center justify-between gap-3 hover:bg-slate-50 transition-colors duration-200 cursor-pointer group"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-gold/25 to-brand-gold/8 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-premium">
-                      {renderIcon(activity.icon || 'MessageSquare', 'w-6 h-6 text-brand-gold')}
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="w-11 h-11 rounded-2xl bg-slate-100 flex items-center justify-center shrink-0 group-hover:bg-[#fdf6e9] transition-colors duration-200">
+                      {renderIcon(activity.icon || 'MessageSquare', 'w-5 h-5 text-slate-500 group-hover:text-[#c9973a] transition-colors duration-200')}
                     </div>
-                    <div>
-                      <p className="font-bold text-brand-dark group-hover:text-brand-gold transition-colors duration-300">
+                    <div className="min-w-0">
+                      <p className="font-bold text-brand-dark truncate group-hover:text-brand-gold transition-colors duration-200">
                         {activity.title}
                       </p>
-                      <p className="text-xs text-slate-500">{activity.subtitle}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ACTIVITY_DOT[activity.tone] || 'bg-slate-300'}`}></span>
+                        <p className="text-xs text-slate-500 truncate">{activity.subtitle}</p>
+                      </div>
                     </div>
                   </div>
-                  <span className="text-xs font-bold text-slate-400 group-hover:text-slate-600 transition-colors duration-300">
+                  <span className="text-[11px] font-bold text-slate-400 shrink-0">
                     {activity.time}
                   </span>
                 </motion.div>
@@ -536,27 +497,11 @@ export default function DynamicAccountRenderer({
                   />
                 );
               }
-              if (view === 'orders') {
-                // Key by `orderId` (the row's own primary key), not
-                // `item.id` — that one is the inquiry id and collides
-                // when two orders point at the same quote/inquiry.
-                return (
-                  <InquiryCard
-                    key={uniqueKey('order', (item as any).orderId ?? item.id, idx)}
-                    inquiry={item}
-                    state="paid"
-                    paidQuote={item.paidQuote}
-                    onAction={() => onAction('view_order', item)}
-                    onDelete={() => onAction('delete_inquiry', item)}
-                    onRate={
-                      (item as any).sellerId
-                        ? () => onAction('rate_shop', item)
-                        : undefined
-                    }
-                    alreadyRated={(item as any).alreadyRated}
-                  />
-                );
-              }
+              // 'orders' no longer routes through this generic list_renderer —
+              // it now mounts TransactionHistoryView (componentType
+              // 'transaction_history_renderer'), which owns its own
+              // Awaiting Collection / Purchased Items / Requests / Expired
+              // tabs and reuses this same InquiryCard rendering internally.
               return (
                 <div
                   key={uniqueKey('item', item.id, idx)}
@@ -786,6 +731,10 @@ export default function DynamicAccountRenderer({
         return <LabourQuotesView {...data?.quotesProps} />;
       case 'financial_renderer':
         return <FinancialPage isInsideDashboard={true} />;
+      case 'venture_account_renderer':
+        return <VentureAccountView />;
+      case 'transaction_history_renderer':
+        return <TransactionHistoryView data={data} onAction={onAction} />;
       case 'report_manager':
         return <ReportManagerView />;
       case 'staff_overview':

@@ -87,8 +87,8 @@ export const MASTER_RENTAL_ACCOUNT_SCHEMA: MasterAccountSchema = {
     },
     financial: {
       title: 'Financial Account',
-      subtitle: 'Manage your virtual wallet and transaction security',
-      componentType: 'financial_renderer',
+      subtitle: 'Track funds released from completed sales',
+      componentType: 'venture_account_renderer',
     },
     'audit-trail': {
       title: 'Audit Trail',

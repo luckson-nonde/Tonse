@@ -113,7 +113,20 @@ export class LedgerBootstrapService implements OnModuleInit {
       HAVING SUM(CASE WHEN e.direction = 'CREDIT' THEN e.amount ELSE -e.amount END) <> 0;
     `);
 
-    this.logger.log('Ledger integrity guards installed (append-only, balance, positive amounts, escrow view)');
+    // ── Seller venture-account positions — derived per seller, same pattern ──
+    await this.dataSource.query(`
+      CREATE OR REPLACE VIEW seller_venture_positions AS
+      SELECT
+        e."counterpartyId" AS "sellerId",
+        e.currency,
+        SUM(CASE WHEN e.direction = 'CREDIT' THEN e.amount ELSE -e.amount END) AS balance
+      FROM ledger_entries e
+      WHERE e."accountCode" = 'SELLER_PAYABLE_ZMW' AND e."counterpartyId" IS NOT NULL
+      GROUP BY e."counterpartyId", e.currency
+      HAVING SUM(CASE WHEN e.direction = 'CREDIT' THEN e.amount ELSE -e.amount END) <> 0;
+    `);
+
+    this.logger.log('Ledger integrity guards installed (append-only, balance, positive amounts, escrow + seller venture views)');
   }
 
   /** Seed the fixed chart of accounts. Insert-only — never overwrites. */

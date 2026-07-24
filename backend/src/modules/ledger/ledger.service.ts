@@ -247,6 +247,16 @@ export class LedgerService {
     );
   }
 
+  /** One seller's venture balance, or zero if they have no open position
+   *  (never released, or fully cleared — the view drops zero-balance rows). */
+  async sellerBalance(sellerId: string, currency = 'ZMW'): Promise<string> {
+    const [row] = await this.dataSource.query(
+      `SELECT balance::text FROM seller_venture_positions WHERE "sellerId" = $1 AND currency = $2`,
+      [sellerId, currency],
+    );
+    return row?.balance ?? '0.00';
+  }
+
   /** The chart of accounts with each account's live balance. */
   async accountBalances(): Promise<
     Array<{
@@ -278,10 +288,11 @@ export class LedgerService {
    * a ledger only grows.
    */
   async listJournals(filters: {
-    page?: number;
-    limit?: number;
+    page?: number | string;
+    limit?: number | string;
     type?: string;
     quoteId?: string;
+    counterpartyId?: string;
   } = {}): Promise<{ data: any[]; total: number }> {
     const page = Math.max(1, Number(filters.page) || 1);
     const limit = Math.min(200, Math.max(1, Number(filters.limit) || 30));
@@ -294,6 +305,15 @@ export class LedgerService {
     if (filters.quoteId) {
       params.push(filters.quoteId);
       where.push(`j."quoteId" = $${params.length}`);
+    }
+    if (filters.counterpartyId) {
+      // EXISTS rather than joining `ledger_entries e` directly in WHERE — that
+      // alias is already used for the debit-sum aggregate below, and a second
+      // predicate on it would filter out the credit lines needed for that sum.
+      params.push(filters.counterpartyId);
+      where.push(
+        `EXISTS (SELECT 1 FROM ledger_entries e2 WHERE e2."journalId" = j.id AND e2."counterpartyId" = $${params.length})`,
+      );
     }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 

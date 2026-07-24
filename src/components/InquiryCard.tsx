@@ -66,22 +66,31 @@ export default function InquiryCard({
   );
   const views = inquiry.viewCount ?? 0;
 
+  // The real collection-flow status lives on paidQuote.status (Quote.status:
+  // PAID/PENDING_COLLECTION/AWAITING_PICKUP → COMPLETED/HANDED_OVER, driven
+  // by the QR-code CollectionService flow) — not Order.status, which never
+  // advances past PENDING in the live app. Every paid order used to render
+  // as unconditionally "collected" regardless of where it actually stood.
+  const isCollected =
+    state === 'paid' &&
+    ['COMPLETED', 'HANDED_OVER'].includes(String(paidQuote?.status || '').toUpperCase());
+
   const borderColors = {
     open: 'border-t-[#d49b35]',
     quoted: 'border-t-[#3b82f6]',
-    paid: 'border-t-[#22c55e]',
+    paid: isCollected ? 'border-t-[#22c55e]' : 'border-t-[#3b82f6]',
   };
 
   const badgeColors = {
     open: 'bg-[#d49b35]/10 text-[#d49b35]',
     quoted: 'bg-[#3b82f6]/10 text-[#3b82f6]',
-    paid: 'bg-[#22c55e]/10 text-[#22c55e]',
+    paid: isCollected ? 'bg-[#22c55e]/10 text-[#22c55e]' : 'bg-[#3b82f6]/10 text-[#3b82f6]',
   };
 
   const statusText = {
     open: 'OPEN',
     quoted: 'QUOTED',
-    paid: 'COMPLETED',
+    paid: isCollected ? 'COLLECTED' : 'PAID',
   };
 
   // Attributes are now normalized at the service layer
@@ -165,16 +174,24 @@ export default function InquiryCard({
             >
               {statusText[state]}
             </span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                console.log('Delete button clicked for inquiry:', inquiry.id);
-                onDelete();
-              }}
-              className="px-2 py-1 text-[9px] font-bold bg-rose-500 text-white rounded-full hover:bg-rose-600"
-            >
-              Delete
-            </button>
+            {/* Hidden once collected: the backend only blocks inquiry
+                deletion while escrow is holding funds (PAID/PENDING_
+                COLLECTION/AWAITING_PICKUP) — a COMPLETED/HANDED_OVER order
+                would otherwise cascade-delete along with it (Order.quote is
+                ON DELETE CASCADE), destroying what Transaction History now
+                calls a permanent purchase record. */}
+            {!isCollected && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  console.log('Delete button clicked for inquiry:', inquiry.id);
+                  onDelete();
+                }}
+                className="px-2 py-1 text-[9px] font-bold bg-rose-500 text-white rounded-full hover:bg-rose-600"
+              >
+                Delete
+              </button>
+            )}
           </div>
         </div>
 
@@ -339,10 +356,17 @@ export default function InquiryCard({
 
         {state === 'paid' && paidQuote && (
           <div className="space-y-4">
-            <div className="bg-[#22c55e]/10 border border-[#22c55e]/20 rounded-xl p-3 flex items-center gap-2 text-[#16a34a] text-sm font-bold font-sans">
-              <CheckCircle2 className="w-4 h-4" />
-              Parcel Collected & Funds Released
-            </div>
+            {isCollected ? (
+              <div className="bg-[#22c55e]/10 border border-[#22c55e]/20 rounded-xl p-3 flex items-center gap-2 text-[#16a34a] text-sm font-bold font-sans">
+                <CheckCircle2 className="w-4 h-4" />
+                Parcel Collected & Funds Released
+              </div>
+            ) : (
+              <div className="bg-[#3b82f6]/10 border border-[#3b82f6]/20 rounded-xl p-3 flex items-center gap-2 text-[#1d4ed8] text-sm font-bold font-sans">
+                <Clock className="w-4 h-4" />
+                Paid — Awaiting Collection
+              </div>
+            )}
             <div className="bg-[#f4efe8] rounded-xl p-5">
               <p className="text-[10px] font-bold text-slate-400 tracking-wider uppercase font-sans mb-1">
                 AMOUNT PAID
@@ -359,10 +383,11 @@ export default function InquiryCard({
             </div>
 
             {/* Rate-the-shop — only once the order actually reached the
-                buyer (DELIVERED/COMPLETED), and only where the order list
-                provides the handler. */}
+                buyer (the quote's real COMPLETED/HANDED_OVER collection
+                status — see isCollected above), and only where the order
+                list provides the handler. */}
             {onRate &&
-              ['DELIVERED', 'COMPLETED'].includes(String(paidQuote.status || '')) &&
+              isCollected &&
               (alreadyRated ? (
                 <div className="flex items-center gap-2 text-[12px] font-bold text-slate-400 font-sans px-1">
                   <Star className="w-4 h-4 text-[#C9973A] fill-[#C9973A]" />

@@ -22,6 +22,7 @@ import { LedgerEntry } from './ledger-entry.entity';
 export type LedgerJournalType =
   | 'ESCROW_FUNDED'
   | 'ESCROW_RELEASED'
+  | 'VENTURE_DEPOSIT'
   | 'REFUND_INITIATED'
   | 'REFUND_SETTLED'
   | 'PAYOUT_INITIATED'
@@ -33,6 +34,7 @@ export type LedgerJournalType =
 export const LEDGER_JOURNAL_TYPES: LedgerJournalType[] = [
   'ESCROW_FUNDED',
   'ESCROW_RELEASED',
+  'VENTURE_DEPOSIT',
   'REFUND_INITIATED',
   'REFUND_SETTLED',
   'PAYOUT_INITIATED',
@@ -64,7 +66,7 @@ export class LedgerJournal {
    * The most important column here. Makes replays a no-op at the DATABASE
    * level rather than relying on app logic — a PSP will redeliver the same
    * webhook, and a double-post is a double-spend. Shape: `escrow-funded:<pspTxnId>`,
-   * `escrow-released:<quoteId>`, `refund-initiated:<refundId>`.
+   * `escrow-released:<quoteId>`, `venture-deposit:<pspTxnId>`, `refund-initiated:<refundId>`.
    */
   @Column({ type: 'varchar', length: 255, unique: true })
   idempotencyKey: string;

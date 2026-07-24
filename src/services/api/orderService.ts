@@ -17,6 +17,14 @@ export interface OrderQuoteSnapshot {
   inquiry?: OrderInquirySnapshot;
   /** Denormalized at quote creation — reliable seller display name. */
   providerName?: string;
+  /** The real collection-flow status (PAID → PENDING_COLLECTION →
+   *  AWAITING_PICKUP → COMPLETED/HANDED_OVER, driven by CollectionService's
+   *  QR-code flow) — already eager-loaded by the backend's order endpoints
+   *  (`relations: ['quote', ...]`), just not declared here until now. This
+   *  is the field that actually tells you whether an order's item has been
+   *  collected; `OrderRecord.status` never advances past its default
+   *  `PENDING` in the live app. */
+  status?: string;
 }
 
 export interface OrderUserSnapshot {

@@ -1,14 +1,19 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { DataSource, In, Repository } from 'typeorm';
 import { Quote } from '../quotes/entities/quote.entity';
 import { PaymentsService } from '../payments/payments.service';
 import { ESCROW_HOLDING_STATUSES } from '../quotes/quote-status';
+import { LedgerService, JournalLineInput } from '../ledger/ledger.service';
+import { ACCOUNT } from '../ledger/ledger-accounts';
+import { splitCommission, toNgwee } from '../../common/money/money';
 
 /**
  * Quotes that still need a physical handover — i.e. the buyer's money is still
@@ -36,6 +41,8 @@ export class CollectionService {
     private readonly quotes: Repository<Quote>,
     private readonly payments: PaymentsService,
     private readonly dataSource: DataSource,
+    private readonly ledger: LedgerService,
+    private readonly config: ConfigService,
   ) {}
 
   /** Parcels awaiting collection/pickup for this shop. */
@@ -96,6 +103,14 @@ export class CollectionService {
       if (!locked) throw new NotFoundException('Parcel not found');
       if (locked.status === 'COMPLETED') return; // idempotent — never double-release
 
+      // Defense-in-depth: a future cancel/refund flow must never have this
+      // method silently re-release escrow it already discharged. Not
+      // reachable today (no cancel/refund endpoint exists yet), but cheap to
+      // assert now rather than after that flow exists.
+      if (!(ESCROW_HOLDING_STATUSES as readonly string[]).includes(locked.status)) {
+        throw new ConflictException(`Cannot complete a parcel in status ${locked.status}`);
+      }
+
       await m.getRepository(Quote).update(quoteId, { status: 'COMPLETED' });
 
       // Server-authoritative escrow release: credit the shop (owner) account.
@@ -115,6 +130,53 @@ export class CollectionService {
         } as any,
         m,
       );
+
+      // MONEY INTEGRITY: quote.status === 'PAID' does NOT mean escrow was
+      // really funded — orders.service.ts's create() (the simulated
+      // wallet-pay path) also sets PAID, with no PSP collection and no
+      // ESCROW_FUNDED journal behind it. Crediting SELLER_PAYABLE for that
+      // would fabricate real ledger money for a sale nothing actually backed.
+      // Only release when a real funding journal exists for this quote.
+      const [fundedJournal] = await m.query(
+        `SELECT id FROM ledger_journals WHERE "quoteId" = $1 AND type = 'ESCROW_FUNDED' LIMIT 1`,
+        [quoteId],
+      );
+
+      if (fundedJournal) {
+        const priceNgwee = toNgwee(locked.price);
+        const commissionPercent = this.config.get<number>('psp.commissionPercent') ?? 0;
+        const { commission, net } = splitCommission(priceNgwee, commissionPercent);
+
+        const lines: JournalLineInput[] = [
+          { accountCode: ACCOUNT.ESCROW_LIABILITY, direction: 'DEBIT', amountNgwee: priceNgwee, quoteId },
+          { accountCode: ACCOUNT.SELLER_PAYABLE, direction: 'CREDIT', amountNgwee: net, quoteId, counterpartyId: providerId },
+        ];
+        if (commission > 0) {
+          lines.push({
+            accountCode: ACCOUNT.PLATFORM_COMMISSION_REVENUE,
+            direction: 'CREDIT',
+            amountNgwee: commission,
+            quoteId,
+          });
+        }
+
+        await this.ledger.postJournal(
+          {
+            type: 'ESCROW_RELEASED',
+            idempotencyKey: `escrow-released:${quoteId}`,
+            quoteId,
+            currency: 'ZMW',
+            description: `Escrow released to shop for collected parcel ${quoteId}`,
+            memo: { commissionPercent, grossNgwee: priceNgwee },
+            lines,
+          },
+          m,
+        );
+      } else {
+        this.logger.warn(
+          `complete(): quote ${quoteId} has no ESCROW_FUNDED journal — skipping ledger release (legacy/simulated payment path)`,
+        );
+      }
     });
 
     this.logger.log(`collection.complete: provider=${providerId} quote=${quoteId}`);

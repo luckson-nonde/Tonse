@@ -61,7 +61,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useUserInquiries, useMatchedLeads } from '../hooks/useInquiries';
 import { useUserQuotes } from '../hooks/useQuotes';
 import { useFavoriteShops } from '../hooks/useFavoriteShops';
-import { isActiveInquiry, isActiveQuote } from '../services/lifecycleFilters';
+import { isActiveInquiry, isActiveQuote, isActiveBuyerQuote } from '../services/lifecycleFilters';
 import {
   fetchBuyerOrders,
   fetchSellerOrders,
@@ -173,10 +173,12 @@ const CalendarPanel = () => {
             type: 'order',
             color: 'emerald',
           });
-        } else if (isActiveQuote(quote as any)) {
+        } else if (isBuyer ? isActiveBuyerQuote(quote as any) : isActiveQuote(quote as any)) {
           // Live quotes the buyer/seller can still act on. Skips
-          // ARCHIVED, REJECTED, SUPERSEDED so the count doesn't drift
-          // from what the My Quotes tab shows.
+          // ARCHIVED, REJECTED, SUPERSEDED (both roles) and, for the
+          // buyer only, also expired — so the count doesn't drift from
+          // what the buyer's Received Quotes / seller's My Quotes tab
+          // shows.
           evts.push({
             date: new Date(quote.createdAt),
             title: quote.inquiryTitle || 'Quote',
@@ -422,7 +424,7 @@ export default function DashboardLayout({
       // Mirror the page split: loan offers live under "Loan Offers", not
       // "Received Quotes". Marketplace badge excludes loans; the loan badge
       // signals pending offers the borrower still needs to act on.
-      const activeQuotes = (sidebarQuotes ?? []).filter((q: any) => isActiveQuote(q) && !isLoanQuote(q)).length;
+      const activeQuotes = (sidebarQuotes ?? []).filter((q: any) => isActiveBuyerQuote(q) && !isLoanQuote(q)).length;
       const pendingLoanOffers = (sidebarQuotes ?? []).filter(
         (q: any) => isLoanQuote(q) && String(q?.status || '').toUpperCase() === 'PENDING',
       ).length;

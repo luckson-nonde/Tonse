@@ -325,14 +325,16 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                   }
 
                   // For non-image values, display with enhanced styling.
-                  // Long text values (incident reports, symptoms,
-                  // additional details) used to overflow the panel
-                  // horizontally because the row was a `flex justify-
-                  // between` with `shrink-0` on the value — labels stayed
-                  // left, values pushed off the right edge of the card.
-                  // Now: short scalars keep the side-by-side layout;
-                  // long strings flip to stacked label-above-value with
-                  // `break-words` so the value wraps inside the panel.
+                  // Long text values (incident reports, symptoms, additional
+                  // details) stack label-above-value. Short scalars keep the
+                  // side-by-side layout — but the value there must still be
+                  // allowed to shrink and wrap (`min-w-0 flex-1`, no
+                  // `shrink-0`): a flex item's default min-width is its
+                  // content's unwrapped width, so without this a value that's
+                  // "not quite long enough" to trip the stacked layout (e.g.
+                  // a free-text purpose field a few chars under the
+                  // threshold) still overflowed straight past the card's
+                  // right edge on narrow phones instead of wrapping.
                   const valueText =
                     typeof value === 'object' ? JSON.stringify(value) : String(value);
                   const isLongText = valueText.length > 40;
@@ -350,10 +352,10 @@ export default function InquiryDetails({ inquiry, quotes, onAction }: InquiryDet
                         {key.replace(/([A-Z])/g, ' $1').trim()}
                       </span>
                       <span
-                        className={`text-sm font-bold text-slate-900 ${
+                        className={`text-sm font-bold text-slate-900 break-words ${
                           isLongText
-                            ? 'leading-relaxed break-words'
-                            : 'shrink-0 text-right'
+                            ? 'leading-relaxed'
+                            : 'min-w-0 flex-1 text-right'
                         }`}
                       >
                         {valueText}

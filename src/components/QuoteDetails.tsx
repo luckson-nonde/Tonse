@@ -28,6 +28,7 @@ import {
 import { robustParse } from '../utils/jsonUtils';
 import { Quote, Inquiry } from '../types.ts';
 import Button from '../components/Button';
+import { isQuoteExpired } from '../utils/quoteExpiry';
 import QuoteInvoice from '../components/QuoteInvoice';
 import { db } from '../services/api/database';
 
@@ -187,6 +188,18 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
   const [showPayModal, setShowPayModal] = useState(false);
   const [hasAutoOpened, setHasAutoOpened] = useState(false);
 
+  // Provider-set "Quote Valid For" window elapsed unpaid — see
+  // src/utils/quoteExpiry.ts. Status-gated: once a quote has actually moved
+  // (paid, collected, rejected, etc.) its createdAt+expiryDuration math is
+  // stale and must never override the real status — e.g. a buyer who pays,
+  // then returns to this same URL later (bookmark, notification, browser
+  // Back) after what would have been the validity window must still see the
+  // paid state, not a false "this quote has expired".
+  const expired =
+    !['PAID', 'PENDING_COLLECTION', 'AWAITING_PICKUP', 'COMPLETED', 'HANDED_OVER', 'REJECTED', 'CANCELLED', 'ARCHIVED'].includes(
+      (quote.status || '').toUpperCase(),
+    ) && isQuoteExpired(quote);
+
   // One-shot auto-open when the buyer arrived here from the QuoteCard's
   // "Make a Payment" button. STANDARD quotes don't have a modal; they
   // use the Generate PO flow, so the flag is ignored for them.
@@ -195,13 +208,14 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
       autoOpenPay &&
       !hasAutoOpened &&
       quote.processType === 'EXPRESS' &&
+      !expired &&
       !['PAID', 'COMPLETED', 'EXPIRED', 'REJECTED', 'CANCELLED'].includes((quote.status || '').toUpperCase())
     ) {
       setShowPayModal(true);
       setHasAutoOpened(true);
       onAction('auto_pay_handled', quote);
     }
-  }, [autoOpenPay, hasAutoOpened, quote, onAction]);
+  }, [autoOpenPay, hasAutoOpened, quote, onAction, expired]);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [paid, setPaid] = useState(false);
   const [parentQuote, setParentQuote] = useState<Quote | null>(null);
@@ -932,6 +946,13 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
                 <div className="flex items-center gap-3 py-4 px-5 bg-emerald-500/20 border border-emerald-500/30 rounded-2xl">
                   <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                   <p className="text-emerald-300 text-sm font-bold">Payment initiated! Awaiting provider confirmation.</p>
+                </div>
+              ) : expired ? (
+                <div className="flex items-center gap-3 py-4 px-5 bg-white/5 border border-white/10 rounded-2xl">
+                  <AlertCircle className="w-5 h-5 text-slate-400 shrink-0" />
+                  <p className="text-slate-300 text-sm font-bold">
+                    This quote has expired ({quote.expiryDuration || 'validity window'} elapsed) — request a new quotation.
+                  </p>
                 </div>
               ) : (
                 <Button
