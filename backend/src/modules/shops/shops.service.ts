@@ -359,7 +359,9 @@ export class ShopsService {
         p.email,
         p.phone,
         p.logo,
-        p.cover_image                                                  AS "coverImage",
+        -- Same fallback as findAll: a shop with no separately-set cover photo
+        -- still shows its own first product photo instead of a blank hero.
+        COALESCE(p.cover_image, MAX(pc.first_image))                   AS "coverImage",
         p.city,
         p.province,
         p.area,
@@ -396,6 +398,15 @@ export class ShopsService {
       LEFT JOIN cat_junctions cj ON cj.profile_id = p.profile_id
       LEFT JOIN categories     c  ON c.id          = cj.category_id
       LEFT JOIN review_agg    ra ON ra.provider_user_id = p.seller_id
+      LEFT JOIN LATERAL (
+        SELECT split_part(pr.images, ',', 1) AS first_image
+        FROM products pr
+        WHERE pr."sellerId" = p.seller_id
+          AND pr."isActive" = true
+          AND pr.images IS NOT NULL AND pr.images <> ''
+        ORDER BY pr."createdAt" DESC
+        LIMIT 1
+      ) pc ON true
       GROUP BY p.profile_id, p.seller_id, p.display_name, p.company_name,
                p.personal_name, p.email, p.phone, p.logo, p.cover_image, p.city, p.province,
                p.area, p.social_links, p.verification_status, p.verified_at,
