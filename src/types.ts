@@ -168,10 +168,13 @@ export interface Quote {
     | 'REJECTED'
     | 'ARCHIVED'
     | 'PAID'
+    | 'PAYMENT_PENDING'
     | 'PENDING_COLLECTION'
     | 'AWAITING_PICKUP'
     | 'COMPLETED'
     | 'HANDED_OVER'
+    | 'CANCELLED'
+    | 'REFUNDED'
     | 'SUPERSEDED';
   quoteType?: 'ORIGINAL' | 'REVISION';
   parentQuoteId?: string | number;
