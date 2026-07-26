@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion, AnimatePresence } from 'motion/react';
@@ -6,6 +6,8 @@ import { AlertCircle, Camera, X, CalendarDays, Navigation, Loader2 } from 'lucid
 import { ProfileSchema } from '../services/userSchemas';
 import { generateZodSchema } from '../services/schemaGenerator';
 import CustomDropdown from './CustomDropdown';
+import { apiClient, API_BASE_URL } from '../services/api/client';
+import { compressImage } from '../utils/compressImage';
 
 interface DynamicProfileFormProps {
   schema: ProfileSchema;
@@ -34,7 +36,16 @@ export default function DynamicProfileForm({
     defaultValues: initialData,
   });
 
-  const handleImageUpload = (name: string, file: File | null, onChange: (val: string) => void) => {
+  // Fields currently mid-upload — drives the spinner overlay in the
+  // 'image_upload' case below (a real network round-trip now, not the
+  // instant local compression this used to be).
+  const [uploadingFields, setUploadingFields] = useState<Set<string>>(new Set());
+
+  const handleImageUpload = async (
+    name: string,
+    file: File | null,
+    onChange: (val: string) => void
+  ) => {
     if (!file) return;
 
     // Validate file size (max 2MB)
@@ -44,38 +55,34 @@ export default function DynamicProfileForm({
       return;
     }
 
-    // Create image for compression
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const img = new Image();
-      img.onload = () => {
-        // Create canvas for compression
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
+    setUploadingFields((prev) => new Set(prev).add(name));
+    try {
+      const compressed = await compressImage(file);
+      const formData = new FormData();
+      formData.append('file', compressed);
 
-        // Resize if image is too large (max 1200px width)
-        const maxWidth = 1200;
-        if (width > maxWidth) {
-          height = (height * maxWidth) / width;
-          width = maxWidth;
-        }
+      // apiClient attaches the JWT and throws a descriptive Error on any
+      // non-OK response — caught below. `profile` isn't in the backend's
+      // SENSITIVE_CATEGORIES list, so this stays on the public file path
+      // (same as every other logo/photo upload in the app).
+      const response = await apiClient.post<{ url: string }>(
+        '/files/upload?category=profile',
+        formData
+      );
+      const fileUrl = response.data?.url;
+      if (!fileUrl) throw new Error('No URL in upload response');
 
-        canvas.width = width;
-        canvas.height = height;
-
-        // Draw and compress
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          // Convert to WebP or JPEG with compression
-          const compressedData = canvas.toDataURL('image/jpeg', 0.75); // 75% quality
-          onChange(compressedData);
-        }
-      };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
+      onChange(`${API_BASE_URL}${fileUrl}`);
+    } catch (error) {
+      console.error('Image upload error:', error);
+      alert(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setUploadingFields((prev) => {
+        const next = new Set(prev);
+        next.delete(name);
+        return next;
+      });
+    }
   };
 
   const handleGetLocation = (onChange: (val: any) => void) => {
@@ -275,7 +282,12 @@ export default function DynamicProfileForm({
                           className="hidden"
                         />
                       </div>
-                      {value && typeof value === 'string' ? (
+                      {uploadingFields.has(field.name) && (
+                        <div className="absolute inset-0 rounded-2xl bg-white/70 backdrop-blur-[1px] flex items-center justify-center">
+                          <Loader2 className="w-6 h-6 text-[#C9973A] animate-spin" />
+                        </div>
+                      )}
+                      {value && typeof value === 'string' && !uploadingFields.has(field.name) ? (
                         <button
                           type="button"
                           onClick={() => onChange('')}
