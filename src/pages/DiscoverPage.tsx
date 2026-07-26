@@ -136,17 +136,26 @@ export default function DiscoverPage() {
     });
   }, [shops, search, activeGroup, availableGroups]);
 
-  const featured = useMemo(() => {
-    const verified = shops.filter((s) => s.verificationStatus === 'VERIFIED');
-    return (verified.length ? verified : shops).slice(0, 6);
-  }, [shops]);
-
-  const recent = useMemo(
+  // Default browse view: one rail per category group actually present in the
+  // data — buyers navigate by WHAT they're looking for (Shopping,
+  // Professional Services, Finance…), not by when a shop joined. Verified
+  // shops lead within each rail.
+  const groupedSections = useMemo(
     () =>
-      [...shops]
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 6),
-    [shops]
+      availableGroups
+        .map((group) => ({
+          group,
+          items: shops
+            .filter((shop) => shop.categoryIds.some((id) => group.categoryIds.includes(id)))
+            .sort((a, b) => {
+              const av = a.verificationStatus === 'VERIFIED' ? 0 : 1;
+              const bv = b.verificationStatus === 'VERIFIED' ? 0 : 1;
+              return av - bv;
+            })
+            .slice(0, 10),
+        }))
+        .filter((section) => section.items.length > 0),
+    [shops, availableGroups]
   );
 
   const categoryCount = useMemo(
@@ -161,7 +170,7 @@ export default function DiscoverPage() {
       {/* Hero */}
       <section className="px-5 sm:px-8 lg:px-12 pt-6">
         <div
-          className="relative overflow-hidden rounded-3xl px-8 sm:px-11 py-11 sm:py-13 text-white"
+          className="relative overflow-hidden rounded-3xl px-6 sm:px-11 py-9 sm:py-13 text-white"
           style={{
             background: `radial-gradient(120% 140% at 85% -10%, rgba(201,151,58,0.35), transparent 55%), linear-gradient(135deg, ${NAVY} 0%, ${NAVY_DEEP} 100%)`,
           }}
@@ -185,14 +194,19 @@ export default function DiscoverPage() {
             </button>
             <button
               onClick={() =>
-                document.getElementById('discover-grid')?.scrollIntoView({ behavior: 'smooth' })
+                // Default view renders category rails (#discover-sections);
+                // filtered/search view renders the flat grid (#discover-grid).
+                (
+                  document.getElementById('discover-sections') ??
+                  document.getElementById('discover-grid')
+                )?.scrollIntoView({ behavior: 'smooth' })
               }
               className="rounded-full border border-white/30 text-white font-semibold text-sm px-6 py-3 hover:border-white/60 transition-colors"
             >
               Browse categories
             </button>
           </div>
-          <div className="mt-8 flex flex-wrap gap-8">
+          <div className="mt-7 sm:mt-8 flex flex-wrap gap-6 sm:gap-8">
             <div>
               <div className="font-serif font-semibold text-[1.7rem]">{shops.length}+</div>
               <div className="text-[11px] uppercase tracking-wider text-white/60">
@@ -235,53 +249,58 @@ export default function DiscoverPage() {
           </div>
         ) : (
           <>
-            {activeGroup === 'All' && !search && featured.length > 0 && (
-              <>
-                <div className="flex items-baseline justify-between mt-9 mb-4">
-                  <h2 className="font-serif font-semibold text-[1.4rem] text-[#1B3068]">
-                    Featured providers
-                  </h2>
-                </div>
-                <div className="flex items-stretch gap-4 overflow-x-auto pb-2 scrollbar-hide">
-                  {featured.map((shop) => (
-                    <div key={shop.id} className="w-68 shrink-0">
-                      <ShopCard shop={shop} onOpen={() => navigate(`/discover/${shop.id}`)} />
+            {activeGroup === 'All' && !search ? (
+              <div id="discover-sections" className="scroll-mt-24">
+                {groupedSections.map(({ group, items }) => (
+                  <section key={group.id}>
+                    <div className="flex items-baseline justify-between mt-9 mb-4">
+                      <h2 className="font-serif font-semibold text-[1.25rem] sm:text-[1.4rem] text-[#1B3068]">
+                        {group.label}
+                      </h2>
+                      <button
+                        onClick={() => {
+                          setActiveGroup(group.label);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="text-[12px] font-semibold text-[#a97c27] hover:underline underline-offset-2 shrink-0 flex items-center gap-1"
+                      >
+                        See all <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {activeGroup === 'All' && !search && recent.length > 0 && (
-              <>
-                <div className="flex items-baseline justify-between mt-9 mb-4">
-                  <h2 className="font-serif font-semibold text-[1.4rem] text-[#1B3068]">
-                    Recently joined
-                  </h2>
-                </div>
-                <div className="flex items-stretch gap-4 overflow-x-auto pb-2 scrollbar-hide">
-                  {recent.map((shop) => (
-                    <div key={shop.id} className="w-68 shrink-0">
-                      <ShopCard shop={shop} onOpen={() => navigate(`/discover/${shop.id}`)} />
+                    <div className="relative">
+                      <div className="flex items-stretch gap-3.5 sm:gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                        {items.map((shop) => (
+                          <div key={shop.id} className="w-56 sm:w-68 shrink-0">
+                            <ShopCard shop={shop} onOpen={() => navigate(`/discover/${shop.id}`)} />
+                          </div>
+                        ))}
+                      </div>
+                      {/* Swipe cue: fades the rail's right edge so it reads as
+                          scrollable on touch screens with no visible scrollbar. */}
+                      {items.length > 2 && (
+                        <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#f5f2ed] to-transparent" />
+                      )}
                     </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            <div id="discover-grid" className="flex items-baseline justify-between mt-9 mb-4 scroll-mt-24">
-              <h2 className="font-serif font-semibold text-[1.4rem] text-[#1B3068]">
-                {activeGroup === 'All' ? 'Browse all providers' : `${activeGroup} providers`}
-              </h2>
-            </div>
-            {filteredShops.length === 0 ? (
-              <p className="text-[#6b7280]">No providers match that filter yet.</p>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4.5 items-stretch">
-                {filteredShops.map((shop) => (
-                  <ShopCard key={shop.id} shop={shop} onOpen={() => navigate(`/discover/${shop.id}`)} />
+                  </section>
                 ))}
               </div>
+            ) : (
+              <>
+                <div id="discover-grid" className="flex items-baseline justify-between mt-9 mb-4 scroll-mt-24">
+                  <h2 className="font-serif font-semibold text-[1.25rem] sm:text-[1.4rem] text-[#1B3068]">
+                    {activeGroup === 'All' ? 'Search results' : `${activeGroup} providers`}
+                  </h2>
+                </div>
+                {filteredShops.length === 0 ? (
+                  <p className="text-[#6b7280]">No providers match that filter yet.</p>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3.5 sm:gap-4.5 items-stretch">
+                    {filteredShops.map((shop) => (
+                      <ShopCard key={shop.id} shop={shop} onOpen={() => navigate(`/discover/${shop.id}`)} />
+                    ))}
+                  </div>
+                )}
+              </>
             )}
 
             {/* Trust strip */}
@@ -325,7 +344,7 @@ export default function DiscoverPage() {
       </main>
 
       <footer className="bg-[#142550] text-white/70 py-8 px-5 sm:px-8 lg:px-12">
-        <div className="flex flex-wrap gap-4 items-center justify-between text-sm">
+        <div className="flex flex-col sm:flex-row gap-4 items-center sm:justify-between text-center sm:text-left text-sm">
           <Logo variant="light" className="text-xl" />
           <span>Intelligent · Connected · Trusted</span>
           <div className="flex items-center gap-1">
