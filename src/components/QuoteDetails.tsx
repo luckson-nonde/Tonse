@@ -563,12 +563,32 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
 
                   {/* What's Included (Textarea or Multiselect) */}
                   {(dynamicFields.whatIsIncluded ||
+                    (Array.isArray(dynamicFields.servicesIncluded) &&
+                      dynamicFields.servicesIncluded.length > 0) ||
                     (Array.isArray(dynamicFields.venueAmenities) &&
                       dynamicFields.venueAmenities.length > 0)) && (
                     <div className="mt-8">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">
                         What's Included
                       </p>
+
+                      {/* Service steps the provider commits to (e.g. a makeup
+                          artist's applied layers) — the price justification
+                          the buyer reads before accepting. */}
+                      {Array.isArray(dynamicFields.servicesIncluded) &&
+                        dynamicFields.servicesIncluded.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-4">
+                            {dynamicFields.servicesIncluded.map((service: string, i: number) => (
+                              <div
+                                key={i}
+                                className="px-3 py-1.5 rounded-full bg-white border border-slate-200 text-xs font-bold text-slate-600 flex items-center gap-2"
+                              >
+                                <Check className="w-3 h-3 text-[#C9973A]" />
+                                {service}
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
                       {dynamicFields.whatIsIncluded && (
                         <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-sm text-slate-600 leading-relaxed italic">
@@ -817,6 +837,7 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
                   'referencePhotos',
                   'whatIsIncluded',
                   'venueAmenities',
+                  'servicesIncluded',
                   'proformaInvoice',
                   'rateUnit',
                   'securityDeposit',

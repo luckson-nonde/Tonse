@@ -27,6 +27,7 @@ import { FieldSchema, RENTAL_CATALOG_ITEMS } from '../services/categories';
 import { generateZodSchema } from '../services/schemaGenerator';
 import CustomDropdown from './CustomDropdown';
 import DateTimePicker from './DateTimePicker';
+import PhotoSlotPair from './photoCapture/PhotoSlotPair';
 import SecureFile, { isSecureFileUrl } from './SecureFile';
 import { formatBytes } from '../utils/fileMeta';
 
@@ -112,6 +113,14 @@ export default function DynamicInquiryForm({
     }
   }, [isClinical, itemsError, clinicalTyped, clinicalPhotoCount]);
 
+  // Clear the missing-photo error the moment a required capture is filled.
+  const capturedCount = schema
+    .filter((f) => f.type === 'guided_capture' && f.required)
+    .reduce((n, f) => n + (((formValues as any)[f.name] as string[])?.length ?? 0), 0);
+  useEffect(() => {
+    if (itemsError && capturedCount > 0) setItemsError(null);
+  }, [itemsError, capturedCount]);
+
   const onFormSubmit = (data: Record<string, any>) => {
     if (isEquipmentRental && Object.keys(selectedItems).length === 0) {
       setItemsError('Add at least one item from the catalog before submitting.');
@@ -128,6 +137,20 @@ export default function DynamicInquiryForm({
         return;
       }
     }
+    // Guided capture is z.any() to zod (it holds an array of uploaded URLs), so
+    // a required slot is enforced here. `isFieldVisible` keeps a dependsOn-
+    // hidden capture (e.g. haircare's product path) from blocking submit.
+    const missingCapture = schema.find(
+      (f) =>
+        f.type === 'guided_capture' &&
+        f.required &&
+        isFieldVisible(f) &&
+        !(Array.isArray(data[f.name]) && data[f.name].length > 0),
+    );
+    if (missingCapture) {
+      setItemsError(`Add your "${missingCapture.label}" photo — providers quote from it.`);
+      return;
+    }
     setItemsError(null);
     const finalData = {
       ...data,
@@ -136,19 +159,29 @@ export default function DynamicInquiryForm({
     onSubmit(finalData);
   };
 
-  const handleImageUpload = async (name: string, files: FileList | null) => {
-    if (!files || files.length === 0) return;
+  /** Dropzone entry point — the <input> hands back a FileList. */
+  const handleImageUpload = (name: string, files: FileList | null) =>
+    uploadImageFiles(name, files ? Array.from(files) : []);
+
+  /** Shared upload path. Split out from handleImageUpload so guided capture,
+   *  which produces a single File rather than an input's FileList, reuses the
+   *  same compression, category routing and storage rules. */
+  const uploadImageFiles = async (name: string, incoming: File[]) => {
+    if (incoming.length === 0) return;
 
     setUploadingFields((prev) => new Set(prev).add(name));
 
     try {
       const field = schema.find((f) => f.name === name);
-      const currentImages = ((formValues as any)[name] as string[]) || [];
+      // A guided-capture slot holds exactly one photo and REPLACES it when the
+      // buyer re-shoots ("Change"), rather than appending to a gallery.
+      const isGuided = field?.type === 'guided_capture';
+      const currentImages = isGuided ? [] : ((formValues as any)[name] as string[]) || [];
       // Clamp to zero: a bare `maxFiles - currentImages.length` can go negative
       // and slice from the array's END instead of taking nothing.
-      const maxFiles = field?.maxFiles ?? 5;
+      const maxFiles = isGuided ? 1 : field?.maxFiles ?? 5;
       const remainingSlots = Math.max(0, maxFiles - currentImages.length);
-      const newFiles = Array.from(files).slice(0, remainingSlots);
+      const newFiles = incoming.slice(0, remainingSlots);
       const uploadedUrls: string[] = [];
 
       // Sensitive documents (payslip, bank statement, NRC, licence, collateral,
@@ -457,6 +490,32 @@ export default function DynamicInquiryForm({
                   </button>
                 </div>
               );
+            case 'guided_capture': {
+              // The partner (optional inspiration) slot is a real schema field
+              // so zod keeps its value and the provider's lead view shows it —
+              // it just renders here, inside its primary's pair, rather than
+              // as a row of its own.
+              const partner = field.pairedWith
+                ? undefined
+                : schema.find((f) => f.pairedWith === field.name);
+              const partnerName = partner?.name;
+              const partnerUrls = partnerName
+                ? ((formValues as any)[partnerName] as string[]) || []
+                : [];
+              return (
+                <PhotoSlotPair
+                  field={field}
+                  partner={partner}
+                  nowUrls={Array.isArray(value) ? (value as string[]) : []}
+                  inspirationUrls={partnerUrls}
+                  uploadingNow={uploadingFields.has(field.name)}
+                  uploadingInspiration={!!partnerName && uploadingFields.has(partnerName)}
+                  onCaptureNow={(file) => uploadImageFiles(field.name, [file])}
+                  onCaptureInspiration={(file) => partnerName && uploadImageFiles(partnerName, [file])}
+                  hasError={!!itemsError}
+                />
+              );
+            }
             case 'image_upload':
               const isUploading = uploadingFields.has(field.name);
               const maxFiles = field.maxFiles ?? 5;
@@ -812,6 +871,8 @@ export default function DynamicInquiryForm({
   const ungroupedFields: FieldSchema[] = [];
 
   schema.forEach((field) => {
+    // Partner capture slots are drawn by their primary field's pair block.
+    if (field.pairedWith) return;
     if (field.group) {
       if (!groupedFields[field.group]) {
         groupedFields[field.group] = [];
@@ -968,6 +1029,7 @@ export default function DynamicInquiryForm({
                       // or multiselect — keeps the chips on one line instead of wrapping.
                       field.type === 'textarea' ||
                       field.type === 'image_upload' ||
+                      field.type === 'guided_capture' ||
                       field.type === 'multiselect' ||
                       field.type === 'date' ||
                       field.type === 'datetime' ||
@@ -1006,6 +1068,7 @@ export default function DynamicInquiryForm({
                           className={
                             field.type === 'textarea' ||
                             field.type === 'image_upload' ||
+                            field.type === 'guided_capture' ||
                             field.type === 'multiselect' ||
                             field.type === 'date' ||
                             field.type === 'datetime' ||
@@ -1134,10 +1197,11 @@ export default function DynamicInquiryForm({
                 </div>
               )}
 
-              {/* Clinical either/or error — the equipment-rental block above
-                  owns the shared itemsError render, but it never mounts for
-                  clinical categories, so surface it here instead. */}
-              {isClinical && itemsError && (
+              {/* Shared submit-guard error (clinical either/or, missing guided
+                  capture). The equipment-rental block above owns its own
+                  render of itemsError, so this one covers every other case
+                  rather than each guard cloning another copy. */}
+              {!isEquipmentRental && itemsError && (
                 <div className="flex items-center gap-2 text-brand-error text-[13px] font-medium mt-6">
                   <AlertCircle className="w-4 h-4" />
                   <span>{itemsError}</span>

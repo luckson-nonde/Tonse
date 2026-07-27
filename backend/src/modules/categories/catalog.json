@@ -413,6 +413,27 @@
     "type": null
   },
   {
+    "id": "nails",
+    "name": "Nails",
+    "parentId": "beauty",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "lashes-brows",
+    "name": "Lashes & Brows",
+    "parentId": "beauty",
+    "baseName": null,
+    "type": null
+  },
+  {
+    "id": "pedicure",
+    "name": "Pedicure",
+    "parentId": "beauty",
+    "baseName": null,
+    "type": null
+  },
+  {
     "id": "fragrances",
     "name": "Fragrances",
     "parentId": "beauty",

@@ -642,7 +642,7 @@ export const ARCHETYPE_CONFIG: Record<string, ArchetypeConfig> = {
   },
   "skincare": {
     "categoryName": "Skincare",
-    "archetype": "PRODUCT",
+    "archetype": "SERVICE",
     "quoteMapping": {
       "quantity": "unitPrice",
       "duration": "rate"
@@ -655,7 +655,7 @@ export const ARCHETYPE_CONFIG: Record<string, ArchetypeConfig> = {
   },
   "makeup-cosmetics": {
     "categoryName": "Makeup & Cosmetics",
-    "archetype": "PRODUCT",
+    "archetype": "SERVICE",
     "quoteMapping": {
       "quantity": "unitPrice",
       "duration": "rate"
@@ -668,7 +668,7 @@ export const ARCHETYPE_CONFIG: Record<string, ArchetypeConfig> = {
   },
   "haircare": {
     "categoryName": "Haircare",
-    "archetype": "PRODUCT",
+    "archetype": "SERVICE",
     "quoteMapping": {
       "quantity": "unitPrice",
       "duration": "rate"
@@ -677,6 +677,39 @@ export const ARCHETYPE_CONFIG: Record<string, ArchetypeConfig> = {
       "warranty",
       "deliveryFee",
       "leadTime"
+    ]
+  },
+  "nails": {
+    "categoryName": "Nails",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "quantity": "unitPrice",
+      "duration": "rate"
+    },
+    "requiredAdditions": [
+      "availabilityDate"
+    ]
+  },
+  "lashes-brows": {
+    "categoryName": "Lashes & Brows",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "quantity": "unitPrice",
+      "duration": "rate"
+    },
+    "requiredAdditions": [
+      "availabilityDate"
+    ]
+  },
+  "pedicure": {
+    "categoryName": "Pedicure",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "quantity": "unitPrice",
+      "duration": "rate"
+    },
+    "requiredAdditions": [
+      "availabilityDate"
     ]
   },
   "fragrances": {

@@ -3,7 +3,7 @@ import { mobilePhonesBuySchema, mobilePhonesRepairSchema, laptopsBuySchema, lapt
 import { entertainmentPerformersSchema } from './schemas/entertainment';
 import { venuesClubsSchema, equipmentRentalSchema, eventManagementSchema, eventCateringSchema, eventPlanningSchema, eventDecorSchema } from './schemas/events';
 import { fashionSchema, shoesFootwearSchema, accessoriesJewelrySchema } from './schemas/fashion';
-import { skincareSchema, makeupCosmeticsSchema, haircareSchema, fragrancesSchema } from './schemas/beauty';
+import { skincareSchema, makeupCosmeticsSchema, haircareSchema, fragrancesSchema, nailsSchema, lashesBrowsSchema, pedicureSchema } from './schemas/beauty';
 import { livingRoomBuySchema, livingRoomRepairSchema, bedroomBuySchema, bedroomRepairSchema, officeBuySchema, officeRepairSchema, outdoorBuySchema, outdoorRepairSchema } from './schemas/furniture';
 import { carPartsNewSchema, carPartsBreakersSchema, vehiclesBuySchema, carAccessoriesSchema, carBreakdownRecoverySchema, motorcyclesPartsSchema, automotiveToolsSchema } from './schemas/automotive';
 import { buildingMaterialsSchema, plumbingFixturesSchema, electricalSuppliesSchema, hardwareToolsSchema, constructionMachinerySchema } from './schemas/construction';
@@ -207,6 +207,9 @@ const BASE_CATEGORIES_DB: Category[] = [
   { id: 'skincare', name: 'Skincare', parentId: 'beauty', formSchema: skincareSchema },
   { id: 'makeup-cosmetics', name: 'Makeup & Cosmetics', parentId: 'beauty', formSchema: makeupCosmeticsSchema },
   { id: 'haircare', name: 'Haircare', parentId: 'beauty', formSchema: haircareSchema },
+  { id: 'nails', name: 'Nails', parentId: 'beauty', formSchema: nailsSchema },
+  { id: 'lashes-brows', name: 'Lashes & Brows', parentId: 'beauty', formSchema: lashesBrowsSchema },
+  { id: 'pedicure', name: 'Pedicure', parentId: 'beauty', formSchema: pedicureSchema },
   { id: 'fragrances', name: 'Fragrances', parentId: 'beauty', formSchema: fragrancesSchema },
 
   // Subcategories - Construction
@@ -305,6 +308,15 @@ export const getCategoryNature = (categoryId: string): CategoryNature => {
   if (!category) return 'BOTH';
 
   const rootId = category.parentId || category.id;
+
+  // Beauty is genuinely split: fragrances is a bottle you buy, everything
+  // else is an appointment with a person. Checked before the productParents
+  // sweep below, which would otherwise call a nail appointment a product.
+  // The root itself is BOTH so it appears in seller AND provider signup.
+  if (rootId === 'beauty') {
+    if (category.id === 'beauty') return 'BOTH';
+    return category.id === 'fragrances' ? 'PRODUCT' : 'SERVICE';
+  }
 
   if (productParents.includes(rootId)) return 'PRODUCT';
   if (serviceParents.includes(rootId)) return 'SERVICE';

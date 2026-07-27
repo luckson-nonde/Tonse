@@ -71,6 +71,15 @@ const SUB_ARCHETYPE: Record<string, Archetype> = {
   'long-term-rentals': 'BOOKING',
   'short-stay-serviced': 'BOOKING',
   'boarding-student-rooms': 'BOOKING',
+  // Beauty's parent archetype is RETAIL (fragrances, cosmetics off a shelf),
+  // but these five are appointments with a person, not stock. Without the
+  // pin a nail tech would seed onto the retail/product dashboard.
+  skincare: 'SERVICE',
+  'makeup-cosmetics': 'SERVICE',
+  haircare: 'SERVICE',
+  nails: 'SERVICE',
+  'lashes-brows': 'SERVICE',
+  pedicure: 'SERVICE',
 };
 
 const PARENT_NATURE: Record<string, CategoryNature> = {

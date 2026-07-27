@@ -125,6 +125,41 @@ const buildLoanOffer = (attrs: Record<string, any>): QuoteField[] => {
   ];
 };
 
+/**
+ * Beauty services (makeup, nails, lashes & brows, pedicure) all quote the
+ * same way: the buyer's form is deliberately just a guided photo, an occasion
+ * and a description, so the CRAFT detail lives here — a checklist of what the
+ * provider will actually do, which is what justifies the price when the client
+ * reads the quote back (QuoteDetails renders it under "What's Included").
+ * `servicesIncluded` is required for exactly that reason.
+ */
+const beautyServiceQuote = (
+  attrs: Record<string, any>,
+  opts: { priceLabel: string; priceHelp: string; steps: string[]; productsPlaceholder: string },
+): QuoteField[] => [
+  { name: 'price', label: opts.priceLabel, type: 'currency', required: true, calculation: 'total',
+    helpText: attrs?.occasion
+      ? `${opts.priceHelp} They're booking for: ${String(attrs.occasion).toLowerCase()}.`
+      : opts.priceHelp,
+    group: 'Pricing' },
+  { name: 'availabilityDate', label: 'Available Date', type: 'date', required: true,
+    group: 'Logistics & Timing' },
+  { name: 'durationHours', label: 'How Long It Takes (hours)', type: 'number', required: false,
+    placeholder: 'e.g. 2', helpText: 'Helps the client plan around the appointment.',
+    group: 'Logistics & Timing' },
+  { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+    options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+  { name: 'servicesIncluded', label: 'What Will Be Done', type: 'multiselect', required: true,
+    options: opts.steps,
+    helpText: 'Tick every step included in the price — this is what justifies the quote to the client.',
+    group: 'Notes & Photos' },
+  { name: 'whatIsIncluded', label: "Products & Brands You'll Use", type: 'textarea', required: false,
+    placeholder: opts.productsPlaceholder, group: 'Notes & Photos' },
+  { name: 'message', label: 'Additional Notes', type: 'textarea', required: false,
+    placeholder: 'Where the appointment happens, travel fee, deposit, aftercare…',
+    group: 'Notes & Photos' },
+];
+
 const QUOTE_SCHEMA_BY_CATEGORY_ID: Record<
   string,
   (attrs: Record<string, any>) => QuoteField[]
@@ -722,6 +757,60 @@ const QUOTE_SCHEMA_BY_CATEGORY_ID: Record<
         placeholder: 'Travel range, night availability, equipment you bring…', group: 'Notes & Photos' },
     ];
   },
+
+  // ── Beauty ─────────────────────────────────────────────────────────────
+  // All four beauty services share beautyServiceQuote (declared above): the
+  // buyer's form is a guided photo + occasion + description, so the craft
+  // detail that justifies the price lives on the quote instead.
+  'makeup-cosmetics': (attrs) => beautyServiceQuote(attrs, {
+    priceLabel: 'Service Price (ZMW)',
+    priceHelp: 'What the client pays for the full look.',
+    steps: ['Skin Prep & Primer', 'Foundation & Concealer', 'Contour, Blush & Highlight',
+      'Eyebrows (Shape / Fill)', 'Eye Makeup & Eyeliner', 'False Lashes',
+      'Setting Powder & Setting Spray', 'Lip Makeup', 'Touch-Up Kit for the Day'],
+    productsPlaceholder: 'e.g. MAC Studio Fix foundation, Fenty concealer, waterproof setting spray for outdoor weddings…',
+  }),
+
+  'skincare': (attrs) => beautyServiceQuote(attrs, {
+    priceLabel: 'Treatment Price (ZMW)',
+    priceHelp: 'What the client pays for the session.',
+    steps: ['Skin analysis / consultation', 'Deep cleanse', 'Exfoliation', 'Extractions', 'Steam',
+      'Chemical peel', 'Mask & serum', 'Facial massage', 'Moisturiser & SPF', 'Home-care plan'],
+    productsPlaceholder: 'e.g. mandelic acid peel 20%, vitamin C serum, brand and strength…',
+  }),
+
+  'haircare': (attrs) => beautyServiceQuote(attrs, {
+    priceLabel: 'Service Price (ZMW)',
+    priceHelp: 'What the client pays for the full service.',
+    steps: ['Wash & blow-dry', 'Deep conditioning / treatment', 'Trim', 'Braiding / cornrows',
+      'Weave or extensions install', 'Wig install & styling', 'Relaxer / texturiser', 'Colour / dye',
+      'Locs maintenance', 'Styling & finish'],
+    productsPlaceholder: 'e.g. brand of extensions (client supplies or you do), treatment used, colour brand…',
+  }),
+
+  'nails': (attrs) => beautyServiceQuote(attrs, {
+    priceLabel: 'Price for the Set (ZMW)',
+    priceHelp: 'What the client pays for the full set.',
+    steps: ['Soak-off / removal of old set', 'Nail prep & cuticle care', 'Gel polish', 'Acrylic extensions',
+      'Gel / builder overlay', 'Tips & shaping', 'Nail art', 'French finish', 'Hand massage'],
+    productsPlaceholder: 'e.g. OPI gel, hard-gel builder, non-acetone soak-off…',
+  }),
+
+  'lashes-brows': (attrs) => beautyServiceQuote(attrs, {
+    priceLabel: 'Service Price (ZMW)',
+    priceHelp: 'What the client pays for the full treatment.',
+    steps: ['Patch test', 'Classic lash extensions', 'Hybrid lash extensions', 'Volume lash extensions',
+      'Lash lift & tint', 'Removal of old set', 'Brow shaping / threading', 'Brow tint', 'Brow lamination', 'Aftercare kit'],
+    productsPlaceholder: 'e.g. mink lashes 0.07mm, sensitive-eye adhesive, henna brow tint…',
+  }),
+
+  'pedicure': (attrs) => beautyServiceQuote(attrs, {
+    priceLabel: 'Service Price (ZMW)',
+    priceHelp: 'What the client pays for the full pedicure.',
+    steps: ['Soak & cleanse', 'Nail cutting & shaping', 'Cuticle care', 'Callus removal', 'Exfoliating scrub',
+      'Foot massage', 'Regular polish', 'Gel polish', 'Paraffin / heel treatment', 'Nail art'],
+    productsPlaceholder: 'e.g. urea heel cream, gel polish, disposable liners per client…',
+  }),
 
   // ── Pastry & Bakery ────────────────────────────────────────────────────
   // Custom Cakes: a firm made-to-order commitment. canMatchDesign only
