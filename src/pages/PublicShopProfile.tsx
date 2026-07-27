@@ -25,12 +25,16 @@ import {
 } from '../services/api/discoverService';
 import { createInquiry } from '../services/api/inquiryService';
 import { savePendingInquiry } from '../services/pendingInquiry';
+import DateTimePicker from '../components/DateTimePicker';
 
 const NAVY = '#1B3068';
 const NAVY_DEEP = '#142550';
 const GOLD = '#c9973a';
 
-const URGENCY_OPTIONS = ['ASAP (Same day)', 'Within 3 days', 'Within a week', 'Flexible / No rush'];
+// Formalized urgency convention shared by every inquiry form on the
+// platform: one immediate option, otherwise the buyer picks an exact
+// day & time on the branded calendar.
+const URGENCY_OPTIONS = ['Immediately', 'On a specific date & time'];
 
 function initials(name: string): string {
   return name
@@ -68,7 +72,8 @@ export default function PublicShopProfile() {
   const [description, setDescription] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [budget, setBudget] = useState('');
-  const [urgency, setUrgency] = useState(URGENCY_OPTIONS[3]);
+  const [urgency, setUrgency] = useState(URGENCY_OPTIONS[0]);
+  const [preferredDateTime, setPreferredDateTime] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -116,6 +121,10 @@ export default function PublicShopProfile() {
       setSubmitError("This shop hasn't finished setting up its categories yet — try another shop.");
       return;
     }
+    if (urgency === 'On a specific date & time' && !preferredDateTime) {
+      setSubmitError('Pick the day and time on the calendar.');
+      return;
+    }
 
     const payload = {
       title: title.trim(),
@@ -130,6 +139,7 @@ export default function PublicShopProfile() {
       attributes: JSON.stringify({
         budget: budget ? Number(budget) : undefined,
         urgency,
+        preferredDateTime: preferredDateTime || undefined,
       }),
       // Direct-to-shop request, not a broadcast — STANDARD is the safe
       // default (EXPRESS implies a faster multi-shop matching flow).
@@ -479,19 +489,36 @@ export default function PublicShopProfile() {
                   </div>
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-[#9ca3af] mb-1">
-                      Urgency
+                      When do you need it?
                     </label>
-                    <select
-                      value={urgency}
-                      onChange={(e) => setUrgency(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-white border border-[#e7e0d5] rounded-xl text-sm outline-none focus:border-[#c9973a]"
-                    >
+                    <div className="flex flex-wrap gap-2">
                       {URGENCY_OPTIONS.map((opt) => (
-                        <option key={opt} value={opt}>
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => {
+                            setUrgency(opt);
+                            if (opt === URGENCY_OPTIONS[0]) setPreferredDateTime('');
+                          }}
+                          className={`px-3.5 py-2 rounded-full text-[13px] font-medium border transition-colors ${
+                            urgency === opt
+                              ? 'bg-[#c9973a] border-[#c9973a] text-white'
+                              : 'bg-white border-[#e7e0d5] text-[#1B3068] hover:border-[#c9973a]'
+                          }`}
+                        >
                           {opt}
-                        </option>
+                        </button>
                       ))}
-                    </select>
+                    </div>
+                    {urgency === URGENCY_OPTIONS[1] && (
+                      <div className="mt-2.5">
+                        <DateTimePicker
+                          mode="datetime"
+                          value={preferredDateTime}
+                          onChange={setPreferredDateTime}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {submitError && <p className="text-[12px] text-rose-600 font-medium">{submitError}</p>}

@@ -12,8 +12,8 @@ export const ispSchema: FieldSchema[] = [
   { name: "currentIssue", label: "Current Issue / Reason for Inquiry", type: "select", required: false, options: ["No Internet Currently", "Too Slow", "Too Expensive", "Unreliable Connection", "New Property / Installation", "Upgrading Plan", "Other"], group: "Current Situation" },
   { name: "contractPreference", label: "Contract Preference", type: "select", required: false, options: ["Month to Month", "6 Month Contract", "12 Month Contract", "24 Month Contract", "No Preference"], group: "Budget and Preferences" },
   { name: "budget_limit", label: "Monthly Budget (ZMW)", type: "currency", required: false, group: "Budget and Preferences" },
-  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Preferences" },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Preferences", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
+  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "On a specific date & time"], group: "Budget and Preferences" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Preferences", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Building type, floor level, any specific requirements...", group: "Budget and Preferences" }
 ];
 
@@ -26,8 +26,8 @@ export const mobileNetworkServicesSchema: FieldSchema[] = [
   { name: "businessUse", label: "For Business Use?", type: "toggle", required: false, helpText: "Toggle if this is for a business or organisation", group: "Service Details" },
   { name: "companyName", label: "Company / Organisation Name", type: "text", required: false, placeholder: "e.g. ABC Company Ltd", group: "Service Details" },
   { name: "budget_limit", label: "Monthly Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
-  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
+  { name: "urgency", label: "When Do You Need It?", type: "select", required: true, options: ["Immediately", "On a specific date & time"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Number portability needed, specific features required, coverage area concerns...", group: "Budget and Urgency" }
 ];
 
@@ -42,8 +42,8 @@ export const satelliteVsatInstallationSchema: FieldSchema[] = [
   { name: "roofType", label: "Roof / Mounting Type", type: "select", required: false, options: ["Tiled Roof", "Iron Sheet Roof", "Concrete / Flat Roof", "Wall Mount", "Ground Mount / Pole", "Not Sure"], group: "Technical Details" },
   { name: "powerAvailable", label: "Reliable Power Available?", type: "toggle", required: false, helpText: "Toggle if site has reliable electricity. If not, solar options may be discussed", group: "Technical Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
-  { name: "urgency", label: "When Do You Need Installation?", type: "select", required: true, options: ["Immediately", "Within a week", "Within a month", "Planning Ahead"], group: "Budget and Urgency" },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["Within a week", "Within a month", "Planning Ahead"] } },
+  { name: "urgency", label: "When Do You Need Installation?", type: "select", required: true, options: ["Immediately", "On a specific date & time"], group: "Budget and Urgency" },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "GPS coordinates if remote, access road details, power situation...", group: "Budget and Urgency" }
 ];
 
