@@ -12,7 +12,7 @@ import { lightingLampsSchema, wallArtMirrorsSchema, rugsCarpetsSchema, curtainsB
 import { softwareWebDevSchema, networkingSecuritySchema, itSupportMaintenanceSchema } from './schemas/itServices';
 import { ispSchema, mobileNetworkServicesSchema, satelliteVsatInstallationSchema } from './schemas/telecommunications';
 import { boreholeDrillingSchema, miningExplorationSchema, geotechnicalDrillingSchema } from './schemas/drillingServices';
-import { hospitalLabsSchema, pharmaciesSchema } from './schemas/clinicalServices';
+import { homeCareSchema, hospitalLabsSchema, pharmaciesSchema } from './schemas/clinicalServices';
 import { longTermRentalsSchema, shortStayServicedSchema, boardingStudentSchema } from './schemas/apartments';
 import { businessComputersSchema, serversStorageSchema, networkingHardwareSchema, softwareLicensesSchema, printersOfficeEquipmentSchema } from './schemas/itProducts';
 import { poultryFarmingSchema, aquacultureSchema, cropProductionSchema, livestockVeterinarySchema, irrigationHardwareSchema, agroTechServicesSchema } from './schemas/agriculture';
@@ -268,6 +268,7 @@ const BASE_CATEGORIES_DB: Category[] = [
   // request content — see schemas/clinicalServices.ts)
   { id: 'hospital-labs', name: 'Hospital Labs', parentId: 'clinical-services', formSchema: hospitalLabsSchema },
   { id: 'pharmacies', name: 'Pharmacies', parentId: 'clinical-services', formSchema: pharmaciesSchema },
+  { id: 'home-care', name: 'Home Care', parentId: 'clinical-services', formSchema: homeCareSchema },
 
   // Subcategories - Locksmith & Key Services (locksmiths fulfil buyer key/lock
   // requests; the buyer's photo of the key/lock/vehicle helps identify the

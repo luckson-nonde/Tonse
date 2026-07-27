@@ -154,8 +154,10 @@ export default function DynamicInquiryForm({
       // Sensitive documents (payslip, bank statement, NRC, licence, collateral,
       // title deed, white book, proof) upload to the encrypted, auth-gated
       // `kyc` category; ordinary reference photos stay public under `inquiries`.
+      // `medical` covers Home Care's medicalAttachments (health PII —
+      // hospital reports, wound photos, discharge summaries).
       const isSensitiveDoc =
-        /payslip|bank|nrc|licen[cs]e|deed|collateral|white.?book|proof|statement|introduction|kyc/i.test(name);
+        /payslip|bank|nrc|licen[cs]e|deed|collateral|white.?book|proof|statement|introduction|kyc|medical/i.test(name);
       const uploadCategory = isSensitiveDoc ? 'kyc' : 'inquiries';
 
       // Accept images always; PDFs only where the field opts in. Mirrors the

@@ -1106,6 +1106,17 @@ export const ARCHETYPE_CONFIG: Record<string, ArchetypeConfig> = {
       "leadTime"
     ]
   },
+  "home-care": {
+    "categoryName": "Home Care",
+    "archetype": "SERVICE",
+    "quoteMapping": {
+      "quantity": "unitPrice",
+      "duration": "rate"
+    },
+    "requiredAdditions": [
+      "availabilityDate"
+    ]
+  },
   "key-replacement": {
     "categoryName": "Key Replacement",
     "archetype": "SERVICE",

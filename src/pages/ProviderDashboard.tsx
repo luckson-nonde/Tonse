@@ -230,6 +230,7 @@ export default function ProviderDashboard() {
           'leads',
           'my-quotes',
           'paid-orders',
+          'my-clients',
           'schedule',
           'products',
           'team',
@@ -1273,6 +1274,15 @@ export default function ProviderDashboard() {
           schema={currentSchema}
           view="archived-leads"
           data={{}}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'my-clients' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="my-clients"
+          data={{ myClientsProps: { user } }}
           onAction={handleAction}
           onNavigate={handleTabClick}
           user={user}

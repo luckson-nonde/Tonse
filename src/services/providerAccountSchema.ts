@@ -45,11 +45,20 @@ export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       businessTypes: ['EVENTS'],
       categoryFilter: ['event venues'],
     },
-    { 
-      id: 'paid-orders', 
-      label: (role) => (role === 'ENTERTAINMENT' || role === 'EVENTS') ? 'Paid Bookings' : 'Paid Orders', 
-      icon: 'Truck', 
-      permissions: [PERMISSIONS.VIEW_ANALYTICS] 
+    {
+      id: 'paid-orders',
+      label: (role) => (role === 'ENTERTAINMENT' || role === 'EVENTS') ? 'Paid Bookings' : 'Paid Orders',
+      icon: 'Truck',
+      permissions: [PERMISSIONS.VIEW_ANALYTICS]
+    },
+    {
+      id: 'my-clients',
+      label: 'My Clients',
+      icon: 'HeartPulse',
+      permissions: [PERMISSIONS.MANAGE_QUOTES],
+      // Home Care caregivers only (categoryFilter matches the 'home-care' id
+      // after dash→space normalisation) — same gating pattern as venue-spaces.
+      categoryFilter: ['home care'],
     },
     {
       id: 'collection',
@@ -158,6 +167,11 @@ export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       title: "Venue Spaces",
       subtitle: "Manage your venue's available spaces",
       componentType: 'venue_spaces_renderer'
+    },
+    'my-clients': {
+      title: "My Clients",
+      subtitle: "Care plans, visit schedules and duties for your home-care clients",
+      componentType: 'home_care_clients'
     },
     financial: {
       title: "Financial Account",

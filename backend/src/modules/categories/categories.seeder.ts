@@ -231,3 +231,5 @@ export class CategoriesSeederService implements OnModuleInit {
 // catalog.json regenerated: +pastry-bakery (custom-cakes, bread-pastries)
 
 // catalog.json regenerated: +locksmith-key-services (key-replacement)
+
+// catalog.json regenerated 2026-07-26: +home-care under clinical-services

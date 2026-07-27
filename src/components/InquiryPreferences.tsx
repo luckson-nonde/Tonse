@@ -489,6 +489,30 @@ const PREFERENCES_OVERRIDES: Record<
       ],
     },
   },
+  'home-care': {
+    section1: {
+      title: 'Target Caregivers',
+      description: 'Who should provide this care?',
+      icon: Navigation,
+      options: [
+        { id: 'nurses',   label: 'Registered Nurses',      icon: ShieldCheck },
+        { id: 'doctors',  label: 'Doctors',                icon: User        },
+        { id: 'agencies', label: 'Care Agencies',          icon: Building2   },
+        { id: 'any',      label: 'Any Qualified Provider', icon: Users       },
+      ],
+    },
+    section2: {
+      title: 'What Matters Most',
+      description: "What's your top priority for this care?",
+      icon: Settings,
+      options: [
+        { id: 'qualifications', label: 'Qualifications & Experience' },
+        { id: 'price',          label: 'Lowest Price'                },
+        { id: 'availability',   label: 'Soonest Available'           },
+        { id: 'distance',       label: 'Nearest To Me'               },
+      ],
+    },
+  },
   'hospital-labs': {
     section1: {
       title: 'Target Labs',

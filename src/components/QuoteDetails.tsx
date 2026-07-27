@@ -328,7 +328,15 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
             {quote.price.toLocaleString()}
             {(() => {
               const dynamicFields = robustParse(quote.dynamicFields);
-              const unit = dynamicFields.rateUnit || quote.rateUnit;
+              // Home Care quotes price per visit or per month (paymentTerms)
+              // — suffix the amount so "K350" reads as "K350 / visit".
+              const homeCareUnit = {
+                'Monthly plan': 'month',
+                'Per month': 'month',
+                'Per week': 'week',
+                'Per visit': 'visit',
+              }[dynamicFields.paymentTerms as string];
+              const unit = dynamicFields.rateUnit || quote.rateUnit || homeCareUnit;
               if (unit)
                 return (
                   <span className="text-sm font-bold text-slate-400 ml-1">
@@ -487,6 +495,43 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
                   icon: Truck,
                   color: 'text-slate-500',
                   bg: 'bg-slate-50',
+                });
+              }
+
+              // Home Care payment agreement — accepting the quote is the
+              // client's agreement to these terms, so they must be visible.
+              if (dynamicFields.paymentTerms) {
+                const visitsSuffix = dynamicFields.visitsPerMonth
+                  ? ` · ${dynamicFields.visitsPerMonth} visits/month`
+                  : dynamicFields.visitsPerWeek
+                    ? ` · ${dynamicFields.visitsPerWeek} visits/week`
+                    : '';
+                details.push({
+                  label: 'Payment Terms',
+                  value: `${dynamicFields.paymentTerms}${visitsSuffix}`,
+                  icon: DollarSign,
+                  color: 'text-emerald-500',
+                  bg: 'bg-emerald-50',
+                });
+              }
+
+              if (dynamicFields.paymentMethod) {
+                details.push({
+                  label: 'Payment Method',
+                  value: dynamicFields.paymentMethod,
+                  icon: DollarSign,
+                  color: 'text-teal-500',
+                  bg: 'bg-teal-50',
+                });
+              }
+
+              if (dynamicFields.proposedSchedule) {
+                details.push({
+                  label: 'Proposed Schedule',
+                  value: dynamicFields.proposedSchedule,
+                  icon: Calendar,
+                  color: 'text-indigo-500',
+                  bg: 'bg-indigo-50',
                 });
               }
 

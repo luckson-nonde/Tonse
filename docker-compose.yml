@@ -11,9 +11,11 @@
 services:
   postgres:
     # 15-alpine and 16-alpine are interchangeable for this app (TypeORM
-    # synchronize + standard SQL). 16-alpine is pinned because it is commonly
-    # already cached; switch to 15-alpine if you need to match production.
-    image: postgres:16-alpine
+    # synchronize + standard SQL). 15-alpine is pinned because the existing
+    # local data volume (postgres_data) was initialized by Postgres 15 —
+    # 16-alpine refuses to start on it ("database files are incompatible").
+    # If you ever start from a FRESH volume, either version works.
+    image: postgres:15-alpine
     container_name: tonse_postgres
     environment:
       POSTGRES_USER: tonse_user

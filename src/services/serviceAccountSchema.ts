@@ -25,6 +25,16 @@ export const MASTER_SERVICE_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'archived-leads', label: 'Archived Leads', icon: 'Archive', permissions: [PERMISSIONS.MANAGE_QUOTES] },
     { id: 'products', label: 'Service Catalog', icon: 'Briefcase', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     { id: 'paid-orders', label: 'Active Engagements', icon: 'TrendingUp', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
+    {
+      id: 'my-clients',
+      label: 'My Clients',
+      icon: 'HeartPulse',
+      permissions: [PERMISSIONS.MANAGE_QUOTES],
+      // Home Care caregivers only — care plans, visit schedule, client duties.
+      // Matches the id 'home-care' after the dash→space normalisation in
+      // DashboardLayout's categoryFilter matcher.
+      categoryFilter: ['home care'],
+    },
     { id: 'team', label: 'Team Management', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
     { id: 'audit-trail', label: 'Audit Trail', icon: 'History', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
@@ -66,6 +76,11 @@ export const MASTER_SERVICE_ACCOUNT_SCHEMA: MasterAccountSchema = {
       subtitle: 'Paid engagements in delivery',
       componentType: 'provider_orders',
       dataKey: 'paidOrders',
+    },
+    'my-clients': {
+      title: 'My Clients',
+      subtitle: 'Care plans, visit schedules and duties for your home-care clients',
+      componentType: 'home_care_clients',
     },
     team: {
       title: 'Team Management',

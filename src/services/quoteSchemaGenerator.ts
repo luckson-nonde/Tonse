@@ -666,6 +666,63 @@ const QUOTE_SCHEMA_BY_CATEGORY_ID: Record<
       placeholder: 'Fasting requirements, accreditation, how results are shared…', group: 'Notes & Photos' },
   ],
 
+  // Home Care: a nurse/doctor prices an ongoing care engagement. The buyer's
+  // preferred arrangement (attrs.paymentModel from homeCareSchema) shapes the
+  // rate field; `price` stays the single amount the existing accept→pay flow
+  // charges (one visit, or the first month of the plan). paymentTerms +
+  // visitsPerMonth land in quote.dynamicFields and seed the provider's care
+  // plan in the My Clients view.
+  'home-care': (attrs) => {
+    const model = String(attrs?.paymentModel ?? '').toLowerCase();
+    const monthly = model.includes('month');
+    const weekly = !monthly && model.includes('week');
+    return [
+      { name: 'price',
+        label: monthly ? 'Rate Per Month (ZMW)' : weekly ? 'Rate Per Week (ZMW)' : 'Rate Per Visit (ZMW)',
+        type: 'currency', required: true, calculation: 'total',
+        helpText: monthly
+          ? 'What the client pays per month for the plan below.'
+          : weekly
+            ? 'What the client pays per week for the plan below.'
+            : 'What the client pays for each visit.',
+        group: 'Pricing' },
+      { name: 'paymentTerms', label: 'Payment Arrangement', type: 'select', required: true,
+        options: ['Per visit', 'Per week', 'Per month'],
+        helpText: attrs?.paymentModel ? `The client asked for: ${attrs.paymentModel}.` : undefined,
+        group: 'Pricing' },
+      { name: 'paymentMethod', label: 'How Should the Client Pay?', type: 'select', required: true,
+        options: ['MTN Mobile Money', 'Airtel Money', 'Zamtel Kwacha', 'Cash after each visit', 'Bank transfer'],
+        helpText: 'The payment method you accept — the client agrees to it when accepting this quote.',
+        group: 'Pricing' },
+      ...(weekly
+        ? [{ name: 'visitsPerWeek', label: 'Visits Included Per Week', type: 'number',
+            required: true, placeholder: 'e.g. 3',
+            helpText: 'How many visits the weekly rate covers.',
+            group: 'Pricing' } as QuoteField]
+        : []),
+      ...(monthly
+        ? [{ name: 'visitsPerMonth', label: 'Visits Included Per Month', type: 'number',
+            required: true, placeholder: 'e.g. 12',
+            helpText: 'How many visits the monthly rate covers.',
+            group: 'Pricing' } as QuoteField]
+        : []),
+      { name: 'availabilityDate', label: 'Earliest Start Date', type: 'date', required: true,
+        group: 'Logistics & Timing' },
+      { name: 'proposedSchedule', label: 'Proposed Visit Schedule', type: 'textarea', required: false,
+        placeholder: 'e.g. Mon / Wed / Fri mornings, 08:00–10:00', group: 'Logistics & Timing' },
+      { name: 'expiryDuration', label: 'Quote Valid For', type: 'select', required: true,
+        options: VALIDITY_OPTIONS, group: 'Logistics & Timing' },
+      { name: 'qualifications', label: 'Qualifications & Experience', type: 'textarea', required: true,
+        placeholder: 'e.g. Registered Nurse (NMCZ), 6 years — post-surgery and elderly home care',
+        group: 'Notes & Photos' },
+      { name: 'whatIsIncluded', label: "What's Included in the Care", type: 'textarea', required: false,
+        placeholder: 'Vitals monitoring, wound dressing, medication administration, physio…',
+        group: 'Notes & Photos' },
+      { name: 'message', label: 'Additional Notes', type: 'textarea', required: false,
+        placeholder: 'Travel range, night availability, equipment you bring…', group: 'Notes & Photos' },
+    ];
+  },
+
   // ── Pastry & Bakery ────────────────────────────────────────────────────
   // Custom Cakes: a firm made-to-order commitment. canMatchDesign only
   // renders when the buyer actually attached a reference photo — otherwise

@@ -60,6 +60,7 @@ export interface ViewDefinition {
     | 'collection_renderer'
     | 'audit_trail_renderer'
     | 'venue_spaces_renderer'
+    | 'home_care_clients'
     | 'financial_renderer'
     | 'venture_account_renderer'
     | 'active_transactions_renderer'

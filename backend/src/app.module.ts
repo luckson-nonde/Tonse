@@ -35,6 +35,7 @@ import { SiteSettingsModule } from './modules/site-settings/site-settings.module
 import { ConsentsModule } from './modules/consents/consents.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
 import { VentureModule } from './modules/venture/venture.module';
+import { CarePlansModule } from './modules/care-plans/care-plans.module';
 
 // Common
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -109,6 +110,7 @@ import webpushConfig from './config/webpush.config';
     ConsentsModule,
     LedgerModule,
     VentureModule,
+    CarePlansModule,
     // The IdempotencyInterceptor (an APP_INTERCEPTOR below) needs this repo.
     TypeOrmModule.forFeature([IdempotencyKey]),
   ],

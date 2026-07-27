@@ -49,6 +49,7 @@ import ProviderProductsView from './provider/ProviderProductsView';
 import ProviderScheduleView from './provider/ProviderScheduleView';
 import ProviderTeamView from './provider/ProviderTeamView';
 import VenueManagementView from './provider/VenueManagementView';
+import HomeCareClientsView from './provider/HomeCareClientsView';
 import CollectionPage from '../pages/CollectionPage';
 import { LoanRequestsView, LoanOffersView } from './loan/LoanViews';
 import { LoanHomeView } from './loan/LoanHomeView';
@@ -716,6 +717,8 @@ export default function DynamicAccountRenderer({
         return <ProviderTeamView {...data?.teamProps} />;
       case 'venue_spaces_renderer':
         return <VenueManagementView />;
+      case 'home_care_clients':
+        return <HomeCareClientsView {...data?.myClientsProps} />;
       case 'provider_collection':
         return <CollectionPage />;
       case 'loan_home':

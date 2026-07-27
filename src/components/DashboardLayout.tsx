@@ -33,6 +33,7 @@ import {
   Wallet,
   Landmark,
   Heart,
+  HeartPulse,
   LogOut,
   Flag,
   Camera,
@@ -272,6 +273,7 @@ const iconMap: Record<string, any> = {
   Wallet,
   Landmark,
   Flag,
+  HeartPulse,
 };
 
 interface DashboardLayoutProps {
