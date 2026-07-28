@@ -426,7 +426,7 @@ export default function QuoteSubmissionForm({
               />
             </div>
             {(formData as any).venueSpaceId && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {(['damageDeposit', 'cleaningFee'] as Array<'damageDeposit' | 'cleaningFee'>).map((fname) => (
                   <div key={fname}>
                     <label className={labelClass}>{fname === 'damageDeposit' ? 'Damage Deposit' : 'Cleaning Fee'} (ZMW)</label>

@@ -95,7 +95,7 @@ export default function ReportUserModal({
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
                 What went wrong?
               </p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {REPORT_CATEGORIES.map((c) => (
                   <button
                     key={c.value}

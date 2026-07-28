@@ -484,7 +484,7 @@ export default function BuyerProfilePage() {
       {/* Edit Profile Modal */}
       <AnimatePresence>
         {isEditModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -494,12 +494,12 @@ export default function BuyerProfilePage() {
             />
 
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-96 max-h-screen bg-white rounded-4xl shadow-2xl overflow-hidden flex flex-col border border-white/20"
+              initial={{ opacity: 0, y: '100%' }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: '100%' }}
+              className="relative w-full max-w-lg sm:max-w-2xl lg:max-w-4xl xl:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-white rounded-t-4xl sm:rounded-4xl shadow-2xl overflow-hidden flex flex-col border border-white/20"
             >
-              <div className="p-8 pb-4 border-b border-[#f1f5f9] flex items-center justify-between shrink-0">
+              <div className="p-5 sm:p-8 pb-4 sm:pb-4 border-b border-[#f1f5f9] flex items-center justify-between shrink-0">
                 <div>
                   <h2 className="text-xl font-serif font-bold text-brand-dark">Refine Profile</h2>
                   <p className="text-[12px] text-[#64748b]">
@@ -514,7 +514,7 @@ export default function BuyerProfilePage() {
                 </button>
               </div>
 
-              <div className="p-8 overflow-y-auto flex-1 custom-scrollbar">
+              <div className="p-5 sm:p-8 overflow-y-auto flex-1 custom-scrollbar">
                 <DynamicProfileForm
                   schema={{ sections: schema.sections.filter((s) => s.type === 'fields') }}
                   initialData={user ? {
@@ -532,11 +532,11 @@ export default function BuyerProfilePage() {
                 />
               </div>
 
-              <div className="p-8 pt-4 border-t border-[#f1f5f9] flex items-center justify-end gap-4 shrink-0 bg-[#fdfaf6]/50">
+              <div className="p-5 sm:p-8 pt-4 sm:pt-4 border-t border-[#f1f5f9] flex items-center justify-end gap-3 sm:gap-4 shrink-0 bg-[#fdfaf6]/50 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-8">
                 <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
-                  className="px-8 py-3 text-[#64748b] rounded-full text-[14px] font-sans font-medium hover:bg-white transition-colors"
+                  className="px-6 sm:px-8 py-3 text-[#64748b] rounded-full text-[14px] font-sans font-medium hover:bg-white transition-colors"
                 >
                   Discard
                 </button>
@@ -544,7 +544,7 @@ export default function BuyerProfilePage() {
                   type="submit"
                   form="dynamic-profile-form"
                   disabled={isSaving}
-                  className="px-10 py-3 bg-[#C9973A] text-white rounded-full text-[14px] font-sans font-bold hover:bg-[#a37d35] transition-all shadow-lg shadow-[#C9973A]/20 disabled:opacity-50 flex items-center gap-2"
+                  className="px-7 sm:px-10 py-3 bg-[#C9973A] text-white rounded-full text-[14px] font-sans font-bold hover:bg-[#a37d35] transition-all shadow-lg shadow-[#C9973A]/20 disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
                 >
                   {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                   {isSaving ? 'Saving Changes...' : 'Save Changes'}

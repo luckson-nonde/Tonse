@@ -246,11 +246,14 @@ export default function DynamicProfileForm({
                 );
               case 'image_upload':
                 return (
-                  <div className="space-y-2">
+                  // Capped: the field spans every column, so without a max
+                  // width the preview stretches into a thin band on wide
+                  // screens.
+                  <div className="space-y-2 max-w-md">
                     <div className="relative group">
                       <div
                         onClick={() => document.getElementById(`file-input-${field.name}`)?.click()}
-                        className="w-full h-32 rounded-2xl bg-[#fffef9] border-2 border-dashed border-[#e8e0d0] flex flex-col items-center justify-center overflow-hidden transition-all group-hover:border-[#C9973A]/30 cursor-pointer"
+                        className="w-full h-32 sm:h-40 rounded-2xl bg-[#fffef9] border-2 border-dashed border-[#e8e0d0] flex flex-col items-center justify-center overflow-hidden transition-all group-hover:border-[#C9973A]/30 cursor-pointer"
                       >
                         {value && typeof value === 'string' ? (
                           <img
@@ -412,22 +415,26 @@ export default function DynamicProfileForm({
         return (
           <div
             key={sIdx}
-            className="space-y-6 p-6 rounded-3xl border border-[#e8e0d0]/50 bg-[#fcfcfc]/50"
+            className="space-y-6 p-4 sm:p-6 rounded-3xl border border-[#e8e0d0] bg-[#fcfcfc]"
           >
             <div className="flex items-center gap-3 pl-3 border-l-[3px] border-[#C9973A]">
               <h3 className="text-lg font-serif font-bold text-brand-dark">
                 {section.sectionHeader || section.title}
               </h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+            {/* Fields flow into as many columns as the container can afford:
+                1 on phones, 2 from md, 3 on xl. Full-bleed field types use
+                col-span-full so they stay correct at every column count. */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 lg:gap-x-8 gap-y-6">
               {section.fields?.map((field, fIdx) => {
                 if (!field) return null;
                 const fieldName = (field as any).name || (field as any).id;
+                const isWide =
+                  field?.type === 'gps' ||
+                  field?.type === 'image_upload' ||
+                  field?.type === 'multiselect';
                 return (
-                  <div
-                    key={fieldName || fIdx}
-                    className={`${field?.type === 'gps' || field?.type === 'image_upload' ? 'md:col-span-2' : ''}`}
-                  >
+                  <div key={fieldName || fIdx} className={isWide ? 'col-span-full' : ''}>
                     {renderField(field)}
                   </div>
                 );

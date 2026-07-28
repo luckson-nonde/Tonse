@@ -203,7 +203,7 @@ export default function ScheduleEventModal({
 
           <div className="space-y-3">
             <label className={labelClasses}>Time range</label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <span className="text-[10px] text-slate-400">Start</span>
                 <input
@@ -236,7 +236,7 @@ export default function ScheduleEventModal({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className={labelClasses}>Category</label>
               <select
@@ -267,7 +267,7 @@ export default function ScheduleEventModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className={labelClasses}>Color</label>
               <div className="flex gap-2.5 flex-wrap">
