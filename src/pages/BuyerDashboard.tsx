@@ -442,6 +442,14 @@ export default function BuyerDashboard() {
   }, [inquiries, quotes, orders, selectedInquiryId, selectedQuoteId, selectedOrderId, balance, escrowBalance, autoPayQuoteId, transactionHistoryInitialTab]);
 
   const handleTabChange = (tab: string, id?: string) => {
+    // The schedule/calendar page is a real route shared by every role, not
+    // a /buyer/:tab view. DashboardLayout's own handleTabClick special-case
+    // never runs for buyers (it defers to this handler first), so the
+    // redirect has to live here too.
+    if (tab === 'schedule') {
+      navigate('/schedule');
+      return;
+    }
     setActiveTab(tab);
     // 'inquiries' with no id means "show the list" — clear any stale
     // selection so the inquiry_details view (derived from activeTab +

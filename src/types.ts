@@ -265,19 +265,44 @@ export interface Shop {
   isSaved?: boolean;
 }
 
+// Personal calendar entry (generic scheduling module). Mirrors
+// backend/src/modules/calendar-events/entities/calendar-event.entity.ts —
+// uuid string ids (the old numeric ids were a dead Dexie leftover).
+export type CalendarEventCategory =
+  | 'MEETING'
+  | 'REMINDER'
+  | 'APPOINTMENT'
+  | 'EVENT'
+  | 'PERSONAL'
+  | 'PARCEL_COLLECTION'
+  | 'MAKE_PAYMENT'
+  | 'OTHER';
+
+export type CalendarEventColor = 'blue' | 'green' | 'orange' | 'purple' | 'red' | 'yellow';
+
+export type CalendarEventRepeatRule = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+
+export type CalendarEventStatus = 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+
 export interface CalendarEvent {
-  id?: number;
-  userId: number;
+  id: string;
+  userId: string;
   title: string;
-  note: string;
-  date: string; // YYYY-MM-DD
-  startTime: string; // HH:mm
-  endTime: string; // HH:mm
-  category: 'WORK' | 'PERSONAL' | 'HEALTH' | 'OTHER';
-  reminderEnabled: boolean;
-  status: 'PENDING' | 'ACTIVE' | 'COMPLETED';
-  color?: string;
-  createdAt: number;
+  description?: string | null;
+  date: string; // YYYY-MM-DD (base date; recurrence expands client-side)
+  startTime?: string | null; // HH:mm, null = all-day
+  endTime?: string | null; // HH:mm
+  location?: string | null;
+  category: CalendarEventCategory;
+  /** User-picked swatch; null/undefined = derive from category. */
+  color?: CalendarEventColor | null;
+  repeatRule: CalendarEventRepeatRule;
+  /** Minutes before startTime; null = no reminder (stored only for now). */
+  reminderOffsetMinutes?: number | null;
+  status: CalendarEventStatus;
+  metadata?: Record<string, any> | null;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface VenueSpace {

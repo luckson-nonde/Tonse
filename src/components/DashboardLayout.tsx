@@ -59,8 +59,15 @@ import {
 import { useAuth } from '../AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import React, { useState, useMemo, useEffect } from 'react';
+import { parseISO } from 'date-fns';
 import { useUserInquiries, useMatchedLeads } from '../hooks/useInquiries';
 import { useUserQuotes } from '../hooks/useQuotes';
+import { useCalendarEvents } from '../hooks/useCalendarEvents';
+import {
+  getSelectedScheduleDate,
+  selectScheduleDate,
+  subscribeToScheduleDate,
+} from '../services/scheduleSelection';
 import { useFavoriteShops } from '../hooks/useFavoriteShops';
 import { isActiveInquiry, isActiveQuote, isActiveBuyerQuote } from '../services/lifecycleFilters';
 import {
@@ -101,6 +108,7 @@ function businessTypeToCalendarTone(type: BusinessType): CalendarTone {
 // Calendar panel shown in right sidebar on dashboard/home tabs
 const CalendarPanel = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   // Inquiry-source split is role-shaped, not ownership-shaped:
   //   - BUYERS authored their inquiries — own them, see them on the
   //     calendar.
@@ -134,6 +142,20 @@ const CalendarPanel = () => {
   );
   const inquiries = isBuyer ? ownInquiries : matchedInquiries;
   const { quotes } = useUserQuotes(user?.id);
+
+  // Personal calendar entries (the generic scheduling module) — surfaced as
+  // dots on the rail calendar so a created schedule is visible at a glance.
+  const { events: manualCalendarEvents } = useCalendarEvents({}, !!user?.id);
+
+  // The schedule is deliberately NOT a permanent dashboard feature —
+  // clicking a date records it on the tonse:schedule-date-selected bus and
+  // opens the independent /schedule page, which initializes on that day.
+  const [selectedDate, setSelectedDate] = useState<Date>(() => getSelectedScheduleDate());
+  useEffect(() => subscribeToScheduleDate(setSelectedDate), []);
+  const handleDateSelect = (date: Date) => {
+    selectScheduleDate(date);
+    navigate('/schedule');
+  };
 
   const tone = useMemo<CalendarTone>(
     () => businessTypeToCalendarTone(getEffectiveBusinessType(user as any, calendarActiveContext)),
@@ -190,8 +212,22 @@ const CalendarPanel = () => {
       });
     }
 
+    // User-created schedule entries — dots on their (base) day. Recurrence
+    // occurrences aren't expanded here (dot = base date); the timeline card
+    // and /schedule page do the full expansion.
+    if (manualCalendarEvents) {
+      manualCalendarEvents.forEach((ev) => {
+        evts.push({
+          date: parseISO(ev.date),
+          title: ev.title,
+          type: 'meeting',
+          color: 'blue',
+        });
+      });
+    }
+
     return evts;
-  }, [inquiries, quotes, isBuyer]);
+  }, [inquiries, quotes, isBuyer, manualCalendarEvents]);
 
   // Per-tone carousel counters that literally mirror the headline tiles
   // shown on the dashboard body. Each tone derives its values from the
@@ -246,7 +282,15 @@ const CalendarPanel = () => {
     return undefined;
   }, [tone, events, inquiries, quotes]);
 
-  return <DashboardCalendar events={events} tone={tone} counters={counters} />;
+  return (
+    <DashboardCalendar
+      events={events}
+      tone={tone}
+      counters={counters}
+      selectedDate={selectedDate}
+      onDateSelect={handleDateSelect}
+    />
+  );
 };
 
 // Map icon names to components

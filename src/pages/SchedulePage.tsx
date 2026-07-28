@@ -30,12 +30,9 @@ import {
   Sparkles,
   Coins,
 } from 'lucide-react';
-import { useLiveQuery } from '../hooks/useLiveQuery';
-import { db } from '../services/api/database';
 import { useAuth } from '../AuthContext';
 import { useDashboard } from '../DashboardContext';
 import { CalendarEvent } from '../types';
-import Button from '../components/Button';
 import {
   fetchBuyerOrders,
   fetchSellerOrders,
@@ -45,36 +42,23 @@ import {
   deriveGigEventsFromOrders,
   type DerivedGigEvent,
 } from '../services/derivedGigEvents';
-
-const MANUAL_CATEGORIES = [
-  { id: 'WORK',     label: 'Work',     dot: '#3399C9' },
-  { id: 'PERSONAL', label: 'Personal', dot: '#8E6FD8' },
-  { id: 'HEALTH',   label: 'Health',   dot: '#3FA98B' },
-  { id: 'OTHER',    label: 'Other',    dot: '#64748B' },
-];
-
-interface MergedEvent {
-  key: string;
-  date: string;            // yyyy-MM-dd
-  startTime: string;
-  endTime: string;
-  title: string;
-  note?: string;
-  /** Discriminator: 'gig' is read-only / system-derived; 'manual' is
-   *  user-added via the FAB. */
-  kind: 'gig' | 'manual';
-  status: string;
-  /** Gig-only metadata; undefined for manual events. */
-  gig?: DerivedGigEvent;
-  /** Manual-only metadata. */
-  manual?: CalendarEvent;
-}
+import { useCalendarEvents, notifyCalendarEventsChanged } from '../hooks/useCalendarEvents';
+import {
+  deleteCalendarEvent,
+  updateCalendarEvent,
+} from '../services/api/calendarEventService';
+import { expandOccurrenceDates, type MergedEvent } from '../hooks/useMergedScheduleEvents';
+import { CATEGORY_LABELS, COLOR_META, eventColor } from '../services/scheduleMeta';
+import { getSelectedScheduleDate } from '../services/scheduleSelection';
+import ScheduleEventModal from '../components/schedule/ScheduleEventModal';
 
 export default function SchedulePage() {
   const { user } = useAuth();
   const { setActiveTab } = useDashboard();
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  // Land on whichever day the dashboard rail last selected — coming here
+  // from a calendar click keeps the context instead of resetting to today.
+  const [currentMonth, setCurrentMonth] = useState(() => getSelectedScheduleDate());
+  const [selectedDate, setSelectedDate] = useState(() => getSelectedScheduleDate());
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
@@ -83,15 +67,9 @@ export default function SchedulePage() {
     setActiveTab('schedule');
   }, [setActiveTab]);
 
-  // Manual notes (Dexie/IndexedDB) — buyer/provider personal reminders.
-  const manualEvents = useLiveQuery(
-    () =>
-      db.calendarEvents
-        .where('userId')
-        .equals(user?.id || 0)
-        .toArray(),
-    [user?.id],
-  );
+  // Personal schedule entries from the real /calendar-events backend
+  // (replaces the dead Dexie-shim path that silently 404'd forever).
+  const { events: manualEvents } = useCalendarEvents({}, !!user?.id);
 
   // Derived gig events from paid orders. We pull from BOTH perspectives so
   // a user who is sometimes the buyer and sometimes the seller (the
@@ -128,20 +106,32 @@ export default function SchedulePage() {
     });
   }, [orders, user?.id]);
 
+  // The padded month-grid window (Mon-start weeks) — recurrence expands
+  // over exactly what the grid can show, so repeating entries appear on
+  // every applicable day, not just their base date.
+  const gridRange = useMemo(() => {
+    const monthStart = startOfMonth(currentMonth);
+    return {
+      start: startOfWeek(monthStart, { weekStartsOn: 1 }),
+      end: endOfWeek(endOfMonth(monthStart), { weekStartsOn: 1 }),
+    };
+  }, [currentMonth]);
+
   const allEvents = useMemo<MergedEvent[]>(() => {
     const out: MergedEvent[] = [];
-    if (manualEvents) {
-      for (const e of manualEvents) {
+    for (const e of manualEvents) {
+      for (const date of expandOccurrenceDates(e, gridRange.start, gridRange.end)) {
         out.push({
-          key: `m-${e.id}`,
-          date: e.date,
-          startTime: e.startTime,
-          endTime: e.endTime,
+          key: `m-${e.id}@${date}`,
+          date,
+          startTime: e.startTime ?? '',
+          endTime: e.endTime ?? '',
           title: e.title,
-          note: e.note,
+          note: e.description ?? undefined,
           kind: 'manual',
           status: e.status,
           manual: e,
+          isRecurringOccurrence: e.repeatRule !== 'NONE' && date !== e.date,
         });
       }
     }
@@ -159,7 +149,7 @@ export default function SchedulePage() {
       });
     }
     return out;
-  }, [manualEvents, derivedGigs]);
+  }, [manualEvents, derivedGigs, gridRange]);
 
   const selectedDateEvents = useMemo(() => {
     return allEvents
@@ -192,19 +182,17 @@ export default function SchedulePage() {
     setSelectedDate(today);
   };
 
-  const handleDeleteEvent = async (id: number) => {
-    if (confirm('Delete this note? Gig records cannot be deleted from the calendar.')) {
-      await db.calendarEvents.delete(id);
+  const handleDeleteEvent = async (id: string) => {
+    if (confirm('Delete this schedule? Gig records cannot be deleted from the calendar.')) {
+      await deleteCalendarEvent(id);
+      notifyCalendarEventsChanged();
     }
   };
 
   const handleToggleStatus = async (event: CalendarEvent) => {
-    const nextStatus: Record<string, 'PENDING' | 'ACTIVE' | 'COMPLETED'> = {
-      PENDING: 'ACTIVE',
-      ACTIVE: 'COMPLETED',
-      COMPLETED: 'PENDING',
-    };
-    await db.calendarEvents.update(event.id!, { status: nextStatus[event.status] });
+    const next = event.status === 'COMPLETED' ? 'CONFIRMED' : 'COMPLETED';
+    await updateCalendarEvent(event.id, { status: next });
+    notifyCalendarEventsChanged();
   };
 
   const totalGigs = derivedGigs.length;
@@ -365,9 +353,12 @@ export default function SchedulePage() {
 
       <AnimatePresence>
         {isAddModalOpen && (
-          <AddEventModal
-            onClose={() => setIsAddModalOpen(false)}
-            selectedDate={selectedDate}
+          <ScheduleEventModal
+            onClose={() => {
+              setIsAddModalOpen(false);
+              setEditingEvent(null);
+            }}
+            defaultDate={selectedDate}
             editingEvent={editingEvent}
           />
         )}
@@ -638,14 +629,15 @@ function EventCard({
       return map[event.status] ?? { label: event.status, bg: 'bg-slate-100', fg: 'text-slate-500' };
     }
     const map: Record<string, { label: string; bg: string; fg: string }> = {
-      PENDING:   { label: 'Pending',   bg: 'bg-slate-100', fg: 'text-slate-500' },
-      ACTIVE:    { label: 'Active',    bg: 'bg-amber-100', fg: 'text-amber-600' },
+      CONFIRMED: { label: 'Planned',   bg: 'bg-slate-100', fg: 'text-slate-500' },
       COMPLETED: { label: 'Done',      bg: 'bg-emerald-50', fg: 'text-emerald-600' },
+      CANCELLED: { label: 'Cancelled', bg: 'bg-red-50', fg: 'text-red-500' },
     };
     return map[event.status] ?? { label: event.status, bg: 'bg-slate-100', fg: 'text-slate-500' };
   })();
 
-  const accent = isGig ? '#c9973a' : (MANUAL_CATEGORIES.find((c) => c.id === event.manual?.category)?.dot ?? '#64748B');
+  const accent =
+    isGig || !event.manual ? '#c9973a' : COLOR_META[eventColor(event.manual)].hex;
 
   return (
     <div className="flex gap-3 group">
@@ -666,8 +658,6 @@ function EventCard({
             <Sparkles className="w-3 h-3" />
           ) : event.manual?.status === 'COMPLETED' ? (
             <CheckCircle2 className="w-4 h-4" />
-          ) : event.manual?.status === 'ACTIVE' ? (
-            <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
           ) : (
             <Circle className="w-4 h-4 text-slate-200" />
           )}
@@ -682,11 +672,15 @@ function EventCard({
             <h3 className="font-bold text-[15px] text-brand-dark tracking-tight truncate">
               {event.title}
             </h3>
-            <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium mt-1">
+            <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium mt-1 flex-wrap">
               <Clock className="w-3 h-3" />
-              {event.startTime} - {event.endTime}
+              {event.startTime || 'All day'}
+              {event.endTime ? ` - ${event.endTime}` : ''}
               {isGig && event.gig?.counterparty && (
                 <span className="text-slate-400">· {event.gig.counterparty}</span>
+              )}
+              {!isGig && event.manual?.location && (
+                <span className="text-slate-400 truncate">· {event.manual.location}</span>
               )}
             </div>
           </div>
@@ -758,210 +752,23 @@ function EventCard({
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full" style={{ background: accent }} />
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              {isGig ? `Order #${event.gig?.orderNumber ?? ''}` : event.manual?.category ?? 'NOTE'}
+              {isGig
+                ? `Order #${event.gig?.orderNumber ?? ''}`
+                : event.manual
+                  ? CATEGORY_LABELS[event.manual.category] ?? 'Other'
+                  : 'Note'}
             </span>
           </div>
-          {event.manual?.reminderEnabled && <Bell className="w-3 h-3 text-[#c9973a]" />}
+          {event.manual?.reminderOffsetMinutes != null && (
+            <Bell className="w-3 h-3 text-[#c9973a]" />
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function AddEventModal({
-  onClose,
-  selectedDate,
-  editingEvent,
-}: {
-  onClose: () => void;
-  selectedDate: Date;
-  editingEvent: CalendarEvent | null;
-}) {
-  const { user } = useAuth();
-  const [title, setTitle] = useState(editingEvent?.title || '');
-  const [note, setNote] = useState(editingEvent?.note || '');
-  const [startTime, setStartTime] = useState(editingEvent?.startTime || '09:00');
-  const [endTime, setEndTime] = useState(editingEvent?.endTime || '10:00');
-  const [category, setCategory] = useState<CalendarEvent['category']>(
-    editingEvent?.category || 'WORK',
-  );
-  const [reminderEnabled, setReminderEnabled] = useState(editingEvent?.reminderEnabled || false);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-
-    const eventData: Omit<CalendarEvent, 'id'> = {
-      userId: typeof user.id === 'number' ? user.id : parseInt(user.id || '0', 10),
-      title,
-      note,
-      date: format(selectedDate, 'yyyy-MM-dd'),
-      startTime,
-      endTime,
-      category,
-      reminderEnabled,
-      status: editingEvent?.status || 'PENDING',
-      createdAt: editingEvent?.createdAt || Date.now(),
-    };
-
-    if (editingEvent?.id) {
-      await db.calendarEvents.update(editingEvent.id, eventData);
-    } else {
-      await db.calendarEvents.add(eventData as CalendarEvent);
-    }
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-100 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      <motion.div
-        initial={{ y: '100%' }}
-        animate={{ y: 0 }}
-        exit={{ y: '100%' }}
-        className="relative w-full max-w-lg bg-white rounded-t-[32px] sm:rounded-[32px] overflow-hidden shadow-xl border border-slate-200"
-      >
-        <div className="px-7 pt-7 pb-5 border-b border-slate-100">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#c9973a]">
-                Personal note
-              </p>
-              <h2 className="mt-1 text-xl font-bold font-serif text-brand-dark tracking-tight">
-                {editingEvent ? 'Edit note' : 'New note'}
-              </h2>
-            </div>
-            <button
-              onClick={onClose}
-              aria-label="Close"
-              className="p-2 hover:bg-[#f5f2ed] rounded-full transition-colors text-slate-500"
-            >
-              <Plus className="w-5 h-5 rotate-45" />
-            </button>
-          </div>
-          <p className="text-slate-500 text-[13px] font-sans">
-            {format(selectedDate, 'EEEE, MMMM do')}
-          </p>
-        </div>
-
-        <form
-          onSubmit={handleSave}
-          className="px-7 py-6 space-y-5 max-h-[70vh] overflow-y-auto"
-        >
-          <div className="space-y-3">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-              Time range
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <span className="text-[10px] text-slate-400">Start</span>
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full p-3 bg-[#f5f2ed] border border-slate-200 rounded-xl outline-none focus:border-[#c9973a] transition-all text-brand-dark"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <span className="text-[10px] text-slate-400">End</span>
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full p-3 bg-[#f5f2ed] border border-slate-200 rounded-xl outline-none focus:border-[#c9973a] transition-all text-brand-dark"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-              Title
-            </label>
-            <input
-              type="text"
-              placeholder="What's the note about?"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              className="w-full p-3.5 bg-[#f5f2ed] border border-slate-200 rounded-xl outline-none focus:border-[#c9973a] transition-all text-base font-medium font-serif text-brand-dark placeholder-slate-400"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-              Notes
-            </label>
-            <textarea
-              placeholder="Optional details"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={3}
-              className="w-full p-3.5 bg-[#f5f2ed] border border-slate-200 rounded-xl outline-none focus:border-[#c9973a] transition-all resize-none font-sans text-brand-dark placeholder-slate-400"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                Category
-              </label>
-              <div className="flex gap-2.5">
-                {MANUAL_CATEGORIES.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setCategory(cat.id as any)}
-                    aria-label={cat.label}
-                    className={`w-6 h-6 rounded-full transition-all ${
-                      category === cat.id
-                        ? 'ring-4 ring-[#f5f2ed] scale-110'
-                        : 'opacity-40 hover:opacity-100'
-                    }`}
-                    style={{ background: cat.dot }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                Reminder
-              </label>
-              <button
-                type="button"
-                onClick={() => setReminderEnabled(!reminderEnabled)}
-                aria-pressed={reminderEnabled}
-                className={`w-12 h-6 rounded-full relative transition-all ${
-                  reminderEnabled ? 'bg-[#c9973a]' : 'bg-slate-200'
-                }`}
-              >
-                <div
-                  className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
-                    reminderEnabled ? 'left-7' : 'left-1'
-                  }`}
-                />
-              </button>
-            </div>
-          </div>
-
-          <div className="pt-2">
-            <Button
-              type="submit"
-              className="w-full py-4 bg-[#c9973a] text-white text-base font-bold rounded-xl shadow-lg shadow-[#c9973a]/30"
-            >
-              {editingEvent ? 'Save changes' : 'Save note'}
-            </Button>
-          </div>
-        </form>
-      </motion.div>
-    </div>
-  );
-}
+// AddEventModal was extracted and upgraded into the shared
+// components/schedule/ScheduleEventModal (date picker, location, color
+// label, repeat, reminder offsets) — and now saves to the real
+// /calendar-events backend instead of the old silent-404 Dexie shim.

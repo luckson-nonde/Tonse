@@ -29,6 +29,12 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'active_transactions', label: 'Active Transactions', icon: 'ShoppingBag' },
     { id: 'orders', label: 'Transaction History', icon: 'History' },
     { id: 'shops', label: 'Browse Shops', icon: 'Store' },
+    // Routes to the /schedule page (calendar on top, day schedule below) —
+    // same destination as the provider's "My Schedule" nav item. On
+    // desktop the dashboard also embeds the calendar (right rail) +
+    // timeline (main column); this item is the mobile/tablet path where
+    // the rail is hidden.
+    { id: 'schedule', label: 'Calendar', icon: 'Calendar' },
     { id: 'profile', label: 'Account Settings', icon: 'User' },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
     REPORTING_NAV_ITEM,

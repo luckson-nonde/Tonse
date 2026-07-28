@@ -51,6 +51,12 @@ interface DashboardCalendarProps {
    *  3+ entries → animated 2-of-N carousel. <=2 entries → render side
    *  by side without rotation. */
   counters?: CounterCard[];
+  /** Currently selected day. Optional — consumers that don't pass it
+   *  (e.g. ProviderScheduleView) keep the old passive behavior. */
+  selectedDate?: Date | null;
+  /** Fired when a day cell (or Today) is clicked. The dashboard uses this
+   *  to load that day's schedule into the main-content timeline card. */
+  onDateSelect?: (date: Date) => void;
 }
 
 /** How long each pair of cards stays visible before rotating. */
@@ -129,9 +135,23 @@ export default function DashboardCalendar({
   className = '',
   tone = 'generic',
   counters,
+  selectedDate,
+  onDateSelect,
 }: DashboardCalendarProps) {
   const [currentDate, setCurrentDate] = React.useState(new Date());
   const toneCfg = TONE_CONFIG[tone] ?? TONE_CONFIG.generic;
+
+  // Keep the visible month in step with an externally-driven selection
+  // (e.g. "Today" pressed elsewhere, or a restored selection on mount).
+  useEffect(() => {
+    if (!selectedDate) return;
+    setCurrentDate((cur) =>
+      cur.getMonth() === selectedDate.getMonth() &&
+      cur.getFullYear() === selectedDate.getFullYear()
+        ? cur
+        : new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1),
+    );
+  }, [selectedDate?.getTime()]);
 
   // Carousel state — only matters when caller supplies 3+ counters.
   // Rotation pauses on hover so a buyer reading a number doesn't have it
@@ -198,25 +218,14 @@ export default function DashboardCalendar({
   };
 
   const handleToday = () => {
+    // Recenter the visible month only. Deliberately NOT onDateSelect —
+    // selecting navigates to the /schedule page, and "Today" shouldn't
+    // yank the user off the dashboard; clicking the day cell does that.
     setCurrentDate(new Date());
   };
 
   const monthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-  const colorMap = {
-    amber: 'bg-amber-100 text-amber-700 border-amber-200',
-    purple: 'bg-purple-100 text-purple-700 border-purple-200',
-    emerald: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    blue: 'bg-blue-100 text-blue-700 border-blue-200',
-  };
-
-  const typeLabel = {
-    inquiry: `${toneCfg.inquiryEmoji} ${toneCfg.inquiryLabel}`,
-    quote: `📊 ${toneCfg.quoteLabel}`,
-    order: `📦 ${toneCfg.orderLabel}`,
-    meeting: '🎯 Meeting',
-  };
 
   // Secondary counter: events in the current calendar month, OR events
   // landing within the next 7 days for "this week" tones.
@@ -295,19 +304,51 @@ export default function DashboardCalendar({
             new Date().getDate() === day &&
             currentDate.getMonth() === new Date().getMonth() &&
             currentDate.getFullYear() === new Date().getFullYear();
+          const isSelected =
+            !!day &&
+            !!selectedDate &&
+            selectedDate.getDate() === day &&
+            selectedDate.getMonth() === currentDate.getMonth() &&
+            selectedDate.getFullYear() === currentDate.getFullYear();
 
+          const handleSelect = () => {
+            if (!day) return;
+            onDateSelect?.(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
+          };
+
+          // Border hexes are opaque on purpose — translucent strokes
+          // (border-X/NN) mis-rasterize on Mali-GPU Android phones.
           return (
             <motion.div
               key={`${day}-${idx}`}
               whileHover={day ? { scale: 1.1 } : {}}
+              role={day ? 'button' : undefined}
+              tabIndex={day ? 0 : undefined}
+              aria-pressed={isSelected || undefined}
+              aria-label={
+                day
+                  ? `${currentDate.toLocaleDateString('en-US', { month: 'long' })} ${day}`
+                  : undefined
+              }
+              onClick={handleSelect}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleSelect();
+                }
+              }}
               className={`aspect-square flex items-center justify-center rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer ${
                 !day
                   ? 'bg-transparent'
                   : isToday
-                    ? 'bg-gradient-to-br from-[#C9973A] to-[#b8832a] text-white shadow-md'
-                    : event
-                      ? 'bg-amber-50 border-2 border-dashed border-[#C9973A]/40 text-brand-dark hover:border-[#C9973A] hover:bg-amber-100'
-                      : 'hover:bg-slate-100 text-slate-600'
+                    ? isSelected
+                      ? 'bg-gradient-to-br from-[#C9973A] to-[#b8832a] text-white shadow-md border-2 border-[#8a6118]'
+                      : 'bg-gradient-to-br from-[#C9973A] to-[#b8832a] text-white shadow-md'
+                    : isSelected
+                      ? 'bg-amber-50 border-2 border-[#C9973A] text-[#8a6118] shadow-sm'
+                      : event
+                        ? 'bg-amber-50 border-2 border-dashed border-[#ecd9b3] text-brand-dark hover:border-[#C9973A] hover:bg-amber-100'
+                        : 'hover:bg-slate-100 text-slate-600'
               }`}
               title={event ? event.title : ''}
             >
@@ -317,40 +358,10 @@ export default function DashboardCalendar({
         })}
       </div>
 
-      {/* Events List */}
-      {events.length > 0 && (
-        <div className="space-y-3 border-t border-slate-100 pt-5">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
-            Upcoming Events
-          </p>
-          <div className="space-y-2 max-h-52 overflow-y-auto scrollbar-hide">
-            {events
-              .filter((e) => e.date >= new Date(new Date().setHours(0,0,0,0)))
-              .sort((a, b) => a.date.getTime() - b.date.getTime())
-              .slice(0, 5)
-              .map((event, idx) => (
-                <motion.div
-                  key={`event-${idx}`}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.05 }}
-                  className={`px-3 py-2.5 rounded-xl text-xs font-medium border ${colorMap[event.color]} group cursor-pointer hover:shadow-md transition-all duration-300`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold truncate">{event.title}</span>
-                    <span className="text-[10px] opacity-70 whitespace-nowrap shrink-0">
-                      {event.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                    </span>
-                  </div>
-                  <p className="text-[10px] opacity-75 mt-0.5">{typeLabel[event.type]}</p>
-                </motion.div>
-              ))}
-          </div>
-          {events.filter((e) => e.date >= new Date(new Date().setHours(0,0,0,0))).length === 0 && (
-            <p className="text-xs text-slate-400 italic text-center py-4">No upcoming events</p>
-          )}
-        </div>
-      )}
+      {/* The in-sidebar "Upcoming Events" list is gone by design: the rail
+          shows ONLY the calendar (+ counters). A day's schedule now lives
+          in the main content's ScheduleTimelineCard, loaded via
+          onDateSelect — see src/components/schedule/ScheduleTimelineCard. */}
 
       {/* Stats Footer — original position. When the caller passes 3+
           counters, the two visible cards rotate every CAROUSEL_INTERVAL_MS

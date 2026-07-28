@@ -635,6 +635,39 @@ Relations: ManyToOne → `users` (userId, `@JoinColumn({name:'userId'})`, target
 
 ---
 
+### Module: Calendar Events
+
+#### `calendar_events`
+Personal calendar entries — the generic scheduling module behind the dashboard right-rail calendar, the main-content schedule timeline and the `/schedule` page. One row per user-created event; always scoped to the owner (`userId` stamped from the JWT server-side, never client-supplied). Recurrence stores the rule only — occurrences are expanded client-side over the visible window.
+Entity file: `backend/src/modules/calendar-events/entities/calendar-event.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| userId | uuid | NO | — | Loose uuid, no FK relation (care_plans convention) |
+| title | varchar(255) | NO | — | |
+| description | text | YES | — | |
+| date | date | NO | — | Base event day, `YYYY-MM-DD` |
+| startTime | time | YES | — | `HH:MM`; null = all-day |
+| endTime | time | YES | — | |
+| location | varchar(255) | YES | — | |
+| category | varchar(30) | NO | `OTHER` | `MEETING, REMINDER, APPOINTMENT, EVENT, PERSONAL, PARCEL_COLLECTION, MAKE_PAYMENT, OTHER` (varchar union, not a PG enum — evolvable without ALTER TYPE) |
+| color | varchar(20) | YES | — | `blue, green, orange, purple, red, yellow`; null = derived from category |
+| repeatRule | varchar(10) | NO | `NONE` | `NONE, DAILY, WEEKLY, MONTHLY, YEARLY` |
+| reminderOffsetMinutes | int | YES | — | Minutes before startTime; null = no reminder (stored only — no server-side dispatch yet) |
+| status | varchar(20) | NO | `CONFIRMED` | `CONFIRMED, COMPLETED, CANCELLED` |
+| metadata | json | YES | — | Escape hatch |
+| createdAt | timestamp | NO | — | `@CreateDateColumn` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn` |
+
+Indexes: `idx_calendar_events_user` (userId) · `idx_calendar_events_date` (date)
+
+Relations: none (loose uuid `userId`)
+
+Migration: `1785700000000-CreateCalendarEvents.ts`
+
+---
+
 ### Module: Categories
 
 #### `categories`
