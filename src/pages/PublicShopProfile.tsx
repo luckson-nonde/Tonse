@@ -122,7 +122,7 @@ export default function PublicShopProfile() {
       return;
     }
     if (urgency === 'On a specific date & time' && !preferredDateTime) {
-      setSubmitError('Pick the day and time on the calendar.');
+      setSubmitError('Pick the day on the calendar (time is optional).');
       return;
     }
 

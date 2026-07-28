@@ -10,7 +10,7 @@ export const softwareWebDevSchema: FieldSchema[] = [
   { name: "techPreference", label: "Technology Preference", type: "text", required: false, placeholder: "e.g. React, Laravel, WordPress, No preference", group: "Technical Requirements" },
   { name: "hostingRequired", label: "Hosting & Domain Required?", type: "toggle", required: false, helpText: "Toggle if you need the developer to set up hosting and domain", group: "Technical Requirements" },
   { name: "timeline", label: "Project Timeline", type: "select", required: true, options: ["Immediately", "On a specific date & time"], group: "Budget and Timeline" },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Timeline", dependsOn: { field: "timeline", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", group: "Budget and Timeline", dependsOn: { field: "timeline", value: ["On a specific date & time"] } },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Timeline" },
   { name: "maintenanceRequired", label: "Ongoing Maintenance Required?", type: "toggle", required: false, helpText: "Toggle if you need monthly support after launch", group: "Budget and Timeline" },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any other requirements, integrations needed, competitors to reference...", group: "Budget and Timeline" }
@@ -28,7 +28,7 @@ export const networkingSecuritySchema: FieldSchema[] = [
   { name: "equipmentSupplyNeeded", label: "Equipment Supply Needed?", type: "toggle", required: false, helpText: "Toggle if you need the provider to supply routers, cameras etc.", group: "Technical Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Immediately", "On a specific date & time"], group: "Budget and Urgency" },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific brands, security certifications required, other details...", group: "Budget and Urgency" }
 ];
 
@@ -45,7 +45,7 @@ export const itSupportMaintenanceSchema: FieldSchema[] = [
   { name: "numberOfStaff", label: "Number of Staff / Users", type: "number", required: false, min: 1, group: "Contract Details" },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Budget and Urgency" },
   { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Immediately", "On a specific date & time"], group: "Budget and Urgency" },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", group: "Budget and Urgency", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any error messages, when issue started, previous repairs done...", group: "Budget and Urgency" }
 ];
 

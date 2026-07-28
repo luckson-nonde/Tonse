@@ -93,8 +93,13 @@ export default function DateTimePicker({
       setOpen(false);
       return;
     }
+    // A day alone is a complete answer — time is optional detail on top.
     setPendingDay(day);
-    if (pendingTime) onChange(`${format(day, 'yyyy-MM-dd')}T${pad2(pendingTime.h)}:${pad2(pendingTime.m)}`);
+    onChange(
+      pendingTime
+        ? `${format(day, 'yyyy-MM-dd')}T${pad2(pendingTime.h)}:${pad2(pendingTime.m)}`
+        : format(day, 'yyyy-MM-dd'),
+    );
   };
 
   // Keep the committed value live with every time tweak (the buyer may close
@@ -149,16 +154,25 @@ export default function DateTimePicker({
   };
 
   const confirmDateTime = () => {
-    if (!pendingDay || !pendingTime) return;
-    onChange(`${format(pendingDay, 'yyyy-MM-dd')}T${pad2(pendingTime.h)}:${pad2(pendingTime.m)}`);
+    if (!pendingDay) return;
+    onChange(
+      pendingTime
+        ? `${format(pendingDay, 'yyyy-MM-dd')}T${pad2(pendingTime.h)}:${pad2(pendingTime.m)}`
+        : format(pendingDay, 'yyyy-MM-dd'),
+    );
     setOpen(false);
+  };
+
+  const removeTime = () => {
+    setPendingTime(null);
+    if (pendingDay) onChange(format(pendingDay, 'yyyy-MM-dd'));
   };
 
   const label = selectedDay
     ? mode === 'datetime' && selectedTime
       ? `${format(selectedDay, 'EEE, d MMM yyyy')} · ${format(selectedDay, 'h:mm a')}`
       : format(selectedDay, 'EEE, d MMM yyyy')
-    : placeholder || (mode === 'datetime' ? 'Pick a day & time' : 'Pick a date');
+    : placeholder || (mode === 'datetime' ? 'Pick a day (time optional)' : 'Pick a date');
 
   return (
     <div className="w-full">
@@ -268,11 +282,11 @@ export default function DateTimePicker({
                 >
                   {!pendingDay && (
                     <p className="text-[11px] text-[#8a6118] italic mb-2">
-                      Pick a day first, then set the time.
+                      Pick a day first — you can add a time after.
                     </p>
                   )}
                   <p className="text-[10px] font-bold text-[#8a6118] uppercase tracking-widest mb-2">
-                    Time
+                    Time <span className="text-[#b8a06a] normal-case tracking-normal font-semibold">· optional</span>
                   </p>
                   <div className="flex items-center gap-3 flex-wrap">
                     <div className="flex items-start gap-2">
@@ -345,7 +359,7 @@ export default function DateTimePicker({
                     <button
                       type="button"
                       onClick={confirmDateTime}
-                      disabled={!pendingDay || !pendingTime}
+                      disabled={!pendingDay}
                       className="px-5 py-2.5 rounded-full bg-[#C9973A] text-white text-[13px] font-semibold flex items-center gap-1.5 shadow-[0_2px_8px_rgba(201,151,58,0.35)] disabled:opacity-40 disabled:pointer-events-none active:scale-95 transition-transform self-center"
                     >
                       <Check className="w-4 h-4" />
@@ -355,11 +369,19 @@ export default function DateTimePicker({
                   {pendingTime ? (
                     <p className="text-[12px] font-semibold text-[#8a6118] mt-2.5">
                       That's {hour12Of(pendingTime.h)}:{pad2(pendingTime.m)} {meridiemOf(pendingTime.h)}{' '}
-                      {periodWordOf(pendingTime.h)}.
+                      {periodWordOf(pendingTime.h)}.{' '}
+                      <button
+                        type="button"
+                        onClick={removeTime}
+                        className="text-[11px] font-semibold text-[#94a3b8] underline underline-offset-2 hover:text-[#64748b]"
+                      >
+                        Remove time
+                      </button>
                     </p>
                   ) : (
                     <p className="text-[11px] text-[#94a3b8] italic mt-2.5">
-                      Set the hour and minutes, then choose AM (morning) or PM (afternoon/evening).
+                      Skip the time if any time of day works — set one only when the service must
+                      happen at a specific hour.
                     </p>
                   )}
                 </div>

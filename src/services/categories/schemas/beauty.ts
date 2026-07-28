@@ -10,7 +10,7 @@ export const skincareSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "On a specific date & time"] },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any allergies, ingredients to avoid, or specific needs..." }
 ];
 
@@ -25,7 +25,7 @@ export const makeupCosmeticsSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "On a specific date & time"] },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific requirements, occasion, or allergies..." }
 ];
 
@@ -40,7 +40,7 @@ export const haircareSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "On a specific date & time"] },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Hair length, color, any allergies or preferences..." }
 ];
 
@@ -56,7 +56,7 @@ export const fragrancesSchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "On a specific date & time"] },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any similar scents you like, gift wrapping needed, etc..." }
 ];
 

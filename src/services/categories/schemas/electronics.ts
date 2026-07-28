@@ -10,7 +10,7 @@ export const mobilePhonesBuySchema: FieldSchema[] = [
   { name: "condition", label: "Condition", type: "select", required: true, options: ["Brand New", "Used - Excellent", "Used - Good", "Used - Fair", "Any"] },
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "On a specific date & time"] },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, helpText: "Optional - leave blank to receive price offers from shops" },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific requirements, accessories needed, etc." }
 ];
@@ -28,7 +28,7 @@ export const mobilePhonesRepairSchema: FieldSchema[] = [
   { name: "warrantyStatus", label: "Still Under Warranty?", type: "toggle", required: false },
   { name: "dataCritical", label: "Is Data on Device Critical?", type: "toggle", required: false, helpText: "Toggle if you have important files that must be saved" },
   { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Immediately", "On a specific date & time"] },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
 ];
 
 export const laptopsBuySchema: FieldSchema[] = [
@@ -45,7 +45,7 @@ export const laptopsBuySchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, helpText: "Optional - leave blank to receive price offers from shops" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "On a specific date & time"] },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "additionalDetails", label: "Additional Requirements", type: "textarea", required: false, placeholder: "Any specific software, accessories, or requirements..." }
 ];
 
@@ -62,7 +62,7 @@ export const laptopsRepairSchema: FieldSchema[] = [
   { name: "warrantyStatus", label: "Still Under Warranty?", type: "toggle", required: false },
   { name: "dataRecoveryNeeded", label: "Data Recovery Needed?", type: "toggle", required: false, helpText: "Toggle if you need files recovered from the device" },
   { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Immediately", "On a specific date & time"] },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
 ];
 
 export const homeAppliancesBuySchema: FieldSchema[] = [
@@ -76,7 +76,7 @@ export const homeAppliancesBuySchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, helpText: "Optional - leave blank to receive price offers from shops" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "On a specific date & time"] },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific features, color, or requirements..." }
 ];
 
@@ -93,7 +93,7 @@ export const homeAppliancesRepairSchema: FieldSchema[] = [
   { name: "applianceAge", label: "How Old is the Appliance?", type: "select", required: false, options: ["Less than 1 year", "1-3 years", "3-5 years", "More than 5 years", "Not sure"] },
   { name: "warrantyStatus", label: "Still Under Warranty?", type: "toggle", required: false },
   { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Immediately", "On a specific date & time"] },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
 ];
 
 export const audioVideoBuySchema: FieldSchema[] = [
@@ -106,7 +106,7 @@ export const audioVideoBuySchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, helpText: "Optional - leave blank to receive price offers from shops" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "On a specific date & time"] },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific features or requirements..." }
 ];
 
@@ -121,7 +121,7 @@ export const audioVideoRepairSchema: FieldSchema[] = [
   { name: "symptoms", label: "Technical Symptoms & Observations", type: "textarea", required: true, placeholder: "e.g. TV screen is black but sound is working" },
   { name: "quantity", label: "Number of Devices", type: "counter", required: true, min: 1, helpText: "Please specify if all items share the same fault in the description." },
   { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Immediately", "On a specific date & time"] },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
 ];
 
 export const gamingBuySchema: FieldSchema[] = [
@@ -135,7 +135,7 @@ export const gamingBuySchema: FieldSchema[] = [
   { name: "quantity", label: "Quantity", type: "counter", required: true, min: 1 },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, helpText: "Optional - leave blank to receive price offers from shops" },
   { name: "urgency", label: "Urgency", type: "select", required: true, options: ["Immediately", "On a specific date & time"] },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "additionalDetails", label: "Additional Details", type: "textarea", required: false, placeholder: "Any specific version, bundle, or requirements..." }
 ];
 

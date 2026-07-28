@@ -23,7 +23,7 @@ export const pharmaciesSchema: FieldSchema[] = [
   { name: "genericsAccepted", label: "Generic Substitutes OK?", type: "toggle", required: false, keepInExpress: true, helpText: "Allow the pharmacy to offer an equivalent generic brand if the exact one is out of stock.", group: "What You Need" },
   { name: "fulfilment", label: "Collection or Delivery?", type: "select", required: true, options: ["I'll collect from the pharmacy", "Deliver to me", "Whichever is faster"], group: "Fulfilment" },
   { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Immediately", "On a specific date & time"], group: "Fulfilment" },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Fulfilment", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", group: "Fulfilment", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Fulfilment" },
   { name: "additionalDetails", label: "Additional Notes", type: "textarea", required: false, placeholder: "Allergies the pharmacist should know about, preferred brands, dosage questions...", group: "Fulfilment" }
 ];
@@ -44,7 +44,7 @@ export const homeCareSchema: FieldSchema[] = [
   { name: "visitFrequency", label: "How Often Are Visits Needed?", type: "select", required: true, keepInExpress: true, options: ["Once-off visit", "Daily visits", "Several times a week", "Weekly check-ins", "24/7 / live-in care"], group: "Schedule & Payment" },
   { name: "paymentModel", label: "Preferred Payment Arrangement", type: "select", required: true, keepInExpress: true, options: ["Pay per visit", "Pay per week", "Pay per month"], helpText: "Per visit suits a once-off; weekly or monthly suits ongoing care. The caregiver confirms the final arrangement in their quote.", group: "Schedule & Payment" },
   { name: "urgency", label: "When Should Care Start?", type: "select", required: true, options: ["Immediately", "On a specific date & time"], group: "Schedule & Payment" },
-  { name: "preferredDateTime", label: "Preferred First Visit", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day and time for the first visit — the provider plans around it.", group: "Schedule & Payment", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred First Visit", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day for the first visit — add a time only if it must start at a specific hour.", group: "Schedule & Payment", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, helpText: "Per visit or per month, depending on your payment arrangement.", group: "Schedule & Payment" },
   { name: "additionalDetails", label: "Additional Notes", type: "textarea", required: false, placeholder: "Mobility, allergies, language preference, anything the caregiver should know about the home...", group: "Schedule & Payment" }
 ];
@@ -54,7 +54,7 @@ export const hospitalLabsSchema: FieldSchema[] = [
   { name: "requestItems", label: "Test(s) Required", type: "textarea", required: false, keepInExpress: true, placeholder: "e.g. Full Blood Count; Malaria RDT; Fasting Blood Sugar", helpText: "List the tests you need — or just attach the doctor's order above.", group: "Tests Required" },
   { name: "homeSampleCollection", label: "Home Sample Collection?", type: "toggle", required: false, keepInExpress: true, helpText: "Should the lab send someone to collect the sample at your location?", group: "Scheduling" },
   { name: "urgency", label: "How Urgent?", type: "select", required: true, options: ["Immediately", "On a specific date & time"], group: "Scheduling" },
-  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the exact day and time that suits you — the provider plans around it.", group: "Scheduling", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
+  { name: "preferredDateTime", label: "Preferred Day & Time", type: "datetime", required: true, keepInExpress: true, helpText: "Pick the day that suits you — add a time only if it needs to happen at a specific hour.", group: "Scheduling", dependsOn: { field: "urgency", value: ["On a specific date & time"] } },
   { name: "budget_limit", label: "Budget (ZMW)", type: "currency", required: false, group: "Scheduling" },
   { name: "additionalDetails", label: "Additional Notes", type: "textarea", required: false, placeholder: "Fasting status, mobility constraints, previous results to compare against...", group: "Scheduling" }
 ];

@@ -67,9 +67,10 @@ export function generateZodSchema(fields: FieldSchema[]) {
         break;
 
       case 'datetime':
-        // Combined day+time, ISO-local ("2026-08-02T14:00") — the shape
-        // derivedGigEvents.splitDateTime already parses into date + time.
-        fieldSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Pick a date and time');
+        // Day with OPTIONAL time — "2026-08-02" or "2026-08-02T14:00".
+        // derivedGigEvents.splitDateTime parses both shapes; the time part is
+        // only for services that must happen at a specific hour.
+        fieldSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/, 'Pick a date');
         break;
 
       case 'image_upload':
