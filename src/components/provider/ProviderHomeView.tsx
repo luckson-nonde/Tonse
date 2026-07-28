@@ -395,7 +395,9 @@ export default function ProviderHomeView({
             </div>
           </div>
           <div className="h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+            {/* minHeight stops recharts warning about its initial
+                unmeasured (-1) size on the first paint. */}
+            <ResponsiveContainer width="100%" height="100%" minHeight={250}>
               <AreaChart data={chartData} width={800} height={250}>
                 <defs>
                   <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
@@ -785,7 +787,7 @@ export default function ProviderHomeView({
             </div>
 
             <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                 <AreaChart data={chartData} width={800} height={200}>
                   <defs>
                     <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
