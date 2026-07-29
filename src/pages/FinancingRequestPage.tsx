@@ -58,7 +58,7 @@ export default function FinancingRequestPage() {
 
   if (done) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+      <div className="flex items-center justify-center p-6 py-16">
         <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-100 p-8 text-center">
           <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
             <CheckCircle2 className="w-8 h-8 text-emerald-500" />
@@ -96,51 +96,56 @@ export default function FinancingRequestPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Product-context banner — the principal is locked to the quote price. */}
-      <div className="bg-gradient-to-r from-[#1B3068] to-[#12224d] text-white px-5 sm:px-8 pt-6 pb-8">
-        <div className="max-w-2xl mx-auto">
+    <div>
+      {/* Product-context card — the principal is locked to the quote price.
+          Rendered in the dashboard's own light card language (white card,
+          gold accent chip, opaque borders) so paying by loan feels like any
+          other step of the flow, not a separate product. */}
+      <div className="px-5 sm:px-8 pt-6">
+        <div className="max-w-2xl mx-auto bg-white rounded-3xl border border-slate-200 p-5 sm:p-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#d49b35]/20 border border-[#d49b35]/30 flex items-center justify-center">
-              <Landmark className="w-5 h-5 text-[#d49b35]" />
+            <div className="w-10 h-10 rounded-xl bg-[#fdf6e9] border border-[#e8d5ae] flex items-center justify-center">
+              <Landmark className="w-5 h-5 text-[#c9973a]" />
             </div>
             <div>
-              <h1 className="text-lg font-black leading-tight">Pay via lending institution</h1>
+              <h1 className="text-lg font-black leading-tight text-slate-900">
+                Pay via lending institution
+              </h1>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <ShieldCheck className="w-3 h-3 text-[#d49b35]" />
-                <span className="text-[9px] font-black uppercase tracking-widest text-[#d49b35]/80">
+                <ShieldCheck className="w-3 h-3 text-[#c9973a]" />
+                <span className="text-[9px] font-black uppercase tracking-widest text-[#a87b26]">
                   Government employees · salary-backed
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="mt-5 p-4 bg-white/5 rounded-2xl border border-white/10 space-y-2.5">
-            <div className="flex items-center justify-between gap-3 text-[12px]">
-              <span className="text-white/40 font-bold uppercase tracking-[0.14em] text-[10px]">
+          <div className="mt-5 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
+            <div className="flex items-center justify-between gap-3 text-[12px] text-slate-700">
+              <span className="text-slate-400 font-bold uppercase tracking-[0.14em] text-[10px]">
                 Financing
               </span>
               <span className="font-bold truncate">{quote.inquiryTitle}</span>
             </div>
-            <div className="flex items-center justify-between gap-3 text-[12px]">
-              <span className="text-white/40 font-bold uppercase tracking-[0.14em] text-[10px]">
+            <div className="flex items-center justify-between gap-3 text-[12px] text-slate-700">
+              <span className="text-slate-400 font-bold uppercase tracking-[0.14em] text-[10px]">
                 Seller
               </span>
               <span className="font-bold truncate">{quote.providerName || 'Provider'}</span>
             </div>
-            <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-2.5">
-              <span className="flex items-center gap-1.5 text-white/60 font-bold uppercase tracking-[0.14em] text-[10px]">
+            <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-2.5">
+              <span className="flex items-center gap-1.5 text-slate-500 font-bold uppercase tracking-[0.14em] text-[10px]">
                 <Lock className="w-3 h-3" /> Loan amount (locked)
               </span>
               <div className="flex items-baseline gap-1">
-                <span className="text-[10px] font-black text-[#d49b35]">ZMW</span>
-                <span className="text-xl font-black tabular-nums">
+                <span className="text-[10px] font-black text-[#c9973a]">ZMW</span>
+                <span className="text-xl font-black tabular-nums text-slate-900">
                   {principal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
           </div>
-          <p className="mt-3 text-[11px] text-white/50 leading-relaxed">
+          <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">
             The lender verifies your government employment, then disburses the purchase amount into
             the platform holding account. Repayment is arranged with the lender via salary/payroll
             deduction.

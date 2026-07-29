@@ -262,9 +262,11 @@ export default function App() {
                 path="/buyer/financing"
                 element={
                   <ProtectedRoute allowedRoles={['BUYER']}>
-                    <PageTransition transitionKey="financing">
-                      <FinancingRequestPage />
-                    </PageTransition>
+                    <DashboardLayout>
+                      <PageTransition transitionKey="financing">
+                        <FinancingRequestPage />
+                      </PageTransition>
+                    </DashboardLayout>
                   </ProtectedRoute>
                 }
               />
