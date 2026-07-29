@@ -77,6 +77,17 @@ export default function LoanOfferDetail({ quote, onAction }: LoanOfferDetailProp
   const telHref = (p: string) => `tel:${p.replace(/[^\d+]/g, '')}`;
   const waHref = (p: string) => `https://wa.me/${p.replace(/[^\d]/g, '')}`;
 
+  // Is this a PURCHASE-FINANCING loan? If so the money never comes to the
+  // borrower — the lender pays the SELLER and the buyer receives the PRODUCT —
+  // so the borrower-centric copy below would be actively misleading.
+  let loanAttrs: any = (quote as any)?.inquiry?.attributes ?? {};
+  if (typeof loanAttrs === 'string') {
+    try { loanAttrs = JSON.parse(loanAttrs); } catch { loanAttrs = {}; }
+  }
+  const isFinancing = !!loanAttrs?.financedQuoteId;
+  const productTitle: string = loanAttrs?.productTitle || 'your purchase';
+  const sellerName: string = loanAttrs?.sellerName || 'the seller';
+
   // Post-acceptance roadmap driven by the loan's REAL lifecycle stage
   // (dynamicFields.stage, advanced by the lender). done = i <= stageIdx;
   // active = the step immediately after the last completed one.
@@ -84,13 +95,23 @@ export default function LoanOfferDetail({ quote, onAction }: LoanOfferDetailProp
   const disbursed = stageIdx >= loanStageIndex('DISBURSED');
   const borrowerConfirmed = !!d.borrowerConfirmedAt;
   const confirmReceived = () => act('confirm', () => confirmLoanDisbursement(String(quote.id)));
-  const nextSteps = [
-    { label: 'Offer accepted' },
-    { label: `${lenderName} contacts you to arrange disbursement` },
-    { label: 'Verify your identity & collateral / documents' },
-    { label: 'Funds disbursed to you' },
-    { label: 'Repay according to your schedule' },
-  ].map((s, i) => ({ ...s, done: i <= stageIdx, active: i === stageIdx + 1 }));
+  const nextSteps = (
+    isFinancing
+      ? [
+          { label: 'Offer accepted' },
+          { label: `${lenderName} contacts you to finalise the loan` },
+          { label: 'Verify your identity & documents' },
+          { label: `${lenderName} pays ${sellerName} for ${productTitle}` },
+          { label: 'Collect your item from the seller' },
+        ]
+      : [
+          { label: 'Offer accepted' },
+          { label: `${lenderName} contacts you to arrange disbursement` },
+          { label: 'Verify your identity & collateral / documents' },
+          { label: 'Funds disbursed to you' },
+          { label: 'Repay according to your schedule' },
+        ]
+  ).map((s, i) => ({ ...s, done: i <= stageIdx, active: i === stageIdx + 1 }));
 
   // Self-contained printable loan agreement. Opens a clean document the
   // borrower can print or "Save as PDF" — their record of the accepted terms.
@@ -302,7 +323,9 @@ export default function LoanOfferDetail({ quote, onAction }: LoanOfferDetailProp
                 <CalendarClock className="w-4.5 h-4.5" /> What happens next
               </div>
               <p className="text-sm text-slate-500 mb-5">
-                Your loan is approved. Here's the path to getting your funds.
+                {isFinancing
+                  ? `Your financing is approved. Here's the path to getting ${productTitle}.`
+                  : "Your loan is approved. Here's the path to getting your funds."}
               </p>
 
               <div>
@@ -342,9 +365,16 @@ export default function LoanOfferDetail({ quote, onAction }: LoanOfferDetailProp
                 ))}
               </div>
 
-              {/* Confirm receipt — appears once the lender marks the loan
-                  disbursed, so the borrower closes the loop on-platform. */}
-              {disbursed && !borrowerConfirmed && (
+              {/* Once disbursed. FINANCING: the lender paid the seller, so the
+                  buyer collects the product (no "I received funds" step — the
+                  money never came to them). Plain loan: borrower confirms receipt. */}
+              {disbursed && isFinancing && (
+                <div className="mt-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-bold flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  {lenderName} has paid {sellerName} — arrange collection of {productTitle} with the seller.
+                </div>
+              )}
+              {disbursed && !isFinancing && !borrowerConfirmed && (
                 <div className="mt-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-200">
                   <p className="text-sm font-bold text-emerald-800 mb-2">
                     {lenderName} has marked your funds as disbursed.
@@ -359,7 +389,7 @@ export default function LoanOfferDetail({ quote, onAction }: LoanOfferDetailProp
                   </button>
                 </div>
               )}
-              {borrowerConfirmed && (
+              {!isFinancing && borrowerConfirmed && (
                 <div className="mt-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-bold flex items-center gap-2">
                   <Check className="w-4 h-4" /> You confirmed receipt of the funds.
                 </div>

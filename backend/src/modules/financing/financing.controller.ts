@@ -13,6 +13,7 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { PERMISSIONS } from '../../common/constants/permissions';
 import { FinancingService } from './financing.service';
+import { CreateFinancingRequestDto, InitiateDisbursementDto } from './dto/financing.dto';
 
 interface AuthenticatedRequest extends ExpressRequest {
   user?: {
@@ -44,13 +45,7 @@ export class FinancingController {
   @Post('requests')
   @UseGuards(JwtAuthGuard)
   createRequest(
-    @Body()
-    body: {
-      productQuoteId: string;
-      tenureMonths?: string | number;
-      attributes?: Record<string, any>;
-      targetedLenderId?: string;
-    },
+    @Body() body: CreateFinancingRequestDto,
     @Request() req: AuthenticatedRequest,
   ) {
     return this.financing.createRequest(req.user!.id, body);
@@ -66,18 +61,23 @@ export class FinancingController {
     return this.financing.cancelFinancing(req.user!.id, productQuoteId);
   }
 
-  /** Lender: confirm disbursement → fund the product order's escrow. */
-  @Post('offers/:loanQuoteId/confirm-disbursement')
+  /**
+   * Lender: initiate disbursement → pay the principal into the holding account
+   * through the PSP. Escrow funds only when the collection is webhook-confirmed
+   * (not on this call), so a lender can't mark a deal paid without real money.
+   */
+  @Post('offers/:loanQuoteId/initiate-disbursement')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(PERMISSIONS.MANAGE_LOANS)
-  confirmDisbursement(
+  initiateDisbursement(
     @Param('loanQuoteId') loanQuoteId: string,
+    @Body() body: InitiateDisbursementDto,
     @Request() req: AuthenticatedRequest,
   ) {
     if (req.user?.role !== 'SERVICE_PROVIDER') {
-      throw new ForbiddenException('Only lending providers can confirm a disbursement');
+      throw new ForbiddenException('Only lending providers can disburse a loan');
     }
     const lenderId = req.user.parentProviderId ?? req.user.id;
-    return this.financing.settleFinancedOrder(lenderId, loanQuoteId);
+    return this.financing.initiateDisbursement(lenderId, loanQuoteId, body);
   }
 }

@@ -166,6 +166,27 @@ export default function ProviderQuotesView({
                               REVISION
                             </div>
                           )}
+                          {(() => {
+                            // Financing visibility for the seller: an accepted deal
+                            // the buyer is financing (so it's not stalled), and one
+                            // already paid via a lender.
+                            const fin = robustParse(quote.dynamicFields)?.financing;
+                            if (fin?.status === 'REQUESTED') {
+                              return (
+                                <div className="px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-blue-50 text-blue-700 border border-blue-100">
+                                  Financing in progress
+                                </div>
+                              );
+                            }
+                            if (fin?.status === 'FUNDED') {
+                              return (
+                                <div className="px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-violet-50 text-violet-700 border border-violet-100">
+                                  Paid via loan
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
                       </div>
 

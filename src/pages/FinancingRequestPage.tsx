@@ -66,13 +66,23 @@ export default function FinancingRequestPage() {
           <h2 className="mt-5 text-xl font-black text-slate-900">Financing request sent</h2>
           <p className="mt-2 text-sm text-slate-500 leading-relaxed">
             Licensed lenders can now review your request for{' '}
-            <span className="font-bold text-slate-700">{quote.inquiryTitle}</span>. Once a lender
-            approves and confirms disbursement, <span className="font-bold">the item is paid for</span>{' '}
-            and the seller proceeds — you'll be notified instantly.
+            <span className="font-bold text-slate-700">{quote.inquiryTitle}</span>.
           </p>
+          <div className="mt-4 text-left bg-slate-50 border border-slate-100 rounded-2xl p-4">
+            <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">
+              What happens next
+            </p>
+            <ol className="space-y-1.5 text-[13px] text-slate-600 list-decimal list-inside">
+              <li>A lender sends you a loan offer.</li>
+              <li>
+                You <span className="font-bold">accept an offer</span> under{' '}
+                <span className="font-bold">Loan Offers</span> in your dashboard.
+              </li>
+              <li>The lender pays the seller and your item is released — you'll be notified.</li>
+            </ol>
+          </div>
           <p className="mt-3 text-[12px] text-slate-400">
-            Review incoming loan offers under <span className="font-bold">Loan Offers</span> in your
-            dashboard.
+            Nothing is paid until you accept an offer — you can cancel anytime before then.
           </p>
           <Button
             onClick={() => navigate('/buyer/dashboard')}
@@ -149,7 +159,6 @@ export default function FinancingRequestPage() {
       <DynamicInquiryForm
         schema={schema}
         categoryName="Government Employee Loan"
-        processType="STANDARD"
         isLoading={submitting}
         onBack={() => navigate(-1)}
         onSubmit={handleSubmit}

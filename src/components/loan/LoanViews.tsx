@@ -633,6 +633,7 @@ export const LoanOffersView: React.FC = () => {
   const [reviseId, setReviseId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [stageBusyId, setStageBusyId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -682,6 +683,7 @@ export const LoanOffersView: React.FC = () => {
   // server-side for financing loans.
   const advanceStage = async (offer: any, stage: LoanStage) => {
     setStageBusyId(String(offer.id));
+    setNotice(null);
     try {
       let attrs: any = offer.inquiry?.attributes;
       if (typeof attrs === 'string') {
@@ -689,13 +691,27 @@ export const LoanOffersView: React.FC = () => {
       }
       const isFinancing = !!attrs?.financedQuoteId;
       if (stage === 'DISBURSED' && isFinancing) {
-        await financingService.confirmDisbursement(String(offer.id));
+        // Disbursement is now a VERIFIED PSP payment, not a click. Initiating it
+        // starts a collection of the principal from the lender; the order's
+        // escrow (and this loan → DISBURSED) only settles once the payment is
+        // confirmed. So we report a pending state rather than an instant "done".
+        const res = await financingService.initiateDisbursement(String(offer.id));
+        if (res?.status === 'successful') {
+          setNotice({ kind: 'info', text: 'Disbursement confirmed — the seller has been paid.' });
+        } else {
+          setNotice({
+            kind: 'info',
+            text:
+              res?.instruction ||
+              'Disbursement initiated — the seller is paid once your payment is confirmed. This may take a moment.',
+          });
+        }
       } else {
         await loanService.advanceStage(String(offer.id), stage);
       }
       await load();
     } catch (e: any) {
-      alert(e?.message || 'Failed to update the loan stage.');
+      setNotice({ kind: 'error', text: e?.message || 'Failed to update the loan stage.' });
     } finally {
       setStageBusyId(null);
     }
@@ -722,6 +738,17 @@ export const LoanOffersView: React.FC = () => {
 
   return (
     <>
+    {notice && (
+      <div
+        className={`mb-3 rounded-2xl border p-4 text-sm font-medium ${
+          notice.kind === 'error'
+            ? 'border-rose-200 bg-rose-50 text-rose-700'
+            : 'border-blue-100 bg-blue-50/70 text-blue-800'
+        }`}
+      >
+        {notice.text}
+      </div>
+    )}
     <div className="space-y-3">
       {offers.map((o) => {
         const d = o.dynamicFields || {};

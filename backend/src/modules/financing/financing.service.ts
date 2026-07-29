@@ -13,6 +13,7 @@ import { QuotesService } from '../quotes/quotes.service';
 import { InquiriesService } from '../inquiries/inquiries.service';
 import { CheckoutService } from '../payments/checkout.service';
 import { AuditService } from '../audit/audit.service';
+import { ConsentsService } from '../consents/consents.service';
 
 /**
  * Financed checkout — the bridge between the marketplace and the lending
@@ -21,15 +22,18 @@ import { AuditService } from '../audit/audit.service';
  * A buyer who can't pay cash for an accepted PRODUCT quote finances it: we open
  * a `loan-government` request whose context IS the product (title, spec, price
  * locked as the principal), broadcast it to licensed lenders, and — once a
- * lender approves, the buyer accepts the terms, and the lender confirms the
- * off-platform disbursement — fund the PRODUCT quote's escrow on-platform.
+ * lender approves, the buyer accepts the terms, and the lender pays the
+ * principal into the holding account through the PSP — fund the PRODUCT quote's
+ * escrow on-platform.
  *
  * The product quote and the loan link through JSON (no schema migration):
  *   • product `quote.dynamicFields.financing = { status, loanInquiryId, ... }`
  *   • loan `inquiry.attributes.{ financedQuoteId, financedInquiryId, ... }`
  *
- * Settlement reuses `CheckoutService.fundEscrowFromExternal`, so the seller's
- * post-payment flow (collection/handover/escrow-release) is identical to cash.
+ * Disbursement goes through the SAME verified PSP collection as cash
+ * (`CheckoutService.initiateDisbursement` → webhook → `fundEscrow`), so escrow
+ * only funds on a confirmed receipt and the seller's post-payment flow
+ * (collection/handover/escrow-release) is identical to cash.
  */
 @Injectable()
 export class FinancingService {
@@ -49,7 +53,12 @@ export class FinancingService {
     private readonly inquiriesService: InquiriesService,
     private readonly checkoutService: CheckoutService,
     private readonly auditService: AuditService,
+    private readonly consentsService: ConsentsService,
   ) {}
+
+  /** Notice key for the salary/payroll-deduction consent a financed borrower
+   *  must grant. Recorded in the consents ledger so it's auditable. */
+  private static readonly PAYROLL_CONSENT_KEY = 'PAYROLL_DEDUCTION_FINANCING';
 
   private audit(entry: Record<string, any>) {
     return this.auditService.create(entry as any).catch(() => undefined);
@@ -91,6 +100,17 @@ export class FinancingService {
 
     const principal = Number(quote.price) || 0;
     if (principal <= 0) throw new BadRequestException('This quote has no payable amount');
+
+    // A salary-backed financing request REQUIRES the payroll-deduction consent.
+    // Previously the toggle was only enforced in the browser — here it's a hard
+    // server gate, and the grant is written to the consents ledger so there is
+    // an auditable record (not just a value buried in freeform attributes).
+    const consentGranted = (dto.attributes as any)?.payrollDeductionConsent === true;
+    if (!consentGranted) {
+      throw new BadRequestException(
+        'Payroll-deduction consent is required to request salary-backed financing',
+      );
+    }
 
     // The buyer is committing to this quote — reflect it as ACCEPTED so the
     // seller sees an accepted deal (with a "financing in progress" badge) rather
@@ -147,6 +167,12 @@ export class FinancingService {
       },
     });
 
+    // Record the payroll-deduction consent (append-only) — the auditable proof
+    // the borrower agreed to salary-deduction repayment for this request.
+    await this.consentsService
+      .record(buyerId, FinancingService.PAYROLL_CONSENT_KEY, true, '1', 'financing_request')
+      .catch((e) => this.logger.warn(`Consent record failed: ${(e as Error).message}`));
+
     this.audit({
       action: 'FINANCING_REQUESTED',
       entityType: 'QUOTE',
@@ -154,26 +180,29 @@ export class FinancingService {
       buyerId,
       targetTitle: quote.inquiryTitle,
       amount: principal,
-      details: 'Buyer requested lender financing for a product quote',
+      details: 'Buyer requested lender financing for a product quote (payroll-deduction consent recorded)',
     });
 
     return { loanInquiryId: loanInquiry.id, productQuoteId: quote.id, principal };
   }
 
   /**
-   * Lender confirms they have disbursed the principal into the holding account
-   * (off-platform transfer). THIS is the pivot: it funds the PRODUCT quote's
-   * escrow, creates the Order, flips it PAID, advances the loan to DISBURSED and
-   * notifies buyer + seller (ORDER_PAID, fired inside CheckoutService).
+   * Lender initiates disbursement: they pay the principal into the holding
+   * account through the SAME verified PSP collection as a cash buyer. This does
+   * NOT fund escrow directly — it starts a collection and returns a pending
+   * state. Escrow, the Order, the loan → DISBURSED and the financing → FUNDED
+   * flips all happen later in `CheckoutService.fundEscrow` when the provider's
+   * webhook confirms the money actually arrived. So a lender can no longer mark
+   * a deal paid without real funds landing.
    *
    * Requires: the loan offer is this lender's, is a LOAN, is ACCEPTED by the
-   * borrower, and actually finances a product quote. Idempotent — a repeated
-   * confirmation is a no-op once the product escrow is funded.
+   * borrower, and actually finances a product quote.
    */
-  async settleFinancedOrder(
+  async initiateDisbursement(
     lenderId: string,
     loanQuoteId: string,
-  ): Promise<{ orderId: string | null; alreadyFunded: boolean; productQuoteId: string }> {
+    opts?: { phone?: string; operator?: string },
+  ): Promise<{ reference: string; status: string; amount: string; productQuoteId: string; instruction?: string }> {
     const loanQuote = await this.quotesService.findOne(loanQuoteId);
     if (!loanQuote) throw new NotFoundException('Loan offer not found');
     if (loanQuote.providerId !== lenderId) throw new ForbiddenException('Not your loan offer');
@@ -208,61 +237,36 @@ export class FinancingService {
     if (!financing || financing.loanInquiryId !== loanQuote.inquiryId) {
       throw new ConflictException('This loan offer is not linked to that product quote');
     }
+    if (financing.status === 'FUNDED') {
+      throw new ConflictException('This order is already funded');
+    }
     const buyerId = (productQuote.inquiry as any)?.buyerId;
     if (!buyerId) throw new ConflictException('Financed quote has no buyer');
 
-    const outcome = await this.checkoutService.fundEscrowFromExternal({
-      quoteId: financedQuoteId,
+    // Start a verified collection from the LENDER for the principal. Escrow is
+    // funded only when the webhook confirms — see CheckoutService.fundEscrow,
+    // which then advances the loan to DISBURSED and the financing to FUNDED.
+    const result = await this.checkoutService.initiateDisbursement({
+      productQuoteId: financedQuoteId,
+      lenderId,
       buyerId,
-      idempotencyScope: loanQuote.id,
-      memo: {
-        lenderId,
-        loanQuoteId: loanQuote.id,
-        loanInquiryId: loanQuote.inquiryId,
-      },
-    });
-
-    // Advance the loan lifecycle tracker to DISBURSED (forward-only; the borrower
-    // sees "disbursed" in their "what happens next" tracker) and record the order.
-    const now = new Date().toISOString();
-    const loanDf = (loanQuote.dynamicFields as any) || {};
-    await this.quotesService.patchDynamicFields(loanQuote.id, {
-      stage: 'DISBURSED',
-      stageAt: { ...(loanDf.stageAt || {}), disbursed: now },
-      disbursedAt: now,
-      financedOrderId: outcome.orderId,
-    });
-
-    // Mark the product-quote financing FUNDED (preserve the rest of the object).
-    await this.quotesService.patchDynamicFields(productQuote.id, {
-      financing: {
-        ...financing,
-        status: 'FUNDED',
-        loanQuoteId: loanQuote.id,
-        lenderId,
-        orderId: outcome.orderId,
-        fundedAt: now,
-      },
+      loanQuoteId: loanQuote.id,
+      loanInquiryId: loanQuote.inquiryId,
+      phone: opts?.phone,
+      operator: opts?.operator,
     });
 
     this.audit({
-      action: 'FINANCING_DISBURSED',
+      action: 'FINANCING_DISBURSEMENT_INITIATED',
       entityType: 'QUOTE',
       entityId: productQuote.id,
       providerId: lenderId,
       targetTitle: productQuote.inquiryTitle,
-      amount: Number(outcome.amount) || 0,
-      status: 'PAID',
-      details: outcome.alreadyFunded
-        ? 'Disbursement re-confirmed (escrow already funded)'
-        : 'Lender confirmed disbursement — product escrow funded',
+      amount: Number(result.amount) || 0,
+      details: `Lender initiated disbursement (ref ${result.reference}) — escrow funds on confirmation`,
     });
 
-    return {
-      orderId: outcome.orderId,
-      alreadyFunded: outcome.alreadyFunded,
-      productQuoteId: productQuote.id,
-    };
+    return { ...result, productQuoteId: productQuote.id };
   }
 
   /**

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { createOrder } from '../services/api/orderService';
 import { financingService } from '../services/api/financingService';
+import { isFinancingActive } from '../services/lifecycleFilters';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Star,
@@ -213,9 +214,14 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
   // "Make a Payment" button. STANDARD quotes don't have a modal; they
   // use the Generate PO flow, so the flag is ignored for them.
   React.useEffect(() => {
+    // Don't auto-open the cash sheet on a quote that's mid-financing — the buyer
+    // would dead-end (the backend 409s a cash pay while financing is REQUESTED).
+    const financingInFlight =
+      (quote.dynamicFields as any)?.financing?.status === 'REQUESTED';
     if (
       autoOpenPay &&
       !hasAutoOpened &&
+      !financingInFlight &&
       quote.processType === 'EXPRESS' &&
       !expired &&
       !['PAID', 'COMPLETED', 'EXPIRED', 'REJECTED', 'CANCELLED'].includes((quote.status || '').toUpperCase())
@@ -234,8 +240,7 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
   // button for an in-progress banner so the buyer can't dead-end on a cash pay
   // (the backend 409s that) and can back out to pay another way.
   const navigate = useNavigate();
-  const financing = (quote.dynamicFields as any)?.financing;
-  const financingActive = financing?.status === 'REQUESTED';
+  const financingActive = isFinancingActive(quote as any);
   const [cancellingFinancing, setCancellingFinancing] = useState(false);
   const handleCancelFinancing = async () => {
     setCancellingFinancing(true);
@@ -1041,8 +1046,9 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
                   <div className="flex items-start gap-3">
                     <Landmark className="w-5 h-5 text-[#C9973A] shrink-0" />
                     <p className="text-white/90 text-sm font-bold leading-snug">
-                      Financing in progress — a lender is reviewing your salary-backed loan. You'll be
-                      notified the moment the item is paid for.
+                      Financing in progress — a lender is reviewing your salary-backed loan. Next,{' '}
+                      <span className="underline">accept an offer under Loan Offers</span>; the lender
+                      then pays the seller and your item is released.
                     </p>
                   </div>
                   <button
