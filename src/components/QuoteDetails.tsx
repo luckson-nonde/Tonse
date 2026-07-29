@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { createOrder } from '../services/api/orderService';
+import { financingService } from '../services/api/financingService';
+import { isFinancingActive } from '../services/lifecycleFilters';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Star,
@@ -24,6 +26,7 @@ import {
   X,
   CheckCircle2,
   Sparkles,
+  Landmark,
 } from 'lucide-react';
 import { robustParse } from '../utils/jsonUtils';
 import { Quote, Inquiry } from '../types.ts';
@@ -109,13 +112,20 @@ function PaymentModal({
       amountMode="fixed"
       fixedAmount={total}
       defaultPhone={(user as any)?.phone || ''}
-      methods={['wallet', 'mobile_money', 'card']}
+      methods={['wallet', 'mobile_money', 'card', 'lending']}
       defaultMethod="mobile_money"
       onWalletSelected={() => {
         // Wallet payments go through /buyer/financial so the buyer
         // reviews their balance + the basket before the debit.
         onClose();
         navigate('/buyer/financial', { state: { payQuote: quote } });
+      }}
+      onLendingSelected={() => {
+        // "Pay via lending institution" (government workers): route to the
+        // financing-request flow, which opens a salary-backed loan request
+        // whose principal is locked to this quote's price.
+        onClose();
+        navigate('/buyer/financing', { state: { financeQuote: quote } });
       }}
       actionLabel={(amt) => `Pay ZMW ${amt.toLocaleString()}`}
       onSubmit={handlePaymentSubmit}
@@ -204,9 +214,14 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
   // "Make a Payment" button. STANDARD quotes don't have a modal; they
   // use the Generate PO flow, so the flag is ignored for them.
   React.useEffect(() => {
+    // Don't auto-open the cash sheet on a quote that's mid-financing — the buyer
+    // would dead-end (the backend 409s a cash pay while financing is REQUESTED).
+    const financingInFlight =
+      (quote.dynamicFields as any)?.financing?.status === 'REQUESTED';
     if (
       autoOpenPay &&
       !hasAutoOpened &&
+      !financingInFlight &&
       quote.processType === 'EXPRESS' &&
       !expired &&
       !['PAID', 'COMPLETED', 'EXPIRED', 'REJECTED', 'CANCELLED'].includes((quote.status || '').toUpperCase())
@@ -219,6 +234,24 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [paid, setPaid] = useState(false);
   const [parentQuote, setParentQuote] = useState<Quote | null>(null);
+
+  // Financed checkout: while a lender reviews the buyer's salary-backed loan the
+  // quote carries `dynamicFields.financing.status = 'REQUESTED'`. Swap the pay
+  // button for an in-progress banner so the buyer can't dead-end on a cash pay
+  // (the backend 409s that) and can back out to pay another way.
+  const navigate = useNavigate();
+  const financingActive = isFinancingActive(quote as any);
+  const [cancellingFinancing, setCancellingFinancing] = useState(false);
+  const handleCancelFinancing = async () => {
+    setCancellingFinancing(true);
+    try {
+      await financingService.cancel(String(quote.id));
+      navigate('/buyer/dashboard');
+    } catch (e: any) {
+      alert(e?.message || 'Could not cancel the financing request.');
+      setCancellingFinancing(false);
+    }
+  };
 
   React.useEffect(() => {
     if ((quote as any).parentQuoteId) {
@@ -1008,7 +1041,25 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
             )}
 
             <div className="space-y-3">
-              {paid ? (
+              {financingActive ? (
+                <div className="py-4 px-5 bg-[#C9973A]/10 border border-[#C9973A]/30 rounded-2xl space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Landmark className="w-5 h-5 text-[#C9973A] shrink-0" />
+                    <p className="text-white/90 text-sm font-bold leading-snug">
+                      Financing in progress — a lender is reviewing your salary-backed loan. Next,{' '}
+                      <span className="underline">accept an offer under Loan Offers</span>; the lender
+                      then pays the seller and your item is released.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleCancelFinancing}
+                    disabled={cancellingFinancing}
+                    className="w-full py-3 rounded-xl border border-white/15 text-white/70 hover:text-white hover:bg-white/5 text-[10px] font-bold uppercase tracking-widest disabled:opacity-50"
+                  >
+                    {cancellingFinancing ? 'Cancelling…' : 'Cancel & pay another way'}
+                  </button>
+                </div>
+              ) : paid ? (
                 <div className="flex items-center gap-3 py-4 px-5 bg-emerald-500/20 border border-emerald-500/30 rounded-2xl">
                   <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                   <p className="text-emerald-300 text-sm font-bold">Payment initiated! Awaiting provider confirmation.</p>
@@ -1036,7 +1087,7 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
                   {quote.processType === 'EXPRESS' ? 'Pay & Start Service' : 'Generate Purchase Order (PO)'}
                 </Button>
               )}
-              {!paid && (
+              {!paid && !financingActive && (
                 <Button
                   variant="outline"
                   onClick={() => onAction('archive_quote', quote)}

@@ -32,6 +32,7 @@ import { JobsModule } from './modules/jobs/jobs.module';
 import { LoanModule } from './modules/loans/loans.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { SiteSettingsModule } from './modules/site-settings/site-settings.module';
+import { FinancingModule } from './modules/financing/financing.module';
 import { ConsentsModule } from './modules/consents/consents.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
 import { VentureModule } from './modules/venture/venture.module';
@@ -108,6 +109,7 @@ import webpushConfig from './config/webpush.config';
     LoanModule,
     BillingModule,
     SiteSettingsModule,
+    FinancingModule,
     ConsentsModule,
     LedgerModule,
     VentureModule,

@@ -11,9 +11,12 @@ import {
   ArrowLeftRight,
   PhoneCall,
   Mail,
+  ShoppingBag,
+  Lock,
 } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
 import { loanService } from '../../services/api/loanService';
+import { financingService } from '../../services/api/financingService';
 import { recordInquiryView } from '../../services/api/inquiryService';
 import SecureFile, { isSecureFileUrl } from '../SecureFile';
 import { recordConsent } from '../../services/api/consentService';
@@ -50,7 +53,22 @@ const prettifyKey = (k: string) =>
 // Borrower follow-up contact is PRIVATE until the borrower accepts an offer —
 // it's revealed only in the accepted-offer "follow up" panel, never on the open
 // request. Keep these keys out of the general attribute dump.
-const HIDDEN_ATTR_KEYS = new Set(['contactName', 'contactPhone', 'contactEmail', 'preferredContact']);
+const HIDDEN_ATTR_KEYS = new Set([
+  'contactName',
+  'contactPhone',
+  'contactEmail',
+  'preferredContact',
+  // Purchase-financing linkage — rendered in the dedicated FinancingContext
+  // panel, kept out of the raw attribute dump (productSpec is a nested object).
+  'financing',
+  'financedQuoteId',
+  'financedInquiryId',
+  'productTitle',
+  'productSpec',
+  'sellerId',
+  'sellerName',
+  'principal',
+]);
 
 const RequestDetails: React.FC<{ attributes: Record<string, any> }> = ({ attributes }) => {
   const entries = Object.entries(attributes || {}).filter(
@@ -84,6 +102,46 @@ const RequestDetails: React.FC<{ attributes: Record<string, any> }> = ({ attribu
   );
 };
 
+// Purchase-financing context — shown when a loan request finances a specific
+// product buy. Gives the lender the product, seller and the fixed principal, plus
+// the product spec, so they can assess the deal they're actually funding.
+const FinancingContext: React.FC<{ a: Record<string, any> }> = ({ a }) => {
+  if (!a?.financing) return null;
+  const spec = a.productSpec && typeof a.productSpec === 'object' ? a.productSpec : null;
+  return (
+    <div className="mt-3 p-3.5 rounded-2xl bg-[#1B3068]/5 border border-[#1B3068]/15">
+      <div className="flex items-center gap-2">
+        <ShoppingBag className="w-4 h-4 text-[#1B3068]" />
+        <span className="text-[10px] font-black uppercase tracking-wider text-[#1B3068]">
+          Purchase financing
+        </span>
+      </div>
+      <p className="mt-1.5 text-sm text-slate-700">
+        Financing <span className="font-bold">{a.productTitle || 'a product purchase'}</span>
+        {a.sellerName ? (
+          <>
+            {' '}from <span className="font-bold">{a.sellerName}</span>
+          </>
+        ) : null}
+        . The principal is fixed to the purchase price (
+        <span className="font-bold">{zmw(a.principal ?? a.loanAmount)}</span>).
+      </p>
+      <p className="mt-1 text-[11px] text-slate-500 leading-snug">
+        On approval you disburse into the platform holding account and confirm — that pays the seller
+        and marks the buyer's order paid. Repayment is arranged with the borrower directly.
+      </p>
+      {spec && (
+        <div className="mt-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-2">
+            Product specification
+          </p>
+          <RequestDetails attributes={spec} />
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Compact offer form built from the loan-offer QuoteField[] schema.
 const OfferForm: React.FC<{
   request: any;
@@ -103,6 +161,9 @@ const OfferForm: React.FC<{
   const { fields } = generateQuoteSchema(categoryKey, request.attributes || {}, 'STANDARD');
   const lt = loanTypeOverride ?? loanTypeKey(categoryKey, request.category, request.title);
   const isLoan = isLoanOverride ?? !!lt;
+  // Purchase financing: the principal is the buyer's purchase price and must not
+  // be changed by the lender (they fund exactly the order amount). Lock it.
+  const isFinancing = !!request.attributes?.financing;
 
   // Terms & Conditions default from the lender's saved, per-loan-type terms
   // (type-specific → general fallback) so they rarely retype boilerplate.
@@ -180,6 +241,20 @@ const OfferForm: React.FC<{
 
   const renderField = (f: QuoteField) => {
     const common = 'w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#C9973A] outline-none';
+    // Purchase financing: the principal is locked to the purchase price — show it
+    // read-only so the lender funds exactly the order amount.
+    if (isLoan && isFinancing && f.name === 'price') {
+      return (
+        <div className={`${common} bg-slate-50 flex items-center justify-between`}>
+          <span className="font-bold text-slate-900">
+            {values.price ? `ZMW ${Number(values.price).toLocaleString()}` : '—'}
+          </span>
+          <span className="text-[10px] font-black uppercase tracking-wider text-[#C9973A] flex items-center gap-1">
+            <Lock className="w-3 h-3" /> Purchase price
+          </span>
+        </div>
+      );
+    }
     // Monthly repayment is auto-priced for loans — show it read-only so the
     // lender can't fat-finger the arithmetic.
     if (isLoan && f.name === 'monthlyRepayment') {
@@ -391,6 +466,7 @@ export const LoanRequestsView: React.FC = () => {
               </div>
             </div>
 
+            <FinancingContext a={a} />
             <RequestDetails attributes={a} />
 
             {openId === String(r.id) ? (
@@ -557,6 +633,7 @@ export const LoanOffersView: React.FC = () => {
   const [reviseId, setReviseId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [stageBusyId, setStageBusyId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -600,13 +677,41 @@ export const LoanOffersView: React.FC = () => {
   };
 
   // Advance an accepted loan's lifecycle stage (drives the borrower's tracker).
+  // For a PURCHASE-FINANCING loan, DISBURSED is special: it must fund the linked
+  // product order's escrow, so it goes through the financing settlement endpoint
+  // (which also stamps the stage DISBURSED) — the plain stage bump is rejected
+  // server-side for financing loans.
   const advanceStage = async (offer: any, stage: LoanStage) => {
     setStageBusyId(String(offer.id));
+    setNotice(null);
     try {
-      await loanService.advanceStage(String(offer.id), stage);
+      let attrs: any = offer.inquiry?.attributes;
+      if (typeof attrs === 'string') {
+        try { attrs = JSON.parse(attrs); } catch { attrs = {}; }
+      }
+      const isFinancing = !!attrs?.financedQuoteId;
+      if (stage === 'DISBURSED' && isFinancing) {
+        // Disbursement is now a VERIFIED PSP payment, not a click. Initiating it
+        // starts a collection of the principal from the lender; the order's
+        // escrow (and this loan → DISBURSED) only settles once the payment is
+        // confirmed. So we report a pending state rather than an instant "done".
+        const res = await financingService.initiateDisbursement(String(offer.id));
+        if (res?.status === 'successful') {
+          setNotice({ kind: 'info', text: 'Disbursement confirmed — the seller has been paid.' });
+        } else {
+          setNotice({
+            kind: 'info',
+            text:
+              res?.instruction ||
+              'Disbursement initiated — the seller is paid once your payment is confirmed. This may take a moment.',
+          });
+        }
+      } else {
+        await loanService.advanceStage(String(offer.id), stage);
+      }
       await load();
     } catch (e: any) {
-      alert(e?.message || 'Failed to update the loan stage.');
+      setNotice({ kind: 'error', text: e?.message || 'Failed to update the loan stage.' });
     } finally {
       setStageBusyId(null);
     }
@@ -633,6 +738,17 @@ export const LoanOffersView: React.FC = () => {
 
   return (
     <>
+    {notice && (
+      <div
+        className={`mb-3 rounded-2xl border p-4 text-sm font-medium ${
+          notice.kind === 'error'
+            ? 'border-rose-200 bg-rose-50 text-rose-700'
+            : 'border-blue-100 bg-blue-50/70 text-blue-800'
+        }`}
+      >
+        {notice.text}
+      </div>
+    )}
     <div className="space-y-3">
       {offers.map((o) => {
         const d = o.dynamicFields || {};
@@ -647,6 +763,8 @@ export const LoanOffersView: React.FC = () => {
         if (typeof attrs === 'string') {
           try { attrs = JSON.parse(attrs); } catch { attrs = {}; }
         }
+        // Purchase-financing loan → DISBURSED funds the product order's escrow.
+        const isFinancing = !!attrs.financedQuoteId;
         const contactPhone: string = attrs.contactPhone || '';
         const contactEmail: string = attrs.contactEmail || '';
         const contactName: string = attrs.contactName || '';
@@ -727,7 +845,9 @@ export const LoanOffersView: React.FC = () => {
                           className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg flex items-center gap-1.5 disabled:opacity-50"
                         >
                           {stageBusyId === String(o.id) && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                          {next.label}
+                          {next.stage === 'DISBURSED' && isFinancing
+                            ? 'Confirm disbursement — pay seller'
+                            : next.label}
                         </button>
                       )}
                     </div>

@@ -95,3 +95,13 @@ export const isPastOrder = (o: StatusBearing): boolean => {
   const status = String(o.status || '').toUpperCase();
   return ['COMPLETED', 'CANCELLED'].includes(status);
 };
+
+/**
+ * True while a quote is being financed through a lender — the buyer chose "Pay
+ * via lending institution" and no disbursement has funded it yet. The quote is
+ * still ACCEPTED (so it stays in Stage 2), but should render an "awaiting
+ * financing" state for the buyer and a "financing in progress" badge for the
+ * seller. Reads the flag the financing flow stamps on the quote's dynamicFields.
+ */
+export const isFinancingActive = (q: { dynamicFields?: any }): boolean =>
+  ((q?.dynamicFields?.financing?.status ?? '') as string) === 'REQUESTED';

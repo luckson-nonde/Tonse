@@ -12,6 +12,7 @@ import {
   Trash2,
   CreditCard,
   Music,
+  Landmark,
 } from 'lucide-react';
 import { Quote } from '../types.ts';
 import { robustParse } from '../utils/jsonUtils';
@@ -100,7 +101,12 @@ function resolveConditionDetail(quote: Quote): { label: string; value: string; i
 export default function QuoteCard({ quote, onView, onPay, onDelete }: QuoteCardProps) {
   const conditionDetail = resolveConditionDetail(quote);
   const categoryContext = resolveCategoryContext(quote);
-  const canPay = !!onPay && !NON_PAYABLE_STATUSES.has((quote.status || '').toUpperCase());
+  // While a lender is reviewing the buyer's financing request, cash payment is
+  // off the table (the backend blocks it) — show a status pill, not a pay CTA.
+  const financingActive =
+    (robustParse((quote as any).dynamicFields, {}) as any)?.financing?.status === 'REQUESTED';
+  const canPay =
+    !!onPay && !financingActive && !NON_PAYABLE_STATUSES.has((quote.status || '').toUpperCase());
   const providerId = quote.providerId ? String(quote.providerId) : '';
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   return (
@@ -273,6 +279,15 @@ export default function QuoteCard({ quote, onView, onPay, onDelete }: QuoteCardP
               <Trash2 className="w-3.5 h-3.5" />
               Delete
             </button>
+          )}
+          {financingActive && (
+            <span
+              className="px-4 py-2.5 text-[12px] font-bold rounded-xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1.5"
+              title="A lender is reviewing your financing request"
+            >
+              <Landmark className="w-3.5 h-3.5" />
+              Financing in progress
+            </span>
           )}
           {canPay && (
             <button

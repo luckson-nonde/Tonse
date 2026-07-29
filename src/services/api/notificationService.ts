@@ -17,7 +17,8 @@ export interface NotificationRecord {
     | 'REPORT_FILED'
     | 'REPORT_RECEIVED'
     | 'JOB_ASSIGNED'
-    | 'JOB_EVIDENCE_ADDED';
+    | 'JOB_EVIDENCE_ADDED'
+    | 'ORDER_PAID';
   inquiryId?: string;
   quoteId?: string;
   title: string;

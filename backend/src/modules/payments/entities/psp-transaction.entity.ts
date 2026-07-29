@@ -79,9 +79,29 @@ export class PspTransaction {
   @Column({ type: 'uuid', nullable: true })
   orderId: string;
 
-  /** The party paying or being paid. No FK — see LedgerEntry.counterpartyId. */
+  /** The party paying or being paid. No FK — see LedgerEntry.counterpartyId.
+   *  For a cash sale this is the buyer; for a financed disbursement it's the
+   *  LENDER (who pays the principal into the holding account). */
   @Column({ type: 'uuid', nullable: true })
   counterpartyId: string;
+
+  /**
+   * The deal's BUYER, when the payer differs from them — i.e. a financed
+   * disbursement, where the lender (`counterpartyId`) pays but the order and
+   * escrow belong to the buyer. Null for a cash sale (buyer = payer).
+   */
+  @Column({ type: 'uuid', nullable: true })
+  beneficiaryBuyerId: string;
+
+  /**
+   * Funding context for non-cash sources. For financed checkout:
+   * `{ source:'LOAN', loanQuoteId, loanInquiryId, lenderId }`. Drives the
+   * side-effects applied when escrow funds (advance the loan offer to
+   * DISBURSED, flip the product quote's financing to FUNDED) — so those only
+   * ever happen on a verified receipt.
+   */
+  @Column({ type: 'json', nullable: true })
+  context: Record<string, any>;
 
   /** PII — scrubbed on account erasure, alongside rawPayload. */
   @Column({ type: 'varchar', length: 32, nullable: true })

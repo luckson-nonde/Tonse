@@ -25,6 +25,10 @@ import { User } from '../../users/entities/user.entity';
  *   REPORT_FILED      → reporter: confirmation their complaint was filed.
  *   REPORT_RECEIVED   → admins (primary + ADMIN_REPORTS managers): a new
  *                       complaint is awaiting review.
+ *   ORDER_PAID        → buyer + seller: a quote's escrow was funded (the item
+ *                       is paid for). Fired on cash checkout AND on a lender's
+ *                       loan-financed disbursement (financed checkout), so both
+ *                       parties learn "paid → proceed" without polling.
  *
  * Ephemeral counter events (QUOTE_COUNT_UPDATE, LEAD_FULL, PROVIDER_ACCEPTED,
  * REFERRAL_PROGRESS, MILESTONE_UPDATED) are push-only — never persisted;
@@ -56,6 +60,7 @@ export class Notification {
       'REPORT_RECEIVED',
       'JOB_ASSIGNED',
       'JOB_EVIDENCE_ADDED',
+      'ORDER_PAID',
     ],
   })
   type: string;

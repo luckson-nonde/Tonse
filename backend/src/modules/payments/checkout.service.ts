@@ -17,6 +17,8 @@ import { Inquiry } from '../inquiries/entities/inquiry.entity';
 import { Order } from '../orders/entities/order.entity';
 import { LedgerService } from '../ledger/ledger.service';
 import { ACCOUNT } from '../ledger/ledger-accounts';
+import { isEscrowHolding } from '../quotes/quote-status';
+import { NotificationsService } from '../notifications/notifications.service';
 import { toNgwee } from '../../common/money/money';
 import {
   Channel,
@@ -55,6 +57,7 @@ export class CheckoutService {
     @Inject(PAYMENT_PROVIDER)
     private readonly provider: PaymentProvider,
     private readonly ledger: LedgerService,
+    private readonly notifications: NotificationsService,
     private readonly dataSource: DataSource,
     private readonly config: ConfigService,
   ) {}
@@ -91,6 +94,15 @@ export class CheckoutService {
     if ((quote as any).condition === 'LOAN') {
       // Loans settle off-platform — they never enter escrow.
       throw new BadRequestException('Loan offers are not paid through escrow');
+    }
+    // Financed checkout in flight: block a parallel cash payment so the buyer
+    // can't both finance AND pay for the same quote (which would leave them with
+    // an unnecessary loan against an already-funded order). Cancel financing to
+    // pay another way.
+    if ((quote.dynamicFields as any)?.financing?.status === 'REQUESTED') {
+      throw new ConflictException(
+        'This quote has a financing request in progress — cancel it to pay another way',
+      );
     }
 
     // AMOUNT COMES FROM THE QUOTE, never the client.
@@ -332,6 +344,15 @@ export class CheckoutService {
     verifiedFee: string | undefined,
     raw: Record<string, any> | undefined,
   ): Promise<void> {
+    let paid: {
+      buyerId: string;
+      sellerId: string;
+      quoteId: string;
+      inquiryId: string | null;
+      inquiryTitle: string;
+      amount: string;
+      source: 'CASH' | 'LOAN';
+    } | null = null;
     await this.dataSource.transaction(async (m) => {
       const [tx]: PspTransaction[] = await m.query(
         'SELECT * FROM psp_transactions WHERE reference = $1 FOR UPDATE',
@@ -347,10 +368,19 @@ export class CheckoutService {
 
       const amountNgwee = toNgwee(verifiedAmount);
 
+      // Who owns this deal. For a cash sale the payer IS the buyer. For a
+      // financed disbursement the payer is the LENDER, so the order + escrow
+      // belong to `beneficiaryBuyerId`.
+      const ctx = (tx.context as any) || {};
+      const source: 'CASH' | 'LOAN' = ctx.source === 'LOAN' ? 'LOAN' : 'CASH';
+      const buyerId = tx.beneficiaryBuyerId || tx.counterpartyId;
+
       // Dr PSP_HOLDING / Cr ESCROW_LIABILITY — the money is at the PSP and we
-      // owe it to this deal. The PSP fee is NOT journalled: the buyer bore it,
-      // the provider kept it, and it never entered the holding account. It is
-      // recorded as a memo so the admin still sees gross vs fee vs net.
+      // owe it to this deal. Identical for cash and loan: the lender really
+      // paid the principal into the holding account (verified above), so the
+      // seller's downstream release path is unchanged. The PSP fee is NOT
+      // journalled: the payer bore it, the provider kept it, it never entered
+      // the holding account — recorded as a memo only.
       await this.ledger.postJournal(
         {
           type: 'ESCROW_FUNDED',
@@ -358,8 +388,9 @@ export class CheckoutService {
           quoteId: quote.id,
           pspTransactionId: tx.id,
           currency: tx.currency,
-          description: `Escrow funded for ${quote.inquiryTitle}`,
+          description: `Escrow funded${source === 'LOAN' ? ' (loan)' : ''} for ${quote.inquiryTitle}`,
           memo: {
+            source,
             pspReference: tx.providerReference,
             pspFee: verifiedFee ?? tx.feeAmount,
             feeBearer: tx.feeBearer,
@@ -367,6 +398,9 @@ export class CheckoutService {
               tx.feeBearer === 'customer'
                 ? String(Number(verifiedAmount) + Number(verifiedFee ?? tx.feeAmount ?? 0))
                 : verifiedAmount,
+            ...(source === 'LOAN'
+              ? { lenderId: ctx.lenderId, loanQuoteId: ctx.loanQuoteId, loanInquiryId: ctx.loanInquiryId }
+              : {}),
           },
           lines: [
             {
@@ -380,7 +414,7 @@ export class CheckoutService {
               direction: 'CREDIT',
               amountNgwee,
               quoteId: quote.id,
-              counterpartyId: tx.counterpartyId,
+              counterpartyId: buyerId,
             },
           ],
         },
@@ -394,11 +428,11 @@ export class CheckoutService {
 
       // The order is now a CONSEQUENCE of confirmed payment, not the cause.
       const orderNumber = `ORD-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-      await m.getRepository(Order).save(
+      const order = await m.getRepository(Order).save(
         m.getRepository(Order).create({
           orderNumber,
           quoteId: quote.id,
-          buyerId: tx.counterpartyId,
+          buyerId,
           sellerId: quote.providerId,
           totalAmount: Number(verifiedAmount),
         } as any),
@@ -408,9 +442,195 @@ export class CheckoutService {
       if (quote.inquiryId) {
         await m.getRepository(Inquiry).update(quote.inquiryId, { status: 'CLOSED' });
       }
+
+      // FINANCED disbursement side-effects — applied ONLY here, on a verified
+      // receipt, never on a lender's bare click. Advance the loan offer to
+      // DISBURSED and flip the product quote's financing to FUNDED, mirroring
+      // what the old (trusted) settleFinancedOrder did — but now the money is
+      // provably in the holding account first.
+      if (source === 'LOAN' && ctx.loanQuoteId) {
+        const loanQuote = await m.getRepository(Quote).findOne({ where: { id: ctx.loanQuoteId } });
+        if (loanQuote) {
+          const loanDyn: any = { ...(loanQuote.dynamicFields || {}) };
+          loanDyn.stage = 'DISBURSED';
+          loanDyn.stageAt = new Date().toISOString();
+          loanDyn.disbursedAt = new Date().toISOString();
+          loanDyn.financedOrderId = (order as any).id;
+          await m.getRepository(Quote).update(loanQuote.id, { dynamicFields: loanDyn });
+        }
+        const productDyn: any = { ...(quote.dynamicFields || {}) };
+        productDyn.financing = {
+          ...(productDyn.financing || {}),
+          status: 'FUNDED',
+          loanQuoteId: ctx.loanQuoteId,
+          lenderId: ctx.lenderId ?? tx.counterpartyId,
+          orderId: (order as any).id,
+          fundedAt: new Date().toISOString(),
+        };
+        // Re-apply on the SAME row we already updated to PAID (merge, don't clobber).
+        await m.getRepository(Quote).update(quote.id, { status: 'PAID', dynamicFields: productDyn });
+      }
+
+      paid = {
+        buyerId,
+        sellerId: quote.providerId,
+        quoteId: quote.id,
+        inquiryId: quote.inquiryId ?? null,
+        inquiryTitle: quote.inquiryTitle,
+        amount: verifiedAmount,
+        source,
+      };
     });
 
     this.logger.log(`Escrow funded for ${reference}`);
+    // Post-commit: tell buyer + seller the item is paid. Fire-and-forget.
+    if (paid) this.emitOrderPaid(paid);
+  }
+
+  /**
+   * Tell buyer + seller a quote's escrow is funded ("the item is paid for").
+   * Fire-and-forget, POST-COMMIT: a notification failure must never unwind a
+   * funded payment. Also closes a prior gap — funding emitted nothing, so the
+   * seller only discovered a paid parcel by polling the collection queue.
+   */
+  private emitOrderPaid(ctx: {
+    buyerId: string;
+    sellerId: string;
+    quoteId: string;
+    inquiryId: string | null;
+    inquiryTitle: string;
+    amount: string;
+    source: 'CASH' | 'LOAN';
+  }): void {
+    const financed = ctx.source === 'LOAN';
+    void this.notifications
+      .notifyUsers([ctx.buyerId], 'ORDER_PAID', () => ({
+        title: financed
+          ? `Your loan was approved — "${ctx.inquiryTitle}" is paid for`
+          : `Payment confirmed — "${ctx.inquiryTitle}" is paid for`,
+        inquiryId: ctx.inquiryId ?? undefined,
+        quoteId: ctx.quoteId,
+        data: { role: 'buyer', amount: ctx.amount, source: ctx.source },
+      }))
+      .catch((e) => this.logger.warn(`ORDER_PAID buyer notify failed: ${(e as Error).message}`));
+    void this.notifications
+      .notifyUsers([ctx.sellerId], 'ORDER_PAID', () => ({
+        title: financed
+          ? `"${ctx.inquiryTitle}" has been paid for (buyer financing) — proceed`
+          : `"${ctx.inquiryTitle}" has been paid for — proceed`,
+        inquiryId: ctx.inquiryId ?? undefined,
+        quoteId: ctx.quoteId,
+        data: { role: 'seller', amount: ctx.amount, source: ctx.source },
+      }))
+      .catch((e) => this.logger.warn(`ORDER_PAID seller notify failed: ${(e as Error).message}`));
+  }
+
+  /**
+   * FINANCED DISBURSEMENT — the lender pays the principal into the holding
+   * account through the SAME verified PSP collection as a cash buyer. This
+   * replaces the old trust-based `fundEscrowFromExternal`, where escrow was
+   * booked on the lender's word alone (inflating PSP_HOLDING with money that
+   * may never have arrived). Now nothing is funded until the provider's webhook
+   * confirms the collection, at which point `fundEscrow` (LOAN-aware) posts the
+   * journal, creates the buyer's order, and advances the loan to DISBURSED.
+   *
+   * The payer is the LENDER (`counterpartyId`); the deal's buyer is carried in
+   * `beneficiaryBuyerId`; the financing links ride in `context`.
+   */
+  async initiateDisbursement(params: {
+    productQuoteId: string;
+    lenderId: string;
+    buyerId: string;
+    loanQuoteId: string;
+    loanInquiryId?: string | null;
+    channel?: Channel;
+    phone?: string;
+    operator?: string;
+  }): Promise<{ reference: string; status: string; amount: string; instruction?: string }> {
+    const quote = await this.dataSource.getRepository(Quote).findOne({
+      where: { id: params.productQuoteId },
+    });
+    if (!quote) throw new NotFoundException('Product quote not found');
+    if (isEscrowHolding(quote.status)) {
+      throw new ConflictException('This order is already funded');
+    }
+    if (quote.status !== 'ACCEPTED' && quote.status !== 'PENDING') {
+      throw new ConflictException(`This quote can't be funded from status ${quote.status}`);
+    }
+
+    const amount = String(quote.price);
+    const bearer = this.config.get<'customer' | 'merchant'>('psp.feeBearer') || 'customer';
+    const channel: Channel = params.channel || 'mobile-money';
+    const fees = await this.provider.quoteFees({ amount, channel, bearer });
+    const reference = `TSE-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+
+    // Persist BEFORE the outbound call (a webhook can beat the HTTP response).
+    // counterpartyId = the LENDER (payer); beneficiaryBuyerId = the buyer whose
+    // order + escrow this funds; context drives the funded side-effects.
+    await this.pspTx.save(
+      this.pspTx.create({
+        reference,
+        provider: this.provider.name,
+        type: 'COLLECTION',
+        status: 'PENDING',
+        amount: fees.amount,
+        feeAmount: fees.fee,
+        feeBearer: bearer,
+        currency: fees.currency,
+        quoteId: quote.id,
+        counterpartyId: params.lenderId,
+        beneficiaryBuyerId: params.buyerId,
+        context: {
+          source: 'LOAN',
+          loanQuoteId: params.loanQuoteId,
+          loanInquiryId: params.loanInquiryId ?? null,
+          lenderId: params.lenderId,
+        },
+        payerMsisdn: params.phone ?? null,
+        channel,
+        idempotencyKey: `collection:${reference}`,
+      } as any),
+    );
+
+    let result;
+    try {
+      result = await this.provider.initiateCollection({
+        reference,
+        amount: fees.amount,
+        currency: fees.currency,
+        channel,
+        bearer,
+        phone: params.phone,
+        operator: params.operator,
+        description: `TONSE loan disbursement — ${quote.inquiryTitle}`.slice(0, 100),
+      });
+    } catch (e) {
+      await this.pspTx.update({ reference }, { status: 'FAILED', lastError: (e as Error).message });
+      throw e;
+    }
+
+    await this.pspTx.update(
+      { reference },
+      {
+        providerReference: result.providerReference ?? null,
+        status:
+          result.status === 'successful'
+            ? 'SUCCESSFUL'
+            : result.status === 'failed'
+              ? 'FAILED'
+              : result.status === 'pay-offline'
+                ? 'PAY_OFFLINE'
+                : 'PENDING',
+        rawPayload: result.raw ?? null,
+      },
+    );
+
+    return {
+      reference,
+      status: result.status,
+      amount: fees.amount,
+      instruction: result.instruction,
+    };
   }
 
   /**
@@ -475,11 +695,14 @@ export class CheckoutService {
     this.logger.log(`Venture deposit funded for ${reference}`);
   }
 
-  /** Payment status for the buyer's polling UI. */
-  async status(buyerId: string, reference: string): Promise<any> {
+  /** Payment status for a polling UI. Visible to the payer (buyer for cash,
+   *  lender for a disbursement) or the deal's beneficiary buyer. */
+  async status(userId: string, reference: string): Promise<any> {
     const tx = await this.pspTx.findOne({ where: { reference } });
     if (!tx) throw new NotFoundException('Payment not found');
-    if (tx.counterpartyId !== buyerId) throw new BadRequestException('Not your payment');
+    if (tx.counterpartyId !== userId && tx.beneficiaryBuyerId !== userId) {
+      throw new BadRequestException('Not your payment');
+    }
     return {
       reference: tx.reference,
       status: tx.status,
