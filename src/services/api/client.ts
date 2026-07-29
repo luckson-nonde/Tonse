@@ -410,8 +410,13 @@ export const apiCall = async <T = any>(
     }
 
     if (!response.ok) {
+      // class-validator failures arrive as an ARRAY of messages; String(array)
+      // comma-jams them ("too short,must be a string") — join them readably.
+      const message = Array.isArray(data?.message)
+        ? data.message.join(', ')
+        : data?.message;
       throw new Error(
-        data?.message ||
+        message ||
           (response.status >= 500
             ? 'The server had a problem. Please try again in a moment.'
             : `Request failed (${response.status}).`)

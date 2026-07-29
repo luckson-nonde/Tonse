@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Store, X, Loader2 } from 'lucide-react';
+import { Store, X, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import PageTransition from '../components/PageTransition';
 import { useAuth } from '../AuthContext';
 import { useDashboard } from '../DashboardContext';
@@ -33,6 +33,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import DashboardLayout from '../components/DashboardLayout';
 import { CATEGORIES_DB, getCategorySchema, getCategoryType } from '../services/categories';
 import { isCategoryAvailable } from '../services/categories/availability';
+import { buildInquiryDescription, clampInquiryTitle } from '../services/inquiryDescription';
 import { Inquiry, InquiryItem, Quote } from '../types';
 import { getLabourInquirySchema } from '../services/labourSchemaRegistry';
 import FinancialPage from './FinancialPage';
@@ -50,13 +51,45 @@ import type { ShopResult } from '../services/api/shopService';
  * handlePaymentComplete has no re-entrancy guard, so an unguarded effect
  * would publish the inquiry twice.
  */
-function FreeInquiryAutoPublish({ onReady }: { onReady: () => void }) {
+function FreeInquiryAutoPublish({
+  onReady,
+  error,
+  onRetry,
+}: {
+  onReady: () => void;
+  /** Publish failure reason — switches the spinner to an error + retry UI
+   *  so the buyer is never stranded on an endless "Publishing…" screen. */
+  error?: string | null;
+  onRetry?: () => void;
+}) {
   const fired = React.useRef(false);
   useEffect(() => {
     if (fired.current) return;
     fired.current = true;
     onReady();
   }, [onReady]);
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4 px-6">
+        <div className="flex items-start gap-3 max-w-md w-full bg-rose-50 border border-rose-200 rounded-2xl p-4">
+          <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-rose-700">Your inquiry didn't publish</p>
+            <p className="text-xs text-rose-600 mt-1">{error}</p>
+          </div>
+        </div>
+        <button
+          onClick={onRetry}
+          className="inline-flex items-center gap-2 bg-[#C9973A] hover:bg-[#b3852f] text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Try again
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center justify-center py-24 gap-3 text-slate-400">
       <Loader2 className="w-6 h-6 animate-spin text-[#C9973A]" />
@@ -239,6 +272,9 @@ export default function BuyerDashboard() {
   }, [transactions]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Publish-failure reason for the inquiry flow — drives the error/retry UI
+  // in FreeInquiryAutoPublish and enriches the paid-path alert.
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   // Inquiry Flow State
   const [pendingInquiry, setPendingInquiry] = useState<{
@@ -797,6 +833,7 @@ export default function BuyerDashboard() {
     // broadcasts to every provider in the chosen city; when present,
     // matching narrows to providers within `radius` km of the point.
     setIsSubmitting(true);
+    setPublishError(null);
 
     try {
       const isLabour = pendingInquiry.isLabour === true;
@@ -852,11 +889,16 @@ export default function BuyerDashboard() {
       // category name) when the buyer didn't type one — previously the typed
       // answer was always discarded from the headline.
       const typedTitle = (pendingInquiry.attributes?.title || '').trim();
-      const title = typedTitle
-        ? typedTitle
-        : pendingInquiry.attributes?.brand
-          ? `${pendingInquiry.attributes.brand} ${pendingInquiry.attributes.model || ''} Request`
-          : `${lastCategoryName} Request`;
+      // clampInquiryTitle keeps the result inside the backend's 3–255 char
+      // window (falls back to the category name, truncates overlong text).
+      const title = clampInquiryTitle(
+        typedTitle
+          ? typedTitle
+          : pendingInquiry.attributes?.brand
+            ? `${pendingInquiry.attributes.brand} ${pendingInquiry.attributes.model || ''} Request`
+            : `${lastCategoryName} Request`,
+        `${lastCategoryName} Request`,
+      );
 
       // Merge the payment receipt back into preferences so the backend can
       // bill, audit, and enforce the auto-close cap.
@@ -873,32 +915,21 @@ export default function BuyerDashboard() {
       const hasCoords =
         locationData.latitude != null && locationData.longitude != null;
 
-      // Derive the inquiry's display description from whatever long-form
-      // text the form actually captured. The form schemas vary by
-      // archetype — repair has `incidentReport` / `symptoms`, retail has
-      // `additionalDetails` / `title`, events have `description` /
-      // `additionalDetails` — so probe a priority list and stop on the
-      // first non-empty entry. Falling back to the literal placeholder
-      // string ("No description provided.") was the prior behaviour and
-      // it polluted every inquiry's description column with the same
-      // sentinel — the seller-side panel then rendered the sentinel as
-      // if it were real copy. Empty string means the renderer
-      // suppresses the panel entirely (it already short-circuits on
-      // falsy `lead.description`), which is the right outcome when the
-      // user genuinely had nothing more to add beyond the structured
-      // fields.
-      const attrs = pendingInquiry.attributes || {};
-      // Probe structured fields in priority order; fall back to a neutral
-      // placeholder that satisfies the backend's MinLength(10) constraint
-      // when the buyer filled in only structured fields (brand/model/etc.)
-      // and left the free-text area blank.
-      const description: string =
-        attrs.description ||
-        attrs.incidentReport ||
-        attrs.symptoms ||
-        attrs.additionalDetails ||
-        attrs.notes ||
-        'No additional details provided.';
+      // Derive the inquiry's description from the form's own textarea
+      // answers. Selection is driven by the CATEGORY SCHEMA (required
+      // textareas first), so every category's differently-named free-text
+      // field (`conditionDetails`, `issueDescription`, `requestItems`…) is
+      // honoured — the old hardcoded five-name probe chain missed most of
+      // them and shipped a generic sentinel to the seller. The helper also
+      // guarantees the backend's MinLength(10): a short answer ("wound",
+      // "None") is kept and topped up with a summary sentence instead of
+      // being sent as-is (which 400'd after the buyer had already paid).
+      const description = buildInquiryDescription({
+        attributes: pendingInquiry.attributes || {},
+        schema: getCategorySchema(lastCategoryId),
+        title,
+        categoryName: lastCategoryName,
+      });
 
       const inquiryData: CreateInquiryPayload = {
         title,
@@ -957,7 +988,13 @@ export default function BuyerDashboard() {
         return;
       }
       console.error('Error creating inquiry:', error);
-      alert('Payment cleared but the inquiry failed to publish. Please contact support.');
+      const reason =
+        (error as Error)?.message || 'Something went wrong while publishing.';
+      // Held in state so FreeInquiryAutoPublish can swap its spinner for an
+      // inline error + retry; the alert stays as a belt-and-braces signal for
+      // the paid path (and now carries the actual reason, not a fixed string).
+      setPublishError(reason);
+      alert(`Your inquiry failed to publish: ${reason}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -1107,6 +1144,8 @@ export default function BuyerDashboard() {
           return (
             <FreeInquiryAutoPublish
               onReady={() => handlePaymentComplete({ method: 'free', amount: 0 })}
+              error={publishError}
+              onRetry={() => handlePaymentComplete({ method: 'free', amount: 0 })}
             />
           );
         }
