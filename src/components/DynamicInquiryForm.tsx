@@ -37,6 +37,11 @@ interface DynamicInquiryFormProps {
   onSubmit: (data: Record<string, any>) => void;
   onBack: () => void;
   isLoading?: boolean;
+  /** Optional context block rendered INSIDE the form card, above the first
+   *  field — e.g. the financing flow's locked product/loan summary. Keeps
+   *  flows that wrap this form to a single card instead of stacking a
+   *  separate banner above it. */
+  formIntro?: React.ReactNode;
 }
 
 export default function DynamicInquiryForm({
@@ -45,6 +50,7 @@ export default function DynamicInquiryForm({
   onSubmit,
   onBack,
   isLoading,
+  formIntro,
 }: DynamicInquiryFormProps) {
   const [view, setView] = useState<'form' | 'catalog'>('form');
   const [selectedItems, setSelectedItems] = useState<Record<string, any>>({});
@@ -1015,6 +1021,7 @@ export default function DynamicInquiryForm({
             className="flex-1 w-full space-y-8"
           >
             <div className="bg-white border border-[#e8e0d0]/60 rounded-[28px] p-4 sm:p-6 md:p-10 xl:p-12 shadow-[0_4px_24px_-8px_rgba(26,26,46,0.08)]">
+              {formIntro && <div className="mb-8">{formIntro}</div>}
               {/* Two-column max — forms read better when each field has
                   real horizontal room. Going wider (3-4 columns) makes
                   labels feel cramped and bureaucratic; capped at 2 the
