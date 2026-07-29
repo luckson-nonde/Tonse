@@ -35,7 +35,9 @@ export default function DynamicDataDisplay({ schema, attributes }: DynamicDataDi
   });
 
   const renderValue = (item: { label: string; value: any; type: string }) => {
-    if (item.type === 'image_upload') {
+    // guided_capture stores the same array-of-URLs shape as image_upload — the
+    // buyer's guided photo and its optional inspiration shot both land here.
+    if (item.type === 'image_upload' || item.type === 'guided_capture') {
       let imageUrls: string[] = [];
 
       // Handle different formats of image data

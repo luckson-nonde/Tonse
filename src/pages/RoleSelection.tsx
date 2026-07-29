@@ -352,7 +352,13 @@ export default function RoleSelection() {
       // Services + labour only — pure-SERVICE categories. BOTH-nature
       // categories (Automotive, Agriculture) are product catalogs that belong
       // to the seller flow, so they're excluded here to avoid repeats.
-      return rootCategories.filter((c) => getCategoryNature(c.id) === 'SERVICE');
+      // Beauty is the deliberate exception: its root is BOTH because
+      // fragrances is retail, but makeup artists, nail and lash techs,
+      // stylists and pedicurists all register through THIS flow — without
+      // the carve-out they'd have no way in at all.
+      return rootCategories.filter(
+        (c) => getCategoryNature(c.id) === 'SERVICE' || c.id === 'beauty',
+      );
     }
     return rootCategories;
     // eslint-disable-next-line react-hooks/exhaustive-deps

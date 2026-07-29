@@ -74,6 +74,10 @@ export function generateZodSchema(fields: FieldSchema[]) {
         break;
 
       case 'image_upload':
+      // Same shape as image_upload (array of uploaded URLs), so zod stays
+      // out of the way. Requiredness is enforced by the guard in
+      // DynamicInquiryForm.onFormSubmit — z.any() can't express it.
+      case 'guided_capture':
         fieldSchema = z.any();
         break;
 
@@ -99,7 +103,14 @@ export function generateZodSchema(fields: FieldSchema[]) {
         }
 
         if (field.required && field.name !== 'nrc') {
-          fieldSchema = fieldSchema.min(1, `${field.label} is required`);
+          // `min` on a text/textarea field is a CHARACTER minimum. Used where
+          // the answer is forwarded to a backend-validated column (the
+          // inquiry `description` probe requires 10+ chars) so the buyer is
+          // corrected in-form instead of eating a 400 on submit.
+          fieldSchema =
+            field.min !== undefined
+              ? fieldSchema.min(field.min, `${field.label} needs at least ${field.min} characters`)
+              : fieldSchema.min(1, `${field.label} is required`);
         }
         break;
     }
