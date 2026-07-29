@@ -45,6 +45,8 @@ const PUSH_ROUTE_BY_TYPE: Record<DurableType, string> = {
   // Technician's My Jobs tab / the buyer's order history.
   JOB_ASSIGNED: '/provider/my-jobs',
   JOB_EVIDENCE_ADDED: '/buyer/orders',
+  // Direct purchase: the seller's escrow/paid-orders queue.
+  ORDER_PAID: '/provider/paid-orders',
 };
 
 /** DB enum → lowercase SSE event name (EventSource convention). */

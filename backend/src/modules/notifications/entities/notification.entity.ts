@@ -60,6 +60,8 @@ export class Notification {
       'REPORT_RECEIVED',
       'JOB_ASSIGNED',
       'JOB_EVIDENCE_ADDED',
+      // Buyer + seller alert: a quote's escrow was funded, or a buyer bought
+      // a listing outright (direct purchase / financed checkout).
       'ORDER_PAID',
     ],
   })
