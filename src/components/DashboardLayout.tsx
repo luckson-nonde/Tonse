@@ -38,6 +38,19 @@ import {
   Flag,
   Camera,
   LifeBuoy,
+  Package,
+  PackageOpen,
+  Music,
+  Wrench,
+  Briefcase,
+  Check,
+  CheckCircle,
+  Clock,
+  CreditCard,
+  FileCheck,
+  Plus,
+  TrendingUp,
+  XCircle,
 } from 'lucide-react';
 import Logo from './Logo';
 import HeaderProfileMenu from './HeaderProfileMenu';
@@ -318,6 +331,24 @@ const iconMap: Record<string, any> = {
   Landmark,
   Flag,
   HeartPulse,
+  // Every icon name the account schemas reference must exist here —
+  // unknown names silently fall back to Home, which made several
+  // personas' Catalog items render as a second "home" entry.
+  Package,
+  PackageOpen,
+  Music,
+  Wrench,
+  Briefcase,
+  Camera,
+  Check,
+  CheckCircle,
+  Clock,
+  CreditCard,
+  FileCheck,
+  Plus,
+  TrendingUp,
+  XCircle,
+  Tool: Wrench, // lucide has no "Tool" — schemas using it mean a wrench
 };
 
 interface DashboardLayoutProps {
@@ -708,8 +739,9 @@ export default function DashboardLayout({
           return 'Service Catalog';
         case 'SERVICE':
           return 'Service Catalog';
-        case 'WHOLESALE':
-          return 'Stock & Pricing';
+        // WHOLESALE case removed — MASTER_SUPPLIER_ACCOUNT_SCHEMA now
+        // declares 'Supply Catalog' itself (the old 'Stock & Pricing'
+        // rewrite here was overriding it and hiding the catalog naming).
         default:
           return baseLabel;
       }
@@ -951,14 +983,22 @@ export default function DashboardLayout({
           <nav className="space-y-2 md:space-y-3">
             {navItems.map((item) => {
               // Phase 4: Profile is a persona switcher, not a route.
-              // Personal mode + per-archetype Business modes pop in
-              // line; selecting one switches the entire dashboard.
+              // The user's own (Personal) profile lives in the HEADER
+              // dropdown (HeaderProfileMenu); the sidebar only shows a
+              // switcher when the seller actually has something to switch
+              // BETWEEN — two or more business archetypes (e.g. Repair +
+              // Retail). Single-archetype sellers just work in their one
+              // profile with no sidebar Profile item at all.
               // Buyers don't see this (their `profile` is a regular
               // route via the BUYER schema's NavLink path below), and
               // neither does staff (parentProviderId): a technician or
               // collection officer has exactly one work profile — for
               // them `profile` falls through to a plain NavLink.
               if (item.id === 'profile' && user?.role !== 'BUYER' && !user?.parentProviderId) {
+                const businessOptions = profilePersonaOptions.filter(
+                  (opt) => opt.kind === 'business',
+                );
+                if (businessOptions.length < 2) return null;
                 const ProfileIcon = iconMap[item.icon] || User;
                 return (
                   <div key={item.id} className="w-full">
@@ -982,11 +1022,8 @@ export default function DashboardLayout({
                     </button>
                     {isProfileMenuOpen && (
                       <div className="pl-6 pb-2 space-y-0.5 bg-white">
-                        {profilePersonaOptions.map((opt) => {
-                          const key =
-                            opt.kind === 'personal'
-                              ? 'personal'
-                              : `business:${(opt as any).archetype}`;
+                        {businessOptions.map((opt) => {
+                          const key = `business:${opt.archetype}`;
                           const isSelected = currentPersonaKey === key;
                           return (
                             <button
@@ -1344,6 +1381,11 @@ export default function DashboardLayout({
                     onSettingsClick={() => handleTabClick('profile')}
                     onRoleManagerClick={() => setIsRoleManagerOpen(true)}
                     showRoleManager={canUseRoleManager}
+                    personaOptions={
+                      user?.role !== 'BUYER' ? profilePersonaOptions : undefined
+                    }
+                    currentPersonaKey={currentPersonaKey}
+                    onSelectPersona={handleSelectPersona}
                   />
                   <button
                     onClick={() => setIsNotificationPanelOpen(true)}
@@ -1537,12 +1579,15 @@ export default function DashboardLayout({
                 </>
               )}
 
+              {/* The provider's own product/service catalog — labeled
+                  "Catalog", NOT "Shops" (that's the buyer tab's name; the
+                  old copy-pasted label made this screen undiscoverable). */}
               {hasPermission(user, PERMISSIONS.VIEW_ANALYTICS) && !isQuotationManager(user) && (
                 <button
                   onClick={() => handleTabClick('products')}
                   className={`flex flex-col items-center justify-center w-full h-full transition-all ${activeTab === 'products' ? 'text-[#C9973A]' : 'text-[#9ca3af]'}`}
                 >
-                  <Store
+                  <Package
                     className="w-5.5 h-5.5 mb-1"
                     stroke="white"
                     strokeWidth={1.5}
@@ -1551,7 +1596,7 @@ export default function DashboardLayout({
                   <span
                     className={`text-[11px] font-sans tracking-tight ${activeTab === 'products' ? 'font-bold' : 'font-normal'}`}
                   >
-                    Shops
+                    Catalog
                   </span>
                 </button>
               )}
