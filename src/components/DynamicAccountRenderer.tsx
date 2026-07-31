@@ -435,11 +435,14 @@ export default function DynamicAccountRenderer({
             </h2>
             <p className="text-slate-500">{resolveValue(viewSchema.subtitle)}</p>
           </div>
-          {/* Always visible — even once the list is populated — so the buyer
-              can send another inquiry without scrolling back to an empty
-              state. Stacks full-width below the title on mobile; sits at the
-              top-right next to the title from md up. */}
-          {(viewSchema.actions?.length ?? 0) > 0 && (
+          {/* Only once the list has something in it. The empty state below
+              renders these SAME actions as its call-to-action, and showing
+              both put two identical button pairs a few hundred pixels apart
+              on a phone — the header pair read as clutter next to the card
+              that exists precisely to prompt the first inquiry. Once there
+              are items the empty card is gone, and the header pair is what
+              lets the buyer act without scrolling to the end of the list. */}
+          {items.length > 0 && (viewSchema.actions?.length ?? 0) > 0 && (
             <div className="flex flex-row gap-3">
               {viewSchema.actions?.map((action, idx) => (
                 <Button
