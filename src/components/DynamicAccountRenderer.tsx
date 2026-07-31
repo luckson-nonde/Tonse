@@ -435,14 +435,13 @@ export default function DynamicAccountRenderer({
             </h2>
             <p className="text-slate-500">{resolveValue(viewSchema.subtitle)}</p>
           </div>
-          {/* Only once the list has something in it. The empty state below
-              renders these SAME actions as its call-to-action, and showing
-              both put two identical button pairs a few hundred pixels apart
-              on a phone — the header pair read as clutter next to the card
-              that exists precisely to prompt the first inquiry. Once there
-              are items the empty card is gone, and the header pair is what
-              lets the buyer act without scrolling to the end of the list. */}
-          {items.length > 0 && (viewSchema.actions?.length ?? 0) > 0 && (
+          {/* The single home for this view's actions, in every state. The
+              empty-state card deliberately carries NO buttons of its own —
+              duplicating them there put two identical pairs a few hundred
+              pixels apart, and moving the CTA depending on whether the list
+              happened to be empty made it a moving target. It lives up here,
+              same place on every view that uses this renderer. */}
+          {(viewSchema.actions?.length ?? 0) > 0 && (
             <div className="flex flex-row gap-3">
               {viewSchema.actions?.map((action, idx) => (
                 <Button
@@ -538,27 +537,9 @@ export default function DynamicAccountRenderer({
                  view === 'orders' ? 'No completed orders yet.' :
                  'There is no data to display here yet.'}
               </p>
-              {/* All schema actions, side by side on ONE line even on mobile.
-                  flex-1 on every button keeps the pair identically sized;
-                  whitespace-nowrap stops labels wrapping inside the pills. */}
-              {(viewSchema.actions?.length ?? 0) > 0 && (
-                <div className="flex flex-row items-stretch justify-center gap-3 w-full max-w-md">
-                  {viewSchema.actions!.map((action, idx) => (
-                    <Button
-                      key={uniqueKey('empty-action', action.id, idx)}
-                      onClick={() => onAction(action.id)}
-                      className={`flex-1 min-w-0 px-2 sm:px-8 py-3.5 sm:py-4 rounded-full font-bold text-[13px] sm:text-base whitespace-nowrap hover:-translate-y-1 transition-all duration-300 flex items-center justify-center gap-1.5 sm:gap-2 ${
-                        action.variant === 'secondary'
-                          ? '!bg-brand-gold hover:!bg-brand-accent !text-white shadow-xl shadow-brand-gold/15 hover:shadow-brand-gold/25'
-                          : '!bg-brand-dark hover:!bg-[#1e3a8a] !text-white shadow-xl shadow-brand-dark/10 hover:shadow-[#1e3a8a]/20'
-                      }`}
-                    >
-                      {renderIcon(action.icon || 'Plus', 'w-4 h-4 sm:w-5 sm:h-5 shrink-0')}
-                      {action.label}
-                    </Button>
-                  ))}
-                </div>
-              )}
+              {/* No buttons here on purpose — this view's actions live in the
+                  page header above, in one fixed place regardless of whether
+                  the list is empty. The card just explains the emptiness. */}
             </div>
           )}
         </div>
