@@ -171,6 +171,14 @@ services:
       - path: /*
         name: Referrer-Policy
         value: strict-origin-when-cross-origin
+      # Render doesn't know the .webmanifest extension and serves it as
+      # binary/octet-stream. Harmless on its own, but with the nosniff header
+      # above the browser won't second-guess that type, so the manifest can be
+      # rejected — and no manifest means the app is not installable and
+      # `beforeinstallprompt` never fires. Declare the real type explicitly.
+      - path: /manifest.webmanifest
+        name: Content-Type
+        value: application/manifest+json
     envVars:
       # Build-time (Vite bakes this in). The backend's PUBLIC URL — Render's
       # `fromService host` gives the private name `tonse-api`, which the browser

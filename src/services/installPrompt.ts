@@ -15,6 +15,27 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+/** "Don't offer the install again" flag. Shared by every surface that can
+ *  offer it (InstallAppBanner for normal browsing, FloatingHub while the app
+ *  is minimized) so dismissing in one place silences all of them. */
+export const INSTALL_PROMPTED_KEY = 'tonse_install_prompted';
+
+export function wasInstallPromptDismissed(): boolean {
+  try {
+    return localStorage.getItem(INSTALL_PROMPTED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function markInstallPromptDismissed(): void {
+  try {
+    localStorage.setItem(INSTALL_PROMPTED_KEY, 'true');
+  } catch {
+    /* private mode — the banner simply reappears next visit */
+  }
+}
+
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
 const listeners = new Set<() => void>();
 

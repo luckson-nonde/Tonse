@@ -11,6 +11,7 @@ import { CategoryAvailabilityProvider } from './services/categories/availability
 import { ErrorBoundary } from './components/ErrorBoundary';
 import PageTransition from './components/PageTransition';
 import FloatingHub from './components/FloatingHub';
+import InstallAppBanner from './components/InstallAppBanner';
 import OfflineBanner from './components/OfflineBanner';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
@@ -514,6 +515,10 @@ export default function App() {
               />
             </Routes>
             <OfflineBanner />
+            {/* Outside <Routes> so the install offer reaches VISITORS on the
+                login/register/discover pages too — FloatingHub's copy of it
+                only ever appears once signed in and minimized. */}
+            <InstallAppBanner />
             <FloatingHub />
           </Router>
           </BackgroundModeProvider>

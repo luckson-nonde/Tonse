@@ -17,6 +17,7 @@ import {
   isStandalone,
   promptInstall,
   subscribeInstallable,
+  INSTALL_PROMPTED_KEY,
 } from '../services/installPrompt';
 import {
   closeFloatingWindow,
@@ -55,7 +56,9 @@ const NO_WIDGET_PREFIXES = [
 ];
 
 const PUSH_PROMPTED_KEY = 'tonse_push_prompted';
-const INSTALL_PROMPTED_KEY = 'tonse_install_prompted';
+// INSTALL_PROMPTED_KEY now lives in services/installPrompt.ts — InstallAppBanner
+// (the offer shown during ordinary browsing) shares it, so dismissing either
+// surface silences both.
 
 /** Mirror the unread count onto the installed PWA's app icon (Badging API —
  *  feature-detected no-op elsewhere). */
