@@ -22,10 +22,10 @@ export const MASTER_SUPPLIER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       permissions: [PERMISSIONS.VIEW_ANALYTICS] 
     },
     { id: 'collection', label: 'Fulfillment / Pickup', icon: 'QrCode', permissions: [PERMISSIONS.MANAGE_COLLECTIONS] },
-    { 
-      id: 'products', 
-      label: 'Supply Inventory', 
-      icon: 'Store', 
+    {
+      id: 'products',
+      label: 'Supply Catalog',
+      icon: 'Store',
       permissions: [PERMISSIONS.VIEW_ANALYTICS]
     },
     { id: 'team', label: 'Operations Team', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },

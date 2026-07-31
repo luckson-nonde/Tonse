@@ -13,9 +13,11 @@ import {
 } from 'class-validator';
 
 export class CreateProductDto {
+  // The controller always overwrites this with req.user.id before saving
+  // (products.controller.ts) — never trust a client-supplied seller id.
   @IsUUID()
-  @IsNotEmpty()
-  sellerId: string;
+  @IsOptional()
+  sellerId?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -38,10 +40,11 @@ export class CreateProductDto {
   @MaxLength(100)
   subCategory?: string;
 
+  // Optional: omitting the price publishes the listing as "Price on request".
+  @IsOptional()
   @IsNumber()
-  @IsNotEmpty()
   @Min(0)
-  price: number;
+  price?: number;
 
   @IsOptional()
   @IsNumber()
@@ -57,6 +60,11 @@ export class CreateProductDto {
   @IsArray()
   @IsString({ each: true })
   images?: string[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  youtubeUrl?: string;
 
   @IsOptional()
   @IsString()

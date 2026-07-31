@@ -32,7 +32,7 @@ export const MASTER_RETAIL_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'leads', label: 'Buyer Inquiries', icon: 'FileText', permissions: [PERMISSIONS.MANAGE_QUOTES] },
     { id: 'my-quotes', label: 'My Quotes', icon: 'MessageSquare', permissions: [PERMISSIONS.MANAGE_QUOTES] },
     { id: 'archived-leads', label: 'Archived Leads', icon: 'Archive', permissions: [PERMISSIONS.MANAGE_QUOTES] },
-    { id: 'products', label: 'Inventory', icon: 'Store', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
+    { id: 'products', label: 'Product Catalog', icon: 'Store', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     { id: 'paid-orders', label: 'Orders', icon: 'Truck', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     { id: 'team', label: 'Team Management', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package, Users, Clock, FileText, Flag, ShoppingCart } from 'lucide-react';
+import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package, Users, Clock, FileText, Flag, ShoppingCart, CalendarCheck } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import ReportUserModal from '../ReportUserModal';
 import emptyLeadsImage from '../../assets/images/empty-states/owl_reading.webp';
 import { uniqueKey } from '../../utils/keyUtils';
@@ -333,6 +334,15 @@ interface ProviderLeadsViewProps {
    *  Pending" with a Revise action instead of a fresh Submit Quote. */
   pendingQuoteByInquiryId?: Record<string, any>;
   onReviseQuote?: (quote: any) => void;
+}
+
+/** Short, readable date for a catalog-booking badge. */
+function formatBookingDate(value: string): string {
+  try {
+    return format(parseISO(value), value.includes('T') ? "d MMM 'at' h:mm a" : 'd MMM yyyy');
+  } catch {
+    return value;
+  }
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -690,6 +700,29 @@ export default function ProviderLeadsView({
                             </div>
                           ))}
                         </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Catalog booking: the buyer picked a listing and a date.
+                      When the listing carried a price it's already locked —
+                      this quote is an availability confirmation, and the
+                      backend rejects any other amount. */}
+                  {(lead as any).attributes?.orderKind === 'SERVICE_BOOKING' && (
+                    <div className="self-start w-full -mt-0.5">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#fdf6e9] text-[#8a6118] border border-[#ecd9b3]">
+                        <CalendarCheck className="w-3 h-3" />
+                        Booking request
+                        {(lead as any).attributes?.preferredDateTime
+                          ? ` · ${formatBookingDate((lead as any).attributes.preferredDateTime)}`
+                          : ''}
+                      </span>
+                      {Number((lead as any).attributes?.lockedPrice) > 0 && (
+                        <p className="mt-2 text-[11px] font-semibold text-[#8a6118] bg-[#fdfaf2] border border-[#ecd9b3] rounded-xl px-3 py-2">
+                          Price fixed by your listing: ZMW{' '}
+                          {Number((lead as any).attributes.lockedPrice).toLocaleString()} — quote
+                          this exact amount to confirm availability.
+                        </p>
                       )}
                     </div>
                   )}

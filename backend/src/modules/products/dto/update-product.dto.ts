@@ -33,10 +33,12 @@ export class UpdateProductDto {
   @MaxLength(100)
   subCategory?: string;
 
+  // @IsOptional skips null too — an explicit `price: null` clears the price
+  // back to the "Price on request" state.
   @IsOptional()
   @IsNumber()
   @Min(0)
-  price?: number;
+  price?: number | null;
 
   @IsOptional()
   @IsNumber()
@@ -52,6 +54,12 @@ export class UpdateProductDto {
   @IsArray()
   @IsString({ each: true })
   images?: string[];
+
+  /** Explicit null clears a previously stored video URL. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  youtubeUrl?: string | null;
 
   @IsOptional()
   @IsString()

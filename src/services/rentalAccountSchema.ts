@@ -25,7 +25,7 @@ export const MASTER_RENTAL_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'leads', label: 'Rental Requests', icon: 'FileText', permissions: [PERMISSIONS.MANAGE_QUOTES] },
     { id: 'my-quotes', label: 'My Quotes', icon: 'MessageSquare', permissions: [PERMISSIONS.MANAGE_QUOTES] },
     { id: 'archived-leads', label: 'Archived Leads', icon: 'Archive', permissions: [PERMISSIONS.MANAGE_QUOTES] },
-    { id: 'products', label: 'Rental Fleet', icon: 'Package', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
+    { id: 'products', label: 'Rental Catalog', icon: 'Package', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     { id: 'paid-orders', label: 'Active Rentals', icon: 'Truck', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     { id: 'schedule', label: 'Return Schedule', icon: 'Calendar', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     { id: 'team', label: 'Team Management', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },

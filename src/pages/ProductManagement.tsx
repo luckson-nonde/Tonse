@@ -2,12 +2,28 @@ import React, { useState } from 'react';
 import { useAuth } from '../AuthContext';
 import { useLiveQuery } from '../hooks/useLiveQuery';
 import { db } from '../services/api/database';
+import { apiClient } from '../services/api/client';
 import { Product } from '../types';
-import { Plus, Trash2, Edit2, Package, Image as ImageIcon, Loader2, X } from 'lucide-react';
+import { Plus, Trash2, Edit2, Package, Image as ImageIcon, Loader2, X, Play } from 'lucide-react';
 import { uniqueKey } from '../utils/keyUtils';
 import { getEffectiveBusinessTypes } from '../services/categories';
 import { useActiveProfileContext } from '../hooks/useActiveProfileContext';
+import { compressImage } from '../utils/compressImage';
+import { extractYouTubeId } from '../services/api/portfolioService';
 import PerformanceCatalog from './PerformanceCatalog';
+
+/** Max photos per listing — keeps data-URL payloads well under limits. */
+const MAX_LISTING_IMAGES = 5;
+
+const EMPTY_FORM = {
+  name: '',
+  price: '',
+  stock: '',
+  description: '',
+  category: '',
+  images: [] as string[],
+  youtubeUrl: '',
+};
 
 export default function ProductManagement() {
   const { user } = useAuth();
@@ -23,69 +39,107 @@ export default function ProductManagement() {
   // Backend-stored so buyers viewing a quote can render the embeds. The
   // products IndexedDB table stays untouched for retail/rental sellers
   // who legitimately list inventory.
+  // SERVICE/REPAIR personas list services, not stocked goods — same
+  // entity/endpoints, but the form drops the stock field and swaps copy.
+  const isServiceBusiness =
+    effectiveTypes.includes('SERVICE') || effectiveTypes.includes('REPAIR');
   if (effectiveTypes.includes('ENTERTAINMENT')) {
     return <PerformanceCatalog />;
   }
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editingProductId, setEditingProductId] = useState<number | null>(null);
-  const [deletingProductId, setDeletingProductId] = useState<number | null>(null);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    price: '',
-    stock: '',
-    description: '',
-    category: '',
-    image: '',
-  });
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // Bumped after every successful mutation so the list refetches.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [formData, setFormData] = useState({ ...EMPTY_FORM });
 
   const products =
     useLiveQuery(async () => {
       if (!user?.id) return [];
       const effectiveProviderId = user.parentProviderId || user.id;
-      return await db.products
-        .where('providerId')
-        .equals(String(effectiveProviderId))
-        .reverse()
-        .sortBy('createdAt');
-    }, [user]) || [];
+      // GET /products/seller/:sellerId returns ALL of this seller's rows
+      // newest-first (the generic /products list ignores unknown filters
+      // and caps at 10 — wrong tool for a management view).
+      const res = await apiClient.get<Product[]>(`/products/seller/${effectiveProviderId}`);
+      return Array.isArray(res.data) ? res.data : [];
+    }, [user, refreshKey]) || [];
+
+  /** Compress each picked file and append it as a data URL (cap enforced). */
+  const handlePickImages = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const room = MAX_LISTING_IMAGES - formData.images.length;
+    const picked = Array.from(files).slice(0, Math.max(0, room));
+    const dataUrls = await Promise.all(
+      picked.map(async (file) => {
+        const compressed = await compressImage(file);
+        return new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error('Could not read image'));
+          reader.readAsDataURL(compressed);
+        });
+      }),
+    );
+    setFormData((f) => ({
+      ...f,
+      images: [...f.images, ...dataUrls].slice(0, MAX_LISTING_IMAGES),
+    }));
+  };
 
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.id) return;
+
+    // Same validation copy as PerformanceCatalog — accept watch/share/
+    // embed/shorts links, reject anything unparseable.
+    const trimmedYoutube = formData.youtubeUrl.trim();
+    if (trimmedYoutube && !extractYouTubeId(trimmedYoutube)) {
+      setSaveError(
+        "That doesn't look like a YouTube URL. Paste a watch, share, embed, or shorts link.",
+      );
+      return;
+    }
+
     setIsSubmitting(true);
+    setSaveError(null);
 
     try {
+      // Only fields CreateProductDto/UpdateProductDto declare — anything
+      // extra is rejected by the backend's forbidNonWhitelisted pipe.
+      const payload: Partial<Product> = {
+        name: formData.name,
+        description: formData.description,
+        category: formData.category,
+        images: formData.images,
+      };
+      // Empty price = "Price on request": omitted on create, explicit null
+      // on edit so a previously set price can be cleared.
+      if (formData.price !== '') payload.price = Number(formData.price);
+      else if (isEditing) payload.price = null;
+      if (trimmedYoutube) payload.youtubeUrl = trimmedYoutube;
+      else if (isEditing) payload.youtubeUrl = null;
+      if (!isServiceBusiness) payload.stock = Number(formData.stock) || 0;
+
       if (isEditing && editingProductId) {
-        await db.products.update(editingProductId, {
-          name: formData.name,
-          price: Number(formData.price),
-          stock: Number(formData.stock) || 0,
-          description: formData.description,
-          category: formData.category,
-          images: [formData.image || 'https://picsum.photos/seed/product/400/400'],
-        });
+        await db.products.update(editingProductId, payload);
         setIsEditing(false);
         setEditingProductId(null);
       } else {
-        const newProduct: Product = {
-          providerId: String(user.id),
-          name: formData.name,
-          price: Number(formData.price),
-          stock: Number(formData.stock) || 0,
-          description: formData.description,
-          category: formData.category,
-          images: [formData.image || 'https://picsum.photos/seed/product/400/400'],
-          createdAt: Date.now(),
-          status: 'ACTIVE',
-        };
-        await db.products.add(newProduct);
+        await db.products.add(payload as Product);
         setIsAdding(false);
       }
-      setFormData({ name: '', price: '', stock: '', description: '', category: '', image: '' });
+      setRefreshKey((k) => k + 1);
+      setFormData({ ...EMPTY_FORM });
     } catch (error) {
       console.error('Failed to save product:', error);
+      setSaveError(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Could not save. Please check the details and try again.',
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -94,17 +148,18 @@ export default function ProductManagement() {
   const handleEditClick = (product: Product) => {
     setFormData({
       name: product.name,
-      price: product.price.toString(),
+      price: product.price == null ? '' : String(product.price),
       stock: product.stock?.toString() || '',
       description: product.description,
       category: product.category,
-      image: product.images[0] || '',
+      images: Array.isArray(product.images) ? product.images : [],
+      youtubeUrl: product.youtubeUrl ?? '',
     });
     setEditingProductId(product.id!);
     setIsEditing(true);
   };
 
-  const handleDeleteClick = (id: number) => {
+  const handleDeleteClick = (id: string) => {
     setDeletingProductId(id);
   };
 
@@ -112,6 +167,7 @@ export default function ProductManagement() {
     if (deletingProductId) {
       await db.products.delete(deletingProductId);
       setDeletingProductId(null);
+      setRefreshKey((k) => k + 1);
     }
   };
 
@@ -124,7 +180,7 @@ export default function ProductManagement() {
           className="bg-[#d49b35] hover:brightness-95 text-slate-900 px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-[#d49b35]/20"
         >
           <Plus className="w-5 h-5" />
-          {isEventsBusiness ? 'Add Item' : 'Add Product'}
+          {isServiceBusiness ? 'Add Service' : isEventsBusiness ? 'Add Item' : 'Add Product'}
         </button>
       </div>
 
@@ -134,26 +190,24 @@ export default function ProductManagement() {
             <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
               <h3 className="text-xl font-black text-slate-900">
                 {isEditing
-                  ? isEventsBusiness
-                    ? 'Edit Equipment'
-                    : 'Edit Product'
-                  : isEventsBusiness
-                    ? 'Add New Equipment'
-                    : 'Add New Product'}
+                  ? isServiceBusiness
+                    ? 'Edit Service'
+                    : isEventsBusiness
+                      ? 'Edit Equipment'
+                      : 'Edit Product'
+                  : isServiceBusiness
+                    ? 'Add New Service'
+                    : isEventsBusiness
+                      ? 'Add New Equipment'
+                      : 'Add New Product'}
               </h3>
               <button
                 onClick={() => {
                   setIsAdding(false);
                   setIsEditing(false);
                   setEditingProductId(null);
-                  setFormData({
-                    name: '',
-                    price: '',
-                    stock: '',
-                    description: '',
-                    category: '',
-                    image: '',
-                  });
+                  setSaveError(null);
+                  setFormData({ ...EMPTY_FORM });
                 }}
                 className="p-2 hover:bg-slate-200 rounded-full transition-colors"
               >
@@ -164,48 +218,67 @@ export default function ProductManagement() {
               <form onSubmit={handleAddProduct} className="p-8 space-y-4">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-                    {isEventsBusiness ? 'Equipment Name' : 'Product Name'}
+                    {isServiceBusiness
+                      ? 'Service Name'
+                      : isEventsBusiness
+                        ? 'Equipment Name'
+                        : 'Product Name'}
                   </label>
                   <input
                     type="text"
                     required
+                    minLength={3}
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] outline-none"
                     placeholder={
-                      isEventsBusiness
-                        ? 'e.g. Professional Sound System'
-                        : 'e.g. Minimalist Smart Watch'
+                      isServiceBusiness
+                        ? 'e.g. Gel Manicure'
+                        : isEventsBusiness
+                          ? 'e.g. Professional Sound System'
+                          : 'e.g. Minimalist Smart Watch'
                     }
                   />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div
+                  className={
+                    isServiceBusiness ? '' : 'grid grid-cols-1 sm:grid-cols-2 gap-4'
+                  }
+                >
                   <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
                       Price (ZMW)
                     </label>
                     <input
                       type="number"
-                      required
+                      min={0}
+                      step="0.01"
                       value={formData.price}
                       onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] outline-none"
                       placeholder="0.00"
                     />
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      Leave empty for &ldquo;Price on request&rdquo;
+                    </p>
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-                      {isEventsBusiness ? 'Stock Quantity' : 'Quantity'}
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      value={formData.stock}
-                      onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] outline-none"
-                      placeholder="e.g. 50"
-                    />
-                  </div>
+                  {/* A service has no inventory count — the field only
+                      renders for goods-selling personas. */}
+                  {!isServiceBusiness && (
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+                        {isEventsBusiness ? 'Stock Quantity' : 'Quantity'}
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        value={formData.stock}
+                        onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] outline-none"
+                        placeholder="e.g. 50"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
@@ -217,79 +290,121 @@ export default function ProductManagement() {
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] outline-none"
-                    placeholder={isEventsBusiness ? 'e.g. Plastic' : 'e.g. Electronics'}
+                    placeholder={
+                      isServiceBusiness
+                        ? 'e.g. Nail Care'
+                        : isEventsBusiness
+                          ? 'e.g. Plastic'
+                          : 'e.g. Electronics'
+                    }
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-                    {isEventsBusiness ? 'Equipment Description' : 'Description'}
+                    {isServiceBusiness
+                      ? 'Service Description'
+                      : isEventsBusiness
+                        ? 'Equipment Description'
+                        : 'Description'}
                   </label>
                   <textarea
                     required
+                    minLength={10}
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] outline-none resize-none"
                     placeholder={
-                      isEventsBusiness
-                        ? 'Describe the equipment...'
-                        : 'Describe your product...'
+                      isServiceBusiness
+                        ? 'Describe the service...'
+                        : isEventsBusiness
+                          ? 'Describe the equipment...'
+                          : 'Describe your product...'
                     }
                     rows={3}
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-                    {isEventsBusiness ? 'Equipment Image' : 'Product Image'}
+                    {isServiceBusiness
+                      ? 'Service Photos'
+                      : isEventsBusiness
+                        ? 'Equipment Photos'
+                        : 'Product Photos'}{' '}
+                    ({formData.images.length}/{MAX_LISTING_IMAGES})
                   </label>
-                  <div
-                    onClick={() => document.getElementById('product-image-input')?.click()}
-                    className="w-full h-32 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center overflow-hidden transition-all hover:border-[#d49b35]/30 cursor-pointer relative group"
-                  >
-                    {formData.image ? (
-                      <>
+                  <div className="grid grid-cols-3 gap-2">
+                    {formData.images.map((src, idx) => (
+                      <div
+                        key={idx}
+                        className="relative aspect-square rounded-2xl overflow-hidden bg-slate-100 group"
+                      >
                         <img
-                          src={formData.image}
-                          alt="Preview"
+                          src={src}
+                          alt={`Photo ${idx + 1}`}
                           className="w-full h-full object-cover"
                           referrerPolicy="no-referrer"
                         />
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setFormData({ ...formData, image: '' });
-                          }}
-                          className="absolute top-2 right-2 p-1 bg-white/80 backdrop-blur-sm rounded-lg text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                          aria-label={`Remove photo ${idx + 1}`}
+                          onClick={() =>
+                            setFormData((f) => ({
+                              ...f,
+                              images: f.images.filter((_, i) => i !== idx),
+                            }))
+                          }
+                          className="absolute top-1.5 right-1.5 p-1 bg-white/85 backdrop-blur-sm rounded-lg text-red-500 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                         >
-                          <X className="w-4 h-4" />
+                          <X className="w-3.5 h-3.5" />
                         </button>
-                      </>
-                    ) : (
-                      <>
-                        <ImageIcon className="w-8 h-8 text-slate-300 mb-2" />
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">
-                          Click to upload image
+                      </div>
+                    ))}
+                    {formData.images.length < MAX_LISTING_IMAGES && (
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById('product-image-input')?.click()}
+                        className="aspect-square rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center transition-all hover:border-[#d49b35] cursor-pointer"
+                      >
+                        <ImageIcon className="w-6 h-6 text-slate-300 mb-1" />
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">
+                          Add photos
                         </span>
-                      </>
+                      </button>
                     )}
-                    <input
-                      id="product-image-input"
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setFormData({ ...formData, image: reader.result as string });
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      className="hidden"
-                    />
                   </div>
+                  <input
+                    id="product-image-input"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => {
+                      void handlePickImages(e.target.files);
+                      // Allow re-picking the same file after a remove.
+                      e.target.value = '';
+                    }}
+                    className="hidden"
+                  />
                 </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+                    YouTube Video (optional)
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.youtubeUrl}
+                    onChange={(e) => setFormData({ ...formData, youtubeUrl: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-[#d49b35]/20 focus:border-[#d49b35] outline-none"
+                    placeholder="https://www.youtube.com/watch?v=…"
+                  />
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    A demo or promo clip buyers can watch on this listing
+                  </p>
+                </div>
+                {saveError && (
+                  <p className="text-sm text-red-600 bg-red-50 border border-[#fecaca] rounded-xl p-3">
+                    {saveError}
+                  </p>
+                )}
                 <button
                   type="submit"
                   disabled={isSubmitting}
@@ -303,12 +418,16 @@ export default function ProductManagement() {
                     <Plus className="w-5 h-5" />
                   )}
                   {isEditing
-                    ? isEventsBusiness
-                      ? 'Update Equipment'
-                      : 'Update Product'
-                    : isEventsBusiness
-                      ? 'List Equipment'
-                      : 'List Product'}
+                    ? isServiceBusiness
+                      ? 'Update Service'
+                      : isEventsBusiness
+                        ? 'Update Equipment'
+                        : 'Update Product'
+                    : isServiceBusiness
+                      ? 'List Service'
+                      : isEventsBusiness
+                        ? 'List Equipment'
+                        : 'List Product'}
                 </button>
               </form>
             </div>
@@ -321,13 +440,21 @@ export default function ProductManagement() {
           <div className="bg-white rounded-4xl p-12 text-center border border-slate-100">
             <Package className="w-12 h-12 text-slate-200 mx-auto mb-4" />
             <p className="text-slate-500 font-medium">
-              {isEventsBusiness ? 'No equipment listed yet.' : 'No products listed yet.'}
+              {isServiceBusiness
+                ? 'No services listed yet.'
+                : isEventsBusiness
+                  ? 'No equipment listed yet.'
+                  : 'No products listed yet.'}
             </p>
             <button
               onClick={() => setIsAdding(true)}
               className="text-[#d49b35] font-bold mt-2 hover:underline"
             >
-              {isEventsBusiness ? 'Add your first item' : 'Add your first product'}
+              {isServiceBusiness
+                ? 'Add your first service'
+                : isEventsBusiness
+                  ? 'Add your first item'
+                  : 'Add your first product'}
             </button>
           </div>
         ) : (
@@ -338,12 +465,23 @@ export default function ProductManagement() {
             >
               {/* Thumbnail */}
               <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-slate-100 shrink-0 relative">
-                <img
-                  src={product.images[0]}
-                  alt={product.name}
-                  className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-500"
-                  referrerPolicy="no-referrer"
-                />
+                {product.images?.[0] ? (
+                  <img
+                    src={product.images[0]}
+                    alt={product.name}
+                    className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-500"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Package className="w-8 h-8 text-slate-300" />
+                  </div>
+                )}
+                {product.youtubeUrl && (
+                  <span className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-[#1a1612] flex items-center justify-center">
+                    <Play className="w-2.5 h-2.5 text-white fill-white ml-px" />
+                  </span>
+                )}
               </div>
 
               {/* Details */}
@@ -353,18 +491,30 @@ export default function ProductManagement() {
                     {product.category}
                   </span>
                   <div
-                    className={`w-1.5 h-1.5 rounded-full ${product.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                    className={`w-1.5 h-1.5 rounded-full ${product.isActive !== false ? 'bg-emerald-500' : 'bg-slate-300'}`}
                   ></div>
                 </div>
                 <h4 className="font-bold text-slate-900 text-sm sm:text-base truncate">
                   {product.name}
                 </h4>
                 <div className="flex items-center gap-3 mt-1">
-                  <p className="text-[#C9973A] font-black text-sm sm:text-base">
-                    ZMW {product.price.toLocaleString()}
-                  </p>
-                  <span className="text-slate-300 text-xs">•</span>
-                  <p className="text-slate-500 text-xs font-medium">Stock: {product.stock || 0}</p>
+                  {product.price != null && Number(product.price) > 0 ? (
+                    <p className="text-[#C9973A] font-black text-sm sm:text-base">
+                      ZMW {Number(product.price).toLocaleString()}
+                    </p>
+                  ) : (
+                    <p className="text-slate-500 font-bold text-xs sm:text-sm">
+                      Price on request
+                    </p>
+                  )}
+                  {!isServiceBusiness && (
+                    <>
+                      <span className="text-slate-300 text-xs">•</span>
+                      <p className="text-slate-500 text-xs font-medium">
+                        Stock: {product.stock || 0}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -396,8 +546,8 @@ export default function ProductManagement() {
             </div>
             <h3 className="text-xl font-black text-slate-900 mb-2">Delete Item?</h3>
             <p className="text-slate-500 mb-8">
-              Are you sure you want to remove this item from your inventory? This action cannot be
-              undone.
+              Are you sure you want to remove this item from your{' '}
+              {isServiceBusiness ? 'catalog' : 'inventory'}? This action cannot be undone.
             </p>
             <div className="flex gap-4">
               <button

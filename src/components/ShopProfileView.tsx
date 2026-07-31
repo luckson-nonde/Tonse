@@ -29,12 +29,16 @@ import {
 import {
   getShopProfile,
   fetchShopProducts,
+  buyProduct,
   type ShopProfile,
   type ShopResult,
   type ShopProduct,
 } from '../services/api/shopService';
+import { createBookingInquiry } from '../services/catalogBooking';
 import { reviewService, type ShopReview } from '../services/api/reviewService';
 import ReportUserModal from './ReportUserModal';
+import CatalogItemGrid from './CatalogItemGrid';
+import CatalogItemModal from './CatalogItemModal';
 import { Star } from 'lucide-react';
 
 export interface PurchaseOrderLine {
@@ -107,6 +111,8 @@ export default function ShopProfileView({
   const [profile, setProfile] = useState<ShopProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [showReport, setShowReport] = useState(false);
+  /** Listing opened in the detail modal (book / buy / add-to-PO). */
+  const [selectedItem, setSelectedItem] = useState<ShopProduct | null>(null);
 
   // Purchase Order state. Lines are unified across typed (free-text) items and
   // catalog picks — a shop needn't have a catalog to receive a PO.
@@ -467,6 +473,28 @@ export default function ShopProfileView({
               </div>
             )}
 
+            {/* Catalog — the shop's own listed products/services. Same data
+                the PO modal's picker uses; quietly absent when empty. */}
+            {products.length > 0 && (
+              <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#C9973A]">
+                    {profile.shopType === 'SELLER' ? 'Listed Products' : 'Listed Services'}
+                  </p>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    {products.length} available
+                  </span>
+                </div>
+                <CatalogItemGrid
+                  items={products}
+                  showSoldOut={profile.shopType === 'SELLER'}
+                  onItemClick={(g) =>
+                    setSelectedItem(products.find((p) => p.id === g.id) ?? null)
+                  }
+                />
+              </div>
+            )}
+
             {/* Customer reviews — earned through DELIVERED/COMPLETED orders */}
             <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6">
               <div className="flex items-center justify-between mb-5">
@@ -584,6 +612,46 @@ export default function ShopProfileView({
           reportedUserId={profile.sellerId}
           reportedUserName={profile.name}
           onClose={() => setShowReport(false)}
+        />
+      )}
+
+      {selectedItem && (
+        <CatalogItemModal
+          item={selectedItem}
+          shopType={profile.shopType === 'SELLER' ? 'SELLER' : 'SERVICE_PROVIDER'}
+          shopName={profile.name}
+          onClose={() => setSelectedItem(null)}
+          onBook={(dt, note) =>
+            createBookingInquiry(
+              {
+                sellerId: profile.sellerId,
+                name: profile.name,
+                categoryIds: profile.categoryIds,
+                location: profile.location,
+                province: profile.province,
+                city: profile.city,
+              },
+              selectedItem,
+              dt,
+              note,
+            )
+          }
+          onBuy={async (qty) => {
+            // Simulated payment processing (dev convention) — the backend
+            // call is the moment the payment "clears".
+            await new Promise((r) => setTimeout(r, 1600));
+            await buyProduct(selectedItem.id, qty);
+            const fresh = await fetchShopProducts(profile.sellerId);
+            setProducts(fresh);
+          }}
+          // Priceless listings fall back to the existing PO composer, which
+          // is exactly the "shop supplies the price" flow.
+          onRequestQuote={() => {
+            addProduct(selectedItem);
+            setSelectedItem(null);
+            openPO();
+          }}
+          onDone={() => setSelectedItem(null)}
         />
       )}
 

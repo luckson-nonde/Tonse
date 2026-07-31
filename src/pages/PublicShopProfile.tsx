@@ -26,6 +26,10 @@ import {
 import { createInquiry } from '../services/api/inquiryService';
 import { savePendingInquiry } from '../services/pendingInquiry';
 import DateTimePicker from '../components/DateTimePicker';
+import CatalogItemGrid from '../components/CatalogItemGrid';
+import CatalogItemModal from '../components/CatalogItemModal';
+import { createBookingInquiry } from '../services/catalogBooking';
+import { buyProduct } from '../services/api/shopService';
 
 const NAVY = '#1B3068';
 const NAVY_DEEP = '#142550';
@@ -77,6 +81,8 @@ export default function PublicShopProfile() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  /** Listing opened in the detail modal (book / buy / request-quote). */
+  const [selectedItem, setSelectedItem] = useState<DiscoverProduct | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -323,43 +329,23 @@ export default function PublicShopProfile() {
             <section>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-serif font-semibold text-[1.25rem] text-[#1B3068] flex items-center gap-2">
-                  <Package className="w-5 h-5 text-[#6b7280]" /> Listed products
+                  <Package className="w-5 h-5 text-[#6b7280]" />{' '}
+                  {profile.shopType === 'SELLER' ? 'Listed products' : 'Listed services'}
                 </h2>
                 <span className="text-[11px] font-bold text-[#9ca3af] uppercase tracking-wider">
                   {products.length} available
                 </span>
               </div>
               {products.length === 0 ? (
-                <p className="text-[#6b7280] text-sm">Loading products…</p>
+                <p className="text-[#6b7280] text-sm">Loading catalog…</p>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
-                  {products.map((product) => (
-                    <div
-                      key={product.id}
-                      className="bg-[#fffaf5] border border-[#e7e0d5] rounded-2xl overflow-hidden cursor-pointer hover:border-[#c9973a]/40 transition-colors flex flex-col"
-                      onClick={() => setTitle(product.name)}
-                    >
-                      <div className="aspect-square bg-[#f1f5f9] overflow-hidden">
-                        {product.images?.[0] && (
-                          <img
-                            src={product.images[0]}
-                            alt={product.name}
-                            className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer"
-                          />
-                        )}
-                      </div>
-                      <div className="p-3">
-                        <h4 className="font-semibold text-[#1B3068] text-[13px] truncate">
-                          {product.name}
-                        </h4>
-                        <p className="text-[13px] font-bold text-[#a97c27] mt-0.5">
-                          ZMW {toNumber(product.price).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <CatalogItemGrid
+                  items={products}
+                  showSoldOut={profile.shopType === 'SELLER'}
+                  onItemClick={(g) =>
+                    setSelectedItem(products.find((p) => p.id === g.id) ?? null)
+                  }
+                />
               )}
             </section>
           )}
@@ -569,6 +555,58 @@ export default function PublicShopProfile() {
           </div>
         </aside>
       </div>
+
+      {selectedItem && (
+        <CatalogItemModal
+          item={selectedItem}
+          shopType={profile.shopType === 'SELLER' ? 'SELLER' : 'SERVICE_PROVIDER'}
+          shopName={profile.name}
+          onClose={() => setSelectedItem(null)}
+          // Guests: stash intent-free and route to login (same funnel note
+          // the sidebar form uses). Non-buyer accounts get a view-only modal.
+          authGate={
+            !user
+              ? () => navigate('/login', { state: { pendingIntentShopName: profile.name } })
+              : undefined
+          }
+          onBook={
+            user?.role === 'BUYER'
+              ? (dt, note) =>
+                  createBookingInquiry(
+                    {
+                      sellerId: profile.sellerId,
+                      name: profile.name,
+                      categoryIds: profile.categoryIds,
+                      location: profile.location,
+                      province: profile.province,
+                      city: profile.city,
+                    },
+                    selectedItem,
+                    dt,
+                    note,
+                  )
+              : undefined
+          }
+          onBuy={
+            user?.role === 'BUYER'
+              ? async (qty) => {
+                  // Simulated payment processing (dev convention) — the
+                  // backend call is the moment the payment "clears".
+                  await new Promise((r) => setTimeout(r, 1600));
+                  await buyProduct(selectedItem.id, qty);
+                  // Refresh the catalog so the decremented stock (and any
+                  // sold-out flip) shows immediately.
+                  fetchDiscoverShopProducts(profile.sellerId).then(setProducts);
+                }
+              : undefined
+          }
+          onRequestQuote={() => {
+            setTitle(selectedItem.name);
+            setSelectedItem(null);
+          }}
+          onDone={() => navigate('/buyer/inquiries')}
+        />
+      )}
     </div>
   );
 }

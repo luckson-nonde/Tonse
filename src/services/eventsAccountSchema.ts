@@ -39,7 +39,7 @@ export const MASTER_EVENTS_ACCOUNT_SCHEMA: MasterAccountSchema = {
       // events seller doesn't.
       categoryFilter: ['event venues'],
     },
-    { id: 'products', label: 'Inventory', icon: 'Package', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
+    { id: 'products', label: 'Equipment Catalog', icon: 'Package', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     { id: 'paid-orders', label: 'Paid Bookings', icon: 'Truck', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     { id: 'collection', label: 'Collection', icon: 'QrCode', permissions: [PERMISSIONS.MANAGE_COLLECTIONS] },
     { id: 'team', label: 'Team Management', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },

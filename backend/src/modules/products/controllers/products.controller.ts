@@ -14,13 +14,18 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { ProductsService } from '../products.service';
+import { DirectOrderService } from '../direct-order.service';
 import { CreateProductDto } from '../dto/create-product.dto';
 import { UpdateProductDto } from '../dto/update-product.dto';
+import { BuyProductDto } from '../dto/buy-product.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly directOrderService: DirectOrderService,
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -29,6 +34,18 @@ export class ProductsController {
     // ENFORCE: products are created under the caller's own seller id
     createProductDto.sellerId = req.user.id;
     return this.productsService.create(createProductDto);
+  }
+
+  /**
+   * Direct purchase: buy a priced, in-stock listing outright. Amount always
+   * derives from the listing server-side; stock decrements atomically and
+   * the paid order joins the normal collection/escrow rails.
+   */
+  @Post(':id/buy')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async buy(@Param('id') id: string, @Body() dto: BuyProductDto, @Request() req) {
+    return this.directOrderService.buy(req.user.id, id, dto.quantity);
   }
 
   @Get()

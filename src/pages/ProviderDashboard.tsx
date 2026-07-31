@@ -46,6 +46,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useLiveQuery } from '../hooks/useLiveQuery';
 import { useMatchedLeads } from '../hooks/useInquiries';
 import { db } from '../services/api/database';
+import { apiClient } from '../services/api/client';
 import { newIdempotencyKey } from '../services/offlineWriteQueue';
 import { collectionService } from '../services/api/collectionService';
 import {
@@ -277,11 +278,12 @@ export default function ProviderDashboard() {
   const products =
     useLiveQuery(async () => {
       if (!effectiveProviderId) return [];
-      const allProducts = await db.products
-        .where('providerId')
-        .equals(effectiveProviderId)
-        .toArray();
-      return allProducts.reverse().slice(0, 5);
+      // Dedicated endpoint: all of this seller's rows, newest-first. The
+      // generic /products list ignores a providerId filter (backend only
+      // knows sellerId) and would return an unscoped global slice.
+      const res = await apiClient.get<any[]>(`/products/seller/${effectiveProviderId}`);
+      const allProducts = Array.isArray(res.data) ? res.data : [];
+      return allProducts.slice(0, 5);
     }, [effectiveProviderId]) || [];
 
   const myQuotes =

@@ -65,10 +65,13 @@ export interface DiscoverProduct {
   id: string;
   name: string;
   description?: string;
-  price: number;
+  /** null/absent means "Price on request" (decimals arrive as strings). */
+  price?: number | string | null;
   images: string[];
   category?: string;
   stock?: number;
+  /** Optional promo/demo video for the listing. */
+  youtubeUrl?: string | null;
 }
 
 export async function fetchDiscoverShops(
@@ -100,7 +103,10 @@ export async function fetchDiscoverShopProducts(sellerId: string): Promise<Disco
     `/products/seller/${sellerId}`,
     { swr: true }
   );
-  return res.data ?? [];
+  // Same isActive filter shopService.fetchShopProducts applies — the two
+  // buyer surfaces must agree on which listings are visible.
+  const list = res.data ?? [];
+  return list.filter((p: DiscoverProduct & { isActive?: boolean }) => p.isActive !== false);
 }
 
 export interface DiscoverReview {

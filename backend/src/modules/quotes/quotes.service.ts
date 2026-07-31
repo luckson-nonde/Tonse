@@ -1,4 +1,10 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Quote } from './entities/quote.entity';
@@ -80,6 +86,20 @@ export class QuotesService {
         .where('i.id = :id', { id: parsedDto.inquiryId })
         .getOne();
       if (!inquiry) throw new NotFoundException('Inquiry not found');
+
+      // Catalog-booking price lock: when the buyer booked a listing that
+      // carries a fixed price, the provider's quote is an availability
+      // confirmation — it must honor that exact price. (Before this,
+      // nothing anywhere tied a quote's price to the inquiry.)
+      const lockedPrice = Number((inquiry.attributes as any)?.lockedPrice);
+      if (Number.isFinite(lockedPrice) && lockedPrice > 0) {
+        const quotedPrice = Number(parsedDto.price);
+        if (Math.abs(quotedPrice - lockedPrice) > 0.009) {
+          throw new BadRequestException(
+            `This booking's price is fixed at ZMW ${lockedPrice} by the shop's own listing — quote that exact amount to confirm availability.`,
+          );
+        }
+      }
 
       const maxQuotes = inquiry.maxQuotes ?? 3;
       const counts: Array<{ tier: string; count: string }> = await manager.query(

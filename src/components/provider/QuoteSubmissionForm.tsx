@@ -91,6 +91,14 @@ export default function QuoteSubmissionForm({
     [inquiry.categoryIds, inquiry.category, inquiry.attributes]
   );
 
+  // Catalog booking with a priced listing: the buyer already agreed to the
+  // shop's own listed price, so this quote is an availability confirmation.
+  // The backend rejects any other amount (QuotesService.create).
+  const lockedPrice = useMemo(() => {
+    const raw = Number(inquiry.attributes?.lockedPrice);
+    return Number.isFinite(raw) && raw > 0 ? raw : 0;
+  }, [inquiry.attributes]);
+
   const { control, handleSubmit, watch, formState: { errors } } = useForm({
     resolver: zodResolver(zodSchema),
     defaultValues: {
@@ -98,12 +106,13 @@ export default function QuoteSubmissionForm({
       rateUnit: initialValues?.rateUnit || 'Per Hour',
       venueAmenities: initialValues?.venueAmenities || [],
       ...Object.fromEntries(quoteSchema.map((f) => [
-        f.name, 
-        initialValues?.[f.name] !== undefined 
-          ? initialValues[f.name] 
+        f.name,
+        initialValues?.[f.name] !== undefined
+          ? initialValues[f.name]
           : (f.type === 'toggle' ? false : f.type === 'multiselect' ? [] : '')
       ])),
       ...initialValues, // Spread all initial values if any
+      ...(lockedPrice > 0 ? { price: lockedPrice } : {}),
     },
   });
 
@@ -188,9 +197,12 @@ export default function QuoteSubmissionForm({
   };
 
   const onFormSubmit = (data: any) => {
-    onSubmit({ 
-      ...data, 
-      calculatedTotal, 
+    onSubmit({
+      ...data,
+      // A locked (catalog-listed) price always wins client-side too, so the
+      // submitted amount can't drift from what the backend will accept.
+      ...(lockedPrice > 0 ? { price: lockedPrice } : {}),
+      calculatedTotal: lockedPrice > 0 ? lockedPrice : calculatedTotal,
       processType: inquiry.processType,
       referencePhotos,
       parentQuoteId
@@ -251,19 +263,36 @@ export default function QuoteSubmissionForm({
           control={control}
           render={({ field: { onChange, value } }: any): React.ReactElement => {
             if (field.type === 'currency') {
+              // A locked price (catalog booking) pins the price field the
+              // same way an itemised total already does.
+              const isLockedPrice = field.name === 'price' && lockedPrice > 0;
+              const isDerivedPrice = field.name === 'price' && itemPricesTotal > 0;
+              const pinned = isLockedPrice || isDerivedPrice;
               return (
                 <div>
                   <div className="relative">
                     <input
                       type="number"
-                      value={field.name === 'price' && itemPricesTotal > 0 ? itemPricesTotal : (value as any) || ''}
+                      value={
+                        isLockedPrice
+                          ? lockedPrice
+                          : isDerivedPrice
+                            ? itemPricesTotal
+                            : (value as any) || ''
+                      }
                       onChange={onChange}
-                      readOnly={field.name === 'price' && itemPricesTotal > 0}
-                      className={`${inputClass} pl-12 ${field.name === 'price' && itemPricesTotal > 0 ? 'bg-slate-50 text-[#d49b35] font-bold' : ''}`}
+                      readOnly={pinned}
+                      className={`${inputClass} pl-12 ${pinned ? 'bg-slate-50 text-[#d49b35] font-bold' : ''}`}
                       placeholder="0.00"
                     />
                     <span className="absolute left-3 top-3 text-xs font-bold text-slate-400">ZMW</span>
                   </div>
+                  {isLockedPrice && (
+                    <span className={`${helpClass} block`}>
+                      Price fixed by your own listing — you&apos;re confirming availability, not
+                      re-pricing.
+                    </span>
+                  )}
                   {field.calculation === 'unit' && inquiry.attributes?.quantity && (
                     <span className={`${helpClass} block`}>
                       × {inquiry.attributes.quantity} units = ZMW {((Number(value) || 0) * Number(inquiry.attributes.quantity)).toLocaleString()}

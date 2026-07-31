@@ -214,17 +214,32 @@ export interface Quote {
   pickupInstructions?: string;
 }
 
+// Mirrors backend/src/modules/products/entities/product.entity.ts. The
+// products table applies no transform in database.ts, so dates arrive as
+// ISO strings and decimals may arrive as strings from Postgres.
 export interface Product {
-  id?: number;
-  providerId: string | number;
+  id?: string;
+  sellerId?: string;
   name: string;
-  price: number;
-  stock?: number;
   description: string;
-  images: string[];
   category: string;
-  createdAt: number;
-  status: 'ACTIVE' | 'INACTIVE';
+  subCategory?: string;
+  /** Nullable — null/absent means "Price on request". */
+  price?: number | string | null;
+  originalPrice?: number;
+  stock?: number;
+  images: string[];
+  /** Optional promo/demo video for the listing. */
+  youtubeUrl?: string | null;
+  brand?: string;
+  condition?: string;
+  attributes?: Record<string, any>;
+  isActive?: boolean;
+  viewCount?: number;
+  rating?: number;
+  reviewCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Transaction {

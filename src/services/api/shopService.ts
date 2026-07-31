@@ -77,11 +77,13 @@ export interface ShopProduct {
   description: string;
   category: string;
   subCategory?: string;
-  /** Listed price — NOT shown to the buyer in the PO flow (the shop prices
-   *  the order), kept for the seller's own reference. */
-  price?: number;
+  /** Listed price — null/absent means "Price on request". Decimal columns
+   *  arrive as strings from TypeORM; coerce before math. */
+  price?: number | string | null;
   stock?: number;
   images?: string[];
+  /** Optional promo/demo video for the listing. */
+  youtubeUrl?: string | null;
   brand?: string;
   condition?: string;
   isActive?: boolean;
@@ -97,6 +99,28 @@ export async function fetchShopProducts(sellerId: string): Promise<ShopProduct[]
   } catch {
     return [];
   }
+}
+
+// ── Direct purchase (Buy Now on a priced, in-stock listing) ──────────────
+
+export interface DirectOrderReceipt {
+  quoteId: string;
+  inquiryId: string;
+  orderNumber: string;
+  collectionCode: string;
+  totalAmount: number;
+  quantity: number;
+  remainingStock: number;
+}
+
+/**
+ * Buy a listing outright — the backend derives the amount from the listing,
+ * decrements stock atomically, and lands a PAID order on the normal
+ * escrow/collection rails. 409 = sold out / not enough stock.
+ */
+export async function buyProduct(productId: string, quantity: number): Promise<DirectOrderReceipt> {
+  const res = await apiClient.post<DirectOrderReceipt>(`/products/${productId}/buy`, { quantity });
+  return res.data!;
 }
 
 // ── Favorites (Browse Shops → Favorites) ────────────────────────────────

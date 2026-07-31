@@ -39,8 +39,10 @@ export class Product {
   @Column({ type: 'varchar', length: 100, nullable: true })
   subCategory: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
-  price: number;
+  // Nullable — a priceless listing is a real "Price on request" state that
+  // routes buyers into the quote/booking flow instead of Buy Now.
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  price: number | null;
 
   @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
   originalPrice: number;
@@ -48,8 +50,14 @@ export class Product {
   @Column({ type: 'integer', default: 0 })
   stock: number;
 
-  @Column({ type: 'simple-array', default: '' })
+  // json, NOT simple-array: base64 data-URL images contain commas, which the
+  // comma-joined simple-array storage corrupted on read.
+  @Column({ type: 'json', default: () => "'[]'" })
   images: string[];
+
+  // Optional promo/demo video for the listing (PortfolioItem precedent).
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  youtubeUrl: string | null;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   brand: string;

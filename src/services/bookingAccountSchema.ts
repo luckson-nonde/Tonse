@@ -22,7 +22,7 @@ export const MASTER_BOOKING_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'leads', label: 'Booking Requests', icon: 'FileText', permissions: [PERMISSIONS.MANAGE_QUOTES] },
     { id: 'my-quotes', label: 'My Quotes', icon: 'MessageSquare', permissions: [PERMISSIONS.MANAGE_QUOTES] },
     { id: 'archived-leads', label: 'Archived Leads', icon: 'Archive', permissions: [PERMISSIONS.MANAGE_QUOTES] },
-    { id: 'products', label: 'Services & Slots', icon: 'Package', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
+    { id: 'products', label: 'Service Catalog', icon: 'Package', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     { id: 'paid-orders', label: 'Confirmed Bookings', icon: 'Check', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     { id: 'schedule', label: 'Booking Calendar', icon: 'Calendar', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     { id: 'team', label: 'Team Management', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },

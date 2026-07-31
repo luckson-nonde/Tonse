@@ -78,9 +78,9 @@ export const MASTER_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
         'BOOKING',
       ],
     },
-    { 
-      id: 'products', 
-      label: 'My Products',
+    {
+      id: 'products',
+      label: 'My Catalog',
       icon: 'Store',
       permissions: [PERMISSIONS.VIEW_ANALYTICS],
       excludeRoles: ['ENTERTAINMENT'],

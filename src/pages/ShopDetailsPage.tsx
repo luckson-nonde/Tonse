@@ -240,7 +240,9 @@ export default function ShopDetailsPage() {
                           </p>
                           <div className="flex items-center gap-4 mt-2">
                             <span className="text-sm font-black text-brand-dark">
-                              ZMW {product.price.toLocaleString()}
+                              {product.price != null && Number(product.price) > 0
+                                ? `ZMW ${Number(product.price).toLocaleString()}`
+                                : 'Price on request'}
                             </span>
                             <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
                               IN STOCK ({product.stock})
