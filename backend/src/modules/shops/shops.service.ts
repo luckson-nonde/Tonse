@@ -228,11 +228,15 @@ export class ShopsService {
       LEFT JOIN categories       c  ON c.id          = cj.category_id
       LEFT JOIN review_agg      ra ON ra.provider_user_id = p.seller_id
       LEFT JOIN LATERAL (
-        SELECT split_part(pr.images, ',', 1) AS first_image
+        -- products.images is json (CatalogRichListings migration) — a json
+        -- array of URLs/data-URLs. ->>0 is the first entry; the old
+        -- split_part/<>'' text handling errors outright on a json column.
+        SELECT pr.images->>0 AS first_image
         FROM products pr
         WHERE pr."sellerId" = p.seller_id
           AND pr."isActive" = true
-          AND pr.images IS NOT NULL AND pr.images <> ''
+          AND pr.images IS NOT NULL
+          AND NULLIF(pr.images->>0, '') IS NOT NULL
         ORDER BY pr."createdAt" DESC
         LIMIT 1
       ) cov ON true
@@ -399,11 +403,13 @@ export class ShopsService {
       LEFT JOIN categories     c  ON c.id          = cj.category_id
       LEFT JOIN review_agg    ra ON ra.provider_user_id = p.seller_id
       LEFT JOIN LATERAL (
-        SELECT split_part(pr.images, ',', 1) AS first_image
+        -- json images column — see the matching note in findAll().
+        SELECT pr.images->>0 AS first_image
         FROM products pr
         WHERE pr."sellerId" = p.seller_id
           AND pr."isActive" = true
-          AND pr.images IS NOT NULL AND pr.images <> ''
+          AND pr.images IS NOT NULL
+          AND NULLIF(pr.images->>0, '') IS NOT NULL
         ORDER BY pr."createdAt" DESC
         LIMIT 1
       ) pc ON true
