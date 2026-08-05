@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, X, Store, LayoutGrid, Briefcase, Heart } from 'lucide-react';
 import { fetchShops, type ShopResult } from '../services/api/shopService';
 import { CATEGORIES_DB, getBusinessTypeLabel, type BusinessType } from '../services/categories';
@@ -39,17 +39,29 @@ export default function BrowseShopsView({
   const { favoriteIds, isFavorite, toggle: toggleFavorite } = useFavoriteShops(user?.id);
   const [shops, setShops] = useState<ShopResult[]>([]);
   const [loading, setLoading] = useState(true);
+  // Distinguish "the directory is empty" from "the request failed" — during
+  // the Aug 2026 /shops 500 outage a swallowed error rendered as "No shops
+  // registered yet" and masked the incident entirely.
+  const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
   const [selectedServiceType, setSelectedServiceType] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadShops = useCallback(() => {
     setLoading(true);
+    setLoadError(false);
     fetchShops({ limit: 100 })
       .then((r) => setShops(r.data))
-      .catch(() => setShops([]))
+      .catch(() => {
+        setShops([]);
+        setLoadError(true);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadShops();
+  }, [loadShops]);
 
   // Leaf category id → master (industry) id, from the static catalog.
   const categoryParentMap = useMemo(
@@ -162,7 +174,9 @@ export default function BrowseShopsView({
                 : `${favoriteIds.size} saved ${favoriteIds.size === 1 ? 'shop' : 'shops'} · your handpicked list`
               : loading
                 ? 'Loading verified shops…'
-                : `${shops.length} verified ${shops.length === 1 ? 'shop' : 'shops'} · browse, compare and send an inquiry`}
+                : loadError
+                  ? 'Shops are unavailable right now'
+                  : `${shops.length} verified ${shops.length === 1 ? 'shop' : 'shops'} · browse, compare and send an inquiry`}
           </p>
 
           {/* One white bar: search left, filter dropdowns embedded right.
@@ -244,7 +258,20 @@ export default function BrowseShopsView({
             alt={favoritesOnly ? 'No favorites yet' : 'No shops found'}
             className="w-44 h-44 object-contain opacity-90 mb-8"
           />
-          {favoritesOnly && !hasActiveFilters ? (
+          {loadError ? (
+            <>
+              <p className="text-[17px] font-bold text-slate-700 mb-2">Couldn't load shops</p>
+              <p className="text-[13px] text-slate-400 mb-5 max-w-xs">
+                Something went wrong reaching the marketplace. Check your connection and try again.
+              </p>
+              <button
+                onClick={loadShops}
+                className="px-5 py-2 text-[13px] font-bold text-[#d49b35] bg-[#fdf6e9] border border-[#ecd9b3] rounded-xl hover:bg-[#fcecd4] transition-colors"
+              >
+                Try again
+              </button>
+            </>
+          ) : favoritesOnly && !hasActiveFilters ? (
             <>
               <p className="text-[17px] font-bold text-slate-700 mb-2">No favorites yet</p>
               <p className="text-[13px] text-slate-400 max-w-xs">
