@@ -551,15 +551,12 @@ export type UpdateBillingSettingsInput = Partial<
   >
 >;
 
-export type AdAdminPlacementLocation =
-  | 'HOMEPAGE_CENTER'
-  | 'SECONDARY_SIDEBAR'
-  | 'CATEGORY_SIDEBAR'
-  | 'BUNDLE_ALL';
+export type AdAdminPlacementLocation = 'HOMEPAGE_CENTER' | 'SECONDARY_SIDEBAR' | 'CATEGORY_SIDEBAR';
 
-/** Ad placement pricing — base rate per placement + duration discount tiers (Ads tab). */
+/** Ad pricing — ONE daily rate for every placement (cost scales with days,
+ *  not with where the ad runs) plus duration discount tiers (Ads tab). */
 export interface AdminAdPricing {
-  baseRates: Record<AdAdminPlacementLocation, number>;
+  baseRatePerDay: number;
   discountTiers: { minDays: number; discountPercentage: number }[];
 }
 
@@ -574,8 +571,9 @@ export interface AdminAdvertisement {
   mediaType: 'IMAGE' | 'VIDEO';
   mediaUrl: string;
   videoDurationSeconds: number | null;
-  placementLocation: AdAdminPlacementLocation;
-  /** Category slug a CATEGORY_SIDEBAR ad targets; null = all categories. */
+  /** Every place this ad runs. */
+  placements: AdAdminPlacementLocation[];
+  /** Category slug a category-rail ad targets; null = all categories. */
   targetCategoryId: string | null;
   startDate: string | null;
   endDate: string | null;

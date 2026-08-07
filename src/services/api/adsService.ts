@@ -13,11 +13,13 @@ function payload<T>(res: any, fallback: T): T {
   return (res && 'data' in res ? res.data : res) ?? fallback;
 }
 
-export type AdPlacementLocation =
-  | 'HOMEPAGE_CENTER'
-  | 'SECONDARY_SIDEBAR'
-  | 'CATEGORY_SIDEBAR'
-  | 'BUNDLE_ALL';
+export type AdPlacementLocation = 'HOMEPAGE_CENTER' | 'SECONDARY_SIDEBAR' | 'CATEGORY_SIDEBAR';
+
+export const AD_PLACEMENTS: AdPlacementLocation[] = [
+  'HOMEPAGE_CENTER',
+  'SECONDARY_SIDEBAR',
+  'CATEGORY_SIDEBAR',
+];
 export type AdMediaType = 'IMAGE' | 'VIDEO';
 export type AdStatus = 'PENDING_PAYMENT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
 export type EffectiveAdStatus = AdStatus | 'EXPIRED';
@@ -30,8 +32,9 @@ export interface Advertisement {
   mediaType: AdMediaType;
   mediaUrl: string;
   videoDurationSeconds: number | null;
-  placementLocation: AdPlacementLocation;
-  /** Master category slug this ad targets (CATEGORY_SIDEBAR only); null = all categories. */
+  /** Every place this ad runs — costs the same however many are ticked. */
+  placements: AdPlacementLocation[];
+  /** Master category slug this ad targets (category rail only); null = all categories. */
   targetCategoryId: string | null;
   startDate: string | null;
   endDate: string | null;
@@ -52,7 +55,8 @@ export interface AdDiscountTier {
 }
 
 export interface AdPricingRates {
-  baseRates: Record<AdPlacementLocation, number>;
+  /** ZMW per day, whatever the placement — price scales with days only. */
+  baseRatePerDay: number;
   discountTiers: AdDiscountTier[];
 }
 
@@ -62,10 +66,14 @@ export interface CreateAdvertisementInput {
   mediaType: AdMediaType;
   mediaUrl: string;
   videoDurationSeconds?: number;
-  placementLocation: AdPlacementLocation;
-  /** Only sent for CATEGORY_SIDEBAR; omit to run across all categories. */
+  /** At least one. Ticking more costs nothing extra. */
+  placements: AdPlacementLocation[];
+  /** Only used when the category rail is among the placements; omit for all categories. */
   targetCategoryId?: string;
-  durationDays: number;
+  /** Inclusive campaign window, `yyyy-MM-dd`. The server derives durationDays
+   *  from these and recomputes the price — neither is client-supplied. */
+  startDate: string;
+  endDate: string;
 }
 
 export interface AdCheckoutResult {
@@ -77,25 +85,33 @@ export interface AdCheckoutResult {
   instruction?: string;
 }
 
-/** Best-matching discount tier for a duration — mirrors AdsService.priceFor
- *  so the create-ad form can show a live total before the server round-trip. */
-export function calculateAdPrice(
-  placementLocation: AdPlacementLocation,
-  durationDays: number,
-  rates: AdPricingRates,
-): number {
-  const baseRate = Number(rates.baseRates[placementLocation] ?? 0);
+/** Mirrors AdsService.priceFor so the create-ad form can show a live total
+ *  before the server round-trip. Deliberately takes no placement argument —
+ *  cost is a function of days alone. The server still recomputes. */
+export function calculateAdPrice(durationDays: number, rates: AdPricingRates): number {
   const bestTier = [...rates.discountTiers]
     .filter((t) => durationDays >= t.minDays)
     .sort((a, b) => b.minDays - a.minDays)[0];
   const discount = bestTier ? bestTier.discountPercentage / 100 : 0;
-  return Math.round(baseRate * durationDays * (1 - discount) * 100) / 100;
+  return Math.round(Number(rates.baseRatePerDay) * durationDays * (1 - discount) * 100) / 100;
+}
+
+/** Inclusive day count between two `yyyy-MM-dd` strings — the 10th to the
+ *  10th is one day. Mirrors the server's derivation. */
+export function countAdDays(startDate: string, endDate: string): number {
+  if (!startDate || !endDate) return 0;
+  const [sy, sm, sd] = startDate.split('-').map(Number);
+  const [ey, em, ed] = endDate.split('-').map(Number);
+  const start = new Date(sy, sm - 1, sd);
+  const end = new Date(ey, em - 1, ed);
+  const days = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+  return days > 0 ? days : 0;
 }
 
 export const adsService = {
   async getPricingRates(): Promise<AdPricingRates> {
     const res = await apiClient.get('/ads/pricing-rates');
-    return payload<AdPricingRates>(res, { baseRates: {} as any, discountTiers: [] });
+    return payload<AdPricingRates>(res, { baseRatePerDay: 0, discountTiers: [] });
   },
 
   /** Public — no auth required. Empty array means "show the fallback banner".

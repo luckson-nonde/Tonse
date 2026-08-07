@@ -23,8 +23,10 @@ const PLACEMENT_LABEL: Record<AdAdminPlacementLocation, string> = {
   HOMEPAGE_CENTER: 'Homepage Center',
   SECONDARY_SIDEBAR: 'Secondary Sidebar',
   CATEGORY_SIDEBAR: 'Category Sidebar',
-  BUNDLE_ALL: 'Bundle (Both)',
 };
+
+const placementList = (ad: AdminAdvertisement) =>
+  (ad.placements ?? []).map((p) => PLACEMENT_LABEL[p] ?? p).join(' + ') || '—';
 
 export default function AdsAdminView() {
   const [pricing, setPricing] = useState<AdminAdPricing | null>(null);
@@ -153,9 +155,9 @@ export default function AdsAdminView() {
       <div className="grid grid-cols-2 gap-3 md:gap-4 mb-6">
         <StatTile label="Pending Review" value={pending.length} hint="Awaiting approve/reject" icon={Clock} tone="gold" />
         <StatTile
-          label="Homepage Rate"
-          value={`K${draft.baseRates.HOMEPAGE_CENTER ?? 0}/day`}
-          hint="Base, before discounts"
+          label="Daily Rate"
+          value={`K${draft.baseRatePerDay ?? 0}/day`}
+          hint="Any placement, before discounts"
           icon={Megaphone}
           tone="navy"
         />
@@ -163,28 +165,26 @@ export default function AdsAdminView() {
 
       {/* Pricing */}
       <div className={`${CARD} mb-6`}>
-        <h3 className="text-[12px] font-black uppercase tracking-widest text-[#1a1a2e] mb-4">Base rates (ZMW/day)</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-          {(Object.keys(PLACEMENT_LABEL) as AdAdminPlacementLocation[]).map((placement) => (
-            <label key={placement} className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
-              {PLACEMENT_LABEL[placement]}
-              <div className="flex items-center gap-1.5 mt-1.5">
-                <span className="text-[#C9973A] font-black text-[13px]">K</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={draft.baseRates[placement] ?? 0}
-                  onChange={(e) =>
-                    setDraft((d) =>
-                      d ? { ...d, baseRates: { ...d.baseRates, [placement]: Math.max(0, Number(e.target.value) || 0) } } : d
-                    )
-                  }
-                  className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-[13px] font-bold text-[#1a1a2e] tracking-normal focus:outline-none focus:border-[#C9973A]"
-                />
-              </div>
-            </label>
-          ))}
-        </div>
+        <h3 className="text-[12px] font-black uppercase tracking-widest text-[#1a1a2e] mb-1">Daily rate</h3>
+        <p className="text-[12px] text-slate-500 mb-4 leading-relaxed">
+          What one day of advertising costs. It's the same wherever the ad runs — a seller can tick
+          every placement without paying more, so price scales only with how long they book.
+        </p>
+        <label className="block max-w-xs text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-5">
+          ZMW per day
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <span className="text-[#C9973A] font-black text-[13px]">K</span>
+            <input
+              type="number"
+              min={0}
+              value={draft.baseRatePerDay ?? 0}
+              onChange={(e) =>
+                setDraft((d) => (d ? { ...d, baseRatePerDay: Math.max(0, Number(e.target.value) || 0) } : d))
+              }
+              className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-[13px] font-bold text-[#1a1a2e] tracking-normal focus:outline-none focus:border-[#C9973A]"
+            />
+          </div>
+        </label>
 
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-[12px] font-black uppercase tracking-widest text-[#1a1a2e]">Duration discount tiers</h3>
@@ -284,8 +284,8 @@ export default function AdsAdminView() {
                     <div className="min-w-0">
                       <h4 className="font-bold text-slate-900 text-sm truncate">{ad.title}</h4>
                       <p className="text-[11px] text-slate-500 mt-0.5">
-                        {PLACEMENT_LABEL[ad.placementLocation]}
-                        {ad.placementLocation === 'CATEGORY_SIDEBAR' && (
+                        {placementList(ad)}
+                        {(ad.placements ?? []).includes('CATEGORY_SIDEBAR') && (
                           <> · targets {ad.targetCategoryId ?? 'all categories'}</>
                         )}
                         {' · '}K{ad.totalPaidAmount} · {ad.durationDays} days

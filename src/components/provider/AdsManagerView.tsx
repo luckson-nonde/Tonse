@@ -10,6 +10,7 @@ import {
   XCircle,
   Wallet,
   ArrowLeft,
+  Check,
 } from 'lucide-react';
 import emptyStateImage from '../../assets/images/empty-states/owl_reading.webp';
 import { formatCurrency } from '../../utils/financeUtils';
@@ -20,12 +21,15 @@ import { ventureService } from '../../services/api/ventureService';
 import {
   adsService,
   calculateAdPrice,
+  countAdDays,
+  AD_PLACEMENTS,
   Advertisement,
   AdPricingRates,
   AdPlacementLocation,
   AdMediaType,
   EffectiveAdStatus,
 } from '../../services/api/adsService';
+import DateTimePicker from '../DateTimePicker';
 import PaymentSheet, { PaymentSheetSubmitPayload } from '../PaymentSheet';
 import Button from '../Button';
 
@@ -33,19 +37,33 @@ const PLACEMENT_LABEL: Record<AdPlacementLocation, string> = {
   HOMEPAGE_CENTER: 'Homepage Center Banner',
   SECONDARY_SIDEBAR: 'Secondary Page Sidebar',
   CATEGORY_SIDEBAR: 'Category Page Sidebar',
-  BUNDLE_ALL: 'Both (Bundle)',
 };
 
-/** Master categories a CATEGORY_SIDEBAR ad can target — the same list the
- *  buyer picks from, so ids line up with what the rail queries. */
+const PLACEMENT_HELP: Record<AdPlacementLocation, string> = {
+  HOMEPAGE_CENTER: 'The wide banner on the buyer home screen, under the main call to action.',
+  SECONDARY_SIDEBAR: 'The right-hand panel on inquiries, quotes and order pages.',
+  CATEGORY_SIDEBAR: 'Beside the subcategory list while a buyer is choosing what to request.',
+};
+
+/** Master categories a category-rail ad can target — the same list the buyer
+ *  picks from, so ids line up with what the rail queries. */
 const MASTER_CATEGORIES = CATEGORIES_DB.filter((c) => c.parentId === null);
 
-const DURATION_PRESETS = [
-  { label: '3 Days', days: 3 },
-  { label: '7 Days', days: 7 },
-  { label: '1 Month', days: 30 },
-  { label: '6 Months', days: 180 },
-];
+const todayISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const parseISODate = (value: string): Date | undefined => {
+  if (!value) return undefined;
+  const [y, m, d] = value.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
+const prettyDate = (value: string) => {
+  const d = parseISODate(value);
+  return d ? d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+};
 
 const STATUS_STYLE: Record<EffectiveAdStatus, string> = {
   PENDING_PAYMENT: 'bg-slate-100 text-slate-500 border border-slate-200',
@@ -88,6 +106,31 @@ interface PendingCheckout {
   amount: string;
 }
 
+/** Human-readable placement list, plus the targeted category when the
+ *  category rail is one of them. Tolerates legacy rows with no array. */
+function placementSummary(ad: Advertisement): string {
+  const list = (ad.placements ?? []).map((p) => PLACEMENT_LABEL[p] ?? p);
+  const base = list.length ? list.join(' + ') : '—';
+  if (!(ad.placements ?? []).includes('CATEGORY_SIDEBAR')) return base;
+  const category = MASTER_CATEGORIES.find((c) => c.id === ad.targetCategoryId)?.name ?? 'All categories';
+  return `${base} (${category})`;
+}
+
+/** One line under a field: its error if it has one, otherwise its help text.
+ *  Keeps the message next to the input it's about. */
+function FieldNote({ error, help }: { error?: string; help?: string }) {
+  if (!error && !help) return null;
+  return (
+    <span
+      className={`block mt-1 text-[10px] font-medium normal-case tracking-normal ${
+        error ? 'text-rose-500' : 'text-slate-400'
+      }`}
+    >
+      {error || help}
+    </span>
+  );
+}
+
 /**
  * Seller "Advertise" surface — create a paid ad placement (homepage banner /
  * secondary-page sidebar), pay for it (venture balance or PSP checkout, same
@@ -110,12 +153,16 @@ export default function AdsManagerView() {
   const [mediaUrl, setMediaUrl] = useState('');
   const [mediaPreview, setMediaPreview] = useState('');
   const [videoDurationSeconds, setVideoDurationSeconds] = useState<number | undefined>(undefined);
-  const [placementLocation, setPlacementLocation] = useState<AdPlacementLocation>('HOMEPAGE_CENTER');
+  const [placements, setPlacements] = useState<AdPlacementLocation[]>(['HOMEPAGE_CENTER']);
   const [targetCategoryId, setTargetCategoryId] = useState<string>('');
-  const [durationDays, setDurationDays] = useState(7);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState('');
+  /** Per-field messages, so an error sits under the field it belongs to
+   *  rather than as one orphaned line above the submit button. */
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Payment state — the ad currently being paid for.
   const [payingAd, setPayingAd] = useState<Advertisement | null>(null);
@@ -154,10 +201,19 @@ export default function AdsManagerView() {
     setMediaUrl('');
     setMediaPreview('');
     setVideoDurationSeconds(undefined);
-    setPlacementLocation('HOMEPAGE_CENTER');
+    setPlacements(['HOMEPAGE_CENTER']);
     setTargetCategoryId('');
-    setDurationDays(7);
+    setStartDate('');
+    setEndDate('');
     setFormError('');
+    setFieldErrors({});
+  };
+
+  const togglePlacement = (p: AdPlacementLocation) => {
+    setFieldErrors((e) => ({ ...e, placements: '' }));
+    setPlacements((current) =>
+      current.includes(p) ? current.filter((x) => x !== p) : [...current, p],
+    );
   };
 
   const handleFileChange = async (file: File | null) => {
@@ -192,13 +248,26 @@ export default function AdsManagerView() {
     }
   };
 
-  const price = rates ? calculateAdPrice(placementLocation, durationDays, rates) : 0;
+  const durationDays = countAdDays(startDate, endDate);
+  const price = rates ? calculateAdPrice(durationDays, rates) : 0;
 
   const handleCreate = async () => {
     setFormError('');
-    if (!title.trim()) return setFormError('Give your ad a title.');
-    if (!targetUrl.trim()) return setFormError('Add a link — where should the ad send people?');
-    if (!mediaUrl) return setFormError('Upload an image or video first.');
+    // Collect every problem at once so the seller fixes them in one pass
+    // instead of discovering them one submit at a time.
+    const errs: Record<string, string> = {};
+    if (!title.trim()) errs.title = 'Give your ad a title.';
+    if (!targetUrl.trim()) errs.targetUrl = 'Add a link — where should the ad send people?';
+    if (!mediaUrl) errs.media = 'Upload an image or video first.';
+    if (placements.length === 0) errs.placements = 'Pick at least one place to show the ad.';
+    if (!startDate) errs.startDate = 'Choose the day the ad should start.';
+    if (!endDate) errs.endDate = 'Choose the day the ad should stop.';
+    if (startDate && endDate && durationDays <= 0) {
+      errs.endDate = 'The end date must be on or after the start date.';
+    }
+    setFieldErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
     setCreating(true);
     try {
       const ad = await adsService.createAd({
@@ -207,10 +276,11 @@ export default function AdsManagerView() {
         mediaType,
         mediaUrl,
         videoDurationSeconds,
-        placementLocation,
+        placements,
         targetCategoryId:
-          placementLocation === 'CATEGORY_SIDEBAR' && targetCategoryId ? targetCategoryId : undefined,
-        durationDays,
+          placements.includes('CATEGORY_SIDEBAR') && targetCategoryId ? targetCategoryId : undefined,
+        startDate,
+        endDate,
       });
       resetForm();
       setView('list');
@@ -312,7 +382,7 @@ export default function AdsManagerView() {
             ZMW {formatCurrency(Number(payingAd.totalPaidAmount))}
           </p>
           <p className="text-[11px] text-white/50">
-            {PLACEMENT_LABEL[payingAd.placementLocation]} · {payingAd.durationDays} days
+            {placementSummary(payingAd)} · {payingAd.durationDays} days
           </p>
 
           {pendingCheckout ? (
@@ -376,19 +446,28 @@ export default function AdsManagerView() {
             Title
             <input
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => { setTitle(e.target.value); setFieldErrors((x) => ({ ...x, title: '' })); }}
               placeholder="e.g. 20% off all repairs this month"
-              className="mt-1.5 w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-[13px] font-medium text-slate-900 tracking-normal normal-case focus:outline-none focus:border-[#C9973A]"
+              className={`mt-1.5 w-full px-3.5 py-2.5 rounded-xl border text-[13px] font-medium text-slate-900 tracking-normal normal-case focus:outline-none ${
+                fieldErrors.title ? 'border-rose-300 focus:border-rose-400' : 'border-slate-200 focus:border-[#C9973A]'
+              }`}
             />
+            <FieldNote error={fieldErrors.title} help="The headline buyers read on your ad." />
           </label>
 
           <label className="block text-[11px] font-bold uppercase tracking-widest text-slate-400">
             Link
             <input
               value={targetUrl}
-              onChange={(e) => setTargetUrl(e.target.value)}
-              placeholder="Where should this ad send people? e.g. your shop page"
-              className="mt-1.5 w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-[13px] font-medium text-slate-900 tracking-normal normal-case focus:outline-none focus:border-[#C9973A]"
+              onChange={(e) => { setTargetUrl(e.target.value); setFieldErrors((x) => ({ ...x, targetUrl: '' })); }}
+              placeholder="e.g. /discover/my-shop"
+              className={`mt-1.5 w-full px-3.5 py-2.5 rounded-xl border text-[13px] font-medium text-slate-900 tracking-normal normal-case focus:outline-none ${
+                fieldErrors.targetUrl ? 'border-rose-300 focus:border-rose-400' : 'border-slate-200 focus:border-[#C9973A]'
+              }`}
+            />
+            <FieldNote
+              error={fieldErrors.targetUrl}
+              help="Where a buyer lands when they tap the ad — your shop page, a product, or any full web address."
             />
           </label>
 
@@ -441,30 +520,52 @@ export default function AdsManagerView() {
             )}
           </div>
 
-          {/* Placement */}
+          {/* Placements — multi-select. Cost doesn't change with how many are
+              picked, so there's deliberately no per-tile price. */}
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">Placement</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {(Object.keys(PLACEMENT_LABEL) as AdPlacementLocation[]).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPlacementLocation(p)}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    placementLocation === p ? 'border-[#C9973A] bg-[#fdf6e9]' : 'border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <p className="text-[11px] font-black text-slate-900">{PLACEMENT_LABEL[p]}</p>
-                  {rates && (
-                    <p className="text-[10px] text-slate-400 mt-0.5">ZMW {rates.baseRates[p]}/day</p>
-                  )}
-                </button>
-              ))}
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+              Where should it appear?
+            </p>
+            <span className="block mb-2 text-[10px] font-medium text-slate-400">
+              Pick as many as you like — showing in more places doesn't cost extra.
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {AD_PLACEMENTS.map((p) => {
+                const selected = placements.includes(p);
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => togglePlacement(p)}
+                    aria-pressed={selected}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      selected ? 'border-[#C9973A] bg-[#fdf6e9]' : 'border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="flex items-start gap-2">
+                      <span
+                        className={`mt-0.5 w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
+                          selected ? 'bg-[#C9973A] border-[#C9973A]' : 'border-slate-300 bg-white'
+                        }`}
+                      >
+                        {selected && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[11px] font-black text-slate-900">{PLACEMENT_LABEL[p]}</span>
+                        <span className="block text-[10px] text-slate-400 mt-0.5 leading-snug">
+                          {PLACEMENT_HELP[p]}
+                        </span>
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
+            <FieldNote error={fieldErrors.placements} />
           </div>
 
-          {/* Category targeting — only meaningful for the category rail */}
-          {placementLocation === 'CATEGORY_SIDEBAR' && (
+          {/* Category targeting — only meaningful when the category rail is on */}
+          {placements.includes('CATEGORY_SIDEBAR') && (
             <label className="block text-[11px] font-bold uppercase tracking-widest text-slate-400">
               Target category
               <select
@@ -479,43 +580,73 @@ export default function AdsManagerView() {
                   </option>
                 ))}
               </select>
-              <span className="block mt-1 text-[10px] font-medium normal-case tracking-normal text-slate-400">
-                Your ad shows to buyers browsing this category. "All categories" runs everywhere but
-                loses the spot to a targeted ad.
-              </span>
+              <FieldNote help='Your ad shows to buyers browsing this category. "All categories" runs everywhere but gives up the spot to a targeted ad.' />
             </label>
           )}
 
-          {/* Duration */}
+          {/* Campaign window */}
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">Duration</p>
-            <div className="grid grid-cols-4 gap-2 mb-2">
-              {DURATION_PRESETS.map((preset) => (
-                <button
-                  key={preset.days}
-                  type="button"
-                  onClick={() => setDurationDays(preset.days)}
-                  className={`py-2.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all ${
-                    durationDays === preset.days ? 'bg-[#1B3068] text-white border-blue-900' : 'border-slate-200 text-slate-500 hover:bg-slate-50'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+              When should it run?
+            </p>
+            <span className="block mb-2 text-[10px] font-medium text-slate-400">
+              Both days are included. If we're still reviewing when your start date arrives, the whole
+              run shifts forward — you never lose days you paid for.
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1.5">
+                  Start date
+                </span>
+                <DateTimePicker
+                  mode="date"
+                  value={startDate}
+                  onChange={(v) => {
+                    setStartDate(v);
+                    setFieldErrors((x) => ({ ...x, startDate: '', endDate: '' }));
+                    // An end date now before the start is worse than none.
+                    if (endDate && countAdDays(v, endDate) <= 0) setEndDate('');
+                  }}
+                  placeholder="Pick a start date"
+                  error={!!fieldErrors.startDate}
+                />
+                <FieldNote error={fieldErrors.startDate} />
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1.5">
+                  End date
+                </span>
+                <DateTimePicker
+                  mode="date"
+                  value={endDate}
+                  onChange={(v) => { setEndDate(v); setFieldErrors((x) => ({ ...x, endDate: '' })); }}
+                  placeholder="Pick an end date"
+                  error={!!fieldErrors.endDate}
+                  // Can't end before it starts — the calendar just won't offer it.
+                  minDate={parseISODate(startDate) ?? parseISODate(todayISO())}
+                />
+                <FieldNote error={fieldErrors.endDate} />
+              </div>
             </div>
-            <input
-              type="number"
-              min={1}
-              value={durationDays}
-              onChange={(e) => setDurationDays(Math.max(1, Number(e.target.value) || 1))}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-[13px] font-bold text-slate-900 focus:outline-none focus:border-[#C9973A]"
-            />
           </div>
 
           {/* Live price */}
-          <div className="bg-slate-50 rounded-2xl p-5 flex items-center justify-between border border-slate-100">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Total cost</span>
-            <span className="text-2xl font-black text-slate-900">ZMW {formatCurrency(price)}</span>
+          <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Total cost</span>
+              <span className="text-2xl font-black text-slate-900">ZMW {formatCurrency(price)}</span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              {durationDays > 0 ? (
+                <>
+                  {durationDays} {durationDays === 1 ? 'day' : 'days'}
+                  {startDate && endDate && <> · {prettyDate(startDate)} → {prettyDate(endDate)}</>}
+                  {rates && <> · ZMW {formatCurrency(Number(rates.baseRatePerDay))}/day</>}
+                </>
+              ) : (
+                'Pick your dates to see the price.'
+              )}
+            </p>
           </div>
 
           {formError && <p className="text-rose-500 font-bold text-[12px]">{formError}</p>}
@@ -569,10 +700,7 @@ export default function AdsManagerView() {
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-500">
-                        {PLACEMENT_LABEL[ad.placementLocation]}
-                        {ad.placementLocation === 'CATEGORY_SIDEBAR' && (
-                          <> · {MASTER_CATEGORIES.find((c) => c.id === ad.targetCategoryId)?.name ?? 'All categories'}</>
-                        )}
+                        {placementSummary(ad)}
                         {' · '}ZMW {formatCurrency(Number(ad.totalPaidAmount))} · {ad.durationDays} days
                       </p>
                       {status === 'REJECTED' && ad.rejectionReason && (
@@ -616,7 +744,7 @@ export default function AdsManagerView() {
           onSubmit={handleCheckoutSubmit}
           context={[
             { label: 'Ad', value: payingAd.title },
-            { label: 'Placement', value: PLACEMENT_LABEL[payingAd.placementLocation] },
+            { label: 'Placement', value: placementSummary(payingAd) },
           ]}
         />
       )}

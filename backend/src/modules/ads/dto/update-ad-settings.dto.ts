@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsNumber, IsObject, IsOptional, Min, ValidateNested } from 'class-validator';
+import { IsInt, IsNumber, IsOptional, Min, ValidateNested } from 'class-validator';
 import { AdDiscountTier } from '../entities/ad-settings.entity';
 
 /** Nested DTO class — required so the global ValidationPipe actually
@@ -15,10 +15,11 @@ export class AdDiscountTierDto implements AdDiscountTier {
 }
 
 export class UpdateAdSettingsDto {
-  /** Per-placement ZMW/day, e.g. { HOMEPAGE_CENTER: 8, SECONDARY_SIDEBAR: 5, BUNDLE_ALL: 12 }. */
+  /** ZMW/day for ANY placement — price scales with days, not placement. */
   @IsOptional()
-  @IsObject()
-  baseRates?: Record<string, number>;
+  @IsNumber()
+  @Min(0)
+  baseRatePerDay?: number;
 
   @IsOptional()
   @ValidateNested({ each: true })

@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Query, Request, UseGuards, BadReque
 import { IsIn, IsOptional, IsString } from 'class-validator';
 import { AdsService } from './ads.service';
 import { CreateAdvertisementDto } from './dto/create-advertisement.dto';
-import { AdPlacementLocation } from './entities/advertisement.entity';
+import { AD_PLACEMENTS, AdPlacementLocation } from './entities/advertisement.entity';
 import { CheckoutService } from '../payments/checkout.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -20,12 +20,7 @@ class AdCheckoutDto {
   operator?: string;
 }
 
-const PLACEMENTS: AdPlacementLocation[] = [
-  'HOMEPAGE_CENTER',
-  'SECONDARY_SIDEBAR',
-  'CATEGORY_SIDEBAR',
-  'BUNDLE_ALL',
-];
+const PLACEMENTS = AD_PLACEMENTS;
 
 @Controller('ads')
 export class AdsController {

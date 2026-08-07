@@ -9,20 +9,32 @@ import { LedgerService } from '../ledger/ledger.service';
 import { ACCOUNT } from '../ledger/ledger-accounts';
 import { toNgwee } from '../../common/money/money';
 
-const DEFAULT_BASE_RATES: Record<AdPlacementLocation, number> = {
-  HOMEPAGE_CENTER: 8,
-  SECONDARY_SIDEBAR: 5,
-  // Category-targeted: a smaller audience than the homepage but a far
-  // warmer one (the buyer is mid-inquiry in exactly this category), so it
-  // prices between the two.
-  CATEGORY_SIDEBAR: 6,
-  BUNDLE_ALL: 12,
-};
+/** ONE rate for every placement: an ad is priced on how many DAYS it runs,
+ *  never on where it appears, so ticking more placements is free. */
+const DEFAULT_BASE_RATE_PER_DAY = 8;
 
 const DEFAULT_DISCOUNT_TIERS: AdDiscountTier[] = [
   { minDays: 30, discountPercentage: 15 },
   { minDays: 180, discountPercentage: 20 },
 ];
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** Parse a `yyyy-MM-dd` (what DateTimePicker's date mode emits) into a local
+ *  Date at the given edge of that day. Built from parts rather than
+ *  `new Date(str)` — the latter parses a bare date as UTC midnight, which
+ *  lands on the previous day for anyone behind UTC. */
+function parseDayBoundary(value: string, edge: 'start' | 'end'): Date {
+  const [y, m, d] = value.split('-').map(Number);
+  return edge === 'start'
+    ? new Date(y, m - 1, d, 0, 0, 0, 0)
+    : new Date(y, m - 1, d, 23, 59, 59, 999);
+}
+
+/** Whole days between two day-starts. */
+function daysBetween(a: Date, b: Date): number {
+  return Math.round((b.getTime() - a.getTime()) / MS_PER_DAY);
+}
 
 /** APPROVED but past its window reads as EXPIRED — never persisted, computed
  *  on every read (same "stored-only" convention as billing subscriptions). */
@@ -48,7 +60,7 @@ export class AdsService {
     if (existing.length > 0) return existing[0];
     return this.settingsRepository.save(
       this.settingsRepository.create({
-        baseRates: DEFAULT_BASE_RATES,
+        baseRatePerDay: DEFAULT_BASE_RATE_PER_DAY,
         discountTiers: DEFAULT_DISCOUNT_TIERS,
       }),
     );
@@ -57,46 +69,60 @@ export class AdsService {
   async getPricingRatesPublic() {
     const settings = await this.getOrCreateSettings();
     return {
-      // Defaults UNDER the stored row, not instead of it: the settings row is
-      // written once at first use, so a placement added later (CATEGORY_SIDEBAR)
-      // is missing from every existing deployment's json. Merging means a new
-      // placement always has a rate — admin-set values still win per key.
-      baseRates: { ...DEFAULT_BASE_RATES, ...(settings.baseRates ?? {}) },
+      // Coerced: pg hands decimals back as strings, and the frontend multiplies
+      // this straight into a running total.
+      baseRatePerDay: Number(settings.baseRatePerDay ?? DEFAULT_BASE_RATE_PER_DAY),
       discountTiers: settings.discountTiers?.length ? settings.discountTiers : DEFAULT_DISCOUNT_TIERS,
     };
   }
 
   async updatePricingSettings(dto: UpdateAdSettingsDto): Promise<AdSettings> {
     const settings = await this.getOrCreateSettings();
-    if (dto.baseRates !== undefined) {
-      settings.baseRates = { ...(settings.baseRates ?? DEFAULT_BASE_RATES), ...dto.baseRates } as Record<AdPlacementLocation, number>;
-    }
+    if (dto.baseRatePerDay !== undefined) settings.baseRatePerDay = dto.baseRatePerDay;
     if (dto.discountTiers !== undefined) settings.discountTiers = dto.discountTiers;
     return this.settingsRepository.save(settings);
   }
 
-  /** `baseRate * days * (1 - bestTierDiscount)`, ZMW rounded to 2dp. The best
-   *  tier is the largest minDays the duration actually clears. */
-  private priceFor(placementLocation: AdPlacementLocation, durationDays: number, baseRates: Record<string, number>, tiers: AdDiscountTier[]): number {
-    const baseRate = Number(baseRates[placementLocation] ?? DEFAULT_BASE_RATES[placementLocation]);
+  /** `baseRatePerDay * days * (1 - bestTierDiscount)`, ZMW rounded to 2dp.
+   *  The best tier is the largest minDays the duration actually clears.
+   *  Placement count is deliberately NOT a factor. */
+  private priceFor(durationDays: number, baseRatePerDay: number, tiers: AdDiscountTier[]): number {
     const bestTier = [...tiers]
       .filter((t) => durationDays >= t.minDays)
       .sort((a, b) => b.minDays - a.minDays)[0];
     const discount = bestTier ? bestTier.discountPercentage / 100 : 0;
-    const total = baseRate * durationDays * (1 - discount);
+    const total = baseRatePerDay * durationDays * (1 - discount);
     return Math.round(total * 100) / 100;
   }
 
-  async calculatePrice(placementLocation: AdPlacementLocation, durationDays: number): Promise<number> {
-    const { baseRates, discountTiers } = await this.getPricingRatesPublic();
-    return this.priceFor(placementLocation, durationDays, baseRates, discountTiers);
+  async calculatePrice(durationDays: number): Promise<number> {
+    const { baseRatePerDay, discountTiers } = await this.getPricingRatesPublic();
+    return this.priceFor(durationDays, baseRatePerDay, discountTiers);
   }
 
   async createDraftAd(sellerId: string, dto: CreateAdvertisementDto): Promise<Advertisement> {
     if (dto.mediaType === 'VIDEO' && (dto.videoDurationSeconds ?? 0) > 15) {
       throw new BadRequestException('Video length exceeds the 15-second maximum limit.');
     }
-    const totalPaidAmount = await this.calculatePrice(dto.placementLocation, dto.durationDays);
+
+    const startDate = parseDayBoundary(dto.startDate, 'start');
+    const endDate = parseDayBoundary(dto.endDate, 'end');
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      throw new BadRequestException('Start and end dates must be real calendar dates.');
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (startDate.getTime() < today.getTime()) {
+      throw new BadRequestException('The start date cannot be in the past.');
+    }
+    if (endDate.getTime() < startDate.getTime()) {
+      throw new BadRequestException('The end date must be on or after the start date.');
+    }
+
+    // Inclusive: the 10th to the 10th is one full day of advertising.
+    const durationDays = daysBetween(startDate, parseDayBoundary(dto.endDate, 'start')) + 1;
+    const totalPaidAmount = await this.calculatePrice(durationDays);
+
     const ad = this.ads.create({
       sellerId,
       title: dto.title,
@@ -104,12 +130,15 @@ export class AdsService {
       mediaType: dto.mediaType,
       mediaUrl: dto.mediaUrl,
       videoDurationSeconds: dto.mediaType === 'VIDEO' ? dto.videoDurationSeconds ?? null : null,
-      placementLocation: dto.placementLocation,
-      // Targeting only applies to the category rail; ignore it elsewhere so a
-      // homepage ad can't be silently scoped to one category.
-      targetCategoryId:
-        dto.placementLocation === 'CATEGORY_SIDEBAR' ? dto.targetCategoryId ?? null : null,
-      durationDays: dto.durationDays,
+      placements: dto.placements,
+      // Targeting only applies to the category rail; ignore it otherwise so a
+      // homepage-only ad can't be silently scoped to one category.
+      targetCategoryId: dto.placements.includes('CATEGORY_SIDEBAR')
+        ? dto.targetCategoryId ?? null
+        : null,
+      startDate,
+      endDate,
+      durationDays,
       totalPaidAmount,
       currency: 'ZMW',
       status: 'PENDING_PAYMENT',
@@ -164,11 +193,17 @@ export class AdsService {
     if (ad.status !== 'PENDING_APPROVAL') {
       throw new ConflictException(`Only a pending-approval ad can be approved (currently ${ad.status})`);
     }
-    const startDate = new Date();
-    const endDate = new Date(startDate.getTime() + ad.durationDays * 24 * 60 * 60 * 1000);
+    // Honour the seller's chosen window when it's still ahead of us; if review
+    // ran past their start date, slide the whole window forward so they keep
+    // every day they paid for. A slow queue must never cost the seller time.
+    const now = new Date();
+    const requestedStart = ad.startDate ?? now;
+    const start = requestedStart.getTime() > now.getTime() ? requestedStart : now;
+    const end = new Date(start.getTime() + ad.durationDays * MS_PER_DAY);
+
     ad.status = 'APPROVED';
-    ad.startDate = startDate;
-    ad.endDate = endDate;
+    ad.startDate = start;
+    ad.endDate = end;
     ad.approvedByAdminId = adminId;
     ad.rejectionReason = null;
     return this.ads.save(ad);
@@ -205,8 +240,13 @@ export class AdsService {
 
   /**
    * Public read for the homepage / secondary-page / category-rail carousels —
-   * APPROVED ads currently inside their live window, this placement or the
-   * bundle.
+   * APPROVED ads currently inside their live window whose `placements` list
+   * includes this slot.
+   *
+   * The placement match is a JS filter on the loaded rows, not SQL: json
+   * arrays in this codebase are always filtered after load (see the invariant
+   * in jobs.service.ts). Live ads are a small set — the date/status predicates
+   * do the real narrowing in SQL first.
    *
    * `categoryId` narrows the CATEGORY_SIDEBAR rail to what the buyer is
    * actually browsing: ads targeting that category, plus untargeted ones
@@ -219,19 +259,14 @@ export class AdsService {
     categoryId?: string,
   ): Promise<Advertisement[]> {
     const now = new Date();
-    const live = { status: 'APPROVED' as const, startDate: LessThanOrEqual(now), endDate: MoreThanOrEqual(now) };
+    const liveRows = await this.ads.find({
+      where: { status: 'APPROVED', startDate: LessThanOrEqual(now), endDate: MoreThanOrEqual(now) },
+    });
 
-    const [direct, bundled] = await Promise.all([
-      this.ads.find({ where: { ...live, placementLocation } }),
-      placementLocation === 'BUNDLE_ALL'
-        ? Promise.resolve([])
-        : this.ads.find({ where: { ...live, placementLocation: 'BUNDLE_ALL' } }),
-    ]);
-
-    const rows = [...direct, ...bundled];
+    const rows = liveRows.filter((a) => (a.placements ?? []).includes(placementLocation));
     if (placementLocation !== 'CATEGORY_SIDEBAR') return rows;
 
-    const targeted = rows.filter((a) => a.targetCategoryId === categoryId && !!categoryId);
+    const targeted = rows.filter((a) => !!categoryId && a.targetCategoryId === categoryId);
     const untargeted = rows.filter((a) => !a.targetCategoryId);
     return [...targeted, ...untargeted];
   }
