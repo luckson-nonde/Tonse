@@ -33,7 +33,7 @@ services:
     name: tonse-api
     runtime: docker
     region: frankfurt
-    plan: free                 # free instances sleep when idle (cold starts); `starter` to keep warm
+    plan: starter              # PAID — required for the persistent `disk:` below (free tier has no disks)
     branch: main
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
@@ -56,24 +56,25 @@ services:
     # SECURE_UPLOADS_DIR below (an earlier version of this block mounted only
     # /app/public/uploads, which silently left the secure documents ephemeral).
     #
-    # Needs a PAID instance type — flip `plan: free` to `plan: starter` above,
-    # then uncomment this block AND the two *_DIR env vars further down.
-    # disk:
-    #   name: proquote-uploads
-    #   mountPath: /var/data
-    #   sizeGB: 1
+    # Needs a PAID instance type — `plan: starter` is set above for exactly
+    # this reason; reverting it to free will break the deploy, not just the
+    # persistence.
+    disk:
+      name: proquote-uploads
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: "3001"           # main.ts honors it; matches the Dockerfile EXPOSE/healthcheck
-      # --- Upload storage: uncomment TOGETHER with the `disk:` block above.
-      #     Both must live under the single disk mountPath or uploads stay
-      #     ephemeral. Unset, they fall back to the in-container paths.
-      # - key: UPLOADS_DIR
-      #   value: /var/data/uploads
-      # - key: SECURE_UPLOADS_DIR
-      #   value: /var/data/secure-uploads
+      # --- Upload storage: BOTH live under the single disk mountPath above.
+      #     Mounting only the public path would silently leave every encrypted
+      #     KYC document ephemeral (Render allows just one disk per service).
+      - key: UPLOADS_DIR
+        value: /var/data/uploads
+      - key: SECURE_UPLOADS_DIR
+        value: /var/data/secure-uploads
       # --- Database (auto-wired from the managed Postgres above) ---
       - key: DB_HOST
         fromDatabase: { name: tonse-db, property: host }
