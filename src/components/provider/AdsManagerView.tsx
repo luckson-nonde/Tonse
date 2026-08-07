@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   Check,
   Store,
+  AlertTriangle,
 } from 'lucide-react';
 import emptyStateImage from '../../assets/images/empty-states/owl_reading.webp';
 import { formatCurrency } from '../../utils/financeUtils';
@@ -87,7 +88,8 @@ const prettyDate = (value: string) => {
 };
 
 const STATUS_STYLE: Record<EffectiveAdStatus, string> = {
-  PENDING_PAYMENT: 'bg-slate-100 text-slate-500 border border-slate-200',
+  // Amber, not grey: this state needs the seller to act.
+  PENDING_PAYMENT: 'bg-amber-50 text-amber-700 border border-amber-200',
   PENDING_APPROVAL: 'bg-[#fdf6e9] text-[#b07f24] border border-[#ecd9b3]',
   APPROVED: 'bg-emerald-50 text-emerald-600 border border-emerald-100',
   REJECTED: 'bg-rose-50 text-rose-600 border border-rose-100',
@@ -95,7 +97,10 @@ const STATUS_STYLE: Record<EffectiveAdStatus, string> = {
 };
 
 const STATUS_LABEL: Record<EffectiveAdStatus, string> = {
-  PENDING_PAYMENT: 'Awaiting payment',
+  // "Awaiting payment" read as though it were already submitted and merely
+  // settling up. It isn't: an unpaid ad has NOT been sent for review and the
+  // admin cannot see it at all.
+  PENDING_PAYMENT: 'Not submitted',
   PENDING_APPROVAL: 'In review',
   APPROVED: 'Live',
   REJECTED: 'Rejected',
@@ -295,6 +300,10 @@ export default function AdsManagerView() {
     }
   };
 
+  /** Created but never paid for — so never sent for review, and invisible to
+   *  the admin. The single most common way an ad goes nowhere. */
+  const unpaidAds = myAds.filter((a) => (a.effectiveStatus ?? a.status) === 'PENDING_PAYMENT');
+
   const durationDays = countAdDays(startDate, endDate);
   const price = rates ? calculateAdPrice(durationDays, rates) : 0;
 
@@ -428,6 +437,10 @@ export default function AdsManagerView() {
           </p>
           <p className="text-[11px] text-white/50">
             {placementSummary(payingAd)} · {payingAd.durationDays} days
+          </p>
+          <p className="text-[11px] text-amber-300/90 flex items-start gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+            Your ad goes to our review team once this is paid — until then it isn't submitted.
           </p>
 
           {pendingCheckout ? (
@@ -718,6 +731,9 @@ export default function AdsManagerView() {
             {creating && <Loader2 className="w-4 h-4 animate-spin" />}
             Continue to payment
           </Button>
+          <p className="-mt-2 text-center text-[11px] text-slate-400">
+            Next you'll pay — that's what sends the ad to our review team.
+          </p>
         </div>
       )}
 
@@ -730,6 +746,30 @@ export default function AdsManagerView() {
               {myAds.length}
             </span>
           </div>
+
+          {/* Unpaid ads are invisible to the reviewer, which is not obvious
+              from a quiet row in a list — say it once, loudly, at the top. */}
+          {unpaidAds.length > 0 && (
+            <div className="mb-4 flex items-start gap-3 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-[12px] font-black text-amber-900">
+                  {unpaidAds.length} ad{unpaidAds.length === 1 ? '' : 's'} not submitted yet
+                </p>
+                <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+                  We only send an ad for review once it's paid for, so these aren't with our team yet and
+                  can't go live. Tap "Complete payment" on one to send it.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setPayingAd(unpaidAds[0])}
+                  className="mt-2 text-[10px] font-black uppercase tracking-widest text-amber-800 hover:text-amber-900 underline underline-offset-2"
+                >
+                  Pay for "{unpaidAds[0].title}" →
+                </button>
+              </div>
+            </div>
+          )}
 
           {myAds.length === 0 ? (
             <div className="bg-white rounded-2xl sm:rounded-3xl p-10 sm:p-16 text-center border border-slate-100 flex flex-col items-center justify-center shadow-sm">
@@ -773,13 +813,18 @@ export default function AdsManagerView() {
                         </p>
                       )}
                       {status === 'PENDING_PAYMENT' && (
-                        <button
-                          type="button"
-                          onClick={() => setPayingAd(ad)}
-                          className="mt-2 text-[10px] font-black uppercase tracking-widest text-[#C9973A] hover:text-[#b8852f]"
-                        >
-                          Complete payment →
-                        </button>
+                        <>
+                          <p className="text-[11px] text-amber-700 mt-1 flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3 shrink-0" /> Not sent for review yet — pay to submit it.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setPayingAd(ad)}
+                            className="mt-2 px-3 py-1.5 rounded-lg bg-[#C9973A] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#b8852f] transition-all"
+                          >
+                            Complete payment →
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
