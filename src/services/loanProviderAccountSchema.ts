@@ -22,6 +22,7 @@ export const MASTER_LOAN_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'archived-leads', label: 'Archived Requests', icon: 'Archive', permissions: [PERMISSIONS.MANAGE_LOANS] },
     { id: 'team', label: 'Team Management', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
+    { id: 'advertise', label: 'Advertise', icon: 'Megaphone' },
     { id: 'audit-trail', label: 'Audit Trail', icon: 'History', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
   ],
   views: {
@@ -67,6 +68,11 @@ export const MASTER_LOAN_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       title: 'Financial Account',
       subtitle: 'Manage your virtual wallet and transaction security',
       componentType: 'financial_renderer',
+    },
+    advertise: {
+      title: 'Advertise',
+      subtitle: 'Promote your shop with a paid homepage or sidebar ad placement',
+      componentType: 'ads_manager_renderer',
     },
     'audit-trail': {
       title: 'Audit Trail',

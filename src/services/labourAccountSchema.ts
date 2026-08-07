@@ -9,6 +9,7 @@ export const MASTER_LABOUR_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'my_quotes', label: 'My Proposals', icon: 'FileText' },
     { id: 'schedule', label: 'My Schedule', icon: 'Calendar' },
     { id: 'financial', label: 'Financial', icon: 'Wallet' },
+    { id: 'advertise', label: 'Advertise', icon: 'Megaphone' },
     { id: 'profile', label: 'My Profile', icon: 'User' },
     REPORTING_NAV_ITEM,
   ],
@@ -46,6 +47,11 @@ export const MASTER_LABOUR_ACCOUNT_SCHEMA: MasterAccountSchema = {
       title: 'Financial Overview',
       subtitle: 'Manage your earnings and withdrawals',
       componentType: 'financial_renderer',
+    },
+    advertise: {
+      title: 'Advertise',
+      subtitle: 'Promote your services with a paid homepage or sidebar ad placement',
+      componentType: 'ads_manager_renderer',
     },
     profile: {
       title: 'My Profile',
