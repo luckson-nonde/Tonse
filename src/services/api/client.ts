@@ -26,6 +26,28 @@ export const API_BASE_URL =
     ? rawApiBase
     : `https://${rawApiBase}`;
 
+/**
+ * Make a stored upload path renderable.
+ *
+ * `POST /files/upload` returns a bare `/uploads/…` path, which resolves against
+ * the WEB origin — a different service from the API in production, so it 404s.
+ * (And a 404 on /uploads/* surfaces in the browser as
+ * ERR_BLOCKED_BY_RESPONSE.NotSameOrigin, because only files that are FOUND get
+ * the permissive Cross-Origin-Resource-Policy header — the CORP error is always
+ * a symptom of the 404, never a separate bug.)
+ *
+ * Absolute/data/blob URLs pass through untouched, so this is safe to apply to a
+ * field that might already hold either.
+ *
+ * NOTE: product `images` are base64 data URLs written client-side, not uploads
+ * — they render directly and don't need this.
+ */
+export function uploadUrl(url: string | null | undefined): string {
+  if (!url) return '';
+  if (/^(https?:|data:|blob:)/i.test(url)) return url;
+  return `${API_BASE_URL}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
 export interface ApiResponse<T> {
   data?: T;
   message?: string;

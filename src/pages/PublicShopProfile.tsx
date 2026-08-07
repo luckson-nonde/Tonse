@@ -121,6 +121,22 @@ export default function PublicShopProfile() {
     };
   }, [id]);
 
+  // `?product=<id>` is set when the buyer arrived by clicking a specific
+  // listing on the landing-page storefront. Open that item's detail modal once
+  // the catalogue has loaded, so the click lands ON the thing they tapped
+  // rather than at the top of the shop. A stale id simply does nothing.
+  const sourceProductId = searchParams.get('product');
+  const [deepLinkOpened, setDeepLinkOpened] = useState(false);
+  useEffect(() => {
+    if (!sourceProductId || deepLinkOpened || products.length === 0) return;
+    const match = products.find((p) => p.id === sourceProductId);
+    // Mark as handled either way: without this a missing product would retry
+    // on every products change, and re-opening a modal the buyer just closed
+    // would trap them in it.
+    setDeepLinkOpened(true);
+    if (match) setSelectedItem(match);
+  }, [sourceProductId, products, deepLinkOpened]);
+
   // Real photos of the shop come from its listed products — there's no
   // separate "gallery" field on the profile, so this is the honest source.
   const galleryImages = useMemo(() => {

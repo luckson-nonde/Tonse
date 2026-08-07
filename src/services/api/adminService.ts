@@ -209,6 +209,55 @@ export interface AdminReport {
   createdAt: string;
 }
 
+/**
+ * An admin-authored merchandising tile on the public landing page. These fill
+ * the storefront grid while the platform has nothing selling yet; once real
+ * direct purchases land, best-selling listings claim those slots automatically
+ * and tiles fall back to topping up the remainder.
+ */
+export interface AdminPromoTile {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  /** An `/uploads/…` path — render through `uploadUrl()`. */
+  imageUrl: string;
+  ctaLabel: string | null;
+  /** Click target, honoured in this order: product → shop → category. */
+  targetProductId: string | null;
+  targetShopProfileId: string | null;
+  targetCategoryId: string | null;
+  backgroundColor: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PromoTileInput {
+  title: string;
+  subtitle?: string | null;
+  imageUrl: string;
+  ctaLabel?: string | null;
+  targetProductId?: string | null;
+  targetShopProfileId?: string | null;
+  targetCategoryId?: string | null;
+  backgroundColor?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+/** A seller listing shown in the tile editor's target picker. */
+export interface AdminStorefrontProduct {
+  id: string;
+  name: string;
+  price: number | null;
+  /** A base64 data URL — render directly, no URL prefixing. */
+  imageUrl: string | null;
+  sellerName: string;
+  shopProfileId: string | null;
+  salesCount: number;
+}
+
 const buildQuery = (params: Record<string, any>) => {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
@@ -389,6 +438,53 @@ export const adminService = {
   async rejectAd(id: string, reason?: string): Promise<AdminAdvertisement | null> {
     const res = await apiClient.post<AdminAdvertisement>(`/admin/ads/${id}/reject`, { reason });
     return res.data ?? null;
+  },
+
+  // ───── Landing-page storefront / promo tiles (primary admin only) ──────────
+
+  async listPromoTiles(): Promise<AdminPromoTile[]> {
+    const res = await apiClient.get<AdminPromoTile[]>('/admin/storefront/tiles');
+    return res.data ?? [];
+  },
+
+  async createPromoTile(payload: PromoTileInput): Promise<AdminPromoTile | null> {
+    const res = await apiClient.post<AdminPromoTile>('/admin/storefront/tiles', payload);
+    return res.data ?? null;
+  },
+
+  async updatePromoTile(
+    id: string,
+    payload: Partial<PromoTileInput>,
+  ): Promise<AdminPromoTile | null> {
+    const res = await apiClient.patch<AdminPromoTile>(`/admin/storefront/tiles/${id}`, payload);
+    return res.data ?? null;
+  },
+
+  async deletePromoTile(id: string): Promise<boolean> {
+    const res = await apiClient.delete<{ deleted: boolean }>(`/admin/storefront/tiles/${id}`);
+    return res.data?.deleted ?? false;
+  },
+
+  /** Persist a whole new ordering in one call — the editor moves tiles
+   *  optimistically and commits the resulting positions together. */
+  async reorderPromoTiles(
+    tiles: { id: string; sortOrder: number }[],
+  ): Promise<AdminPromoTile[]> {
+    const res = await apiClient.patch<AdminPromoTile[]>('/admin/storefront/tiles/reorder', {
+      tiles,
+    });
+    return res.data ?? [];
+  },
+
+  /** Listings a tile can point at. `category` is a MASTER category id, matched
+   *  through the seller's taxonomy — not the free-text products.category. */
+  async listStorefrontProducts(
+    params: { search?: string; category?: string; limit?: number } = {},
+  ): Promise<AdminStorefrontProduct[]> {
+    const res = await apiClient.get<AdminStorefrontProduct[]>(
+      `/admin/storefront/products${buildQuery(params)}`,
+    );
+    return res.data ?? [];
   },
 
   // ───── Site / Landing page (primary admin only) ────────────────────────────

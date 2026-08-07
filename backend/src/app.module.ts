@@ -39,6 +39,7 @@ import { VentureModule } from './modules/venture/venture.module';
 import { CarePlansModule } from './modules/care-plans/care-plans.module';
 import { CalendarEventsModule } from './modules/calendar-events/calendar-events.module';
 import { AdsModule } from './modules/ads/ads.module';
+import { StorefrontModule } from './modules/storefront/storefront.module';
 
 // Common
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -117,6 +118,7 @@ import webpushConfig from './config/webpush.config';
     CarePlansModule,
     CalendarEventsModule,
     AdsModule,
+    StorefrontModule,
     // The IdempotencyInterceptor (an APP_INTERCEPTOR below) needs this repo.
     TypeOrmModule.forFeature([IdempotencyKey]),
   ],

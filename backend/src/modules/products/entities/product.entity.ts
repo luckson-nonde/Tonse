@@ -80,6 +80,20 @@ export class Product {
   @Column({ type: 'integer', default: 0 })
   reviewCount: number;
 
+  /**
+   * Units sold through direct purchase (`POST /products/:id/buy`), bumped
+   * atomically inside DirectOrderService's own locked transaction. This is
+   * the ONLY sales signal the schema can carry: the normal inquiry → quote →
+   * order flow never references a product row, so a negotiated sale is
+   * unattributable to a listing. Ranks the landing-page storefront.
+   *
+   * Denormalized like viewCount/rating/reviewCount above, which carries the
+   * usual obligation: when a cancel/refund flow lands, it must decrement here
+   * too (no such path exists today — see collection.service.ts).
+   */
+  @Column({ type: 'integer', default: 0 })
+  salesCount: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

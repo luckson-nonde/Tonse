@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Star, ShieldCheck, Lock, Zap, ArrowRight } from 'lucide-react';
 import Logo from '../components/Logo';
 import DiscoverHeader from '../components/discover/DiscoverHeader';
+import TopCategoryRow from '../components/discover/TopCategoryRow';
+import StorefrontCardGrid from '../components/discover/StorefrontCardGrid';
 import { CATEGORY_GROUPS } from '../services/categories/groups';
+import { CATEGORIES_DB } from '../services/categories';
 import { fetchDiscoverShops, DiscoverShop } from '../services/api/discoverService';
+import { storefrontService, StorefrontHome } from '../services/api/storefrontService';
 
 const NAVY = '#1B3068';
 const NAVY_DEEP = '#142550';
@@ -98,12 +102,32 @@ function toRating(rating: number): string {
   return Number.isFinite(n) ? n.toFixed(1) : '0.0';
 }
 
+/**
+ * Every category id that counts as "inside" a master category: its
+ * subcategories, plus the master itself — a seller can subscribe DIRECTLY to a
+ * master when it has nothing to drill into, so matching only on children would
+ * silently hide those shops.
+ */
+function masterScopeIds(masterId: string): string[] {
+  return [masterId, ...CATEGORIES_DB.filter((c) => c.parentId === masterId).map((c) => c.id)];
+}
+
 export default function DiscoverPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [shops, setShops] = useState<DiscoverShop[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeGroup, setActiveGroup] = useState('All');
+  const [storefront, setStorefront] = useState<StorefrontHome>({
+    categories: [],
+    cards: [],
+    mode: 'PROMO',
+  });
+
+  // Category lives in the URL so a promo tile (or a shared link) can land
+  // straight on a filtered directory: /discover?category=electronics.
+  const activeCategory = searchParams.get('category');
 
   useEffect(() => {
     let isMounted = true;
@@ -119,6 +143,34 @@ export default function DiscoverPage() {
     };
   }, []);
 
+  // Storefront loads independently of the shop directory — it fails soft to an
+  // empty grid, so a storefront outage must not hold up or blank the rails.
+  useEffect(() => {
+    let isMounted = true;
+    storefrontService.getHome().then((data) => {
+      if (isMounted) setStorefront(data);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  /** A category pick supersedes the group chip — they're two different ways to
+   *  narrow the same list, and honouring both at once would silently return
+   *  nothing whenever they disagree. */
+  const handleCategorySelect = (categoryId: string) => {
+    const next = activeCategory === categoryId ? null : categoryId;
+    setSearchParams(next ? { category: next } : {});
+    setActiveGroup('All');
+  };
+
+  // Land the visitor on the results they just asked for, including on a cold
+  // load from a promo-tile link.
+  useEffect(() => {
+    if (!activeCategory || isLoading) return;
+    document.getElementById('discover-grid')?.scrollIntoView({ behavior: 'smooth' });
+  }, [activeCategory, isLoading]);
+
   const availableGroups = useMemo(() => {
     const presentCategoryIds = new Set(shops.flatMap((s) => s.categoryIds || []));
     return CATEGORY_GROUPS.filter((g) => g.categoryIds.some((id) => presentCategoryIds.has(id)));
@@ -127,14 +179,25 @@ export default function DiscoverPage() {
   const filteredShops = useMemo(() => {
     const term = search.trim().toLowerCase();
     const group = availableGroups.find((g) => g.label === activeGroup);
+    const categoryScope = activeCategory ? masterScopeIds(activeCategory) : null;
     return shops.filter((shop) => {
+      if (categoryScope && !shop.categoryIds.some((id) => categoryScope.includes(id))) return false;
       if (group && !shop.categoryIds.some((id) => group.categoryIds.includes(id))) return false;
       if (!term) return true;
       return (
         shop.name.toLowerCase().includes(term) || shop.location.toLowerCase().includes(term)
       );
     });
-  }, [shops, search, activeGroup, availableGroups]);
+  }, [shops, search, activeGroup, activeCategory, availableGroups]);
+
+  const activeCategoryName = useMemo(() => {
+    if (!activeCategory) return null;
+    return (
+      storefront.categories.find((c) => c.id === activeCategory)?.name ??
+      CATEGORIES_DB.find((c) => c.id === activeCategory)?.name ??
+      activeCategory
+    );
+  }, [activeCategory, storefront.categories]);
 
   // Default browse view: one rail per category group actually present in the
   // data — buyers navigate by WHAT they're looking for (Shopping,
@@ -194,14 +257,20 @@ export default function DiscoverPage() {
             </button>
             <button
               onClick={() =>
-                // Default view renders category rails (#discover-sections);
-                // filtered/search view renders the flat grid (#discover-grid).
+                // Prefer the real category band; fall back to the shop rails
+                // (#discover-sections) or, in the filtered/search view, the
+                // flat grid (#discover-grid).
                 (
+                  document.getElementById('storefront-categories') ??
                   document.getElementById('discover-sections') ??
                   document.getElementById('discover-grid')
                 )?.scrollIntoView({ behavior: 'smooth' })
               }
-              className="rounded-full border border-white/30 text-white font-semibold text-sm px-6 py-3 hover:border-white/60 transition-colors"
+              // Opaque border hexes, not border-white/NN: translucent borders
+              // on rounded elements mis-rasterize on Mali-GPU Android phones
+              // (see the android-gpu-ghosting skill). These are the white/30
+              // and white/60 blends over the hero's navy.
+              className="rounded-full border border-[#5a6a94] text-white font-semibold text-sm px-6 py-3 hover:border-[#9aa4bf] transition-colors"
             >
               Browse categories
             </button>
@@ -221,12 +290,32 @@ export default function DiscoverPage() {
         </div>
       </section>
 
+      {/* Top categories — the storefront's way in, ahead of the shop rails. */}
+      <TopCategoryRow
+        categories={storefront.categories}
+        activeCategoryId={activeCategory}
+        onSelect={handleCategorySelect}
+      />
+
+      {/* Best-sellers, topped up with admin promo tiles. The backend decides
+          the mix; this just renders it. */}
+      <StorefrontCardGrid
+        cards={storefront.cards}
+        mode={storefront.mode}
+        onOpen={(href) => navigate(href)}
+      />
+
       {/* Filter chips */}
-      <div className="px-5 sm:px-8 lg:px-12 mt-6 flex gap-2.5 overflow-x-auto scrollbar-hide">
+      <div className="px-5 sm:px-8 lg:px-12 mt-9 flex gap-2.5 overflow-x-auto scrollbar-hide">
         {['All', ...availableGroups.map((g) => g.label)].map((label) => (
           <button
             key={label}
-            onClick={() => setActiveGroup(label)}
+            onClick={() => {
+              setActiveGroup(label);
+              // Chips and the category tiles narrow the same list; picking one
+              // clears the other rather than intersecting to nothing.
+              if (activeCategory) setSearchParams({});
+            }}
             className={`whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-medium border transition-colors ${
               activeGroup === label
                 ? 'bg-[#1B3068] text-white border-[#1B3068]'
@@ -249,7 +338,7 @@ export default function DiscoverPage() {
           </div>
         ) : (
           <>
-            {activeGroup === 'All' && !search ? (
+            {activeGroup === 'All' && !search && !activeCategory ? (
               <div id="discover-sections" className="scroll-mt-24">
                 {groupedSections.map(({ group, items }) => (
                   <section key={group.id}>
@@ -286,10 +375,22 @@ export default function DiscoverPage() {
               </div>
             ) : (
               <>
-                <div id="discover-grid" className="flex items-baseline justify-between mt-9 mb-4 scroll-mt-24">
-                  <h2 className="font-serif font-semibold text-[1.25rem] sm:text-[1.4rem] text-[#1B3068]">
-                    {activeGroup === 'All' ? 'Search results' : `${activeGroup} providers`}
+                <div id="discover-grid" className="flex items-baseline justify-between gap-4 mt-9 mb-4 scroll-mt-24">
+                  <h2 className="font-serif font-semibold text-[1.25rem] sm:text-[1.4rem] text-[#1B3068] min-w-0 truncate">
+                    {activeCategoryName
+                      ? `${activeCategoryName} providers`
+                      : activeGroup === 'All'
+                        ? 'Search results'
+                        : `${activeGroup} providers`}
                   </h2>
+                  {activeCategory && (
+                    <button
+                      onClick={() => setSearchParams({})}
+                      className="text-[12px] font-semibold text-[#a97c27] hover:underline underline-offset-2 shrink-0"
+                    >
+                      Show all
+                    </button>
+                  )}
                 </div>
                 {filteredShops.length === 0 ? (
                   <p className="text-[#6b7280]">No providers match that filter yet.</p>

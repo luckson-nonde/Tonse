@@ -20,6 +20,12 @@ import { SiteSettingsService } from '../site-settings/site-settings.service';
 import { UpdateSiteSettingsDto } from '../site-settings/dto/update-site-settings.dto';
 import { AdsService } from '../ads/ads.service';
 import { UpdateAdSettingsDto } from '../ads/dto/update-ad-settings.dto';
+import { StorefrontService } from '../storefront/storefront.service';
+import { CreatePromoTileDto } from '../storefront/dto/create-promo-tile.dto';
+import {
+  ReorderPromoTilesDto,
+  UpdatePromoTileDto,
+} from '../storefront/dto/update-promo-tile.dto';
 
 /**
  * Acting-admin identity, threaded from req.user by the controller so
@@ -46,7 +52,8 @@ export class AdminService {
     private readonly reportsService: ReportsService,
     private readonly billingService: BillingService,
     private readonly siteSettingsService: SiteSettingsService,
-    private readonly adsService: AdsService
+    private readonly adsService: AdsService,
+    private readonly storefrontService: StorefrontService
   ) {}
 
   // ───── Escrow ───────────────────────────────────────────────────────────
@@ -126,7 +133,10 @@ export class AdminService {
   private auditAdminAction(entry: {
     action: string;
     entityType: string;
-    entityId: string;
+    /** Optional: bulk actions (e.g. reordering every promo tile at once) have
+     *  no single subject. The column is a nullable uuid, so a sentinel string
+     *  is not an option. */
+    entityId?: string;
     targetUserId?: string;
     actingAdmin?: ActingAdmin;
     status?: string;
@@ -634,6 +644,66 @@ export class AdminService {
       reason: reason || 'No reason provided',
     });
     return ad;
+  }
+
+  // ───── Landing-page storefront (promo tiles) ────────────────────────────
+  // StorefrontModule owns the tiles and composes the public feed; AdminService
+  // fronts the writes behind the class-wide ADMIN guard and audits them. The
+  // product picker is read-only — it just lists listings a tile can point at.
+
+  async listPromoTiles() {
+    return this.storefrontService.listTiles();
+  }
+
+  async createPromoTile(dto: CreatePromoTileDto, actingAdmin?: ActingAdmin) {
+    const tile = await this.storefrontService.createTile(dto);
+    await this.auditAdminAction({
+      action: 'PROMO_TILE_CREATED',
+      entityType: 'PROMO_TILE',
+      entityId: tile.id,
+      actingAdmin,
+      details: `Promo tile created: ${tile.title}`,
+    });
+    return tile;
+  }
+
+  async updatePromoTile(id: string, dto: UpdatePromoTileDto, actingAdmin?: ActingAdmin) {
+    const tile = await this.storefrontService.updateTile(id, dto);
+    await this.auditAdminAction({
+      action: 'PROMO_TILE_UPDATED',
+      entityType: 'PROMO_TILE',
+      entityId: tile.id,
+      actingAdmin,
+      details: `Promo tile changed: ${JSON.stringify(dto)}`,
+    });
+    return tile;
+  }
+
+  async deletePromoTile(id: string, actingAdmin?: ActingAdmin) {
+    const result = await this.storefrontService.deleteTile(id);
+    await this.auditAdminAction({
+      action: 'PROMO_TILE_DELETED',
+      entityType: 'PROMO_TILE',
+      entityId: id,
+      actingAdmin,
+      details: 'Promo tile deleted',
+    });
+    return result;
+  }
+
+  async reorderPromoTiles(dto: ReorderPromoTilesDto, actingAdmin?: ActingAdmin) {
+    const tiles = await this.storefrontService.reorderTiles(dto);
+    await this.auditAdminAction({
+      action: 'PROMO_TILES_REORDERED',
+      entityType: 'PROMO_TILE',
+      actingAdmin,
+      details: `Reordered ${dto.tiles.length} tile(s)`,
+    });
+    return tiles;
+  }
+
+  async listStorefrontProducts(params: { search?: string; category?: string; limit?: number }) {
+    return this.storefrontService.searchProductsForPicker(params);
   }
 
   // ───── Promoter programme (milestones + oversight) ──────────────────────

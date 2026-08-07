@@ -22,6 +22,11 @@ import { ResolveReportDto } from '../reports/dto/resolve-report.dto';
 import { UpdateBillingSettingsDto } from '../billing/dto/update-billing-settings.dto';
 import { UpdateSiteSettingsDto } from '../site-settings/dto/update-site-settings.dto';
 import { UpdateAdSettingsDto } from '../ads/dto/update-ad-settings.dto';
+import { CreatePromoTileDto } from '../storefront/dto/create-promo-tile.dto';
+import {
+  ReorderPromoTilesDto,
+  UpdatePromoTileDto,
+} from '../storefront/dto/update-promo-tile.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AdminPermissionsGuard } from '../auth/guards/admin-permissions.guard';
@@ -237,6 +242,55 @@ export class AdminController {
   @Post('ads/:id/reject')
   async rejectAd(@Request() req: any, @Param('id') id: string, @Body() body: { reason?: string }) {
     return this.adminService.rejectAd(id, body?.reason, this.actor(req));
+  }
+
+  // ───── Landing-page storefront (undecorated ⇒ primary-admin-only) ──────
+  // `tiles/reorder` MUST stay declared above `tiles/:id` — Nest matches in
+  // declaration order, so the param route would otherwise swallow it and try
+  // to update a tile whose id is the literal "reorder".
+
+  @Get('storefront/tiles')
+  async listPromoTiles() {
+    return this.adminService.listPromoTiles();
+  }
+
+  @Post('storefront/tiles')
+  async createPromoTile(@Request() req: any, @Body() dto: CreatePromoTileDto) {
+    return this.adminService.createPromoTile(dto, this.actor(req));
+  }
+
+  @Patch('storefront/tiles/reorder')
+  async reorderPromoTiles(@Request() req: any, @Body() dto: ReorderPromoTilesDto) {
+    return this.adminService.reorderPromoTiles(dto, this.actor(req));
+  }
+
+  @Patch('storefront/tiles/:id')
+  async updatePromoTile(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdatePromoTileDto,
+  ) {
+    return this.adminService.updatePromoTile(id, dto, this.actor(req));
+  }
+
+  @Delete('storefront/tiles/:id')
+  async deletePromoTile(@Request() req: any, @Param('id') id: string) {
+    return this.adminService.deletePromoTile(id, this.actor(req));
+  }
+
+  /** Listings a tile can point at. `category` is a MASTER category id matched
+   *  through the seller's taxonomy, not the free-text products.category. */
+  @Get('storefront/products')
+  async listStorefrontProducts(
+    @Query('search') search?: string,
+    @Query('category') category?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.adminService.listStorefrontProducts({
+      search,
+      category,
+      limit: limit ? Number(limit) : undefined,
+    });
   }
 
   // ───── Promoter programme (milestones + oversight) ──────────────────────

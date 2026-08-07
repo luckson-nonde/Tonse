@@ -12,6 +12,7 @@ import { motion } from 'motion/react';
 import PageTransition from '../../components/PageTransition';
 import {
   LayoutDashboard,
+  LayoutGrid,
   Users,
   MessageSquare,
   FileText,
@@ -57,6 +58,7 @@ import ReportsView from '../../components/admin/ReportsView';
 import SubscriptionManagerView from '../../components/admin/SubscriptionManagerView';
 import LandingPageSettingsView from '../../components/admin/LandingPageSettingsView';
 import AdsAdminView from '../../components/admin/AdsAdminView';
+import StorefrontView from '../../components/admin/StorefrontView';
 // StatTile / FunnelCard / Switch were extracted to DashboardPrimitives so the
 // promoter dashboard shares them — same components, zero behavior change.
 import { StatTile, FunnelCard, Switch } from '../../components/admin/DashboardPrimitives';
@@ -89,6 +91,7 @@ type AdminTab =
   | 'categories'
   | 'subscriptions'
   | 'landing-page'
+  | 'storefront'
   | 'ads'
   | 'milestones'
   | 'inquiries'
@@ -121,6 +124,7 @@ const TABS: {
   { id: 'categories', label: 'Category Control', icon: SlidersHorizontal },
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
   { id: 'landing-page', label: 'Landing Page', icon: Globe },
+  { id: 'storefront', label: 'Storefront', icon: LayoutGrid },
   { id: 'ads', label: 'Ads', icon: Megaphone },
   { id: 'milestones', label: 'Milestones', icon: Sparkles },
   { id: 'inquiries', label: 'Inquiries', icon: MessageSquare },
@@ -278,6 +282,7 @@ export default function AdminDashboard() {
             {activeTab === 'categories' && tabVisible && <CategoryControlView />}
             {activeTab === 'subscriptions' && tabVisible && <SubscriptionManagerView />}
             {activeTab === 'landing-page' && tabVisible && <LandingPageSettingsView />}
+            {activeTab === 'storefront' && tabVisible && <StorefrontView />}
             {activeTab === 'ads' && tabVisible && <AdsAdminView />}
             {activeTab === 'milestones' && tabVisible && <MilestonesView />}
             {activeTab === 'inquiries' && tabVisible && <InquiriesView />}

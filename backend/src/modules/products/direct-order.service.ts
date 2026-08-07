@@ -189,10 +189,20 @@ export class DirectOrderService {
         m,
       );
 
-      // 5. Inventory: decrement inside the same transaction (the row is
-      //    already locked above).
+      // 5. Inventory + sales tally: one write inside the same transaction (the
+      //    row is already locked above). salesCount is bumped by a SQL
+      //    expression rather than a read-modify-write, matching
+      //    InquiriesService.incrementViewCount — this is the only place in the
+      //    schema a sale ever becomes attributable to a listing, and it ranks
+      //    the public storefront.
       const remainingStock = (product.stock ?? 0) - quantity;
-      await m.getRepository(Product).update(product.id, { stock: remainingStock });
+      await m
+        .createQueryBuilder()
+        .update(Product)
+        .set({ stock: remainingStock, salesCount: () => '"salesCount" + :qty' })
+        .where('id = :id', { id: product.id })
+        .setParameter('qty', quantity)
+        .execute();
 
       return {
         quoteId: quote.id,
