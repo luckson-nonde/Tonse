@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsNotEmpty, IsString, ValidateNested } from 'class-validator';
+import { Allow, IsNotEmpty, IsString, ValidateNested } from 'class-validator';
 
 /**
  * Browser PushSubscriptionJSON shape: { endpoint, expirationTime, keys }.
@@ -23,6 +23,14 @@ export class PushSubscribeDto {
   @IsString()
   @IsNotEmpty()
   endpoint: string;
+
+  /**
+   * Browsers always include this in toJSON() (usually null). Not stored —
+   * whitelisted only so forbidNonWhitelisted doesn't 400 every real
+   * subscription attempt.
+   */
+  @Allow()
+  expirationTime?: number | null;
 
   @ValidateNested()
   @Type(() => PushSubscriptionKeysDto)
