@@ -58,6 +58,8 @@ import DeleteAccountSection from './DeleteAccountSection';
 import LoanOfferDetail from './loan/LoanOfferDetail';
 import FinancialPage from '../pages/FinancialPage';
 import VentureAccountView from './provider/VentureAccountView';
+import AdsManagerView from './provider/AdsManagerView';
+import AdCarousel from './ads/AdCarousel';
 import ActiveTransactionsView from './ActiveTransactionsView';
 import TransactionHistoryView from './TransactionHistoryView';
 import ReportManagerView from './ReportManagerView';
@@ -346,6 +348,10 @@ export default function DynamicAccountRenderer({
             </div>
           </div>
         </motion.div>
+
+        {/* Homepage center ad banner — calendar rail stays untouched in the
+            sidebar; this sits in the main content column beneath the CTA. */}
+        <AdCarousel placement="HOMEPAGE_CENTER" variant="banner" />
 
         {/* Recent Activity Placeholder */}
         <div className="space-y-5">
@@ -723,6 +729,8 @@ export default function DynamicAccountRenderer({
         return <FinancialPage isInsideDashboard={true} />;
       case 'venture_account_renderer':
         return <VentureAccountView />;
+      case 'ads_manager_renderer':
+        return <AdsManagerView />;
       case 'active_transactions_renderer':
         return <ActiveTransactionsView data={data} onAction={onAction} />;
       case 'transaction_history_renderer':

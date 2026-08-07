@@ -18,6 +18,8 @@ import { BillingService } from '../billing/billing.service';
 import { UpdateBillingSettingsDto } from '../billing/dto/update-billing-settings.dto';
 import { SiteSettingsService } from '../site-settings/site-settings.service';
 import { UpdateSiteSettingsDto } from '../site-settings/dto/update-site-settings.dto';
+import { AdsService } from '../ads/ads.service';
+import { UpdateAdSettingsDto } from '../ads/dto/update-ad-settings.dto';
 
 /**
  * Acting-admin identity, threaded from req.user by the controller so
@@ -43,7 +45,8 @@ export class AdminService {
     private readonly promotersService: PromotersService,
     private readonly reportsService: ReportsService,
     private readonly billingService: BillingService,
-    private readonly siteSettingsService: SiteSettingsService
+    private readonly siteSettingsService: SiteSettingsService,
+    private readonly adsService: AdsService
   ) {}
 
   // ───── Escrow ───────────────────────────────────────────────────────────
@@ -579,6 +582,58 @@ export class AdminService {
       details: `Site settings changed: ${JSON.stringify(dto)}`,
     });
     return this.getSiteSettingsForAdmin();
+  }
+
+  // ───── Ad placements ─────────────────────────────────────────────────────
+  // Same composition pattern as billing/site settings: AdsModule owns the
+  // logic (pricing singleton + advertisement rows); AdminService fronts it
+  // behind the class-wide ADMIN guard and writes the audit trail.
+
+  async getAdPricingForAdmin() {
+    return this.adsService.getPricingRatesPublic();
+  }
+
+  async updateAdPricing(dto: UpdateAdSettingsDto, actingAdmin?: ActingAdmin) {
+    const settings = await this.adsService.updatePricingSettings(dto);
+    await this.auditAdminAction({
+      action: 'AD_PRICING_UPDATED',
+      entityType: 'AD_SETTINGS',
+      entityId: settings.id,
+      actingAdmin,
+      details: `Ad pricing changed: ${JSON.stringify(dto)}`,
+    });
+    return this.getAdPricingForAdmin();
+  }
+
+  async listPendingAds() {
+    return this.adsService.listPending();
+  }
+
+  async approveAd(id: string, actingAdmin?: ActingAdmin) {
+    const ad = await this.adsService.approve(id, actingAdmin?.id ?? '');
+    await this.auditAdminAction({
+      action: 'AD_APPROVED',
+      entityType: 'ADVERTISEMENT',
+      entityId: ad.id,
+      targetUserId: ad.sellerId,
+      actingAdmin,
+      status: 'APPROVED',
+    });
+    return ad;
+  }
+
+  async rejectAd(id: string, reason: string | undefined, actingAdmin?: ActingAdmin) {
+    const ad = await this.adsService.reject(id, actingAdmin?.id ?? '', reason || 'No reason provided');
+    await this.auditAdminAction({
+      action: 'AD_REJECTED',
+      entityType: 'ADVERTISEMENT',
+      entityId: ad.id,
+      targetUserId: ad.sellerId,
+      actingAdmin,
+      status: 'REJECTED',
+      reason: reason || 'No reason provided',
+    });
+    return ad;
   }
 
   // ───── Promoter programme (milestones + oversight) ──────────────────────

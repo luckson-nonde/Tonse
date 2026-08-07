@@ -17,6 +17,7 @@ import { ReferralsModule } from '../referrals/referrals.module';
 import { ReportsModule } from '../reports/reports.module';
 import { BillingModule } from '../billing/billing.module';
 import { SiteSettingsModule } from '../site-settings/site-settings.module';
+import { AdsModule } from '../ads/ads.module';
 
 @Module({
   imports: [
@@ -42,6 +43,8 @@ import { SiteSettingsModule } from '../site-settings/site-settings.module';
     BillingModule,
     // Public /discover landing-page on/off switch (Landing Page tab).
     SiteSettingsModule,
+    // Ad placement pricing + review queue (Ads tab).
+    AdsModule,
   ],
   providers: [AdminService, AdminManagerService],
   controllers: [AdminController],

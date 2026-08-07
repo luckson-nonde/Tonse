@@ -74,7 +74,9 @@ export class FilesService {
     // (technician before/after capture) additionally accepts short phone
     // videos — the only category that does.
     const isSensitive = FilesService.isSensitiveCategory(category);
-    const acceptsVideo = category === 'job-evidence';
+    // job-evidence (technician before/after capture) and ad-media (seller ad
+    // placements) are the only categories that accept short phone/ad videos.
+    const acceptsVideo = category === 'job-evidence' || category === 'ad-media';
     const isVideo = VIDEO_MIMES.has(file.mimetype);
     const allowedMimes = [
       'image/jpeg',
@@ -94,9 +96,9 @@ export class FilesService {
       );
     }
 
-    // Validate file size (40MB for evidence videos, 10MB for documents,
-    // 5MB for images).
-    const maxMb = acceptsVideo && isVideo ? 40 : isSensitive ? 10 : 5;
+    // Validate file size (40MB for evidence videos, 25MB for ad videos,
+    // 10MB for documents, 5MB for images).
+    const maxMb = isVideo && category === 'job-evidence' ? 40 : isVideo && category === 'ad-media' ? 25 : isSensitive ? 10 : 5;
     const maxSize = maxMb * 1024 * 1024;
     if (file.size > maxSize) {
       throw new BadRequestException(`File size must not exceed ${maxMb}MB`);

@@ -15,6 +15,7 @@ import { WebhookEventRecord } from './entities/webhook-event.entity';
 import { Quote } from '../quotes/entities/quote.entity';
 import { Inquiry } from '../inquiries/entities/inquiry.entity';
 import { Order } from '../orders/entities/order.entity';
+import { Advertisement } from '../ads/entities/advertisement.entity';
 import { LedgerService } from '../ledger/ledger.service';
 import { ACCOUNT } from '../ledger/ledger-accounts';
 import { isEscrowHolding } from '../quotes/quote-status';
@@ -275,6 +276,103 @@ export class CheckoutService {
   }
 
   /**
+   * Start paying for an ad placement. Mirrors `initiateVentureDeposit()`
+   * exactly (no quote, amount read from our own row not the client) — the
+   * only difference is the amount comes from the Advertisement, not the
+   * request body, and `context.kind` tags the transaction so the eventual
+   * webhook routes to `fundAdPurchase` instead of `fundVentureDeposit`.
+   */
+  async initiateAdPurchase(
+    sellerId: string,
+    adId: string,
+    dto: { channel?: Channel; phone?: string; operator?: string },
+  ): Promise<{
+    reference: string;
+    status: string;
+    amount: string;
+    fee: string;
+    totalCharged: string;
+    instruction?: string;
+  }> {
+    const ad = await this.dataSource.getRepository(Advertisement).findOne({ where: { id: adId } });
+    if (!ad) throw new NotFoundException('Advertisement not found');
+    if (ad.sellerId !== sellerId) {
+      throw new BadRequestException('This ad is not yours to pay for');
+    }
+    if (ad.status !== 'PENDING_PAYMENT') {
+      throw new ConflictException(`This ad can't be paid from status ${ad.status}`);
+    }
+
+    const amount = String(ad.totalPaidAmount);
+    const bearer = this.config.get<'customer' | 'merchant'>('psp.feeBearer') || 'customer';
+    const channel: Channel = dto.channel || 'mobile-money';
+    const fees = await this.provider.quoteFees({ amount, channel, bearer });
+
+    const reference = `ADV-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+
+    await this.pspTx.save(
+      this.pspTx.create({
+        reference,
+        provider: this.provider.name,
+        type: 'COLLECTION',
+        status: 'PENDING',
+        amount: fees.amount,
+        feeAmount: fees.fee,
+        feeBearer: bearer,
+        currency: fees.currency,
+        quoteId: null,
+        counterpartyId: sellerId,
+        context: { kind: 'AD_PURCHASE', adId: ad.id },
+        payerMsisdn: dto.phone ?? null,
+        channel,
+        idempotencyKey: `ad-purchase-collection:${reference}`,
+      } as any),
+    );
+
+    let result;
+    try {
+      result = await this.provider.initiateCollection({
+        reference,
+        amount: fees.amount,
+        currency: fees.currency,
+        channel,
+        bearer,
+        phone: dto.phone,
+        operator: dto.operator,
+        description: `Nyuwe ad — ${ad.title}`.slice(0, 100),
+      });
+    } catch (e) {
+      await this.pspTx.update({ reference }, { status: 'FAILED', lastError: (e as Error).message });
+      throw e;
+    }
+
+    await this.pspTx.update(
+      { reference },
+      {
+        providerReference: result.providerReference ?? null,
+        status:
+          result.status === 'successful'
+            ? 'SUCCESSFUL'
+            : result.status === 'failed'
+              ? 'FAILED'
+              : result.status === 'pay-offline'
+                ? 'PAY_OFFLINE'
+                : 'PENDING',
+        rawPayload: result.raw ?? null,
+      },
+    );
+
+    return {
+      reference,
+      status: result.status,
+      amount: fees.amount,
+      fee: fees.fee,
+      totalCharged: fees.totalCharged,
+      instruction: result.instruction,
+    };
+  }
+
+  /**
    * Handle a verified webhook event. Idempotent twice over: the
    * (provider, eventId) unique index rejects a redelivery, and the journal's
    * own idempotency key rejects a double-post.
@@ -311,14 +409,16 @@ export class CheckoutService {
     }
 
     // Route on what kind of collection this was. `quoteId` is only ever set
-    // for a checkout(); initiateVentureDeposit() always leaves it NULL — that
-    // absence is the discriminator, not a flag, so there's no way for a
-    // deposit to accidentally be mistaken for (or vice versa) a quote payment.
+    // for a checkout(); initiateVentureDeposit() and initiateAdPurchase()
+    // both leave it NULL, so between those two `context.kind` is the
+    // discriminator (mirrors how LOAN context already rides the same field).
     const tx = await this.pspTx.findOne({ where: { reference: event.reference } });
     if (!tx) throw new NotFoundException(`Unknown PSP transaction ${event.reference}`);
 
     if (tx.quoteId) {
       await this.fundEscrow(event.reference, verified.amount, verified.fee, verified.raw);
+    } else if ((tx.context as any)?.kind === 'AD_PURCHASE') {
+      await this.fundAdPurchase(event.reference, verified.amount, verified.fee, verified.raw, (tx.context as any).adId);
     } else {
       await this.fundVentureDeposit(event.reference, verified.amount, verified.fee, verified.raw);
     }
@@ -693,6 +793,61 @@ export class CheckoutService {
     });
 
     this.logger.log(`Venture deposit funded for ${reference}`);
+  }
+
+  /**
+   * The moment an ad-placement purchase becomes real. Same locking/idempotency
+   * shape as `fundVentureDeposit`, but the money goes to AD_REVENUE (the
+   * platform earned it) rather than the seller's own payable — and the paid
+   * ad advances into the admin review queue.
+   */
+  private async fundAdPurchase(
+    reference: string,
+    verifiedAmount: string,
+    verifiedFee: string | undefined,
+    raw: Record<string, any> | undefined,
+    adId: string,
+  ): Promise<void> {
+    await this.dataSource.transaction(async (m) => {
+      const [tx]: PspTransaction[] = await m.query(
+        'SELECT * FROM psp_transactions WHERE reference = $1 FOR UPDATE',
+        [reference],
+      );
+      if (!tx) throw new NotFoundException(`Unknown PSP transaction ${reference}`);
+      if (tx.status === 'SUCCESSFUL') return; // idempotent — never double-credit
+
+      const amountNgwee = toNgwee(verifiedAmount);
+
+      await this.ledger.postJournal(
+        {
+          type: 'AD_PURCHASE',
+          idempotencyKey: `ad-purchase:${tx.id}`,
+          pspTransactionId: tx.id,
+          currency: tx.currency,
+          description: 'Advertisement placement purchase',
+          memo: {
+            adId,
+            pspReference: tx.providerReference,
+            pspFee: verifiedFee ?? tx.feeAmount,
+            feeBearer: tx.feeBearer,
+          },
+          lines: [
+            { accountCode: ACCOUNT.PSP_HOLDING, direction: 'DEBIT', amountNgwee },
+            { accountCode: ACCOUNT.AD_REVENUE, direction: 'CREDIT', amountNgwee },
+          ],
+        },
+        m,
+      );
+
+      await m.query(
+        `UPDATE psp_transactions SET status='SUCCESSFUL', "settledAt"=NOW(), "rawPayload"=$2 WHERE reference=$1`,
+        [reference, raw ? JSON.stringify(raw) : null],
+      );
+
+      await m.getRepository(Advertisement).update(adId, { status: 'PENDING_APPROVAL' });
+    });
+
+    this.logger.log(`Ad purchase funded for ${reference}`);
   }
 
   /** Payment status for a polling UI. Visible to the payer (buyer for cash,

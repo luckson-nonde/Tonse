@@ -36,6 +36,7 @@ export const MASTER_RETAIL_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'paid-orders', label: 'Orders', icon: 'Truck', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     { id: 'team', label: 'Team Management', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
+    { id: 'advertise', label: 'Advertise', icon: 'Megaphone' },
     { id: 'audit-trail', label: 'Audit Trail', icon: 'History', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     REPORTING_NAV_ITEM,
   ],
@@ -90,6 +91,11 @@ export const MASTER_RETAIL_ACCOUNT_SCHEMA: MasterAccountSchema = {
       title: 'Financial Account',
       subtitle: 'Track funds released from completed sales',
       componentType: 'venture_account_renderer',
+    },
+    advertise: {
+      title: 'Advertise',
+      subtitle: 'Promote your shop with a paid homepage or sidebar ad placement',
+      componentType: 'ads_manager_renderer',
     },
     'audit-trail': {
       title: 'Audit Trail',

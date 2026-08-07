@@ -51,6 +51,7 @@ import {
   Plus,
   TrendingUp,
   XCircle,
+  Megaphone,
 } from 'lucide-react';
 import Logo from './Logo';
 import HeaderProfileMenu from './HeaderProfileMenu';
@@ -58,6 +59,7 @@ import RoleManagerModal from './RoleManagerModal';
 import BuyerVerificationBanner from './BuyerVerificationBanner';
 import SubscriptionPaywall from './SubscriptionPaywall';
 import DashboardCalendar, { CalendarTone, CounterCard } from './DashboardCalendar';
+import AdCarousel from './ads/AdCarousel';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useDashboard } from '../DashboardContext';
 import { hasPermission, isCollectionOfficer, isQuotationManager, isLoanOfficer, isTechnician, PERMISSIONS } from '../utils/rbac';
@@ -117,6 +119,22 @@ function businessTypeToCalendarTone(type: BusinessType): CalendarTone {
       return 'generic';
   }
 }
+
+// Secondary-page tabs (buyer + provider list views) that show the ad rail
+// in place of the calendar — the homepage/dashboard tabs keep the calendar
+// (see the aside gating below); every other tab shows neither.
+const AD_SIDEBAR_TABS = [
+  'inquiries',
+  'quotes',
+  'active_transactions',
+  'orders',
+  'shops',
+  'leads',
+  'my-quotes',
+  'archived-leads',
+  'paid-orders',
+  'products',
+];
 
 // Calendar panel shown in right sidebar on dashboard/home tabs
 const CalendarPanel = () => {
@@ -348,6 +366,7 @@ const iconMap: Record<string, any> = {
   Plus,
   TrendingUp,
   XCircle,
+  Megaphone,
   Tool: Wrench, // lucide has no "Tool" — schemas using it mean a wrench
 };
 
@@ -1418,6 +1437,17 @@ export default function DashboardLayout({
             <aside className="hidden xl:flex flex-col w-88 shrink-0 border-l border-[#f1f5f9] bg-white overflow-y-auto">
               <div className="p-6 pt-8">
                 <CalendarPanel />
+              </div>
+            </aside>
+          )}
+
+          {/* Right ad panel - desktop only, shown on secondary list-view tabs
+              (mirrors the calendar rail's container so ad slots line up with
+              the homepage sidebar). Mutually exclusive with the calendar. */}
+          {AD_SIDEBAR_TABS.includes(activeTab) && (
+            <aside className="hidden xl:flex flex-col w-88 shrink-0 border-l border-[#f1f5f9] bg-white overflow-y-auto">
+              <div className="p-6 pt-8">
+                <AdCarousel placement="SECONDARY_SIDEBAR" variant="sidebar" />
               </div>
             </aside>
           )}

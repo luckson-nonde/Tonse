@@ -21,6 +21,7 @@ import { UpdateAdminManagerDto } from './dto/update-admin-manager.dto';
 import { ResolveReportDto } from '../reports/dto/resolve-report.dto';
 import { UpdateBillingSettingsDto } from '../billing/dto/update-billing-settings.dto';
 import { UpdateSiteSettingsDto } from '../site-settings/dto/update-site-settings.dto';
+import { UpdateAdSettingsDto } from '../ads/dto/update-ad-settings.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AdminPermissionsGuard } from '../auth/guards/admin-permissions.guard';
@@ -209,6 +210,33 @@ export class AdminController {
     @Body() dto: UpdateSiteSettingsDto,
   ) {
     return this.adminService.updateSiteSettings(dto, this.actor(req));
+  }
+
+  // ───── Ad placements (undecorated ⇒ primary-admin-only) ────────────────
+
+  @Get('ads/pricing')
+  async getAdPricing() {
+    return this.adminService.getAdPricingForAdmin();
+  }
+
+  @Patch('ads/pricing')
+  async updateAdPricing(@Request() req: any, @Body() dto: UpdateAdSettingsDto) {
+    return this.adminService.updateAdPricing(dto, this.actor(req));
+  }
+
+  @Get('ads/pending')
+  async listPendingAds() {
+    return this.adminService.listPendingAds();
+  }
+
+  @Post('ads/:id/approve')
+  async approveAd(@Request() req: any, @Param('id') id: string) {
+    return this.adminService.approveAd(id, this.actor(req));
+  }
+
+  @Post('ads/:id/reject')
+  async rejectAd(@Request() req: any, @Param('id') id: string, @Body() body: { reason?: string }) {
+    return this.adminService.rejectAd(id, body?.reason, this.actor(req));
   }
 
   // ───── Promoter programme (milestones + oversight) ──────────────────────

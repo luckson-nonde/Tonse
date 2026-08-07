@@ -8,6 +8,7 @@ export const ACCOUNT = {
   REFUND_PAYABLE: 'REFUND_PAYABLE_ZMW',
   PSP_PAYOUT_IN_FLIGHT: 'PSP_PAYOUT_IN_FLIGHT_ZMW',
   PLATFORM_COMMISSION_REVENUE: 'PLATFORM_COMMISSION_REVENUE_ZMW',
+  AD_REVENUE: 'AD_REVENUE_ZMW',
   PSP_FEE_EXPENSE: 'PSP_FEE_EXPENSE_ZMW',
   SUSPENSE: 'SUSPENSE_ZMW',
 } as const;
@@ -78,6 +79,15 @@ export const LEDGER_ACCOUNTS: AccountSeed[] = [
     normalSide: 'CREDIT',
     currency: 'ZMW',
     description: "Nyuwe's commission, deducted from the seller's release.",
+  },
+  {
+    code: ACCOUNT.AD_REVENUE,
+    name: 'Ad placement revenue',
+    type: 'REVENUE',
+    normalSide: 'CREDIT',
+    currency: 'ZMW',
+    description:
+      'Earned when a seller-purchased ad placement (homepage banner / sidebar) is paid for. Debited back on admin rejection.',
   },
   {
     code: ACCOUNT.PSP_FEE_EXPENSE,

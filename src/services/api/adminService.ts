@@ -364,6 +364,33 @@ export const adminService = {
     return res.data ?? null;
   },
 
+  // ───── Ad placements (primary admin only) ──────────────────────────────────
+
+  async getAdPricing(): Promise<AdminAdPricing | null> {
+    const res = await apiClient.get<AdminAdPricing>('/admin/ads/pricing');
+    return res.data ?? null;
+  },
+
+  async updateAdPricing(payload: UpdateAdPricingInput): Promise<AdminAdPricing | null> {
+    const res = await apiClient.patch<AdminAdPricing>('/admin/ads/pricing', payload);
+    return res.data ?? null;
+  },
+
+  async listPendingAds(): Promise<AdminAdvertisement[]> {
+    const res = await apiClient.get<AdminAdvertisement[]>('/admin/ads/pending');
+    return res.data ?? [];
+  },
+
+  async approveAd(id: string): Promise<AdminAdvertisement | null> {
+    const res = await apiClient.post<AdminAdvertisement>(`/admin/ads/${id}/approve`);
+    return res.data ?? null;
+  },
+
+  async rejectAd(id: string, reason?: string): Promise<AdminAdvertisement | null> {
+    const res = await apiClient.post<AdminAdvertisement>(`/admin/ads/${id}/reject`, { reason });
+    return res.data ?? null;
+  },
+
   // ───── Site / Landing page (primary admin only) ────────────────────────────
 
   async getSiteSettings(): Promise<AdminSiteSettings | null> {
@@ -523,6 +550,36 @@ export type UpdateBillingSettingsInput = Partial<
     'subscriptionsEnabled' | 'quoteTiers' | 'targetedInquiryFee' | 'monthlyFee'
   >
 >;
+
+export type AdAdminPlacementLocation = 'HOMEPAGE_CENTER' | 'SECONDARY_SIDEBAR' | 'BUNDLE_ALL';
+
+/** Ad placement pricing — base rate per placement + duration discount tiers (Ads tab). */
+export interface AdminAdPricing {
+  baseRates: Record<AdAdminPlacementLocation, number>;
+  discountTiers: { minDays: number; discountPercentage: number }[];
+}
+
+export type UpdateAdPricingInput = Partial<AdminAdPricing>;
+
+/** One seller-purchased ad placement, as seen in the admin review queue. */
+export interface AdminAdvertisement {
+  id: string;
+  sellerId: string;
+  title: string;
+  targetUrl: string;
+  mediaType: 'IMAGE' | 'VIDEO';
+  mediaUrl: string;
+  videoDurationSeconds: number | null;
+  placementLocation: AdAdminPlacementLocation;
+  startDate: string | null;
+  endDate: string | null;
+  durationDays: number;
+  totalPaidAmount: number;
+  currency: string;
+  status: 'PENDING_PAYMENT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+  rejectionReason: string | null;
+  createdAt: string;
+}
 
 export interface AdminSiteSettings {
   landingPageEnabled: boolean;

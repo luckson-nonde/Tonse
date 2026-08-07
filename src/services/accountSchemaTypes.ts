@@ -63,6 +63,7 @@ export interface ViewDefinition {
     | 'home_care_clients'
     | 'financial_renderer'
     | 'venture_account_renderer'
+    | 'ads_manager_renderer'
     | 'active_transactions_renderer'
     | 'transaction_history_renderer'
     | 'labour_home'

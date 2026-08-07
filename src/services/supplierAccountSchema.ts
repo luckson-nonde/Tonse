@@ -30,6 +30,7 @@ export const MASTER_SUPPLIER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     },
     { id: 'team', label: 'Operations Team', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },
     { id: 'financial', label: 'Settlements', icon: 'Wallet' },
+    { id: 'advertise', label: 'Advertise', icon: 'Megaphone' },
     { id: 'audit-trail', label: 'Supply Audit', icon: 'History', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
     REPORTING_NAV_ITEM,
   ],
@@ -89,6 +90,11 @@ export const MASTER_SUPPLIER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       title: "Financial Settlements",
       subtitle: "Track funds released from completed sales",
       componentType: 'venture_account_renderer'
+    },
+    advertise: {
+      title: 'Advertise',
+      subtitle: 'Promote your shop with a paid homepage or sidebar ad placement',
+      componentType: 'ads_manager_renderer',
     },
     reporting: REPORTING_VIEW,
   }

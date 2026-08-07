@@ -48,6 +48,7 @@ import {
   Flag,
   CreditCard,
   Globe,
+  Megaphone,
 } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
 import { ADMIN_PERMISSIONS } from '../../utils/rbac';
@@ -55,6 +56,7 @@ import TeamManagersView from '../../components/admin/TeamManagersView';
 import ReportsView from '../../components/admin/ReportsView';
 import SubscriptionManagerView from '../../components/admin/SubscriptionManagerView';
 import LandingPageSettingsView from '../../components/admin/LandingPageSettingsView';
+import AdsAdminView from '../../components/admin/AdsAdminView';
 // StatTile / FunnelCard / Switch were extracted to DashboardPrimitives so the
 // promoter dashboard shares them — same components, zero behavior change.
 import { StatTile, FunnelCard, Switch } from '../../components/admin/DashboardPrimitives';
@@ -87,6 +89,7 @@ type AdminTab =
   | 'categories'
   | 'subscriptions'
   | 'landing-page'
+  | 'ads'
   | 'milestones'
   | 'inquiries'
   | 'quotes'
@@ -118,6 +121,7 @@ const TABS: {
   { id: 'categories', label: 'Category Control', icon: SlidersHorizontal },
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
   { id: 'landing-page', label: 'Landing Page', icon: Globe },
+  { id: 'ads', label: 'Ads', icon: Megaphone },
   { id: 'milestones', label: 'Milestones', icon: Sparkles },
   { id: 'inquiries', label: 'Inquiries', icon: MessageSquare },
   { id: 'quotes', label: 'Quotes', icon: FileText },
@@ -274,6 +278,7 @@ export default function AdminDashboard() {
             {activeTab === 'categories' && tabVisible && <CategoryControlView />}
             {activeTab === 'subscriptions' && tabVisible && <SubscriptionManagerView />}
             {activeTab === 'landing-page' && tabVisible && <LandingPageSettingsView />}
+            {activeTab === 'ads' && tabVisible && <AdsAdminView />}
             {activeTab === 'milestones' && tabVisible && <MilestonesView />}
             {activeTab === 'inquiries' && tabVisible && <InquiriesView />}
             {activeTab === 'quotes' && tabVisible && <QuotesView />}
