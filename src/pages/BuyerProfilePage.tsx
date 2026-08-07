@@ -189,7 +189,7 @@ export default function BuyerProfilePage() {
 
           <p className="text-[14px] font-sans text-[#64748b] mb-8 max-w-md leading-relaxed">
             {section.description ||
-              'Welcome to your ProQuote professional account. Manage your identity and preferences below.'}
+              'Welcome to your Nyuwe professional account. Manage your identity and preferences below.'}
           </p>
 
           <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">

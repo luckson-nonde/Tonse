@@ -211,12 +211,12 @@ export default function TeamManagement() {
   const handleShare = async () => {
     if (!lastRegisteredInfo || !generatedPassword) return;
 
-    const shareText = `Welcome to ProQuote!\n\nYou've been added as a staff member for ${user?.name}.\n\nLogin at: ${window.location.origin}\nUser: ${lastRegisteredInfo.email}\nTemp Password: ${generatedPassword}\n\nPlease change your password after logging in.`;
+    const shareText = `Welcome to Nyuwe!\n\nYou've been added as a staff member for ${user?.name}.\n\nLogin at: ${window.location.origin}\nUser: ${lastRegisteredInfo.email}\nTemp Password: ${generatedPassword}\n\nPlease change your password after logging in.`;
 
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'ProQuote Staff Credentials',
+          title: 'Nyuwe Staff Credentials',
           text: shareText,
         });
       } catch (err) {

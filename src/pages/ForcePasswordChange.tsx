@@ -137,7 +137,7 @@ export default function ForcePasswordChange() {
             <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
             <p className="text-xs text-blue-700 leading-relaxed">
               Choose a strong password that you haven't used elsewhere. This will be your permanent
-              password for ProQuote.
+              password for Nyuwe.
             </p>
           </div>
 
@@ -155,7 +155,7 @@ export default function ForcePasswordChange() {
       </motion.div>
 
       <p className="mt-8 text-slate-400 text-xs font-medium tracking-wide uppercase">
-        ProQuote v4 • Secure Access
+        Nyuwe v4 • Secure Access
       </p>
     </div>
   );

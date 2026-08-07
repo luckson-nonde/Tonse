@@ -1,4 +1,4 @@
-# ProQuote full-stack local/demo orchestration.
+# Nyuwe full-stack local/demo orchestration.
 #   frontend (nginx :3000) -> backend (NestJS :3001) -> postgres :5432
 # Bring it up with:  docker compose up -d --build
 #

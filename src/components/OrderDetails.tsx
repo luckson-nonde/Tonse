@@ -133,7 +133,7 @@ export default function OrderDetails({ order, inquiry, onAction }: OrderDetailsP
   // a fake one.
   const collectionCode = paid?.collectionCode ?? (order as any).collectionCode;
   const quoteId = paid?.id ?? order.id;
-  const qrValue = collectionCode ? `PROQUOTE-COLLECT-QT-${quoteId}-${collectionCode}` : '';
+  const qrValue = collectionCode ? `NYUWE-COLLECT-QT-${quoteId}-${collectionCode}` : '';
 
   const money = (n: number) => `K${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
@@ -164,7 +164,7 @@ export default function OrderDetails({ order, inquiry, onAction }: OrderDetailsP
   .pin{font-size:26px;font-weight:900;letter-spacing:.2em;color:#1B3068;margin:4px 0}
   .foot{text-align:center;color:#9aa3b2;font-size:11px;margin-top:22px}
 </style></head><body><div class="wrap">
-  <h1>ProQuote Zambia</h1><div class="sub">Payment Receipt</div>
+  <h1>Nyuwe Zambia</h1><div class="sub">Payment Receipt</div>
   <div class="card">
     <div class="row"><span class="muted">Order</span><span>${orderNumber}</span></div>
     <div class="row"><span class="muted">Paid on</span><span>${paidOn}</span></div>
@@ -177,7 +177,7 @@ export default function OrderDetails({ order, inquiry, onAction }: OrderDetailsP
     </table>
   </div>
   ${collectionCode ? `<div class="card code"><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.15em">Collection code</div><div class="pin">${collectionCode}</div><div class="muted" style="font-size:11px">${isCollected ? 'Collected' : 'Present this at pickup'}</div></div>` : ''}
-  <div class="foot">Funds held in escrow · Thank you for using ProQuote Zambia</div>
+  <div class="foot">Funds held in escrow · Thank you for using Nyuwe Zambia</div>
 </div><script>window.onload=function(){setTimeout(function(){window.print()},150)}<\/script></body></html>`;
     const win = window.open('', '_blank', 'width=420,height=720');
     if (!win) {

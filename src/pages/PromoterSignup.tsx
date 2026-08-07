@@ -137,7 +137,7 @@ export default function PromoterSignup() {
         </h2>
         <p className="text-[14px] text-slate-500 mt-2 mb-6">
           {step === 1
-            ? 'Get your personal referral link, track every person you bring to ProQuote, and earn equity shares as they trade.'
+            ? 'Get your personal referral link, track every person you bring to Nyuwe, and earn equity shares as they trade.'
             : 'Invite keys get shared around — your platforms, ID and a live selfie confirm the account really belongs to you.'}
         </p>
 
@@ -229,7 +229,7 @@ export default function PromoterSignup() {
                 icon={KeyRound}
               />
               <p className="mt-2 text-[12px] text-slate-400 font-medium">
-                The key from your ProQuote agreement. This programme is invite-only.
+                The key from your Nyuwe agreement. This programme is invite-only.
               </p>
             </div>
 
@@ -306,7 +306,7 @@ export default function PromoterSignup() {
             </div>
 
             <p className="mt-4 text-[11px] text-slate-400 font-medium leading-relaxed">
-              Your ID and selfie are reviewed by the ProQuote team only, to confirm your identity —
+              Your ID and selfie are reviewed by the Nyuwe team only, to confirm your identity —
               they never appear publicly.
             </p>
           </form>

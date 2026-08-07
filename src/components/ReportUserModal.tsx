@@ -80,7 +80,7 @@ export default function ReportUserModal({
             <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
             <p className="text-[15px] font-bold text-slate-900">Report submitted</p>
             <p className="mt-1 text-[13px] text-slate-500 leading-relaxed">
-              Our team will review it. Thanks for helping keep ProQuote safe.
+              Our team will review it. Thanks for helping keep Nyuwe safe.
             </p>
             <button
               onClick={onClose}

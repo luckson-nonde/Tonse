@@ -1,10 +1,10 @@
-# ProQuote Zambia System Design & Architecture
+# Nyuwe Zambia System Design & Architecture
 
 ## System Identity Architecture
 
 ### Overview
 
-ProQuote Zambia implements a **Three-Tier Identity System** that provides multiple layers of identification for users while maintaining security, auditability, and user experience.
+Nyuwe Zambia implements a **Three-Tier Identity System** that provides multiple layers of identification for users while maintaining security, auditability, and user experience.
 
 ---
 

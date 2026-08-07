@@ -1,8 +1,8 @@
 #!/bin/bash
-# Complete startup script for ProQuote Zambia Marketplace
+# Complete startup script for Nyuwe Zambia Marketplace
 # Runs all necessary commands in sequence
 
-echo "🚀 ProQuote Zambia Marketplace - Complete Startup Script"
+echo "🚀 Nyuwe Zambia Marketplace - Complete Startup Script"
 echo "================================================"
 echo ""
 

@@ -1020,7 +1020,7 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
                   <div>
                     <p className="text-xs font-bold text-white mb-1">Secure Your Date!</p>
                     <p className="text-[10px] text-slate-400 leading-relaxed">
-                      Payments for venues are held in <span className="text-white">ProQuote Escrow</span> until your event is completed successfully.
+                      Payments for venues are held in <span className="text-white">Nyuwe Escrow</span> until your event is completed successfully.
                     </p>
                   </div>
                 </div>

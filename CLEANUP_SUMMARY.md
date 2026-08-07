@@ -1,4 +1,4 @@
-# ✨ ProQuote Zambia Marketplace - Cleanup Summary
+# ✨ Nyuwe Zambia Marketplace - Cleanup Summary
 
 ## 🧹 What Was Done
 

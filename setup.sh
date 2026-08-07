@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# ProQuote Zambia Marketplace - Complete Setup Script
+# Nyuwe Zambia Marketplace - Complete Setup Script
 # Run this script to set up the entire development environment
 
 set -e
 
 echo "================================================"
-echo "🚀 ProQuote Zambia Marketplace - Full Stack Setup"
+echo "🚀 Nyuwe Zambia Marketplace - Full Stack Setup"
 echo "================================================"
 echo ""
 

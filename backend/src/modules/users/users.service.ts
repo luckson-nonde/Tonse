@@ -1073,10 +1073,10 @@ export class UsersService {
    *     owns that carries no legal retention duty: profiles (name/contact/GPS),
    *     NRC + ID docs, PINs, uploaded files, portfolio, products, shops,
    *     schedules, loan requests/offers (the loan contract is off-platform, so
-   *     ProQuote holds no financial record there), and any inquiry/quote that never
+   *     Nyuwe holds no financial record there), and any inquiry/quote that never
    *     converted to a paid escrow order.
    *
-   *   • ANONYMISE-AND-RETAIN the escrow FINANCIAL records ProQuote must keep (buyer
+   *   • ANONYMISE-AND-RETAIN the escrow FINANCIAL records Nyuwe must keep (buyer
    *     paid into the holding account): `orders` + `payments`, and the quote /
    *     inquiry they reference — the transaction FACTS stay (amount, date, fee,
    *     status), the PERSONAL data is stripped (contact, address, GPS, free

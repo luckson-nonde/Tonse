@@ -1,4 +1,4 @@
-# ProQuote Zambia Marketplace - Complete Project Setup Summary
+# Nyuwe Zambia Marketplace - Complete Project Setup Summary
 
 ## 🎉 Project Completion Status
 

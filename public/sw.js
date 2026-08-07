@@ -1,4 +1,4 @@
-/* ProQuote Zambia — service worker (plain JS, served verbatim from /sw.js).
+/* Nyuwe Zambia — service worker (plain JS, served verbatim from /sw.js).
  *
  * Kept OUT of the Vite build on purpose: vite.config.ts rewrites the `self`
  * global to the window shim for a legacy Node dependency, which would throw
@@ -14,7 +14,8 @@
  *      requests are NEVER intercepted; offline covers the shell, not data.
  */
 
-const VERSION = 'v7';
+// v8: Nyuwe rebrand — same-named icon files changed, old caches must drop.
+const VERSION = 'v8';
 const SHELL_CACHE = 'tonse-shell-' + VERSION;
 const FONT_CACHE = 'tonse-fonts-' + VERSION;
 const IMG_CACHE = 'tonse-img-' + VERSION;
@@ -255,10 +256,10 @@ self.addEventListener('push', (event) => {
   try {
     payload = event.data ? event.data.json() : {};
   } catch (e) {
-    payload = { title: 'ProQuote Zambia', body: event.data ? event.data.text() : '' };
+    payload = { title: 'Nyuwe Zambia', body: event.data ? event.data.text() : '' };
   }
 
-  const title = payload.title || 'ProQuote Zambia';
+  const title = payload.title || 'Nyuwe Zambia';
   const options = {
     body: payload.body || '',
     icon: payload.icon || '/icon-192.png',
@@ -280,7 +281,7 @@ self.addEventListener('notificationclick', (event) => {
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientsArr) => {
-        // Focus an already-open ProQuote window and route it, if any.
+        // Focus an already-open Nyuwe window and route it, if any.
         for (const client of clientsArr) {
           if ('focus' in client) {
             client.focus();

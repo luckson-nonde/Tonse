@@ -160,7 +160,7 @@ export default function ProcessSelection({ onBack, onComplete }: ProcessSelectio
                 </div>
                 <div className="pt-0.5">
                   <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#C9973A] mb-0.5">
-                    ProQuote Tip
+                    Nyuwe Tip
                   </p>
                   <h3 className="font-serif text-[16px] font-bold text-[#1a1a2e] leading-snug">
                     Pick the right pace

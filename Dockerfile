@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # ---------------------------------------------------------------------------
-# ProQuote frontend (React + Vite) — build, then serve static via nginx.
+# Nyuwe frontend (React + Vite) — build, then serve static via nginx.
 # nginx also reverse-proxies /api and /uploads to the backend so the browser
 # only ever talks to one origin (no CORS), mirroring the Vite dev proxy.
 # ---------------------------------------------------------------------------

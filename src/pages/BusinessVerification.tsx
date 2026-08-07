@@ -151,7 +151,7 @@ export default function BusinessVerification() {
       maxWidth="max-w-[700px]"
       footerText={
         <p className="text-[10px] font-normal text-brand-yellow/60">
-          PROQUOTE ZAMBIA MARKETPLACE ONBOARDING © 2026
+          NYUWE ZAMBIA MARKETPLACE ONBOARDING © 2026
         </p>
       }
       onBack={() => navigate('/seller/categories')}

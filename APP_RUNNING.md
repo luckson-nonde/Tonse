@@ -1,4 +1,4 @@
-# 🚀 ProQuote Zambia Marketplace - App Running!
+# 🚀 Nyuwe Zambia Marketplace - App Running!
 
 ## ✅ Current Status
 

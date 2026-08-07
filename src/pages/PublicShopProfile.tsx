@@ -280,7 +280,7 @@ export default function PublicShopProfile() {
         <div className="bg-[#fffaf5] border border-[#e7e0d5] rounded-2xl px-5 sm:px-6 py-4 flex flex-wrap items-center gap-x-10 gap-y-3">
           <StatItem label="Quotes exchanged" value={profile.quoteStats.total} />
           <StatItem label="Completed trades" value={profile.quoteStats.completed} />
-          <StatItem label="On ProQuote" value={`${yearsOnPlatform || '<1'} yr${yearsOnPlatform === 1 ? '' : 's'}`} />
+          <StatItem label="On Nyuwe" value={`${yearsOnPlatform || '<1'} yr${yearsOnPlatform === 1 ? '' : 's'}`} />
         </div>
       </div>
 

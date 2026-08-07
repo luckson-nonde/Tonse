@@ -22,7 +22,7 @@ interface AccountSeed {
 }
 
 /**
- * The fixed chart of accounts. ProQuote never custodies funds — the PSP does — so
+ * The fixed chart of accounts. Nyuwe never custodies funds — the PSP does — so
  * these mirror money held at the PSP and who has a claim on it.
  */
 export const LEDGER_ACCOUNTS: AccountSeed[] = [
@@ -33,7 +33,7 @@ export const LEDGER_ACCOUNTS: AccountSeed[] = [
     normalSide: 'DEBIT',
     currency: 'ZMW',
     description:
-      "ProQuote's claim on money sitting in the PSP's segregated holding account. MUST reconcile to the balance the PSP reports — any delta is a missed webhook or a timing gap.",
+      "Nyuwe's claim on money sitting in the PSP's segregated holding account. MUST reconcile to the balance the PSP reports — any delta is a missed webhook or a timing gap.",
   },
   {
     code: ACCOUNT.ESCROW_LIABILITY,
@@ -77,16 +77,16 @@ export const LEDGER_ACCOUNTS: AccountSeed[] = [
     type: 'REVENUE',
     normalSide: 'CREDIT',
     currency: 'ZMW',
-    description: "ProQuote's commission, deducted from the seller's release.",
+    description: "Nyuwe's commission, deducted from the seller's release.",
   },
   {
     code: ACCOUNT.PSP_FEE_EXPENSE,
-    name: 'PSP fees borne by ProQuote',
+    name: 'PSP fees borne by Nyuwe',
     type: 'EXPENSE',
     normalSide: 'DEBIT',
     currency: 'ZMW',
     description:
-      'PSP fees ProQuote actually pays (payouts, refunds). NOT the collection fee: the buyer bears that, the PSP keeps it, and it never enters our holding account — recording it here would inflate the books with money we never held.',
+      'PSP fees Nyuwe actually pays (payouts, refunds). NOT the collection fee: the buyer bears that, the PSP keeps it, and it never enters our holding account — recording it here would inflate the books with money we never held.',
   },
   {
     code: ACCOUNT.SUSPENSE,

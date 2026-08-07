@@ -1,9 +1,9 @@
 @echo off
-REM Complete startup script for ProQuote Zambia Marketplace (Windows)
+REM Complete startup script for Nyuwe Zambia Marketplace (Windows)
 REM Runs all necessary commands in sequence
 
 echo.
-echo 🚀 ProQuote Zambia Marketplace - Complete Startup Script (Windows)
+echo 🚀 Nyuwe Zambia Marketplace - Complete Startup Script (Windows)
 echo =========================================================
 echo.
 

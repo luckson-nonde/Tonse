@@ -143,7 +143,7 @@ export class CheckoutService {
         bearer,
         phone: dto.phone,
         operator: dto.operator,
-        description: `ProQuote ${quote.inquiryTitle}`.slice(0, 100),
+        description: `Nyuwe ${quote.inquiryTitle}`.slice(0, 100),
       });
     } catch (e) {
       await this.pspTx.update({ reference }, { status: 'FAILED', lastError: (e as Error).message });
@@ -241,7 +241,7 @@ export class CheckoutService {
         bearer,
         phone: dto.phone,
         operator: dto.operator,
-        description: 'ProQuote venture account deposit',
+        description: 'Nyuwe venture account deposit',
       });
     } catch (e) {
       await this.pspTx.update({ reference }, { status: 'FAILED', lastError: (e as Error).message });

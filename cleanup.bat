@@ -5,7 +5,7 @@ REM Run this from the root directory
 cd /d "%~dp0"
 
 echo.
-echo 🧹 ProQuote Zambia Marketplace - Cleanup Script
+echo 🧹 Nyuwe Zambia Marketplace - Cleanup Script
 echo =====================================
 echo.
 echo Moving legacy files to archive folder...

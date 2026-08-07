@@ -68,7 +68,7 @@ export default function InquiryPayment({
   const selectedNetwork = MOBILE_NETWORKS.find((n) => n.id === mobileProvider) ?? MOBILE_NETWORKS[0];
 
   // PCI: card details are NEVER collected here. Card payments are completed on
-  // the payment provider's own secure page — ProQuote never sees, transmits or
+  // the payment provider's own secure page — Nyuwe never sees, transmits or
   // stores a card number, expiry or CVC, which keeps us out of PCI-DSS scope.
 
   const handlePay = (paymentMethod: InquiryPaymentMethod) => {
@@ -176,7 +176,7 @@ export default function InquiryPayment({
                 </div>
                 <div className="pt-0.5">
                   <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#C9973A] mb-1">
-                    ProQuote Tip
+                    Nyuwe Tip
                   </p>
                   <h3 className="font-serif text-[18px] font-bold text-[#1a1a2e] leading-snug">
                     Safe, simple, one-time
@@ -330,7 +330,7 @@ export default function InquiryPayment({
                 </div>
               )}
 
-              {/* Card content — NO card details are collected here. ProQuote never
+              {/* Card content — NO card details are collected here. Nyuwe never
                   sees a card number, expiry or CVC: the payment provider takes
                   them on its own secure page, which keeps us out of PCI scope. */}
               {method === 'card' && (
@@ -345,7 +345,7 @@ export default function InquiryPayment({
                       </p>
                       <p className="mt-1.5 text-[12px] leading-relaxed text-[#64748b] font-medium">
                         Continue below and we'll hand you over to our licensed payment provider to
-                        enter your card details. <span className="font-bold text-[#1a1a2e]">ProQuote never
+                        enter your card details. <span className="font-bold text-[#1a1a2e]">Nyuwe never
                         sees or stores your card number, expiry or CVC.</span>
                       </p>
                     </div>

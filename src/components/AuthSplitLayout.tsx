@@ -106,7 +106,7 @@ export default function AuthSplitLayout({
                 ISO 27001
               </span>
             </div>
-            <span className="font-serif italic text-[#1a1612]/40">ProQuote · Lusaka</span>
+            <span className="font-serif italic text-[#1a1612]/40">Nyuwe · Lusaka</span>
           </div>
         )}
 

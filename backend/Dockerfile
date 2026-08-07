@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # ---------------------------------------------------------------------------
-# ProQuote backend (NestJS) — multi-stage build
+# Nyuwe backend (NestJS) — multi-stage build
 # ---------------------------------------------------------------------------
 
 # ---- Stage 1: build (needs devDependencies: nest CLI + typescript) ----

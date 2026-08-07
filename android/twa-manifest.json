@@ -1,8 +1,8 @@
 {
   "packageId": "com.tonsehub.twa",
   "host": "tonse-web.onrender.com",
-  "name": "ProQuote Zambia",
-  "launcherName": "ProQuote",
+  "name": "Nyuwe Zambia",
+  "launcherName": "Nyuwe",
   "display": "standalone",
   "themeColor": "#1B3068",
   "navigationColor": "#1B3068",

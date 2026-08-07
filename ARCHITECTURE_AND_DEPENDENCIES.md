@@ -1,4 +1,4 @@
-# ProQuote Zambia Marketplace - Architecture & Dependencies
+# Nyuwe Zambia Marketplace - Architecture & Dependencies
 
 ## 🏗️ Backend Architecture Overview
 

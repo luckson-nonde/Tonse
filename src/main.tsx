@@ -13,7 +13,7 @@ initializeFetchInterceptor({
 });
 
 // Capture `beforeinstallprompt` before it can fire (it's a one-shot event) so
-// FloatingHub can offer an in-app "Install ProQuote" banner later.
+// FloatingHub can offer an in-app "Install Nyuwe" banner later.
 initInstallPrompt();
 
 // Register the Web Push service worker. It is a PLAIN file at /sw.js (served

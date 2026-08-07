@@ -14,7 +14,7 @@ import { useBackgroundMode } from '../BackgroundModeContext';
 import Logo from './Logo';
 
 /**
- * "Install ProQuote" offer for ORDINARY browsing — including visitors who
+ * "Install Nyuwe" offer for ORDINARY browsing — including visitors who
  * aren't signed in.
  *
  * Why this exists separately from FloatingHub's install banner: that one is
@@ -80,7 +80,7 @@ export default function InstallAppBanner() {
           exit={{ opacity: 0, y: 16 }}
           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
           role="dialog"
-          aria-label="Install ProQuote"
+          aria-label="Install Nyuwe"
           className="fixed inset-x-4 bottom-4 z-[150] mx-auto max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-[#e8e0d0] sm:left-6 sm:right-auto sm:mx-0 pb-safe"
         >
           <div
@@ -113,7 +113,7 @@ export default function InstallAppBanner() {
             {isIos && !installable ? (
               <>
                 <p className="text-sm text-slate-600">
-                  Keep ProQuote one tap away — it opens full-screen and stays signed in.
+                  Keep Nyuwe one tap away — it opens full-screen and stays signed in.
                 </p>
                 <ol className="mt-3 space-y-2 text-[13px] text-slate-600">
                   <li className="flex items-center gap-2">
@@ -138,7 +138,7 @@ export default function InstallAppBanner() {
             ) : (
               <>
                 <p className="text-sm text-slate-600">
-                  Keep ProQuote one tap away — opens full-screen from your home screen,
+                  Keep Nyuwe one tap away — opens full-screen from your home screen,
                   works on a weak connection, and stays signed in.
                 </p>
                 <div className="mt-4 flex items-center gap-2">

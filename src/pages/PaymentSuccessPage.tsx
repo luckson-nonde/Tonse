@@ -13,7 +13,7 @@ export default function PaymentSuccessPage() {
 
   useEffect(() => {
     if (collectionCode && quoteId) {
-      QRCode.toDataURL(`PROQUOTE-COLLECT-QT-${quoteId}-${collectionCode}`, { width: 200 }).then(setQrCode);
+      QRCode.toDataURL(`NYUWE-COLLECT-QT-${quoteId}-${collectionCode}`, { width: 200 }).then(setQrCode);
     }
   }, [collectionCode, quoteId]);
 

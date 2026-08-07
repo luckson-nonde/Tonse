@@ -394,7 +394,7 @@ export default function PaymentSheet({
               </p>
               <p>
                 Card details will be entered on the next screen via our PCI-compliant
-                processor. We never store card numbers on ProQuote.
+                processor. We never store card numbers on Nyuwe.
               </p>
             </div>
           )}

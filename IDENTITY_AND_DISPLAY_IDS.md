@@ -1,6 +1,6 @@
 # Identity & Display IDs (Canonical)
 
-> **Single source of truth as of 2026-07-02.** This document replaces 8 fragmented, partially-stale docs (see "Superseded documents" below) with one canonical description of the ProQuote Zambia identity model and display-ID system, verified directly against the current codebase.
+> **Single source of truth as of 2026-07-02.** This document replaces 8 fragmented, partially-stale docs (see "Superseded documents" below) with one canonical description of the Nyuwe Zambia identity model and display-ID system, verified directly against the current codebase.
 >
 > Related docs:
 > - [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) — table shapes for `users`, `user_emails`, `identity_audits`, and related entities.
@@ -10,7 +10,7 @@
 
 ## 1. The three identifiers
 
-ProQuote Zambia identifies a user (or an inquiry) with **three distinct fields**, not two. Prior docs split the first one into two names — "System Identifier" and "Internal ID" — as if they were separate tiers. **They are not.** Both terms refer to the exact same database column: the UUID primary key. This document uses **Internal ID** exclusively going forward; if you see "System Identifier" elsewhere in older material, read it as a synonym for the same `id` column.
+Nyuwe Zambia identifies a user (or an inquiry) with **three distinct fields**, not two. Prior docs split the first one into two names — "System Identifier" and "Internal ID" — as if they were separate tiers. **They are not.** Both terms refer to the exact same database column: the UUID primary key. This document uses **Internal ID** exclusively going forward; if you see "System Identifier" elsewhere in older material, read it as a synonym for the same `id` column.
 
 | Identifier | Column | Shown to users? | Mutable? | Purpose |
 |---|---|---|---|---|

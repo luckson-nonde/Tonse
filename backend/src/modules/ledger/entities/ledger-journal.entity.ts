@@ -99,7 +99,7 @@ export class LedgerJournal {
   /**
    * Non-accounting context: the PSP fee and who bore it, the commission rate
    * applied, the gross the payer was charged. The buyer-borne PSP fee is a MEMO
-   * and deliberately NOT an entry — that money never enters ProQuote's account, so
+   * and deliberately NOT an entry — that money never enters Nyuwe's account, so
    * journaling it would inflate both sides and break reconciliation to the PSP
    * balance.
    */

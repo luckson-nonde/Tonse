@@ -303,7 +303,7 @@ function DashboardView({
         />
         <StatTile label="Registrations" value={funnel.registrations} icon={UserPlus} hint="Signed up via your link" />
         <StatTile label="Completed Inquiries" value={funnel.inquiries} icon={MessageSquare} hint="Went on to request quotes" />
-        <StatTile label="Completed Trades" value={funnel.tradesComplete} icon={Handshake} hint="Closed a deal on ProQuote" />
+        <StatTile label="Completed Trades" value={funnel.tradesComplete} icon={Handshake} hint="Closed a deal on Nyuwe" />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4 sm:gap-6">
@@ -391,7 +391,7 @@ function VerificationBanner({ me }: { me: PromoterMe }) {
         <div>
           <p className="text-[13px] font-bold text-emerald-700">Identity verified</p>
           <p className="text-[12px] text-emerald-600/80 font-medium">
-            Your documents were reviewed and approved by the ProQuote team.
+            Your documents were reviewed and approved by the Nyuwe team.
           </p>
         </div>
       </div>
@@ -416,7 +416,7 @@ function VerificationBanner({ me }: { me: PromoterMe }) {
       <div>
         <p className="text-[13px] font-bold text-amber-700">Verification pending</p>
         <p className="text-[12px] text-amber-600/80 font-medium">
-          The ProQuote team is reviewing your ID and selfie — you can keep promoting meanwhile.
+          The Nyuwe team is reviewing your ID and selfie — you can keep promoting meanwhile.
         </p>
       </div>
     </div>
@@ -540,7 +540,7 @@ function ProfileView({
           Platforms you run
         </h3>
         <p className="text-[11px] text-slate-400 font-medium mb-4">
-          The audiences you'll be promoting ProQuote to — at least one required.
+          The audiences you'll be promoting Nyuwe to — at least one required.
         </p>
         <SocialLinksEditor value={socialLinks} onChange={setSocialLinks} />
       </section>
@@ -551,7 +551,7 @@ function ProfileView({
           Identity documents
         </h3>
         <p className="text-[11px] text-slate-400 font-medium mb-4">
-          Reviewed by the ProQuote team only — replacing either resubmits you for verification.
+          Reviewed by the Nyuwe team only — replacing either resubmits you for verification.
         </p>
         <div className="grid sm:grid-cols-2 gap-4">
           <div>

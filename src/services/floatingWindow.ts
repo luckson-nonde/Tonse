@@ -17,7 +17,7 @@
 
 interface OpenOptions {
   unread: number;
-  /** User clicked "Open ProQuote" in the widget — restore the app. */
+  /** User clicked "Open Nyuwe" in the widget — restore the app. */
   onRestore: () => void;
   /** The PiP window went away (user closed it, or we closed it). */
   onClosed?: () => void;
@@ -83,7 +83,7 @@ export async function openFloatingWindow(opts: OpenOptions): Promise<boolean> {
   }
 
   const doc = pipWindow!.document;
-  doc.title = 'ProQuote — background';
+  doc.title = 'Nyuwe — background';
 
   const el = <K extends keyof HTMLElementTagNameMap>(
     tag: K,
@@ -113,7 +113,7 @@ export async function openFloatingWindow(opts: OpenOptions): Promise<boolean> {
   );
   const nameWrap = el('div', 'flex:1;min-width:0;');
   nameWrap.appendChild(
-    el('div', 'font-size:14px;font-weight:700;letter-spacing:.01em;', 'ProQuote Zambia')
+    el('div', 'font-size:14px;font-weight:700;letter-spacing:.01em;', 'Nyuwe Zambia')
   );
   nameWrap.appendChild(
     el('div', 'font-size:11px;color:rgba(255,255,255,.55);', 'Running in the background')
@@ -141,7 +141,7 @@ export async function openFloatingWindow(opts: OpenOptions): Promise<boolean> {
     'margin-top:14px;padding:9px 0;width:100%;border:none;border-radius:10px;' +
       'background:#c9973a;color:#1B3068;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;'
   );
-  button.textContent = 'Open ProQuote';
+  button.textContent = 'Open Nyuwe';
   button.addEventListener('click', () => {
     try {
       window.focus(); // the documented Doc-PiP "back to tab" pattern

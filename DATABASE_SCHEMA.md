@@ -10,7 +10,7 @@
 
 ## 1. Two Data Layers
 
-ProQuote Zambia has two distinct persistence concepts that must not be confused:
+Nyuwe Zambia has two distinct persistence concepts that must not be confused:
 
 ### Backend: PostgreSQL (authoritative)
 - Engine: PostgreSQL (`type: 'postgres'` in `TypeOrmModule.forRootAsync`, `app.module.ts`).
@@ -878,7 +878,7 @@ Indexes: `idx_promoter_profiles_user` (userId, unique) · `idx_promoter_profiles
 #### `promoter_settings`
 Entity file: `backend/src/modules/referrals/entities/promoter-setting.entity.ts`
 
-Single-row (get-or-create) programme settings. Holds the **admin-managed invite key** (rotated from the admin Milestones tab via `POST /admin/promoter-invite/rotate`, format `PROQUOTE-XXXXX-XXXXX`). Stored plaintext deliberately — it's a shared distribution secret the admin must read back, not a verify-only credential. When no row exists, `PROMOTER_INVITE_KEY` from the env is the fallback; neither ⇒ signup disabled.
+Single-row (get-or-create) programme settings. Holds the **admin-managed invite key** (rotated from the admin Milestones tab via `POST /admin/promoter-invite/rotate`, format `NYUWE-XXXXX-XXXXX`). Stored plaintext deliberately — it's a shared distribution secret the admin must read back, not a verify-only credential. When no row exists, `PROMOTER_INVITE_KEY` from the env is the fallback; neither ⇒ signup disabled.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|

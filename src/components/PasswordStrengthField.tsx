@@ -35,7 +35,8 @@ const COMMON_PASSWORDS = [
   'qwerty', 'qwertyuiop', 'asdfghjkl', 'zxcvbnm', 'abc123', 'a1b2c3',
   'letmein', 'welcome', 'admin', 'iloveyou', 'monkey', 'dragon', 'sunshine',
   'princess', 'football', 'baseball', 'superman', 'trustno1', '000000',
-  'tonse', 'tonsehub', 'proquote', 'proquotezambia', 'zambia', 'lusaka',
+  'tonse', 'tonsehub', 'proquote', 'proquotezambia', 'nyuwe', 'nyuwezambia',
+  'zambia', 'lusaka',
 ];
 
 // 4+ character ascending or descending run of letters/digits (e.g. "1234",

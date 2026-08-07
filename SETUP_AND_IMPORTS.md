@@ -1,4 +1,4 @@
-# ProQuote Zambia Marketplace - Complete Setup & Import Guide
+# Nyuwe Zambia Marketplace - Complete Setup & Import Guide
 
 ## 📁 Project Structure Overview
 
@@ -245,7 +245,7 @@ APP_PORT=3000
 
 ```env
 VITE_API_URL=http://localhost:3000/api
-VITE_APP_NAME=ProQuote Zambia Marketplace
+VITE_APP_NAME=Nyuwe Zambia Marketplace
 ```
 
 ### Generate Secure Keys (Backend)

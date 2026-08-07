@@ -456,15 +456,15 @@ export default function RoleSelection() {
             : null
           : <span className="text-[#1a1612]/60">
               {tier === 1
-                ? 'Choose how you want to use ProQuote'
+                ? 'Choose how you want to use Nyuwe'
                 : tier === 2
                   ? isCompanyExpanded
                     ? 'Select your role within the company'
                     : masterRole === 'BUYER'
-                      ? "Tell us how you'll buy on ProQuote"
+                      ? "Tell us how you'll buy on Nyuwe"
                       : masterRole === 'SERVICE_PROVIDER'
                         ? 'Tell us what kind of provider you are'
-                        : "Tell us how you'll sell on ProQuote"
+                        : "Tell us how you'll sell on Nyuwe"
                   : 'Select the categories that best describe your business.'}
             </span>
       }

@@ -1,4 +1,4 @@
-# ProQuote Zambia Marketplace - Full Stack Web Application
+# Nyuwe Zambia Marketplace - Full Stack Web Application
 
 A complete marketplace platform with JWT authentication, PostgreSQL database, TypeORM, and field-level encryption.
 

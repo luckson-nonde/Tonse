@@ -1,4 +1,4 @@
-# ProQuote Zambia Marketplace - Developer Workflow Guide
+# Nyuwe Zambia Marketplace - Developer Workflow Guide
 
 ## 🎯 Common Development Workflows
 

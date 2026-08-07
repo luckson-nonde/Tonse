@@ -1249,7 +1249,7 @@ export default function DashboardLayout({
         </div>
 
         {/* Scoped staff get a "need help" card above the logout controls —
-            their owner (not ProQuote) is the first line of support, so keep the
+            their owner (not Nyuwe) is the first line of support, so keep the
             copy generic. Opaque border per the Android Mali rule. */}
         {(isCollectionOfficer(user) || isQuotationManager(user) || isLoanOfficer(user) || isTechnician(user)) && (
           <div className="px-4 pb-2">

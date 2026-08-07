@@ -1,4 +1,4 @@
-# 🚀 ProQuote Zambia Marketplace - Startup Guide
+# 🚀 Nyuwe Zambia Marketplace - Startup Guide
 
 ## Quick Start Commands
 
