@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Loader2,
   Plus,
@@ -16,6 +16,7 @@ import emptyStateImage from '../../assets/images/empty-states/owl_reading.webp';
 import { formatCurrency } from '../../utils/financeUtils';
 import { compressImage } from '../../utils/compressImage';
 import { CATEGORIES_DB } from '../../services/categories';
+import { useAuth } from '../../AuthContext';
 import { apiClient } from '../../services/api/client';
 import { ventureService } from '../../services/api/ventureService';
 import {
@@ -48,6 +49,25 @@ const PLACEMENT_HELP: Record<AdPlacementLocation, string> = {
 /** Master categories a category-rail ad can target — the same list the buyer
  *  picks from, so ids line up with what the rail queries. */
 const MASTER_CATEGORIES = CATEGORIES_DB.filter((c) => c.parentId === null);
+
+/**
+ * The master categories this seller signed up under, from the stable category
+ * ids chosen at onboarding. Each id is walked up its parent chain because a
+ * seller's selection is usually a SUBcategory ('mobile-phones-sell'), while
+ * the ad rail is keyed on the master ('electronics').
+ */
+function sellerMasterCategories(categoryIds: string[] | undefined): string[] {
+  const out: string[] = [];
+  for (const id of categoryIds ?? []) {
+    let node = CATEGORIES_DB.find((c) => c.id === id);
+    while (node?.parentId) {
+      const parentId: string = node.parentId;
+      node = CATEGORIES_DB.find((c) => c.id === parentId);
+    }
+    if (node && !out.includes(node.id)) out.push(node.id);
+  }
+  return out;
+}
 
 const todayISO = () => {
   const d = new Date();
@@ -138,6 +158,7 @@ function FieldNote({ error, help }: { error?: string; help?: string }) {
  * admin review.
  */
 export default function AdsManagerView() {
+  const { user } = useAuth();
   const [rates, setRates] = useState<AdPricingRates | null>(null);
   const [myAds, setMyAds] = useState<Advertisement[]>([]);
   const [balance, setBalance] = useState<string>('0.00');
@@ -155,6 +176,9 @@ export default function AdsManagerView() {
   const [videoDurationSeconds, setVideoDurationSeconds] = useState<number | undefined>(undefined);
   const [placements, setPlacements] = useState<AdPlacementLocation[]>(['HOMEPAGE_CENTER']);
   const [targetCategoryId, setTargetCategoryId] = useState<string>('');
+  /** Once the seller picks a category themselves, stop re-applying the
+   *  onboarding default over their choice. */
+  const [categoryTouched, setCategoryTouched] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -194,6 +218,29 @@ export default function AdsManagerView() {
     load();
   }, [load]);
 
+  // The seller's own categories, split out so their own trade leads the
+  // dropdown and everything else is still reachable below it.
+  const myCategoryIds = useMemo(
+    () => sellerMasterCategories((user as any)?.categoryIds),
+    [user],
+  );
+  const myCategories = useMemo(
+    () => MASTER_CATEGORIES.filter((c) => myCategoryIds.includes(c.id)),
+    [myCategoryIds],
+  );
+  const otherCategories = useMemo(
+    () => MASTER_CATEGORIES.filter((c) => !myCategoryIds.includes(c.id)),
+    [myCategoryIds],
+  );
+  const defaultCategoryId = myCategoryIds[0] ?? '';
+
+  // Default the target to what they registered under. Applied in an effect
+  // (not useState's initial value) because `user` can still be loading on
+  // first render — but never over a choice they've already made.
+  useEffect(() => {
+    if (!categoryTouched && defaultCategoryId) setTargetCategoryId(defaultCategoryId);
+  }, [defaultCategoryId, categoryTouched]);
+
   const resetForm = () => {
     setTitle('');
     setTargetUrl('');
@@ -202,7 +249,8 @@ export default function AdsManagerView() {
     setMediaPreview('');
     setVideoDurationSeconds(undefined);
     setPlacements(['HOMEPAGE_CENTER']);
-    setTargetCategoryId('');
+    setTargetCategoryId(defaultCategoryId);
+    setCategoryTouched(false);
     setStartDate('');
     setEndDate('');
     setFormError('');
@@ -570,17 +618,36 @@ export default function AdsManagerView() {
               Target category
               <select
                 value={targetCategoryId}
-                onChange={(e) => setTargetCategoryId(e.target.value)}
+                onChange={(e) => { setTargetCategoryId(e.target.value); setCategoryTouched(true); }}
                 className="mt-1.5 w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-[13px] font-medium text-slate-900 tracking-normal normal-case bg-white focus:outline-none focus:border-[#C9973A]"
               >
-                <option value="">All categories</option>
-                {MASTER_CATEGORIES.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
+                {myCategories.length > 0 && (
+                  <optgroup label="Your categories">
+                    {myCategories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label={myCategories.length > 0 ? 'Other categories' : 'Categories'}>
+                  {otherCategories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Everywhere">
+                  <option value="">All categories</option>
+                </optgroup>
               </select>
-              <FieldNote help='Your ad shows to buyers browsing this category. "All categories" runs everywhere but gives up the spot to a targeted ad.' />
+              <FieldNote
+                help={
+                  myCategories.length > 0
+                    ? 'Starts on the category you registered under — change it if this ad is for something else. "All categories" runs everywhere but gives up the spot to a targeted ad.'
+                    : 'Your ad shows to buyers browsing this category. "All categories" runs everywhere but gives up the spot to a targeted ad.'
+                }
+              />
             </label>
           )}
 
