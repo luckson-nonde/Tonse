@@ -899,6 +899,8 @@ export default function DashboardLayout({
         return 'MY SCHEDULE';
       case 'audit-trail':
         return effectiveBusinessType === 'WHOLESALE' ? 'SUPPLY AUDIT' : 'AUDIT TRAIL';
+      case 'advertise':
+        return 'ADVERTISE';
       default:
         return 'HOME';
     }

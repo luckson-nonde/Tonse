@@ -239,6 +239,7 @@ export default function ProviderDashboard() {
           'audit-trail',
           'archived-leads',
           'financial',
+          'advertise',
           'venue-spaces',
           'dashboard',
           'my-jobs',
@@ -1257,6 +1258,15 @@ export default function ProviderDashboard() {
         <DynamicAccountRenderer
           schema={currentSchema}
           view="financial"
+          data={{}}
+          onAction={handleAction}
+          onNavigate={handleTabClick}
+          user={user}
+        />
+      ) : activeTab === 'advertise' ? (
+        <DynamicAccountRenderer
+          schema={currentSchema}
+          view="advertise"
           data={{}}
           onAction={handleAction}
           onNavigate={handleTabClick}
