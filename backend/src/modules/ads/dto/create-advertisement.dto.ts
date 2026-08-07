@@ -20,11 +20,6 @@ export class CreateAdvertisementDto {
   @MaxLength(255)
   title: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(500)
-  targetUrl: string;
-
   @IsIn(['IMAGE', 'VIDEO'])
   mediaType: AdMediaType;
 

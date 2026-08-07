@@ -58,6 +58,17 @@ export class AdsController {
     return this.ads.listMyAds(req.user.id);
   }
 
+  /**
+   * Public, minimal view of one ad — lets the shop page a buyer just landed on
+   * name the ad they clicked ("Responding to: …") and stamp that attribution
+   * onto the inquiry. Declared AFTER the static GET routes so 'active',
+   * 'pricing-rates' and 'my-ads' aren't swallowed by :id.
+   */
+  @Get(':id')
+  async publicOne(@Param('id') id: string) {
+    return this.ads.getPublicAd(id);
+  }
+
   /** Start a PSP collection (mobile money / card) for a PENDING_PAYMENT ad.
    *  Same shape as venture-account/deposit — poll/simulate reuse the generic
    *  /payments/checkout/:reference endpoints. */

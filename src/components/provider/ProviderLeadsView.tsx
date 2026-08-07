@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package, Users, Clock, FileText, Flag, ShoppingCart, CalendarCheck } from 'lucide-react';
+import { MapPin, Eye, Tag, ArrowRight, MessageSquare, Package, Users, Clock, FileText, Flag, ShoppingCart, CalendarCheck, Megaphone } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import ReportUserModal from '../ReportUserModal';
 import emptyLeadsImage from '../../assets/images/empty-states/owl_reading.webp';
@@ -679,6 +679,16 @@ export default function ProviderLeadsView({
 
                   {/* Title */}
                   <p className="text-[15px] font-bold text-slate-800 leading-snug -mt-1">{lead.title}</p>
+
+                  {/* Came from one of this shop's paid ads — worth calling out:
+                      it tells the seller the ad is earning leads, and that this
+                      buyer already saw the offer. */}
+                  {(lead as any).attributes?.sourceAdTitle && (
+                    <span className="self-start inline-flex items-center gap-1.5 px-2.5 py-1 -mt-0.5 rounded-full text-[11px] font-bold bg-[#eef2ff] text-[#4338ca] border border-[#c7d2fe]">
+                      <Megaphone className="w-3 h-3" />
+                      From your ad · {(lead as any).attributes.sourceAdTitle}
+                    </span>
+                  )}
 
                   {/* Purchase Order: a product-anchored, targeted request. Show
                       the badge + each product/qty so the quotation manager

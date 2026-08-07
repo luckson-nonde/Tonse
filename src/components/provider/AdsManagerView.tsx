@@ -11,6 +11,7 @@ import {
   Wallet,
   ArrowLeft,
   Check,
+  Store,
 } from 'lucide-react';
 import emptyStateImage from '../../assets/images/empty-states/owl_reading.webp';
 import { formatCurrency } from '../../utils/financeUtils';
@@ -169,7 +170,6 @@ export default function AdsManagerView() {
 
   // Create-ad form state
   const [title, setTitle] = useState('');
-  const [targetUrl, setTargetUrl] = useState('');
   const [mediaType, setMediaType] = useState<AdMediaType>('IMAGE');
   const [mediaUrl, setMediaUrl] = useState('');
   const [mediaPreview, setMediaPreview] = useState('');
@@ -243,7 +243,6 @@ export default function AdsManagerView() {
 
   const resetForm = () => {
     setTitle('');
-    setTargetUrl('');
     setMediaType('IMAGE');
     setMediaUrl('');
     setMediaPreview('');
@@ -305,7 +304,6 @@ export default function AdsManagerView() {
     // instead of discovering them one submit at a time.
     const errs: Record<string, string> = {};
     if (!title.trim()) errs.title = 'Give your ad a title.';
-    if (!targetUrl.trim()) errs.targetUrl = 'Add a link — where should the ad send people?';
     if (!mediaUrl) errs.media = 'Upload an image or video first.';
     if (placements.length === 0) errs.placements = 'Pick at least one place to show the ad.';
     if (!startDate) errs.startDate = 'Choose the day the ad should start.';
@@ -320,7 +318,6 @@ export default function AdsManagerView() {
     try {
       const ad = await adsService.createAd({
         title: title.trim(),
-        targetUrl: targetUrl.trim(),
         mediaType,
         mediaUrl,
         videoDurationSeconds,
@@ -503,21 +500,16 @@ export default function AdsManagerView() {
             <FieldNote error={fieldErrors.title} help="The headline buyers read on your ad." />
           </label>
 
-          <label className="block text-[11px] font-bold uppercase tracking-widest text-slate-400">
-            Link
-            <input
-              value={targetUrl}
-              onChange={(e) => { setTargetUrl(e.target.value); setFieldErrors((x) => ({ ...x, targetUrl: '' })); }}
-              placeholder="e.g. /discover/my-shop"
-              className={`mt-1.5 w-full px-3.5 py-2.5 rounded-xl border text-[13px] font-medium text-slate-900 tracking-normal normal-case focus:outline-none ${
-                fieldErrors.targetUrl ? 'border-rose-300 focus:border-rose-400' : 'border-slate-200 focus:border-[#C9973A]'
-              }`}
-            />
-            <FieldNote
-              error={fieldErrors.targetUrl}
-              help="Where a buyer lands when they tap the ad — your shop page, a product, or any full web address."
-            />
-          </label>
+          {/* No link field: the destination is always this seller's own shop
+              page, resolved server-side. Stated plainly so it doesn't look
+              like something was left out. */}
+          <div className="flex items-start gap-2.5 rounded-xl bg-slate-50 border border-slate-100 px-3.5 py-3">
+            <Store className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Tapping this ad opens <span className="font-bold text-slate-700">your shop's request form</span>, so
+              buyers can tell you exactly what they want. You'll see which ad brought them in.
+            </p>
+          </div>
 
           {/* Media */}
           <div>

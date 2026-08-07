@@ -28,7 +28,9 @@ export interface Advertisement {
   id: string;
   sellerId: string;
   title: string;
-  targetUrl: string;
+  /** The seller's public shop-profile id — the `:id` in `/discover/:id`, where
+   *  a click lands. Resolved server-side; sellers never type a URL. */
+  shopProfileId: string | null;
   mediaType: AdMediaType;
   mediaUrl: string;
   videoDurationSeconds: number | null;
@@ -60,9 +62,17 @@ export interface AdPricingRates {
   discountTiers: AdDiscountTier[];
 }
 
+/** Minimal public view of one ad — what the shop page shows a buyer who
+ *  arrived by clicking it. */
+export interface PublicAd {
+  id: string;
+  title: string;
+  sellerId: string;
+  shopProfileId: string | null;
+}
+
 export interface CreateAdvertisementInput {
   title: string;
-  targetUrl: string;
   mediaType: AdMediaType;
   mediaUrl: string;
   videoDurationSeconds?: number;
@@ -122,6 +132,17 @@ export const adsService = {
     if (categoryId) query.set('category', categoryId);
     const res = await apiClient.get(`/ads/active?${query.toString()}`);
     return payload<Advertisement[]>(res, []);
+  },
+
+  /** Public — the ad a buyer just clicked, so the shop page can name it. */
+  async getPublicAd(id: string): Promise<PublicAd | null> {
+    try {
+      const res = await apiClient.get(`/ads/${encodeURIComponent(id)}`);
+      return payload<PublicAd | null>(res, null);
+    } catch {
+      // A dead or removed ad id must never block the quote form.
+      return null;
+    }
   },
 
   async createAd(dto: CreateAdvertisementInput): Promise<Advertisement> {

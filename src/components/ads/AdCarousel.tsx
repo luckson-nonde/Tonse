@@ -65,12 +65,15 @@ export default function AdCarousel({ placement, variant, categoryId }: AdCarouse
     return () => clearInterval(timer);
   }, [paused, ads.length]);
 
+  /**
+   * A click opens the advertiser's own shop page, where the quote form sits —
+   * `?ad=` carries the attribution through so the resulting inquiry tells the
+   * seller which ad brought the buyer in. Works for logged-out visitors too:
+   * that page saves the draft and submits it after they sign in.
+   */
   const handleAdClick = (ad: Advertisement) => {
-    if (ad.targetUrl.startsWith('/')) {
-      navigate(ad.targetUrl);
-    } else {
-      window.open(ad.targetUrl, '_blank', 'noopener,noreferrer');
-    }
+    if (!ad.shopProfileId) return;
+    navigate(`/discover/${ad.shopProfileId}?ad=${encodeURIComponent(ad.id)}`);
   };
 
   const aspectClass = resolvedVariant === 'banner' ? 'aspect-video' : 'aspect-[4/5]';

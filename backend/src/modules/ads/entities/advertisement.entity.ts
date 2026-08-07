@@ -47,9 +47,17 @@ export class Advertisement {
   @Column({ type: 'varchar', length: 255 })
   title: string;
 
-  /** Where the ad click sends the visitor — e.g. a shop or product page. */
-  @Column({ type: 'varchar', length: 500 })
-  targetUrl: string;
+  /**
+   * The seller's public shop-profile row id (`seller_profiles.id` /
+   * `service_provider_profiles.id`) — the `:id` in `/discover/:id`. Resolved
+   * server-side when the ad is created, because `sellerId` is a users.id and
+   * the two are different id spaces with no public lookup between them.
+   * Clicking the ad opens this shop's quote form, so sellers never type a URL
+   * and can't point an ad somewhere that breaks its inquiry attribution.
+   * Nullable only to tolerate a seller with no profile row yet.
+   */
+  @Column({ type: 'uuid', nullable: true })
+  shopProfileId: string | null;
 
   @Column({ type: 'enum', enum: ['IMAGE', 'VIDEO'] })
   mediaType: AdMediaType;

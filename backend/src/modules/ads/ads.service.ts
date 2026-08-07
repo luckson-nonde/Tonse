@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
+import { DataSource, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
 import { AdSettings, AdDiscountTier } from './entities/ad-settings.entity';
 import { Advertisement, AdPlacementLocation, EffectiveAdStatus } from './entities/advertisement.entity';
 import { CreateAdvertisementDto } from './dto/create-advertisement.dto';
@@ -53,7 +53,25 @@ export class AdsService {
     @InjectRepository(Advertisement)
     private readonly ads: Repository<Advertisement>,
     private readonly ledger: LedgerService,
+    private readonly dataSource: DataSource,
   ) {}
+
+  /**
+   * The seller's public shop-profile row id — what `/discover/:id` takes.
+   * Queried by userId rather than read off `users.activeProfileId`, because a
+   * seller who has switched to their personal/buyer persona has a BUYER row
+   * pointed at there, and an ad must always link to their SHOP.
+   */
+  private async resolveShopProfileId(sellerId: string): Promise<string | null> {
+    const [row] = await this.dataSource.query(
+      `SELECT id FROM seller_profiles WHERE "userId" = $1
+       UNION ALL
+       SELECT id FROM service_provider_profiles WHERE "userId" = $1
+       LIMIT 1`,
+      [sellerId],
+    );
+    return row?.id ?? null;
+  }
 
   async getOrCreateSettings(): Promise<AdSettings> {
     const existing = await this.settingsRepository.find({ take: 1 });
@@ -126,7 +144,8 @@ export class AdsService {
     const ad = this.ads.create({
       sellerId,
       title: dto.title,
-      targetUrl: dto.targetUrl,
+      // Where the click lands: this seller's own shop quote form.
+      shopProfileId: await this.resolveShopProfileId(sellerId),
       mediaType: dto.mediaType,
       mediaUrl: dto.mediaUrl,
       videoDurationSeconds: dto.mediaType === 'VIDEO' ? dto.videoDurationSeconds ?? null : null,
@@ -144,6 +163,17 @@ export class AdsService {
       status: 'PENDING_PAYMENT',
     });
     return this.ads.save(ad);
+  }
+
+  /**
+   * The few fields a buyer landing from an ad needs — deliberately NOT the
+   * whole row: this is unauthenticated, so pricing and payment status stay
+   * private. 404s rather than leaking the existence of another seller's draft.
+   */
+  async getPublicAd(id: string): Promise<{ id: string; title: string; sellerId: string; shopProfileId: string | null }> {
+    const ad = await this.ads.findOne({ where: { id } });
+    if (!ad) throw new NotFoundException('Advertisement not found');
+    return { id: ad.id, title: ad.title, sellerId: ad.sellerId, shopProfileId: ad.shopProfileId };
   }
 
   async listMyAds(sellerId: string): Promise<Array<Advertisement & { effectiveStatus: EffectiveAdStatus }>> {

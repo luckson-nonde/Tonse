@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Star,
   MapPin,
@@ -11,6 +11,7 @@ import {
   Clock,
   TrendingUp,
   Camera,
+  Megaphone,
 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import DiscoverHeader from '../components/discover/DiscoverHeader';
@@ -23,6 +24,7 @@ import {
   DiscoverProduct,
   DiscoverReview,
 } from '../services/api/discoverService';
+import { adsService, PublicAd } from '../services/api/adsService';
 import { createInquiry } from '../services/api/inquiryService';
 import { savePendingInquiry } from '../services/pendingInquiry';
 import DateTimePicker from '../components/DateTimePicker';
@@ -60,8 +62,23 @@ function StatItem({ label, value }: { label: string; value: string | number }) {
 
 export default function PublicShopProfile() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // `?ad=<id>` is set when the buyer arrived by clicking one of this shop's
+  // ads. It names the ad on the form and rides along on the inquiry so the
+  // seller knows which ad earned the lead.
+  const sourceAdId = searchParams.get('ad');
+  const [sourceAd, setSourceAd] = useState<PublicAd | null>(null);
+  useEffect(() => {
+    if (!sourceAdId) return;
+    let cancelled = false;
+    adsService.getPublicAd(sourceAdId).then((ad) => {
+      if (!cancelled) setSourceAd(ad);
+    });
+    return () => { cancelled = true; };
+  }, [sourceAdId]);
 
   const [profile, setProfile] = useState<ShopProfile | null>(null);
   const [products, setProducts] = useState<DiscoverProduct[]>([]);
@@ -146,6 +163,10 @@ export default function PublicShopProfile() {
         budget: budget ? Number(budget) : undefined,
         urgency,
         preferredDateTime: preferredDateTime || undefined,
+        // Ad attribution lives INSIDE attributes on purpose: a new top-level
+        // key would be stripped by the backend's whitelisting ValidationPipe,
+        // and this survives the guest save-then-submit-after-login round trip.
+        ...(sourceAd ? { sourceAdId: sourceAd.id, sourceAdTitle: sourceAd.title } : {}),
       }),
       // Direct-to-shop request, not a broadcast — STANDARD is the safe
       // default (EXPRESS implies a faster multi-shop matching flow).
@@ -422,6 +443,18 @@ export default function PublicShopProfile() {
                 <p className="text-[13px] text-[#6b7280] mb-4">
                   Tell {profile.name} what you need — no account required to fill this in.
                 </p>
+
+                {/* Arrived from one of this shop's ads — name it, so the buyer
+                    knows the thread and the seller gets told on the inquiry. */}
+                {sourceAd && (
+                  <div className="flex items-start gap-2.5 mb-4 px-3.5 py-3 rounded-xl bg-[#fdf6e9] border border-[#ecd9b3]">
+                    <Megaphone className="w-4 h-4 text-[#b07f24] shrink-0 mt-0.5" />
+                    <p className="text-[12px] text-[#8a6118] leading-relaxed">
+                      Responding to <span className="font-bold">"{sourceAd.title}"</span> — describe what you're
+                      after and {profile.name} will quote you directly.
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-3">
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-[#9ca3af] mb-1">
