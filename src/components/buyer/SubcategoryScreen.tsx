@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Search, Plus, ChevronLeft } from 'lucide-react';
 import type { Category } from '../../services/categories';
+import AdCarousel from '../ads/AdCarousel';
 import { SubLayoutToggle } from './LayoutToggle';
 import SubList from './categoryLayouts/SubList';
 import SubCards from './categoryLayouts/SubCards';
@@ -59,7 +60,11 @@ export default function SubcategoryScreen({
   }, [subs, query]);
 
   return (
-    <div className="w-full max-w-5xl mx-auto pb-8">
+    // Two columns from xl up: the picker stays a centered reading-width
+    // column and the freed space on the right becomes the category-targeted
+    // ad rail. Below xl the rail drops entirely and the picker is unchanged.
+    <div className="w-full max-w-7xl mx-auto pb-8 flex justify-center gap-6">
+      <div className="w-full max-w-3xl min-w-0">
       <div className="flex items-center gap-3 mb-3">
         <button
           type="button"
@@ -148,6 +153,19 @@ export default function SubcategoryScreen({
           Can&apos;t find it? Browse other categories
         </button>
       </div>
+      </div>
+
+      {/* Category-targeted ad rail — keyed to the master the buyer is
+          browsing, so Electronics shows electronics ads and Loans shows
+          lender ads. Sticky so it stays in view down a long subcategory list. */}
+      <aside className="hidden xl:block w-72 shrink-0">
+        <div className="sticky top-4">
+          <p className="text-[10px] font-extrabold tracking-[0.18em] text-slate-400 mb-2 px-1">
+            SPONSORED
+          </p>
+          <AdCarousel placement="CATEGORY_SIDEBAR" variant="sidebar" categoryId={master.id} />
+        </div>
+      </aside>
     </div>
   );
 }

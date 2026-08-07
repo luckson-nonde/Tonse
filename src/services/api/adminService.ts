@@ -551,7 +551,11 @@ export type UpdateBillingSettingsInput = Partial<
   >
 >;
 
-export type AdAdminPlacementLocation = 'HOMEPAGE_CENTER' | 'SECONDARY_SIDEBAR' | 'BUNDLE_ALL';
+export type AdAdminPlacementLocation =
+  | 'HOMEPAGE_CENTER'
+  | 'SECONDARY_SIDEBAR'
+  | 'CATEGORY_SIDEBAR'
+  | 'BUNDLE_ALL';
 
 /** Ad placement pricing — base rate per placement + duration discount tiers (Ads tab). */
 export interface AdminAdPricing {
@@ -571,6 +575,8 @@ export interface AdminAdvertisement {
   mediaUrl: string;
   videoDurationSeconds: number | null;
   placementLocation: AdAdminPlacementLocation;
+  /** Category slug a CATEGORY_SIDEBAR ad targets; null = all categories. */
+  targetCategoryId: string | null;
   startDate: string | null;
   endDate: string | null;
   durationDays: number;

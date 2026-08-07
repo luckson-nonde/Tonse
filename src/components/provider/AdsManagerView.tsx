@@ -14,6 +14,7 @@ import {
 import emptyStateImage from '../../assets/images/empty-states/owl_reading.webp';
 import { formatCurrency } from '../../utils/financeUtils';
 import { compressImage } from '../../utils/compressImage';
+import { CATEGORIES_DB } from '../../services/categories';
 import { apiClient } from '../../services/api/client';
 import { ventureService } from '../../services/api/ventureService';
 import {
@@ -31,8 +32,13 @@ import Button from '../Button';
 const PLACEMENT_LABEL: Record<AdPlacementLocation, string> = {
   HOMEPAGE_CENTER: 'Homepage Center Banner',
   SECONDARY_SIDEBAR: 'Secondary Page Sidebar',
+  CATEGORY_SIDEBAR: 'Category Page Sidebar',
   BUNDLE_ALL: 'Both (Bundle)',
 };
+
+/** Master categories a CATEGORY_SIDEBAR ad can target — the same list the
+ *  buyer picks from, so ids line up with what the rail queries. */
+const MASTER_CATEGORIES = CATEGORIES_DB.filter((c) => c.parentId === null);
 
 const DURATION_PRESETS = [
   { label: '3 Days', days: 3 },
@@ -105,6 +111,7 @@ export default function AdsManagerView() {
   const [mediaPreview, setMediaPreview] = useState('');
   const [videoDurationSeconds, setVideoDurationSeconds] = useState<number | undefined>(undefined);
   const [placementLocation, setPlacementLocation] = useState<AdPlacementLocation>('HOMEPAGE_CENTER');
+  const [targetCategoryId, setTargetCategoryId] = useState<string>('');
   const [durationDays, setDurationDays] = useState(7);
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -148,6 +155,7 @@ export default function AdsManagerView() {
     setMediaPreview('');
     setVideoDurationSeconds(undefined);
     setPlacementLocation('HOMEPAGE_CENTER');
+    setTargetCategoryId('');
     setDurationDays(7);
     setFormError('');
   };
@@ -200,6 +208,8 @@ export default function AdsManagerView() {
         mediaUrl,
         videoDurationSeconds,
         placementLocation,
+        targetCategoryId:
+          placementLocation === 'CATEGORY_SIDEBAR' && targetCategoryId ? targetCategoryId : undefined,
         durationDays,
       });
       resetForm();
@@ -434,7 +444,7 @@ export default function AdsManagerView() {
           {/* Placement */}
           <div>
             <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">Placement</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {(Object.keys(PLACEMENT_LABEL) as AdPlacementLocation[]).map((p) => (
                 <button
                   key={p}
@@ -452,6 +462,29 @@ export default function AdsManagerView() {
               ))}
             </div>
           </div>
+
+          {/* Category targeting — only meaningful for the category rail */}
+          {placementLocation === 'CATEGORY_SIDEBAR' && (
+            <label className="block text-[11px] font-bold uppercase tracking-widest text-slate-400">
+              Target category
+              <select
+                value={targetCategoryId}
+                onChange={(e) => setTargetCategoryId(e.target.value)}
+                className="mt-1.5 w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-[13px] font-medium text-slate-900 tracking-normal normal-case bg-white focus:outline-none focus:border-[#C9973A]"
+              >
+                <option value="">All categories</option>
+                {MASTER_CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <span className="block mt-1 text-[10px] font-medium normal-case tracking-normal text-slate-400">
+                Your ad shows to buyers browsing this category. "All categories" runs everywhere but
+                loses the spot to a targeted ad.
+              </span>
+            </label>
+          )}
 
           {/* Duration */}
           <div>
@@ -536,7 +569,11 @@ export default function AdsManagerView() {
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-500">
-                        {PLACEMENT_LABEL[ad.placementLocation]} · ZMW {formatCurrency(Number(ad.totalPaidAmount))} · {ad.durationDays} days
+                        {PLACEMENT_LABEL[ad.placementLocation]}
+                        {ad.placementLocation === 'CATEGORY_SIDEBAR' && (
+                          <> · {MASTER_CATEGORIES.find((c) => c.id === ad.targetCategoryId)?.name ?? 'All categories'}</>
+                        )}
+                        {' · '}ZMW {formatCurrency(Number(ad.totalPaidAmount))} · {ad.durationDays} days
                       </p>
                       {status === 'REJECTED' && ad.rejectionReason && (
                         <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1">

@@ -20,7 +20,12 @@ class AdCheckoutDto {
   operator?: string;
 }
 
-const PLACEMENTS: AdPlacementLocation[] = ['HOMEPAGE_CENTER', 'SECONDARY_SIDEBAR', 'BUNDLE_ALL'];
+const PLACEMENTS: AdPlacementLocation[] = [
+  'HOMEPAGE_CENTER',
+  'SECONDARY_SIDEBAR',
+  'CATEGORY_SIDEBAR',
+  'BUNDLE_ALL',
+];
 
 @Controller('ads')
 export class AdsController {
@@ -34,14 +39,16 @@ export class AdsController {
     return this.ads.getPricingRatesPublic();
   }
 
-  /** Public — no auth. Powers the homepage/secondary-page ad carousels and
-   *  the "want to advertise here?" fallback (empty response). */
+  /** Public — no auth. Powers the homepage / secondary-page / category-rail
+   *  ad carousels and the "want to advertise here?" fallback (empty response).
+   *  `category` targets the CATEGORY_SIDEBAR rail at what the buyer is
+   *  browsing (e.g. electronics → electronics ads, loans → lender ads). */
   @Get('active')
-  async active(@Query('placement') placement: string) {
+  async active(@Query('placement') placement: string, @Query('category') category?: string) {
     if (!PLACEMENTS.includes(placement as AdPlacementLocation)) {
       throw new BadRequestException(`placement must be one of ${PLACEMENTS.join(', ')}`);
     }
-    return this.ads.getActiveAdsForPlacement(placement as AdPlacementLocation);
+    return this.ads.getActiveAdsForPlacement(placement as AdPlacementLocation, category);
   }
 
   @Post('create')

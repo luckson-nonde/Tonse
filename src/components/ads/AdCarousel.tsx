@@ -11,6 +11,10 @@ interface AdCarouselProps {
   /** Controls aspect ratio — banner (16:9, homepage center) or sidebar
    *  (vertical card, secondary pages). Defaults from `placement`. */
   variant?: 'banner' | 'sidebar';
+  /** CATEGORY_SIDEBAR only: the master category the buyer is browsing, so
+   *  the rail shows ads bought for THAT category (electronics → electronics
+   *  ads, loans → lender ads) ahead of untargeted ones. */
+  categoryId?: string;
 }
 
 /**
@@ -21,7 +25,7 @@ interface AdCarouselProps {
  * (the only precedent, DashboardCalendar's counter-card rotation, is tightly
  * coupled to that shape) — this one is self-contained.
  */
-export default function AdCarousel({ placement, variant }: AdCarouselProps) {
+export default function AdCarousel({ placement, variant, categoryId }: AdCarouselProps) {
   const navigate = useNavigate();
   const [ads, setAds] = useState<Advertisement[]>([]);
   const [index, setIndex] = useState(0);
@@ -32,8 +36,10 @@ export default function AdCarousel({ placement, variant }: AdCarouselProps) {
 
   useEffect(() => {
     let cancelled = false;
+    // Re-runs when the buyer switches category, so the rail re-targets.
+    setLoaded(false);
     adsService
-      .getActiveAds(placement)
+      .getActiveAds(placement, categoryId)
       .then((rows) => {
         if (!cancelled) {
           setAds(rows);
@@ -49,7 +55,7 @@ export default function AdCarousel({ placement, variant }: AdCarouselProps) {
     return () => {
       cancelled = true;
     };
-  }, [placement]);
+  }, [placement, categoryId]);
 
   useEffect(() => {
     if (paused || ads.length <= 1) return;

@@ -13,7 +13,11 @@ function payload<T>(res: any, fallback: T): T {
   return (res && 'data' in res ? res.data : res) ?? fallback;
 }
 
-export type AdPlacementLocation = 'HOMEPAGE_CENTER' | 'SECONDARY_SIDEBAR' | 'BUNDLE_ALL';
+export type AdPlacementLocation =
+  | 'HOMEPAGE_CENTER'
+  | 'SECONDARY_SIDEBAR'
+  | 'CATEGORY_SIDEBAR'
+  | 'BUNDLE_ALL';
 export type AdMediaType = 'IMAGE' | 'VIDEO';
 export type AdStatus = 'PENDING_PAYMENT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
 export type EffectiveAdStatus = AdStatus | 'EXPIRED';
@@ -27,6 +31,8 @@ export interface Advertisement {
   mediaUrl: string;
   videoDurationSeconds: number | null;
   placementLocation: AdPlacementLocation;
+  /** Master category slug this ad targets (CATEGORY_SIDEBAR only); null = all categories. */
+  targetCategoryId: string | null;
   startDate: string | null;
   endDate: string | null;
   durationDays: number;
@@ -57,6 +63,8 @@ export interface CreateAdvertisementInput {
   mediaUrl: string;
   videoDurationSeconds?: number;
   placementLocation: AdPlacementLocation;
+  /** Only sent for CATEGORY_SIDEBAR; omit to run across all categories. */
+  targetCategoryId?: string;
   durationDays: number;
 }
 
@@ -90,9 +98,13 @@ export const adsService = {
     return payload<AdPricingRates>(res, { baseRates: {} as any, discountTiers: [] });
   },
 
-  /** Public — no auth required. Empty array means "show the fallback banner". */
-  async getActiveAds(placement: AdPlacementLocation): Promise<Advertisement[]> {
-    const res = await apiClient.get(`/ads/active?placement=${encodeURIComponent(placement)}`);
+  /** Public — no auth required. Empty array means "show the fallback banner".
+   *  `categoryId` targets the CATEGORY_SIDEBAR rail at the category the buyer
+   *  is browsing; ignored by the other placements. */
+  async getActiveAds(placement: AdPlacementLocation, categoryId?: string): Promise<Advertisement[]> {
+    const query = new URLSearchParams({ placement });
+    if (categoryId) query.set('category', categoryId);
+    const res = await apiClient.get(`/ads/active?${query.toString()}`);
     return payload<Advertisement[]>(res, []);
   },
 

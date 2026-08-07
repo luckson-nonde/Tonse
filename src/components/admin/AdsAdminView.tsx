@@ -22,6 +22,7 @@ const CARD =
 const PLACEMENT_LABEL: Record<AdAdminPlacementLocation, string> = {
   HOMEPAGE_CENTER: 'Homepage Center',
   SECONDARY_SIDEBAR: 'Secondary Sidebar',
+  CATEGORY_SIDEBAR: 'Category Sidebar',
   BUNDLE_ALL: 'Bundle (Both)',
 };
 
@@ -283,7 +284,11 @@ export default function AdsAdminView() {
                     <div className="min-w-0">
                       <h4 className="font-bold text-slate-900 text-sm truncate">{ad.title}</h4>
                       <p className="text-[11px] text-slate-500 mt-0.5">
-                        {PLACEMENT_LABEL[ad.placementLocation]} · K{ad.totalPaidAmount} · {ad.durationDays} days
+                        {PLACEMENT_LABEL[ad.placementLocation]}
+                        {ad.placementLocation === 'CATEGORY_SIDEBAR' && (
+                          <> · targets {ad.targetCategoryId ?? 'all categories'}</>
+                        )}
+                        {' · '}K{ad.totalPaidAmount} · {ad.durationDays} days
                         {ad.mediaType === 'VIDEO' && ad.videoDurationSeconds != null && (
                           <span className="inline-flex items-center gap-1 ml-2"><Video className="w-3 h-3" />{ad.videoDurationSeconds.toFixed(1)}s</span>
                         )}

@@ -12,6 +12,10 @@ import { toNgwee } from '../../common/money/money';
 const DEFAULT_BASE_RATES: Record<AdPlacementLocation, number> = {
   HOMEPAGE_CENTER: 8,
   SECONDARY_SIDEBAR: 5,
+  // Category-targeted: a smaller audience than the homepage but a far
+  // warmer one (the buyer is mid-inquiry in exactly this category), so it
+  // prices between the two.
+  CATEGORY_SIDEBAR: 6,
   BUNDLE_ALL: 12,
 };
 
@@ -53,7 +57,11 @@ export class AdsService {
   async getPricingRatesPublic() {
     const settings = await this.getOrCreateSettings();
     return {
-      baseRates: settings.baseRates ?? DEFAULT_BASE_RATES,
+      // Defaults UNDER the stored row, not instead of it: the settings row is
+      // written once at first use, so a placement added later (CATEGORY_SIDEBAR)
+      // is missing from every existing deployment's json. Merging means a new
+      // placement always has a rate — admin-set values still win per key.
+      baseRates: { ...DEFAULT_BASE_RATES, ...(settings.baseRates ?? {}) },
       discountTiers: settings.discountTiers?.length ? settings.discountTiers : DEFAULT_DISCOUNT_TIERS,
     };
   }
@@ -97,6 +105,10 @@ export class AdsService {
       mediaUrl: dto.mediaUrl,
       videoDurationSeconds: dto.mediaType === 'VIDEO' ? dto.videoDurationSeconds ?? null : null,
       placementLocation: dto.placementLocation,
+      // Targeting only applies to the category rail; ignore it elsewhere so a
+      // homepage ad can't be silently scoped to one category.
+      targetCategoryId:
+        dto.placementLocation === 'CATEGORY_SIDEBAR' ? dto.targetCategoryId ?? null : null,
       durationDays: dto.durationDays,
       totalPaidAmount,
       currency: 'ZMW',
@@ -191,20 +203,36 @@ export class AdsService {
     return this.ads.save(ad);
   }
 
-  /** Public read for the homepage/secondary-page carousels — APPROVED ads
-   *  currently inside their live window, this placement or the bundle. */
-  async getActiveAdsForPlacement(placementLocation: AdPlacementLocation): Promise<Advertisement[]> {
+  /**
+   * Public read for the homepage / secondary-page / category-rail carousels —
+   * APPROVED ads currently inside their live window, this placement or the
+   * bundle.
+   *
+   * `categoryId` narrows the CATEGORY_SIDEBAR rail to what the buyer is
+   * actually browsing: ads targeting that category, plus untargeted ones
+   * (targetCategoryId NULL) so the rail is never empty in a category no one
+   * has bought yet. Targeted ads are returned FIRST — they paid for this
+   * audience, so they lead the rotation.
+   */
+  async getActiveAdsForPlacement(
+    placementLocation: AdPlacementLocation,
+    categoryId?: string,
+  ): Promise<Advertisement[]> {
     const now = new Date();
+    const live = { status: 'APPROVED' as const, startDate: LessThanOrEqual(now), endDate: MoreThanOrEqual(now) };
+
     const [direct, bundled] = await Promise.all([
-      this.ads.find({
-        where: { status: 'APPROVED', placementLocation, startDate: LessThanOrEqual(now), endDate: MoreThanOrEqual(now) },
-      }),
+      this.ads.find({ where: { ...live, placementLocation } }),
       placementLocation === 'BUNDLE_ALL'
         ? Promise.resolve([])
-        : this.ads.find({
-            where: { status: 'APPROVED', placementLocation: 'BUNDLE_ALL', startDate: LessThanOrEqual(now), endDate: MoreThanOrEqual(now) },
-          }),
+        : this.ads.find({ where: { ...live, placementLocation: 'BUNDLE_ALL' } }),
     ]);
-    return [...direct, ...bundled];
+
+    const rows = [...direct, ...bundled];
+    if (placementLocation !== 'CATEGORY_SIDEBAR') return rows;
+
+    const targeted = rows.filter((a) => a.targetCategoryId === categoryId && !!categoryId);
+    const untargeted = rows.filter((a) => !a.targetCategoryId);
+    return [...targeted, ...untargeted];
   }
 }
