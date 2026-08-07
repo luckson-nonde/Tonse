@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './AuthContext';
 import { useLiteMotion } from './hooks/useLiteMotion';
 import { useLandingPageEnabled } from './hooks/useLandingPageEnabled';
 import { getHomePathForRole } from './utils/roleHome';
+import { resolveRootDestination } from './utils/rootDestination';
 import { DashboardProvider } from './DashboardContext';
 import { BackgroundModeProvider } from './BackgroundModeContext';
 import { CategoryAvailabilityProvider } from './services/categories/availability';
@@ -75,8 +76,8 @@ function ProtectedRoute({
 
 function RootRedirect() {
   const { user, isLoading } = useAuth();
-  // Only consulted for a logged-OUT visitor (see below) — an authenticated
-  // user's redirect never waits on this fetch.
+  // Consulted for EVERY visitor now, signed in or not — the landing page is
+  // the front door whenever an admin has it switched on.
   const { enabled: landingEnabled, isLoading: landingLoading } = useLandingPageEnabled();
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' ? window.innerWidth < 1024 : false
@@ -88,13 +89,6 @@ function RootRedirect() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  if (isLoading || (!user && landingLoading))
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div>
-      </div>
-    );
-
   let onboarded = false;
   try {
     if (typeof window !== 'undefined') {
@@ -104,19 +98,26 @@ function RootRedirect() {
     console.error('LocalStorage access failed', e);
   }
 
-  // Mobile-first check: if mobile AND not onboarded → onboarding
-  if (isMobile && !onboarded) {
-    return <Navigate to="/onboarding" replace />;
-  }
+  // The policy itself lives in resolveRootDestination — one readable rule list
+  // that can be exercised without a browser. Headline: when an admin has the
+  // landing page on, "/" is the landing page for everyone, every time.
+  const destination = resolveRootDestination({
+    authLoading: isLoading,
+    user,
+    landingEnabled,
+    landingLoading,
+    isMobile,
+    onboarded,
+  });
 
-  // Logged-out visitors go to the public shop directory when an admin has
-  // turned it on, and to /login otherwise — unchanged from before this
-  // feature existed. A logged-in user's "/" is always their dashboard,
-  // flag or no flag; Discover is something they opt into explicitly via
-  // the profile menu, never something sprung on an existing session.
-  if (!user) return <Navigate to={landingEnabled ? '/discover' : '/login'} replace />;
-  if (user.mustChangePassword) return <Navigate to="/force-password-change" replace />;
-  return <Navigate to={getHomePathForRole(user)} replace />;
+  if (destination.kind === 'wait')
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue"></div>
+      </div>
+    );
+
+  return <Navigate to={destination.to} replace />;
 }
 
 /**
@@ -133,6 +134,12 @@ function LandingGate({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const { enabled, isLoading: landingLoading } = useLandingPageEnabled();
 
+  // Render as soon as we know it's on — same asymmetry as RootRedirect. Waiting
+  // on the flag here too would put a spinner in front of the landing page on
+  // every single visit, which is exactly the sluggishness that made it feel
+  // like it wasn't reliably there.
+  if (enabled) return <>{children}</>;
+
   if (isLoading || landingLoading)
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -140,11 +147,7 @@ function LandingGate({ children }: { children: React.ReactNode }) {
       </div>
     );
 
-  if (!enabled) {
-    return <Navigate to={user ? getHomePathForRole(user) : '/login'} replace />;
-  }
-
-  return <>{children}</>;
+  return <Navigate to={user ? getHomePathForRole(user) : '/login'} replace />;
 }
 
 export default function App() {

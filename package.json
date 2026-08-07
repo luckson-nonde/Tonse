@@ -8,7 +8,7 @@
     "build": "vite build && node scripts/write-version.mjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit && tsx scripts/verifyArchetypes.ts"
+    "lint": "tsc --noEmit && tsx scripts/verifyArchetypes.ts && tsx scripts/verifyRootDestination.ts"
   },
   "dependencies": {
     "@google/design.md": "^0.1.1",

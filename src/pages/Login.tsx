@@ -7,6 +7,7 @@ import FloatingInput from '../components/FloatingInput';
 import Logo from '../components/Logo';
 import { createInquiry } from '../services/api/inquiryService';
 import { getPendingInquiry, clearPendingInquiry } from '../services/pendingInquiry';
+import { getHomePathForRole } from '../utils/roleHome';
 
 export default function Login() {
   const { login } = useAuth();
@@ -60,7 +61,7 @@ export default function Login() {
           } catch {
             clearPendingInquiry();
             setResumeStatus('failed');
-            setTimeout(() => navigate('/'), 1800);
+            setTimeout(() => navigate(getHomePathForRole(loggedIn)), 1800);
           }
           return;
         }
@@ -69,7 +70,10 @@ export default function Login() {
         clearPendingInquiry();
       }
 
-      navigate('/');
+      // Straight to their dashboard, not via "/" — when the landing page is
+      // switched on, "/" is the public storefront for everyone, and someone who
+      // just signed in asked for their account, not the shop window.
+      navigate(getHomePathForRole(loggedIn));
     } catch (err: any) {
       const raw = err?.message || '';
       if (/failed to fetch|network|networkerror/i.test(raw)) {
