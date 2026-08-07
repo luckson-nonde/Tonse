@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Megaphone } from 'lucide-react';
-import { adsService, Advertisement, AdPlacementLocation } from '../../services/api/adsService';
+import { adsService, adMediaUrl, Advertisement, AdPlacementLocation } from '../../services/api/adsService';
 
 const ROTATE_MS = 10000;
 
@@ -120,10 +120,10 @@ export default function AdCarousel({ placement, variant, categoryId }: AdCarouse
           className="absolute inset-0"
         >
           {ad.mediaType === 'IMAGE' ? (
-            <img src={ad.mediaUrl} alt={ad.title} className="w-full h-full object-cover" />
+            <img src={adMediaUrl(ad.mediaUrl)} alt={ad.title} className="w-full h-full object-cover" />
           ) : (
             <video
-              src={ad.mediaUrl}
+              src={adMediaUrl(ad.mediaUrl)}
               className="w-full h-full object-cover"
               autoPlay
               muted

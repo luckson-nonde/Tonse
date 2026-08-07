@@ -14,6 +14,7 @@ import {
   AdminAdvertisement,
   AdAdminPlacementLocation,
 } from '../../services/api/adminService';
+import { adMediaUrl } from '../../services/api/adsService';
 import { StatTile } from './DashboardPrimitives';
 
 const CARD =
@@ -274,9 +275,9 @@ export default function AdsAdminView() {
               <div key={ad.id} className="flex flex-col sm:flex-row gap-4 p-4 rounded-2xl border border-slate-100">
                 <div className="w-full sm:w-32 h-24 rounded-xl bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
                   {ad.mediaType === 'IMAGE' ? (
-                    <img src={ad.mediaUrl} alt={ad.title} className="w-full h-full object-cover" />
+                    <img src={adMediaUrl(ad.mediaUrl)} alt={ad.title} className="w-full h-full object-cover" />
                   ) : (
-                    <video src={ad.mediaUrl} className="w-full h-full object-cover" controls />
+                    <video src={adMediaUrl(ad.mediaUrl)} className="w-full h-full object-cover" controls />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">

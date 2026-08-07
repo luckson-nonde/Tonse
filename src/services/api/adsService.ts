@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, API_BASE_URL } from './client';
 
 /**
  * Client for the backend `/ads/*` surface — seller-purchased ad placements
@@ -11,6 +11,18 @@ import { apiClient } from './client';
  */
 function payload<T>(res: any, fallback: T): T {
   return (res && 'data' in res ? res.data : res) ?? fallback;
+}
+
+/**
+ * Make a stored ad media path renderable. New ads save an absolute URL, but
+ * rows created before that fix hold a bare "/uploads/…" — which resolves
+ * against the WEB origin, a different service from the API in production, and
+ * 404s. Absolute/data/blob URLs pass through untouched.
+ */
+export function adMediaUrl(url: string | null | undefined): string {
+  if (!url) return '';
+  if (/^(https?:|data:|blob:)/i.test(url)) return url;
+  return `${API_BASE_URL}${url.startsWith('/') ? url : `/${url}`}`;
 }
 
 export type AdPlacementLocation = 'HOMEPAGE_CENTER' | 'SECONDARY_SIDEBAR' | 'CATEGORY_SIDEBAR';

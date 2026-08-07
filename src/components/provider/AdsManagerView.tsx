@@ -19,10 +19,11 @@ import { formatCurrency } from '../../utils/financeUtils';
 import { compressImage } from '../../utils/compressImage';
 import { CATEGORIES_DB } from '../../services/categories';
 import { useAuth } from '../../AuthContext';
-import { apiClient } from '../../services/api/client';
+import { apiClient, API_BASE_URL } from '../../services/api/client';
 import { ventureService } from '../../services/api/ventureService';
 import {
   adsService,
+  adMediaUrl,
   calculateAdPrice,
   countAdDays,
   AD_PLACEMENTS,
@@ -290,7 +291,11 @@ export default function AdsManagerView() {
       const response = await apiClient.post<{ url: string }>('/files/upload?category=ad-media', formData);
       const url = response.data?.url;
       if (!url) throw new Error('Upload did not return a file URL');
-      setMediaUrl(url);
+      // Store ABSOLUTE, like every other upload in the app. The API returns a
+      // bare "/uploads/…" path, and the frontend is a separate origin from the
+      // API in production — a relative path resolves against the web service,
+      // which has no uploads directory, so the image 404s.
+      setMediaUrl(`${API_BASE_URL}${url}`);
       setMediaPreview(URL.createObjectURL(file));
       setVideoDurationSeconds(duration);
     } catch (e: any) {
@@ -786,7 +791,7 @@ export default function AdsManagerView() {
                   <div key={ad.id} className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100 flex items-center gap-4">
                     <div className="w-14 h-14 rounded-2xl bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
                       {ad.mediaType === 'IMAGE' ? (
-                        <img src={ad.mediaUrl} alt={ad.title} className="w-full h-full object-cover" />
+                        <img src={adMediaUrl(ad.mediaUrl)} alt={ad.title} className="w-full h-full object-cover" />
                       ) : (
                         <Video className="w-5 h-5 text-slate-400" />
                       )}
