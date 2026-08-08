@@ -20,6 +20,8 @@ import { SiteSettingsService } from '../site-settings/site-settings.service';
 import { UpdateSiteSettingsDto } from '../site-settings/dto/update-site-settings.dto';
 import { AdsService } from '../ads/ads.service';
 import { UpdateAdSettingsDto } from '../ads/dto/update-ad-settings.dto';
+import { TicketsService } from '../tickets/tickets.service';
+import { UpdateEventTicketSettingsDto } from '../tickets/dto/update-event-ticket-settings.dto';
 import { StorefrontService } from '../storefront/storefront.service';
 import { CreatePromoTileDto } from '../storefront/dto/create-promo-tile.dto';
 import {
@@ -53,6 +55,7 @@ export class AdminService {
     private readonly billingService: BillingService,
     private readonly siteSettingsService: SiteSettingsService,
     private readonly adsService: AdsService,
+    private readonly ticketsService: TicketsService,
     private readonly storefrontService: StorefrontService
   ) {}
 
@@ -617,6 +620,25 @@ export class AdminService {
 
   async listPendingAds() {
     return this.adsService.listPending();
+  }
+
+  // ───── Event ticketing ───────────────────────────────────────────────────
+  // TicketsModule owns the logic (commission singleton); AdminService fronts
+  // it behind the class-wide ADMIN guard and writes the audit trail.
+
+  async getTicketSettingsForAdmin() {
+    return this.ticketsService.getSettingsForAdmin();
+  }
+
+  async updateTicketSettings(dto: UpdateEventTicketSettingsDto, actingAdmin?: ActingAdmin) {
+    const settings = await this.ticketsService.updateSettings(dto);
+    await this.auditAdminAction({
+      action: 'TICKET_SETTINGS_UPDATED',
+      entityType: 'EVENT_TICKET_SETTINGS',
+      actingAdmin,
+      details: `Ticket commission changed: ${JSON.stringify(dto)}`,
+    });
+    return settings;
   }
 
   async approveAd(id: string, actingAdmin?: ActingAdmin) {

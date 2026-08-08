@@ -59,6 +59,7 @@ import LoanOfferDetail from './loan/LoanOfferDetail';
 import FinancialPage from '../pages/FinancialPage';
 import VentureAccountView from './provider/VentureAccountView';
 import AdsManagerView from './provider/AdsManagerView';
+import TicketManagerView from './provider/TicketManagerView';
 import AdCarousel from './ads/AdCarousel';
 import ActiveTransactionsView from './ActiveTransactionsView';
 import TransactionHistoryView from './TransactionHistoryView';
@@ -731,6 +732,8 @@ export default function DynamicAccountRenderer({
         return <VentureAccountView />;
       case 'ads_manager_renderer':
         return <AdsManagerView />;
+      case 'ticket_manager_renderer':
+        return <TicketManagerView />;
       case 'active_transactions_renderer':
         return <ActiveTransactionsView data={data} onAction={onAction} />;
       case 'transaction_history_renderer':

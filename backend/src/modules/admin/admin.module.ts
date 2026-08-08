@@ -18,6 +18,7 @@ import { ReportsModule } from '../reports/reports.module';
 import { BillingModule } from '../billing/billing.module';
 import { SiteSettingsModule } from '../site-settings/site-settings.module';
 import { AdsModule } from '../ads/ads.module';
+import { TicketsModule } from '../tickets/tickets.module';
 import { StorefrontModule } from '../storefront/storefront.module';
 
 @Module({
@@ -46,6 +47,7 @@ import { StorefrontModule } from '../storefront/storefront.module';
     SiteSettingsModule,
     // Ad placement pricing + review queue (Ads tab).
     AdsModule,
+    TicketsModule,
     StorefrontModule,
   ],
   providers: [AdminService, AdminManagerService],

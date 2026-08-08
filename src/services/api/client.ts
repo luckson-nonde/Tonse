@@ -291,7 +291,10 @@ export const apiCall = async <T = any>(
       window.location.pathname === '/login' ||
       window.location.pathname.startsWith('/forgot-password') ||
       window.location.pathname.startsWith('/reset-password') ||
-      window.location.pathname.startsWith('/discover'));
+      window.location.pathname.startsWith('/discover') ||
+      // Public ticket purchase (/e/:code) — a guest with a stale token from a
+      // previous session must not be yanked to /login mid-purchase.
+      window.location.pathname.startsWith('/e/'));
 
   // Offline fail-fast for MUTATIONS: a write that can't reach the server is
   // not "pending", it's not happening — say so immediately and honestly

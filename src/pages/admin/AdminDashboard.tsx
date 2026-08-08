@@ -50,6 +50,7 @@ import {
   CreditCard,
   Globe,
   Megaphone,
+  Ticket,
 } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
 import { ADMIN_PERMISSIONS } from '../../utils/rbac';
@@ -58,6 +59,7 @@ import ReportsView from '../../components/admin/ReportsView';
 import SubscriptionManagerView from '../../components/admin/SubscriptionManagerView';
 import LandingPageSettingsView from '../../components/admin/LandingPageSettingsView';
 import AdsAdminView from '../../components/admin/AdsAdminView';
+import TicketsAdminView from '../../components/admin/TicketsAdminView';
 import StorefrontView from '../../components/admin/StorefrontView';
 // StatTile / FunnelCard / Switch were extracted to DashboardPrimitives so the
 // promoter dashboard shares them — same components, zero behavior change.
@@ -93,6 +95,7 @@ type AdminTab =
   | 'landing-page'
   | 'storefront'
   | 'ads'
+  | 'tickets'
   | 'milestones'
   | 'inquiries'
   | 'quotes'
@@ -126,6 +129,7 @@ const TABS: {
   { id: 'landing-page', label: 'Landing Page', icon: Globe },
   { id: 'storefront', label: 'Storefront', icon: LayoutGrid },
   { id: 'ads', label: 'Ads', icon: Megaphone },
+  { id: 'tickets', label: 'Tickets', icon: Ticket },
   { id: 'milestones', label: 'Milestones', icon: Sparkles },
   { id: 'inquiries', label: 'Inquiries', icon: MessageSquare },
   { id: 'quotes', label: 'Quotes', icon: FileText },
@@ -284,6 +288,7 @@ export default function AdminDashboard() {
             {activeTab === 'landing-page' && tabVisible && <LandingPageSettingsView />}
             {activeTab === 'storefront' && tabVisible && <StorefrontView />}
             {activeTab === 'ads' && tabVisible && <AdsAdminView />}
+            {activeTab === 'tickets' && tabVisible && <TicketsAdminView />}
             {activeTab === 'milestones' && tabVisible && <MilestonesView />}
             {activeTab === 'inquiries' && tabVisible && <InquiriesView />}
             {activeTab === 'quotes' && tabVisible && <QuotesView />}

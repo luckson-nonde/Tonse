@@ -904,6 +904,95 @@ Constraints/Indexes: `uq_equity_awards_promoter_milestone` (promoterUserId, mile
 
 ---
 
+### Module: Event Ticketing
+
+Sellers in the events category create ticketed events and sell to guests through a public share link (`/e/:code`). Payment is simulated; the ledger credit is real — each PAID order posts a `TICKET_SALE` journal (Dr `PSP_HOLDING_ZMW` gross / Cr `SELLER_PAYABLE_ZMW` net / Cr `PLATFORM_COMMISSION_REVENUE_ZMW`). Migration: `1786103000000-CreateEventTicketing.ts`.
+
+#### `ticket_events`
+Entity file: `backend/src/modules/tickets/entities/ticket-event.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| sellerId | uuid | NO | — | users.id — no FK by convention |
+| code | varchar(20) | NO | — | public share code `EVT-XXXXXX`, derived from id post-insert (EventCodeUtil) |
+| title | varchar(255) | NO | — | |
+| description | text | NO | — | |
+| venue | varchar(500) | NO | — | free-text location |
+| eventDate | timestamp | NO | — | when the event happens |
+| posterUrl | varchar(500) | YES | — | `/files/upload?category=event-media` |
+| status | enum | NO | `PUBLISHED` | `DRAFT`, `PUBLISHED`, `CANCELLED` — no approval gate; CANCELLED stops sales, reads as 404 publicly |
+| createdAt / updatedAt | timestamp | NO | now() | |
+
+Constraints/Indexes: `idx_ticket_events_code` (code, unique) · `idx_ticket_events_seller` (sellerId)
+
+#### `ticket_tiers`
+Entity file: `backend/src/modules/tickets/entities/ticket-tier.entity.ts`
+
+`remainingQuantity` is the ONLY stock authority — decremented under a `FOR UPDATE` lock in the payment commit, never recomputed from sold tickets.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| eventId | uuid | NO | — | FK → ticket_events, CASCADE |
+| name | varchar(120) | NO | — | e.g. Standard / VIP |
+| priceZmw | numeric(10,2) | NO | — | |
+| totalQuantity | int | NO | — | seller-entered capacity (display) |
+| remainingQuantity | int | NO | — | stock authority |
+
+Constraints/Indexes: `idx_ticket_tiers_event` (eventId)
+
+#### `ticket_orders`
+Entity file: `backend/src/modules/tickets/entities/ticket-order.entity.ts`
+
+A guest's purchase. PENDING at checkout (no stock held); flipped to PAID inside the one atomic simulate-payment transaction. With no psp_transactions row behind the simulated payment, this row IS the audit trail — the journal memo points back at it.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| eventId | uuid | NO | — | ticket_events.id |
+| reference | varchar(40) | NO | — | client polling handle `TKT-<ts>-<hex>` |
+| buyerName | varchar(120) | NO | — | guest-entered |
+| buyerPhone | varchar(40) | YES | — | service enforces phone OR email |
+| buyerEmail | varchar(160) | YES | — | |
+| lineItems | json | NO | — | `{tierId, tierName, quantity, unitPriceZmw}[]` — priced server-side |
+| totalAmountZmw | numeric(10,2) | NO | — | |
+| commissionZmw | numeric(10,2) | YES | — | stamped at payment from then-current settings |
+| status | enum | NO | `PENDING` | `PENDING`, `PAID`, `FAILED` |
+| createdAt / updatedAt | timestamp | NO | now() | |
+
+Constraints/Indexes: `idx_ticket_orders_reference` (reference, unique) · `idx_ticket_orders_event` (eventId)
+
+#### `tickets`
+Entity file: `backend/src/modules/tickets/entities/ticket.entity.ts`
+
+One row per admitted unit — each attendee gets their own code. `status` future-proofs door check-in/refunds; no endpoint mutates it yet.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| orderId | uuid | NO | — | ticket_orders.id |
+| eventId | uuid | NO | — | denormalized for per-event lookups |
+| tierId | uuid | NO | — | ticket_tiers.id |
+| code | varchar(20) | NO | — | `TIX-XXXXXX` (TicketCodeUtil, seeded `orderId:seq`) |
+| status | enum | NO | `VALID` | `VALID`, `REDEEMED`, `VOID` |
+| createdAt | timestamp | NO | now() | |
+
+Constraints/Indexes: `idx_tickets_code` (code, unique) · `idx_tickets_order` (orderId) · `idx_tickets_event` (eventId)
+
+#### `event_ticket_settings`
+Entity file: `backend/src/modules/tickets/entities/event-ticket-settings.entity.ts`
+
+Get-or-create singleton (same pattern as `ad_settings`/`billing_settings`). Admin-edited via `PATCH /admin/tickets/settings`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | |
+| commissionPercent | numeric(5,2) | NO | 5 | platform cut per ticket sale |
+| createdAt / updatedAt | timestamp | NO | now() | |
+
+---
+
 ## 4. Enums Reference
 
 | Enum (owning table.column) | Values |
@@ -937,6 +1026,10 @@ Constraints/Indexes: `uq_equity_awards_promoter_milestone` (promoterUserId, mile
 | `conversions.funnelStage` | `registration`, `inquiry`, `trade_complete` |
 | `milestones.targetStage` | `inquiry`, `trade_complete` |
 | `promoter_profiles.verificationStatus` | `PENDING`, `VERIFIED`, `REJECTED` |
+| `ticket_events.status` | `DRAFT`, `PUBLISHED`, `CANCELLED` |
+| `ticket_orders.status` | `PENDING`, `PAID`, `FAILED` |
+| `tickets.status` | `VALID`, `REDEEMED`, `VOID` |
+| `ledger_journals.type` (addition) | `TICKET_SALE` added alongside `AD_PURCHASE` etc. |
 
 ---
 

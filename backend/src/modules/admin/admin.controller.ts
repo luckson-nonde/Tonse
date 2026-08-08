@@ -22,6 +22,7 @@ import { ResolveReportDto } from '../reports/dto/resolve-report.dto';
 import { UpdateBillingSettingsDto } from '../billing/dto/update-billing-settings.dto';
 import { UpdateSiteSettingsDto } from '../site-settings/dto/update-site-settings.dto';
 import { UpdateAdSettingsDto } from '../ads/dto/update-ad-settings.dto';
+import { UpdateEventTicketSettingsDto } from '../tickets/dto/update-event-ticket-settings.dto';
 import { CreatePromoTileDto } from '../storefront/dto/create-promo-tile.dto';
 import {
   ReorderPromoTilesDto,
@@ -242,6 +243,21 @@ export class AdminController {
   @Post('ads/:id/reject')
   async rejectAd(@Request() req: any, @Param('id') id: string, @Body() body: { reason?: string }) {
     return this.adminService.rejectAd(id, body?.reason, this.actor(req));
+  }
+
+  // ───── Event ticketing (undecorated ⇒ primary-admin-only) ──────────────
+
+  @Get('tickets/settings')
+  async getTicketSettings() {
+    return this.adminService.getTicketSettingsForAdmin();
+  }
+
+  @Patch('tickets/settings')
+  async updateTicketSettings(
+    @Request() req: any,
+    @Body() dto: UpdateEventTicketSettingsDto,
+  ) {
+    return this.adminService.updateTicketSettings(dto, this.actor(req));
   }
 
   // ───── Landing-page storefront (undecorated ⇒ primary-admin-only) ──────

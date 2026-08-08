@@ -52,6 +52,7 @@ import ArchivedLeadsPage from './pages/ArchivedLeadsPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import DiscoverPage from './pages/DiscoverPage';
 import PublicShopProfile from './pages/PublicShopProfile';
+import TicketPurchasePage from './pages/TicketPurchasePage';
 
 function ProtectedRoute({
   children,
@@ -232,6 +233,17 @@ export default function App() {
                       <PublicShopProfile />
                     </PageTransition>
                   </LandingGate>
+                }
+              />
+              {/* Public ticket purchase — a seller's share link. Guest-first:
+                  no ProtectedRoute, and deliberately NOT behind LandingGate
+                  (a shared link must work whatever the landing-page flag). */}
+              <Route
+                path="/e/:code"
+                element={
+                  <PageTransition transitionKey="ticket-purchase">
+                    <TicketPurchasePage />
+                  </PageTransition>
                 }
               />
               <Route path="/" element={<RootRedirect />} />

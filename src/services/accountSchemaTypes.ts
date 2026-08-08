@@ -64,6 +64,7 @@ export interface ViewDefinition {
     | 'financial_renderer'
     | 'venture_account_renderer'
     | 'ads_manager_renderer'
+    | 'ticket_manager_renderer'
     | 'active_transactions_renderer'
     | 'transaction_history_renderer'
     | 'labour_home'

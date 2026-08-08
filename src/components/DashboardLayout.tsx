@@ -52,6 +52,7 @@ import {
   TrendingUp,
   XCircle,
   Megaphone,
+  Ticket,
 } from 'lucide-react';
 import Logo from './Logo';
 import HeaderProfileMenu from './HeaderProfileMenu';
@@ -367,6 +368,7 @@ const iconMap: Record<string, any> = {
   TrendingUp,
   XCircle,
   Megaphone,
+  Ticket,
   Tool: Wrench, // lucide has no "Tool" — schemas using it mean a wrench
 };
 
@@ -901,6 +903,8 @@ export default function DashboardLayout({
         return effectiveBusinessType === 'WHOLESALE' ? 'SUPPLY AUDIT' : 'AUDIT TRAIL';
       case 'advertise':
         return 'ADVERTISE';
+      case 'tickets':
+        return 'TICKET MANAGER';
       default:
         return 'HOME';
     }

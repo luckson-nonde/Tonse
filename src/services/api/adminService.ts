@@ -430,6 +430,18 @@ export const adminService = {
     return res.data ?? [];
   },
 
+  // ───── Event ticketing (primary admin only) ────────────────────────────────
+
+  async getTicketSettings(): Promise<AdminTicketSettings | null> {
+    const res = await apiClient.get<AdminTicketSettings>('/admin/tickets/settings');
+    return res.data ?? null;
+  },
+
+  async updateTicketSettings(payload: Partial<AdminTicketSettings>): Promise<AdminTicketSettings | null> {
+    const res = await apiClient.patch<AdminTicketSettings>('/admin/tickets/settings', payload);
+    return res.data ?? null;
+  },
+
   async approveAd(id: string): Promise<AdminAdvertisement | null> {
     const res = await apiClient.post<AdminAdvertisement>(`/admin/ads/${id}/approve`);
     return res.data ?? null;
@@ -657,6 +669,13 @@ export interface AdminAdPricing {
 }
 
 export type UpdateAdPricingInput = Partial<AdminAdPricing>;
+
+/** Event-ticketing monetization — the platform's cut of each ticket sale
+ *  (Tickets tab). The rest of a sale is credited to the seller's venture
+ *  balance at payment time. */
+export interface AdminTicketSettings {
+  commissionPercent: number;
+}
 
 /** One seller-purchased ad placement, as seen in the admin review queue. */
 export interface AdminAdvertisement {
