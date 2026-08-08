@@ -1,5 +1,9 @@
-import { Controller, Get } from '@nestjs/common';
-import { StorefrontService, StorefrontHome } from './storefront.service';
+import { Controller, Get, Query } from '@nestjs/common';
+import {
+  StorefrontService,
+  StorefrontHome,
+  StorefrontProductsPage,
+} from './storefront.service';
 
 /**
  * Public storefront feed for the `/discover` landing page.
@@ -15,5 +19,18 @@ export class StorefrontController {
   @Get('home')
   async home(): Promise<StorefrontHome> {
     return this.storefront.getHome();
+  }
+
+  /** Paginated products for the category-driven grid. `category` is a master
+   *  category id (resolved via seller subscriptions, not the free-text
+   *  products.category column); omitted → all active products. */
+  @Get('products')
+  async products(@Query() query: any): Promise<StorefrontProductsPage> {
+    return this.storefront.getProducts({
+      category: query.category,
+      sort: query.sort,
+      page: query.page,
+      limit: query.limit,
+    });
   }
 }

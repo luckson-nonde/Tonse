@@ -48,6 +48,29 @@ export interface StorefrontHome {
 
 const EMPTY_HOME: StorefrontHome = { categories: [], cards: [], mode: 'PROMO' };
 
+/** Sub-filter tabs on the category product grid. */
+export type StorefrontSort = 'best' | 'new' | 'trending';
+
+/** A category-grid card — a StorefrontCard plus the strike-through price the
+ *  server computed the discount badge from. */
+export interface StorefrontProductCard extends StorefrontCard {
+  originalPrice: number | null;
+}
+
+export interface StorefrontProductsPage {
+  items: StorefrontProductCard[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+const EMPTY_PRODUCTS_PAGE: StorefrontProductsPage = {
+  items: [],
+  total: 0,
+  page: 1,
+  pageSize: 12,
+};
+
 export const storefrontService = {
   /** Public — no auth. Fails soft to an empty storefront: the landing page
    *  must still render its hero and shop rails if this endpoint is down. */
@@ -57,6 +80,29 @@ export const storefrontService = {
       return payload<StorefrontHome>(res, EMPTY_HOME);
     } catch {
       return EMPTY_HOME;
+    }
+  },
+
+  /** Public — no auth. Paginated products for a master category (resolved via
+   *  seller subscriptions server-side). Fails soft to an empty page for the
+   *  same reason as getHome. */
+  async getProducts(params: {
+    category: string;
+    sort?: StorefrontSort;
+    page?: number;
+    limit?: number;
+  }): Promise<StorefrontProductsPage> {
+    const qs = new URLSearchParams({
+      category: params.category,
+      sort: params.sort ?? 'best',
+      page: String(params.page ?? 1),
+      limit: String(params.limit ?? 12),
+    });
+    try {
+      const res = await apiClient.get(`/storefront/products?${qs.toString()}`, { swr: true });
+      return payload<StorefrontProductsPage>(res, EMPTY_PRODUCTS_PAGE);
+    } catch {
+      return EMPTY_PRODUCTS_PAGE;
     }
   },
 };

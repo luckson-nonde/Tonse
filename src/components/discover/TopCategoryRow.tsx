@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { getCategoryArt, getMeta } from '../buyer/categoryMeta';
+import { CATEGORIES_DB } from '../../services/categories';
 import type { StorefrontCategory } from '../../services/api/storefrontService';
 
 interface TopCategoryRowProps {
@@ -47,7 +48,12 @@ export default function TopCategoryRow({
 
       <div className="flex gap-3 sm:grid sm:grid-cols-4 lg:grid-cols-6 overflow-x-auto snap-x scrollbar-hide -mx-1 px-1 pb-1">
         {categories.map((category, i) => {
-          const art = getCategoryArt(category.id);
+          // Photo resolution: dropped local artwork first, then the catalog's
+          // own image URL — every tile gets a real photo; the icon chip is a
+          // last resort, never the default look.
+          const art =
+            getCategoryArt(category.id) ??
+            CATEGORIES_DB.find((c) => c.id === category.id)?.image;
           const meta = getMeta(category.id);
           const Icon = meta.icon;
           const isActive = activeCategoryId === category.id;

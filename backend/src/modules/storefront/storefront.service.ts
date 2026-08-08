@@ -4,7 +4,12 @@ import { DataSource, Repository } from 'typeorm';
 import { PromoTile } from './entities/promo-tile.entity';
 import { CreatePromoTileDto } from './dto/create-promo-tile.dto';
 import { ReorderPromoTilesDto, UpdatePromoTileDto } from './dto/update-promo-tile.dto';
-import { STOREFRONT_CATEGORY_LIMIT, STOREFRONT_GRID_SIZE } from './storefront.constants';
+import {
+  STOREFRONT_CATEGORY_LIMIT,
+  STOREFRONT_GRID_SIZE,
+  STOREFRONT_PRODUCTS_PAGE_SIZE,
+  STOREFRONT_PRODUCTS_PAGE_SIZE_MAX,
+} from './storefront.constants';
 
 /** One master category as the Top Categories row renders it. */
 export interface StorefrontCategory {
@@ -42,6 +47,22 @@ export interface StorefrontHome {
   categories: StorefrontCategory[];
   cards: StorefrontCard[];
   mode: StorefrontMode;
+}
+
+/** Sub-filter tabs on the category product grid. */
+export type StorefrontSort = 'best' | 'new' | 'trending';
+
+/** A category-grid card — a StorefrontCard plus the strike-through price the
+ *  discount badge is computed from. */
+export interface StorefrontProductCard extends StorefrontCard {
+  originalPrice: number | null;
+}
+
+export interface StorefrontProductsPage {
+  items: StorefrontProductCard[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 /** What the admin tile editor shows when picking a product to point a tile at. */
@@ -301,6 +322,129 @@ export class StorefrontService {
     if (row.targetShopProfileId) return `/discover/${row.targetShopProfileId}`;
     if (row.targetCategoryId) return `/discover?category=${encodeURIComponent(row.targetCategoryId)}`;
     return '/discover';
+  }
+
+  /**
+   * Paginated public product listing for the category-driven grid on the
+   * landing page.
+   *
+   * `category` filters on the REAL taxonomy via the seller's subscriptions
+   * (same EXISTS shape as searchProductsForPicker) — `products.category` is a
+   * free-text box and means something different. Sort is a hardcoded switch,
+   * never interpolated client input. An unknown category simply yields an
+   * empty page, matching this module's permissive read style.
+   */
+  async getProducts(params: {
+    category?: string;
+    sort?: string;
+    page?: number | string;
+    limit?: number | string;
+  }): Promise<StorefrontProductsPage> {
+    const pageSize = Math.min(
+      Math.max(Number(params.limit) || STOREFRONT_PRODUCTS_PAGE_SIZE, 1),
+      STOREFRONT_PRODUCTS_PAGE_SIZE_MAX,
+    );
+    const page = Math.max(Number(params.page) || 1, 1);
+
+    const sqlParams: any[] = [];
+    let categoryClause = '';
+    if (params.category?.trim()) {
+      sqlParams.push(params.category.trim());
+      categoryClause = `AND EXISTS (
+        SELECT 1 FROM provider_master pm
+         WHERE pm.seller_id = p."sellerId" AND pm.master_id = $${sqlParams.length}
+      )`;
+    }
+    sqlParams.push(pageSize, (page - 1) * pageSize);
+
+    const rows: Array<{
+      id: string;
+      name: string;
+      price: string | null;
+      originalPrice: string | null;
+      salesCount: number | string;
+      firstImage: string | null;
+      shopProfileId: string | null;
+      totalCount: number | string;
+    }> = await this.dataSource.query(
+      `
+      ${PROVIDER_MASTER_CTE}
+      SELECT
+        p.id,
+        p.name,
+        p.price,
+        p."originalPrice",
+        p."salesCount",
+        NULLIF(p.images->>0, '') AS "firstImage",
+        prof.id                  AS "shopProfileId",
+        COUNT(*) OVER()::int     AS "totalCount"
+      FROM products p
+      ${SHOP_PROFILE_LATERAL}
+      WHERE p."isActive" = true
+      ${categoryClause}
+      -- id ASC keeps ties stable across requests, so pages never overlap
+      ORDER BY ${this.productsOrderBy(params.sort)}, p.id ASC
+      LIMIT $${sqlParams.length - 1} OFFSET $${sqlParams.length}
+      `,
+      sqlParams,
+    );
+
+    return {
+      items: rows.map((r) => this.toProductCard(r)),
+      total: rows.length > 0 ? Number(rows[0].totalCount) || 0 : 0,
+      page,
+      pageSize,
+    };
+  }
+
+  /** Hardcoded sort whitelist — anything unrecognised falls back to `best`. */
+  private productsOrderBy(sort?: string): string {
+    switch (sort) {
+      case 'new':
+        return 'p."createdAt" DESC';
+      case 'trending':
+        return 'p."viewCount" DESC';
+      case 'best':
+      default:
+        return 'p."salesCount" DESC';
+    }
+  }
+
+  /** Badge precedence lives server-side so the client renders it verbatim:
+   *  discount beats best-seller, and a card never shows both. */
+  private toProductCard(r: {
+    id: string;
+    name: string;
+    price: string | null;
+    originalPrice: string | null;
+    salesCount: number | string;
+    firstImage: string | null;
+    shopProfileId: string | null;
+  }): StorefrontProductCard {
+    const price = r.price == null ? null : Number(r.price);
+    const originalPrice = r.originalPrice == null ? null : Number(r.originalPrice);
+    const salesCount = Number(r.salesCount) || 0;
+
+    let badge: string | null = null;
+    if (price != null && originalPrice != null && originalPrice > price) {
+      const pct = Math.round((1 - price / originalPrice) * 100);
+      if (pct > 0) badge = `SAVE ${pct}%`;
+    }
+    if (!badge && salesCount > 0) badge = 'Best seller';
+
+    return {
+      kind: 'PRODUCT' as const,
+      id: r.id,
+      title: r.name,
+      subtitle: null,
+      imageUrl: r.firstImage,
+      price,
+      originalPrice,
+      badge,
+      ctaLabel: null,
+      backgroundColor: null,
+      href: r.shopProfileId ? `/discover/${r.shopProfileId}?product=${r.id}` : '/discover',
+    };
   }
 
   // ──────────────────────────────── admin ────────────────────────────────

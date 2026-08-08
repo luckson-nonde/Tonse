@@ -11,3 +11,10 @@ export const STOREFRONT_GRID_SIZE = 8;
 
 /** How many master categories the Top Categories row shows at most. */
 export const STOREFRONT_CATEGORY_LIMIT = 12;
+
+/** Default page size for the category-filtered product grid — divisible by
+ *  2, 3 and 4 so every breakpoint's last row is full. */
+export const STOREFRONT_PRODUCTS_PAGE_SIZE = 12;
+
+/** Upper bound a client can request per page. */
+export const STOREFRONT_PRODUCTS_PAGE_SIZE_MAX = 24;

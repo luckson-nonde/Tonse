@@ -3,8 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Star, ShieldCheck, Lock, Zap, ArrowRight } from 'lucide-react';
 import Logo from '../components/Logo';
 import DiscoverHeader from '../components/discover/DiscoverHeader';
+import DiscoverHero from '../components/discover/DiscoverHero';
 import TopCategoryRow from '../components/discover/TopCategoryRow';
 import StorefrontCardGrid from '../components/discover/StorefrontCardGrid';
+import CategoryProductGrid from '../components/discover/CategoryProductGrid';
 import { CATEGORY_GROUPS } from '../services/categories/groups';
 import { CATEGORIES_DB } from '../services/categories';
 import { fetchDiscoverShops, DiscoverShop } from '../services/api/discoverService';
@@ -230,65 +232,13 @@ export default function DiscoverPage() {
     <div className="min-h-screen bg-[#f5f2ed] text-[#1e293b]">
       <DiscoverHeader search={search} onSearchChange={setSearch} />
 
-      {/* Hero */}
-      <section className="px-5 sm:px-8 lg:px-12 pt-6">
-        <div
-          className="relative overflow-hidden rounded-3xl px-6 sm:px-11 py-9 sm:py-13 text-white"
-          style={{
-            background: `radial-gradient(120% 140% at 85% -10%, rgba(201,151,58,0.35), transparent 55%), linear-gradient(135deg, ${NAVY} 0%, ${NAVY_DEEP} 100%)`,
-          }}
-        >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#c9973a]">
-            Everything Zambia sources, in one place
-          </p>
-          <h1 className="font-serif font-semibold mt-3 text-[2rem] sm:text-[3.1rem] leading-[1.05] max-w-[15ch]">
-            Find a verified shop. <span className="text-[#c9973a]">Get a quote.</span>
-          </h1>
-          <p className="mt-3.5 max-w-[46ch] text-white/80">
-            Browse registered shops and service providers, open a profile, and send a quote request —
-            no account needed until you're ready to send it.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button
-              onClick={() => navigate('/register')}
-              className="rounded-full bg-[#c9973a] text-white font-semibold text-sm px-6 py-3 hover:bg-[#a97c27] transition-colors"
-            >
-              Start an inquiry
-            </button>
-            <button
-              onClick={() =>
-                // Prefer the real category band; fall back to the shop rails
-                // (#discover-sections) or, in the filtered/search view, the
-                // flat grid (#discover-grid).
-                (
-                  document.getElementById('storefront-categories') ??
-                  document.getElementById('discover-sections') ??
-                  document.getElementById('discover-grid')
-                )?.scrollIntoView({ behavior: 'smooth' })
-              }
-              // Opaque border hexes, not border-white/NN: translucent borders
-              // on rounded elements mis-rasterize on Mali-GPU Android phones
-              // (see the android-gpu-ghosting skill). These are the white/30
-              // and white/60 blends over the hero's navy.
-              className="rounded-full border border-[#5a6a94] text-white font-semibold text-sm px-6 py-3 hover:border-[#9aa4bf] transition-colors"
-            >
-              Browse categories
-            </button>
-          </div>
-          <div className="mt-7 sm:mt-8 flex flex-wrap gap-6 sm:gap-8">
-            <div>
-              <div className="font-serif font-semibold text-[1.7rem]">{shops.length}+</div>
-              <div className="text-[11px] uppercase tracking-wider text-white/60">
-                Verified providers
-              </div>
-            </div>
-            <div>
-              <div className="font-serif font-semibold text-[1.7rem]">{categoryCount}</div>
-              <div className="text-[11px] uppercase tracking-wider text-white/60">Categories</div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Hero — platform pitch + rotating featured-listing slides. */}
+      <DiscoverHero
+        shopCount={shops.length}
+        categoryCount={categoryCount}
+        cards={storefront.cards}
+        categories={storefront.categories}
+      />
 
       {/* Top categories — the storefront's way in, ahead of the shop rails. */}
       <TopCategoryRow
@@ -297,13 +247,23 @@ export default function DiscoverPage() {
         onSelect={handleCategorySelect}
       />
 
-      {/* Best-sellers, topped up with admin promo tiles. The backend decides
-          the mix; this just renders it. */}
-      <StorefrontCardGrid
-        cards={storefront.cards}
-        mode={storefront.mode}
-        onOpen={(href) => navigate(href)}
-      />
+      {/* One slot, two states: a picked category shows that category's
+          paginated product grid; otherwise the curated band (best-sellers
+          topped up with admin promo tiles — the backend decides the mix). */}
+      {activeCategory ? (
+        <CategoryProductGrid
+          categoryId={activeCategory}
+          categoryName={activeCategoryName ?? 'Category'}
+          onOpen={(href) => navigate(href)}
+          onClearCategory={() => setSearchParams({})}
+        />
+      ) : (
+        <StorefrontCardGrid
+          cards={storefront.cards}
+          mode={storefront.mode}
+          onOpen={(href) => navigate(href)}
+        />
+      )}
 
       {/* Filter chips */}
       <div className="px-5 sm:px-8 lg:px-12 mt-9 flex gap-2.5 overflow-x-auto scrollbar-hide">
