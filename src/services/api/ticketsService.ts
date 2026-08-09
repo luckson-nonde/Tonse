@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, API_BASE_URL } from './client';
 
 /**
  * Client for the backend `/tickets/*` surface — event ticketing for sellers
@@ -37,6 +37,9 @@ export interface MyTicketEvent {
   venue: string;
   eventDate: string;
   posterUrl: string | null;
+  /** Exact venue pin — see ticketMapsUrl(). */
+  latitude: number | null;
+  longitude: number | null;
   status: TicketEventStatus;
   createdAt: string;
   updatedAt: string;
@@ -53,6 +56,9 @@ export interface CreateTicketEventInput {
   /** DateTimePicker datetime mode value (`yyyy-MM-ddTHH:mm`). */
   eventDate: string;
   posterUrl?: string;
+  /** Exact venue pin — both or neither (backend enforces the pairing). */
+  latitude?: number;
+  longitude?: number;
   tiers: Array<{ name: string; priceZmw: number; totalQuantity: number }>;
 }
 
@@ -77,6 +83,9 @@ export interface PublicTicketEvent {
   venue: string;
   eventDate: string;
   posterUrl: string | null;
+  /** Exact venue pin — see ticketMapsUrl(). */
+  latitude: number | null;
+  longitude: number | null;
   organizerName: string | null;
   tiers: Array<{
     id: string;
@@ -109,9 +118,46 @@ export interface PaidTicketOrder {
   tickets: Array<{ code: string; tierName: string }>;
 }
 
-/** The share URL a seller copies — same origin the app is served from. */
+/** The plain SPA URL of the public ticket page. */
 export function ticketShareUrl(code: string): string {
   return `${window.location.origin}/e/${encodeURIComponent(code)}`;
+}
+
+/**
+ * The URL sellers actually SHARE — the backend's server-rendered page whose
+ * Open Graph tags give WhatsApp/Facebook a decorated preview (poster, title,
+ * date, venue) before anyone clicks; humans are redirected straight to
+ * `/e/:code`. The SPA URL alone can't do this: link crawlers never run the
+ * app's JavaScript.
+ */
+export function ticketRichShareUrl(code: string): string {
+  return `${API_BASE_URL}/tickets/public/${encodeURIComponent(code)}/share`;
+}
+
+/** Google Maps deep link for a venue pin — the universal cross-platform URL
+ *  (opens the Maps app on phones, the site on desktop). Null without a pin. */
+export function ticketMapsUrl(
+  event: { latitude: number | null; longitude: number | null } | null | undefined,
+): string | null {
+  if (event?.latitude == null || event?.longitude == null) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${event.latitude},${event.longitude}`;
+}
+
+/** Parse "lat, lng" text or a pasted Google Maps URL (`@lat,lng` /
+ *  `q=lat,lng` / `query=lat,lng`) into a pin. Null when nothing parses. */
+export function parseCoordinates(raw: string): { latitude: number; longitude: number } | null {
+  const text = (raw || '').trim();
+  if (!text) return null;
+  const match =
+    text.match(/@(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)/) ||
+    text.match(/[?&](?:q|query|ll|destination)=(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)/) ||
+    text.match(/^(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$/);
+  if (!match) return null;
+  const latitude = Number(match[1]);
+  const longitude = Number(match[2]);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
+  return { latitude, longitude };
 }
 
 export const ticketsService = {

@@ -32,6 +32,9 @@ export interface PublicTicketEvent {
   venue: string;
   eventDate: Date;
   posterUrl: string | null;
+  /** Exact venue pin — the digital ticket's "open in Google Maps" action. */
+  latitude: number | null;
+  longitude: number | null;
   organizerName: string | null;
   tiers: Array<{
     id: string;
@@ -94,6 +97,10 @@ export class TicketsService {
     if (eventDate.getTime() < Date.now()) {
       throw new BadRequestException('The event date cannot be in the past.');
     }
+    // A lone latitude (or longitude) is an unusable half-pin.
+    if ((dto.latitude == null) !== (dto.longitude == null)) {
+      throw new BadRequestException('Provide both latitude and longitude for the venue pin, or neither.');
+    }
 
     const event = await this.events.save(
       this.events.create({
@@ -105,6 +112,8 @@ export class TicketsService {
         venue: dto.venue,
         eventDate,
         posterUrl: dto.posterUrl ?? null,
+        latitude: dto.latitude ?? null,
+        longitude: dto.longitude ?? null,
         status: 'PUBLISHED',
       }),
     );
@@ -170,6 +179,9 @@ export class TicketsService {
       const row = sumsByEvent.get(event.id);
       return {
         ...event,
+        // pg hands numerics back as strings; the frontend does map math.
+        latitude: event.latitude == null ? null : Number(event.latitude),
+        longitude: event.longitude == null ? null : Number(event.longitude),
         tiers: eventTiers.map((t) => ({
           id: t.id,
           name: t.name,
@@ -209,6 +221,13 @@ export class TicketsService {
     if (dto.description !== undefined) event.description = dto.description;
     if (dto.venue !== undefined) event.venue = dto.venue;
     if (dto.posterUrl !== undefined) event.posterUrl = dto.posterUrl;
+    if (dto.latitude !== undefined || dto.longitude !== undefined) {
+      if (dto.latitude == null || dto.longitude == null) {
+        throw new BadRequestException('Provide both latitude and longitude for the venue pin.');
+      }
+      event.latitude = dto.latitude;
+      event.longitude = dto.longitude;
+    }
     await this.events.save(event);
     return this.getEventForSeller(sellerId, eventId);
   }
@@ -270,6 +289,8 @@ export class TicketsService {
       venue: event.venue,
       eventDate: event.eventDate,
       posterUrl: event.posterUrl,
+      latitude: event.latitude == null ? null : Number(event.latitude),
+      longitude: event.longitude == null ? null : Number(event.longitude),
       organizerName: organizer?.name ?? null,
       tiers: tiers.map((t) => ({
         id: t.id,
@@ -462,6 +483,80 @@ export class TicketsService {
 
       return this.paidOrderResponse(order, minted);
     });
+  }
+
+  /**
+   * Server-rendered share page for `/tickets/public/:code/share` — the URL
+   * sellers actually share. WhatsApp/Facebook crawlers don't run the SPA's
+   * JavaScript, so the decorated link preview (poster, title, date, venue)
+   * must come from real HTML meta tags; humans are redirected to the SPA
+   * ticket page instantly. An unknown/cancelled event still redirects — the
+   * SPA renders its own "not available" state.
+   */
+  async getShareHtml(rawCode: string): Promise<string> {
+    const esc = (s: string) =>
+      s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    const appBase = (process.env.PROMOTER_APP_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
+
+    let event: PublicTicketEvent | null = null;
+    try {
+      event = await this.getPublicEvent(rawCode);
+    } catch {
+      event = null;
+    }
+    const code = event?.code ?? EventCodeUtil.normalizeCode(rawCode);
+    const target = `${appBase}/e/${encodeURIComponent(code)}`;
+    const redirect = `
+    <meta http-equiv="refresh" content="0;url=${esc(target)}">
+    <script>window.location.replace(${JSON.stringify(target)});</script>`;
+
+    if (!event) {
+      return `<!doctype html><html><head><meta charset="utf-8"><title>Nyuwe Tickets</title>${redirect}</head><body><a href="${esc(target)}">Continue to the event</a></body></html>`;
+    }
+
+    const when = new Date(event.eventDate).toLocaleString('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    const description =
+      `${when} · ${event.venue}` +
+      (event.description ? ` — ${event.description.slice(0, 140)}` : '');
+    const image = event.posterUrl
+      ? `
+    <meta property="og:image" content="${esc(event.posterUrl)}">
+    <meta name="twitter:image" content="${esc(event.posterUrl)}">
+    <meta name="twitter:card" content="summary_large_image">`
+      : `
+    <meta name="twitter:card" content="summary">`;
+
+    return `<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>${esc(event.title)} · Nyuwe Tickets</title>
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Nyuwe">
+    <meta property="og:title" content="${esc(event.title)}">
+    <meta property="og:description" content="${esc(description)}">
+    <meta property="og:url" content="${esc(target)}">
+    <meta name="description" content="${esc(description)}">
+    <meta name="twitter:title" content="${esc(event.title)}">
+    <meta name="twitter:description" content="${esc(description)}">${image}
+    <meta name="theme-color" content="#1B3068">${redirect}
+</head>
+<body style="font-family:sans-serif;padding:2rem;text-align:center">
+    <p>Taking you to <strong>${esc(event.title)}</strong>…</p>
+    <a href="${esc(target)}">Continue to get your tickets</a>
+</body>
+</html>`;
   }
 
   private paidOrderResponse(order: TicketOrder, tickets: Ticket[]) {

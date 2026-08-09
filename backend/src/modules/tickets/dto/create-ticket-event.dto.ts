@@ -8,6 +8,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
@@ -53,6 +54,19 @@ export class CreateTicketEventDto {
   @IsString()
   @MaxLength(500)
   posterUrl?: string;
+
+  /** Exact venue pin — both or neither (service enforces the pairing). */
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
 
   @IsArray()
   @ArrayMinSize(1)

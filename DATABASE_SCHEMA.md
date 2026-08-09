@@ -919,6 +919,8 @@ Entity file: `backend/src/modules/tickets/entities/ticket-event.entity.ts`
 | title | varchar(255) | NO | — | |
 | description | text | NO | — | |
 | venue | varchar(500) | NO | — | free-text location |
+| latitude | numeric(10,7) | YES | — | exact venue pin (both-or-neither with longitude); powers the ticket's Google Maps link |
+| longitude | numeric(10,7) | YES | — | see latitude |
 | eventDate | timestamp | NO | — | when the event happens |
 | posterUrl | varchar(500) | YES | — | `/files/upload?category=event-media` |
 | status | enum | NO | `PUBLISHED` | `DRAFT`, `PUBLISHED`, `CANCELLED` — no approval gate; CANCELLED stops sales, reads as 404 publicly |

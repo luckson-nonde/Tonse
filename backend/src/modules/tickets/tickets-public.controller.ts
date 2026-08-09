@@ -1,4 +1,5 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { CheckoutTicketsDto } from './dto/checkout-tickets.dto';
 import { TicketsService } from './tickets.service';
 
@@ -21,6 +22,15 @@ export class TicketsPublicController {
   @HttpCode(HttpStatus.OK)
   async simulate(@Param('reference') reference: string) {
     return this.tickets.simulatePublicPayment(reference);
+  }
+
+  /** The link sellers actually SHARE — real HTML with Open Graph tags so
+   *  WhatsApp/Facebook show a decorated preview (poster, title, date, venue);
+   *  humans are instantly redirected to the SPA ticket page. Raw @Res on
+   *  purpose: this returns HTML, not the JSON envelope. */
+  @Get(':code/share')
+  async share(@Param('code') code: string, @Res() res: Response) {
+    res.type('html').send(await this.tickets.getShareHtml(code));
   }
 
   @Get(':code')

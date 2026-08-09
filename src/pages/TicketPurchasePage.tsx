@@ -11,11 +11,13 @@ import {
   Check,
   Copy,
   AlertTriangle,
+  Navigation,
 } from 'lucide-react';
 import Logo from '../components/Logo';
 import { formatCurrency } from '../utils/financeUtils';
 import {
   ticketsService,
+  ticketMapsUrl,
   PublicTicketEvent,
   PaidTicketOrder,
 } from '../services/api/ticketsService';
@@ -187,9 +189,21 @@ export default function TicketPurchasePage() {
               <p className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-[#C9973A] shrink-0" /> {prettyDateTime(event.eventDate)}
               </p>
-              <p className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-[#C9973A] shrink-0" /> {event.venue}
-              </p>
+              {ticketMapsUrl(event) ? (
+                <a
+                  href={ticketMapsUrl(event)!}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 text-[#a97c27] hover:underline underline-offset-2"
+                >
+                  <MapPin className="w-4 h-4 text-[#C9973A] shrink-0" /> {event.venue}
+                  <Navigation className="w-3.5 h-3.5 shrink-0" />
+                </a>
+              ) : (
+                <p className="flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-[#C9973A] shrink-0" /> {event.venue}
+                </p>
+              )}
               {event.organizerName && (
                 <p className="flex items-center gap-2">
                   <User className="w-4 h-4 text-[#C9973A] shrink-0" /> Organised by {event.organizerName}
@@ -213,6 +227,35 @@ export default function TicketPurchasePage() {
               <p className="text-[12px] text-slate-400 font-medium">
                 Paid ZMW {formatCurrency(order.totalAmountZmw)} · ref {order.reference}
               </p>
+            </div>
+
+            {/* The ticket's own event summary — location is TAPPABLE so the
+                holder can navigate to the venue straight off the ticket. */}
+            <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3.5 space-y-1.5">
+              <p className="font-bold text-[13px] text-slate-900">{event.title}</p>
+              <p className="flex items-center gap-2 text-[12px] text-slate-500 font-medium">
+                <Calendar className="w-3.5 h-3.5 text-[#C9973A] shrink-0" /> {prettyDateTime(event.eventDate)}
+              </p>
+              {ticketMapsUrl(event) ? (
+                <a
+                  href={ticketMapsUrl(event)!}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between gap-2 rounded-xl bg-white border border-slate-200 px-3 py-2.5 hover:border-[#C9973A] transition-colors"
+                >
+                  <span className="flex items-center gap-2 min-w-0 text-[12px] font-semibold text-slate-700">
+                    <MapPin className="w-3.5 h-3.5 text-[#C9973A] shrink-0" />
+                    <span className="truncate">{event.venue}</span>
+                  </span>
+                  <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#a97c27]">
+                    <Navigation className="w-3 h-3" /> Open in Maps
+                  </span>
+                </a>
+              ) : (
+                <p className="flex items-center gap-2 text-[12px] text-slate-500 font-medium">
+                  <MapPin className="w-3.5 h-3.5 text-[#C9973A] shrink-0" /> {event.venue}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2.5">

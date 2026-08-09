@@ -41,6 +41,15 @@ export class TicketEvent {
   @Column({ type: 'varchar', length: 500 })
   venue: string;
 
+  /** Exact GPS pin of the venue (seller-captured at creation). Powers the
+   *  "open in Google Maps" action on the digital ticket — nullable because
+   *  a pin is strongly encouraged but never a hard requirement. */
+  @Column({ type: 'numeric', precision: 10, scale: 7, nullable: true })
+  latitude: number | null;
+
+  @Column({ type: 'numeric', precision: 10, scale: 7, nullable: true })
+  longitude: number | null;
+
   /** When the event happens (DateTimePicker datetime mode on the seller form). */
   @Column({ type: 'timestamp' })
   eventDate: Date;

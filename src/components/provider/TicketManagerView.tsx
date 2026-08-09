@@ -12,6 +12,11 @@ import {
   Trash2,
   Image as ImageIcon,
   XCircle,
+  Crosshair,
+  ExternalLink,
+  X,
+  Share2,
+  Copy,
 } from 'lucide-react';
 import emptyStateImage from '../../assets/images/empty-states/owl_reading.webp';
 import { formatCurrency } from '../../utils/financeUtils';
@@ -19,7 +24,9 @@ import { compressImage } from '../../utils/compressImage';
 import { apiClient, API_BASE_URL } from '../../services/api/client';
 import {
   ticketsService,
-  ticketShareUrl,
+  ticketRichShareUrl,
+  ticketMapsUrl,
+  parseCoordinates,
   MyTicketEvent,
   TicketSaleRow,
   TicketEventStatus,
@@ -87,6 +94,12 @@ export default function TicketManagerView() {
   const [eventDate, setEventDate] = useState('');
   const [posterUrl, setPosterUrl] = useState('');
   const [posterPreview, setPosterPreview] = useState('');
+  // Exact venue pin — GPS-captured or pasted; rides onto the digital ticket
+  // as its "open in Google Maps" action.
+  const [pin, setPin] = useState<{ latitude: number; longitude: number; accuracy?: number } | null>(null);
+  const [pinText, setPinText] = useState('');
+  const [locating, setLocating] = useState(false);
+  const [geoError, setGeoError] = useState('');
   const [tiers, setTiers] = useState<TierRow[]>([{ ...EMPTY_TIER }]);
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -125,9 +138,68 @@ export default function TicketManagerView() {
     setEventDate('');
     setPosterUrl('');
     setPosterPreview('');
+    setPin(null);
+    setPinText('');
+    setGeoError('');
     setTiers([{ ...EMPTY_TIER }]);
     setFormError('');
     setFieldErrors({});
+  };
+
+  /**
+   * Capture the venue pin at the best accuracy the device gives us —
+   * watchPosition keeps collecting while the GPS chip refines its lock
+   * (getCurrentPosition's first fix is often Wi-Fi-coarse), accepting early
+   * at ≤25m or committing the best reading after 12s. Same approach as
+   * LocationDetails' onboarding pin.
+   */
+  const handleUseMyLocation = () => {
+    setGeoError('');
+    if (!navigator.geolocation) {
+      setGeoError('Location is not supported by this browser — paste a Google Maps link instead.');
+      return;
+    }
+    setLocating(true);
+    let best: GeolocationPosition | null = null;
+    let settled = false;
+    let watchId: number | null = null;
+
+    const commit = (position: GeolocationPosition | null) => {
+      if (settled) return;
+      settled = true;
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      setLocating(false);
+      if (!position) {
+        setGeoError('Could not read your location — allow location access, or paste a Google Maps link.');
+        return;
+      }
+      setPin({
+        latitude: Number(position.coords.latitude.toFixed(7)),
+        longitude: Number(position.coords.longitude.toFixed(7)),
+        accuracy: Math.round(position.coords.accuracy),
+      });
+      setPinText('');
+    };
+
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        if (!best || position.coords.accuracy < best.coords.accuracy) best = position;
+        if (position.coords.accuracy <= 25) commit(position);
+      },
+      () => {
+        if (!best) commit(null);
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
+    );
+    window.setTimeout(() => commit(best), 12000);
+  };
+
+  /** Accept "lat, lng" or a pasted Google Maps link. */
+  const handlePinTextChange = (raw: string) => {
+    setPinText(raw);
+    setGeoError('');
+    const parsed = parseCoordinates(raw);
+    if (parsed) setPin(parsed);
   };
 
   const handlePosterChange = async (file: File | null) => {
@@ -197,6 +269,8 @@ export default function TicketManagerView() {
         venue: venue.trim(),
         eventDate,
         posterUrl: posterUrl || undefined,
+        latitude: pin?.latitude,
+        longitude: pin?.longitude,
         tiers: cleanTiers,
       });
       resetForm();
@@ -209,8 +283,32 @@ export default function TicketManagerView() {
     }
   };
 
+  /** Native share sheet (WhatsApp / Facebook / SMS …) with the decorated
+   *  link. Falls back to copy where the Web Share API doesn't exist
+   *  (mostly desktop browsers). */
+  const handleShare = async (event: MyTicketEvent) => {
+    const url = ticketRichShareUrl(event.code);
+    const nav = navigator as Navigator & { share?: (data: { title?: string; text?: string; url?: string }) => Promise<void> };
+    if (nav.share) {
+      try {
+        await nav.share({
+          title: event.title,
+          text: `${event.title} — ${prettyDateTime(event.eventDate)} at ${event.venue}. Get your tickets:`,
+          url,
+        });
+        return;
+      } catch (e: any) {
+        // User dismissed the sheet — not a failure, and not a cue to copy.
+        if (e?.name === 'AbortError') return;
+      }
+    }
+    await handleCopyLink(event.code);
+  };
+
   const handleCopyLink = async (code: string) => {
-    const url = ticketShareUrl(code);
+    // Copy the DECORATED link too — pasted into WhatsApp it unfurls with the
+    // poster and event details, then redirects buyers to the ticket page.
+    const url = ticketRichShareUrl(code);
     try {
       await navigator.clipboard.writeText(url);
     } catch {
@@ -372,6 +470,65 @@ export default function TicketManagerView() {
             <FieldNote error={fieldErrors.venue} help="Shown to everyone who opens your ticket link." />
           </label>
 
+          {/* Exact location pin — lands on the digital ticket as a tappable
+              "open in Google Maps" so attendees can navigate to the venue. */}
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+              Exact location pin
+            </p>
+            {pin ? (
+              <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 border border-emerald-100 px-3.5 py-2.5">
+                <MapPin className="w-4 h-4 text-emerald-600 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-bold text-emerald-700 truncate">
+                    Pinned {pin.latitude}, {pin.longitude}
+                    {pin.accuracy != null && (
+                      <span className="font-medium text-emerald-600"> · ±{pin.accuracy}m</span>
+                    )}
+                  </p>
+                  <a
+                    href={ticketMapsUrl(pin) ?? '#'}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:underline underline-offset-2"
+                  >
+                    <ExternalLink className="w-3 h-3" /> Verify on Google Maps
+                  </a>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setPin(null); setPinText(''); }}
+                  aria-label="Remove pin"
+                  className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-100"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={handleUseMyLocation}
+                  disabled={locating}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 text-[11px] font-black uppercase tracking-widest text-slate-500 hover:border-[#C9973A] hover:text-[#C9973A] transition-colors disabled:opacity-60"
+                >
+                  {locating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Crosshair className="w-3.5 h-3.5" />}
+                  {locating ? 'Pinning your position…' : 'Use my current location'}
+                </button>
+                <input
+                  value={pinText}
+                  onChange={(e) => handlePinTextChange(e.target.value)}
+                  placeholder="…or paste a Google Maps link / -15.4166, 28.2833"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-[12px] font-medium text-slate-900 focus:outline-none focus:border-[#C9973A]"
+                />
+              </div>
+            )}
+            <FieldNote
+              error={geoError}
+              help={pin ? undefined : 'Buyers tap the location on their ticket to open Google Maps and navigate straight to your venue.'}
+            />
+          </div>
+
           <div>
             <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-1.5">Date & time</p>
             <DateTimePicker
@@ -514,7 +671,8 @@ export default function TicketManagerView() {
           ) : (
             <div className="space-y-4">
               {events.map((event) => {
-                const shareUrl = ticketShareUrl(event.code);
+                const shareUrl = ticketRichShareUrl(event.code);
+                const mapsUrl = ticketMapsUrl(event);
                 return (
                   <div key={event.id} className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
                     {event.posterUrl && (
@@ -530,6 +688,16 @@ export default function TicketManagerView() {
                             </p>
                             <p className="flex items-center gap-1.5">
                               <MapPin className="w-3 h-3 text-[#C9973A]" /> {event.venue}
+                              {mapsUrl && (
+                                <a
+                                  href={mapsUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-0.5 text-[#a97c27] font-bold hover:underline underline-offset-2"
+                                >
+                                  <ExternalLink className="w-3 h-3" /> Map
+                                </a>
+                              )}
                             </p>
                           </div>
                         </div>
@@ -568,7 +736,9 @@ export default function TicketManagerView() {
                         </div>
                       </div>
 
-                      {/* Share link */}
+                      {/* Share link — Share opens the native sheet (WhatsApp,
+                          Facebook, SMS…) with the decorated preview link;
+                          Copy grabs the same link for manual pasting. */}
                       {event.status === 'PUBLISHED' && (
                         <div className="flex items-center gap-2 rounded-2xl bg-[#fdf6e9] border border-[#ecd9b3] px-3.5 py-2.5">
                           <Link2 className="w-3.5 h-3.5 text-[#b07f24] shrink-0" />
@@ -576,10 +746,17 @@ export default function TicketManagerView() {
                           <button
                             type="button"
                             onClick={() => handleCopyLink(event.code)}
+                            aria-label="Copy link"
+                            className="shrink-0 p-2 rounded-xl text-[#b07f24] hover:bg-[#ecd9b3] transition-colors"
+                          >
+                            {copiedCode === event.code ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleShare(event)}
                             className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-[#C9973A] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#b07f24] transition-colors"
                           >
-                            {copiedCode === event.code ? <Check className="w-3 h-3" /> : <Link2 className="w-3 h-3" />}
-                            {copiedCode === event.code ? 'Copied' : 'Copy'}
+                            <Share2 className="w-3 h-3" /> Share
                           </button>
                         </div>
                       )}
