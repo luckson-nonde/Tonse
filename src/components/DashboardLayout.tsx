@@ -65,6 +65,11 @@ import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from
 import { useDashboard } from '../DashboardContext';
 import { hasPermission, isCollectionOfficer, isQuotationManager, isLoanOfficer, isTechnician, PERMISSIONS } from '../utils/rbac';
 import { isLoanContext, isLoanQuote } from '../utils/loan';
+import { getMyConsents } from '../services/api/consentService';
+import {
+  SELL_TICKETS_FEATURE_KEY,
+  FEATURE_CONSENTS_CHANGED_EVENT,
+} from './buyer/TicketFeaturePromptModal';
 import {
   getBusinessTypes,
   getPrimaryBusinessType,
@@ -642,10 +647,32 @@ export default function DashboardLayout({
     else handleTabClick('home');
   };
 
+  // Feature opt-ins from the durable consents store (e.g. the sell-tickets
+  // offer BuyerDashboard shows after an events inquiry). Refetched when the
+  // prompt records a decision so the tab appears without a reload.
+  const [featureConsents, setFeatureConsents] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!sidebarIsBuyer) return;
+    let mounted = true;
+    const load = () =>
+      getMyConsents().then((consents) => {
+        if (!mounted) return;
+        setFeatureConsents(
+          Object.fromEntries(Object.entries(consents).map(([k, v]) => [k, !!v.granted])),
+        );
+      });
+    load();
+    window.addEventListener(FEATURE_CONSENTS_CHANGED_EVENT, load);
+    return () => {
+      mounted = false;
+      window.removeEventListener(FEATURE_CONSENTS_CHANGED_EVENT, load);
+    };
+  }, [sidebarIsBuyer, user?.id]);
+
   // Contextual nav gating. A schema item with `requiresActivity: '<key>'` only
   // appears when activitySignals[key] is true — keyed off data the sidebar
   // already fetches (no new plumbing). Buyers only for now; extend with new
-  // keys (e.g. 'events') as more contextual tabs are added.
+  // keys as more contextual tabs are added.
   const activitySignals = useMemo<Record<string, boolean>>(() => {
     const signals: Record<string, boolean> = {};
     if (sidebarIsBuyer) {
@@ -654,9 +681,13 @@ export default function DashboardLayout({
       );
       const hasLoanOffer = (sidebarQuotes ?? []).some((q: any) => isLoanQuote(q));
       signals.loans = hasLoanInquiry || hasLoanOffer;
+      // Sell-tickets is OPT-IN, not activity-derived: the tab appears only
+      // after the buyer accepted the feature offer (prompted when they
+      // publish an events-family inquiry). Declining hides it for good.
+      signals.events = featureConsents[SELL_TICKETS_FEATURE_KEY] === true;
     }
     return signals;
-  }, [sidebarIsBuyer, sidebarOwnInquiries, sidebarQuotes]);
+  }, [sidebarIsBuyer, sidebarOwnInquiries, sidebarQuotes, featureConsents]);
 
   const navItems = useMemo(() => {
     if (!user) return [];
@@ -849,6 +880,8 @@ export default function DashboardLayout({
         return 'RECEIVED QUOTATIONS';
       case 'loan_offers':
         return 'LOAN OFFERS';
+      case 'sell_tickets':
+        return 'SELL EVENT TICKETS';
       case 'inquiries':
         return 'MY INQUIRIES';
       case 'create-inquiry':

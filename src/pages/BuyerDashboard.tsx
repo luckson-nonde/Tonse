@@ -19,6 +19,8 @@ import { createOrder, fetchBuyerOrders, type OrderRecord } from '../services/api
 import { isActiveInquiry, isActiveBuyerQuote } from '../services/lifecycleFilters';
 import { newIdempotencyKey } from '../services/offlineWriteQueue';
 import { isLoanQuote } from '../utils/loan';
+import { isEventContext } from '../utils/events';
+import { getMyConsents } from '../services/api/consentService';
 import { formatRelativeTime } from '../utils/time';
 import { ViewType, MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
@@ -40,6 +42,9 @@ import FinancialPage from './FinancialPage';
 import BrowseShopsView from '../components/BrowseShopsView';
 import ShopProfileView from '../components/ShopProfileView';
 import RateShopModal from '../components/RateShopModal';
+import TicketFeaturePromptModal, {
+  SELL_TICKETS_FEATURE_KEY,
+} from '../components/buyer/TicketFeaturePromptModal';
 import type { ShopResult } from '../services/api/shopService';
 
 /**
@@ -142,6 +147,11 @@ export default function BuyerDashboard() {
     'PURCHASED' | 'REQUESTS' | 'EXPIRED' | null
   >(null);
 
+  // One-time opt-in offer for the ticket-selling feature (see
+  // TicketFeaturePromptModal). Shown after an events-family inquiry publishes
+  // — never shown once a decision (either way) is on record.
+  const [showTicketPrompt, setShowTicketPrompt] = useState(false);
+
   // Keep selectedInquiryId in sync with the URL in both directions, so
   // browser Back/Forward (which bypasses handleTabChange) also correctly
   // clears the selection when the id drops out of the URL.
@@ -158,6 +168,22 @@ export default function BuyerDashboard() {
 
   // Fetch quotes from PostgreSQL backend (NO IndexedDB)
   const { quotes, loading: quotesLoading, refresh: refreshQuotes } = useUserQuotes(user?.id);
+
+  // Fallback trigger for the ticket-feature offer: buyers who ALREADY have
+  // events activity (e.g. a venue quote from before this feature shipped) may
+  // never send another events inquiry, so offer once per session until they
+  // decide. The primary trigger fires right after an events inquiry publishes.
+  useEffect(() => {
+    if (!user?.id || inquiriesLoading || quotesLoading) return;
+    if (window.sessionStorage.getItem('tonse:ticket-feature-prompted')) return;
+    const hasEventActivity =
+      (inquiries ?? []).some((i: any) => isEventContext(i.category, i.categoryIds, i.title)) ||
+      (quotes ?? []).some((q: any) => isEventContext(q.category, q.categoryIds, q.title));
+    if (!hasEventActivity) return;
+    window.sessionStorage.setItem('tonse:ticket-feature-prompted', '1');
+    void offerTicketFeatureIfUndecided();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, inquiriesLoading, quotesLoading, inquiries, quotes]);
 
   // ── Live dispatch stream (buyer side) ────────────────────────────────
   // quote_received / reserve-release → instant refetch via the event buses
@@ -818,6 +844,15 @@ export default function BuyerDashboard() {
     handleTabChange('inquiry-payment');
   };
 
+  /** Show the ticket-feature offer unless a decision is already on record.
+   *  Consent lookup is best-effort (returns {} offline) — failing open just
+   *  means the buyer might be asked again next time, never blocked. */
+  const offerTicketFeatureIfUndecided = async () => {
+    const consents = await getMyConsents();
+    if (SELL_TICKETS_FEATURE_KEY in consents) return;
+    setShowTicketPrompt(true);
+  };
+
   const handlePaymentComplete = async (payment: InquiryPaymentResult) => {
     if (!user) return;
     const locationData = pendingInquiry.location;
@@ -834,6 +869,15 @@ export default function BuyerDashboard() {
     // matching narrows to providers within `radius` km of the point.
     setIsSubmitting(true);
     setPublishError(null);
+
+    // Snapshot for the post-publish ticket-feature offer: pendingInquiry is
+    // reset before the offer fires, and the queued-offline success path can't
+    // see the try block's categoryIds.
+    const eventContextSnapshot: Array<string | string[] | undefined> = [
+      pendingInquiry.categories,
+      pendingInquiry.categoryId,
+      pendingInquiry.category,
+    ];
 
     try {
       const isLabour = pendingInquiry.isLabour === true;
@@ -978,6 +1022,9 @@ export default function BuyerDashboard() {
 
       setPendingInquiry({ items: [] });
       handleTabChange('inquiry-success');
+      // Events-family inquiry (venue, decor, catering…) → this buyer is
+      // organising an event: offer the ticket-selling feature, once.
+      if (isEventContext(...eventContextSnapshot)) void offerTicketFeatureIfUndecided();
     } catch (error) {
       // Offline: the write is safely queued and will publish automatically once
       // the connection returns — so this is a SUCCESS from the buyer's view, not
@@ -985,6 +1032,7 @@ export default function BuyerDashboard() {
       if ((error as Error)?.name === 'QueuedWrite') {
         setPendingInquiry({ items: [] });
         handleTabChange('inquiry-success');
+        if (isEventContext(...eventContextSnapshot)) void offerTicketFeatureIfUndecided();
         return;
       }
       console.error('Error creating inquiry:', error);
@@ -1275,6 +1323,16 @@ export default function BuyerDashboard() {
             user={user}
           />
         )}
+
+        <TicketFeaturePromptModal
+          open={showTicketPrompt}
+          onDecided={(accepted) => {
+            setShowTicketPrompt(false);
+            // Land them straight in their new tool so the "it appeared"
+            // moment is immediate; the sidebar tab is now visible either way.
+            if (accepted) handleTabChange('sell_tickets');
+          }}
+        />
 
         {ratingTarget && (
           <RateShopModal

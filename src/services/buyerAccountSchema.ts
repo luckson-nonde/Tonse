@@ -44,6 +44,10 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     // activitySignals in DashboardLayout; future category tabs (e.g. event
     // tickets) drop in here the same way.
     { id: 'loan_offers', label: 'Loan Offers', icon: 'Landmark', group: 'contextual', requiresActivity: 'loans' },
+    // Surfaces once the buyer engages the events family (venue inquiry, event
+    // quote, …) — an event organiser sells their tickets right here; proceeds
+    // land in their Financial Account.
+    { id: 'sell_tickets', label: 'Sell Event Tickets', icon: 'Ticket', group: 'contextual', requiresActivity: 'events' },
   ],
   views: {
     dashboard: {
@@ -96,6 +100,11 @@ export const MASTER_BUYER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       subtitle: "Review and respond to loan offers from lenders",
       componentType: 'list_renderer',
       dataKey: 'loanOffers'
+    },
+    sell_tickets: {
+      title: "Sell Event Tickets",
+      subtitle: "Create your event, share the link, and sell tickets — proceeds land in your Financial Account",
+      componentType: 'ticket_manager_renderer'
     },
     active_transactions: {
       title: "Active Transactions",
