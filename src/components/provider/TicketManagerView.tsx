@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Loader2,
   Plus,
@@ -31,6 +31,7 @@ import {
   TicketSaleRow,
   TicketEventStatus,
 } from '../../services/api/ticketsService';
+import { searchZambiaPlaces, ZambiaPlace } from '../../utils/zambiaPlaces';
 import DateTimePicker from '../DateTimePicker';
 import Button from '../Button';
 
@@ -94,12 +95,22 @@ export default function TicketManagerView() {
   const [eventDate, setEventDate] = useState('');
   const [posterUrl, setPosterUrl] = useState('');
   const [posterPreview, setPosterPreview] = useState('');
-  // Exact venue pin — GPS-captured or pasted; rides onto the digital ticket
-  // as its "open in Google Maps" action.
+  // Exact venue pin — set by picking a suggested place, GPS capture, or a
+  // pasted maps link; rides onto the digital ticket as "open in Google Maps".
   const [pin, setPin] = useState<{ latitude: number; longitude: number; accuracy?: number } | null>(null);
   const [pinText, setPinText] = useState('');
   const [locating, setLocating] = useState(false);
   const [geoError, setGeoError] = useState('');
+
+  // Venue typeahead — as the seller types, suggest matching Zambian places
+  // (the seller often isn't AT the venue and doesn't know coordinates, so
+  // picking a suggestion is the primary way the pin gets set).
+  const [venueSuggestions, setVenueSuggestions] = useState<ZambiaPlace[]>([]);
+  const [showVenueSuggestions, setShowVenueSuggestions] = useState(false);
+  const [venueSearching, setVenueSearching] = useState(false);
+  const [venueSearched, setVenueSearched] = useState(false);
+  const venueSearchTimeoutRef = useRef<number | null>(null);
+  const venueSearchAbortRef = useRef<AbortController | null>(null);
   const [tiers, setTiers] = useState<TierRow[]>([{ ...EMPTY_TIER }]);
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -145,6 +156,59 @@ export default function TicketManagerView() {
     setFormError('');
     setFieldErrors({});
   };
+
+  // Debounce lives in the change handler, NOT a useEffect on `venue` —
+  // picking a suggestion calls setVenue directly and must never re-trigger
+  // a search of its own output (same rule as LocationDetails).
+  const handleVenueChange = (value: string) => {
+    setVenue(value);
+    setFieldErrors((x) => ({ ...x, venue: '' }));
+    setShowVenueSuggestions(true);
+    setVenueSearched(false);
+
+    if (venueSearchTimeoutRef.current !== null) {
+      window.clearTimeout(venueSearchTimeoutRef.current);
+    }
+    venueSearchAbortRef.current?.abort();
+
+    if (value.trim().length < 3) {
+      setVenueSuggestions([]);
+      setVenueSearching(false);
+      return;
+    }
+    setVenueSearching(true);
+    venueSearchTimeoutRef.current = window.setTimeout(async () => {
+      const controller = new AbortController();
+      venueSearchAbortRef.current = controller;
+      const results = await searchZambiaPlaces(value, controller.signal);
+      if (controller.signal.aborted) return;
+      setVenueSuggestions(results);
+      setVenueSearching(false);
+      setVenueSearched(true);
+    }, 400);
+  };
+
+  /** Picking a place fills the field AND pins its coordinates — the seller
+   *  doesn't need to be there or know the GPS numbers. */
+  const handlePickVenue = (place: ZambiaPlace) => {
+    setVenue(place.detail ? `${place.name}, ${place.detail}` : place.name);
+    setPin({ latitude: place.latitude, longitude: place.longitude });
+    setPinText('');
+    setGeoError('');
+    setVenueSuggestions([]);
+    setShowVenueSuggestions(false);
+  };
+
+  // Cancel any in-flight venue search when the view unmounts.
+  useEffect(
+    () => () => {
+      if (venueSearchTimeoutRef.current !== null) {
+        window.clearTimeout(venueSearchTimeoutRef.current);
+      }
+      venueSearchAbortRef.current?.abort();
+    },
+    [],
+  );
 
   /**
    * Capture the venue pin at the best accuracy the device gives us —
@@ -457,18 +521,75 @@ export default function TicketManagerView() {
             <FieldNote error={fieldErrors.description} />
           </label>
 
-          <label className="block text-[11px] font-bold uppercase tracking-widest text-slate-400">
+          {/* Venue search-as-you-type: matching Zambian places drop down as
+              the seller types ("Makeni" → every related place); picking one
+              fills the field AND pins the exact coordinates, so they never
+              need to be on-site or know GPS numbers. Free typing still works
+              for venues the map doesn't know. */}
+          <div className="block text-[11px] font-bold uppercase tracking-widest text-slate-400">
             Venue / location
-            <input
-              value={venue}
-              onChange={(e) => { setVenue(e.target.value); setFieldErrors((x) => ({ ...x, venue: '' })); }}
-              placeholder="e.g. Levy Junction Rooftop, Lusaka"
-              className={`mt-1.5 w-full px-3.5 py-2.5 rounded-xl border text-[13px] font-medium text-slate-900 tracking-normal normal-case focus:outline-none ${
-                fieldErrors.venue ? 'border-rose-300 focus:border-rose-400' : 'border-slate-200 focus:border-[#C9973A]'
-              }`}
+            <div className="relative">
+              <input
+                value={venue}
+                onChange={(e) => handleVenueChange(e.target.value)}
+                onFocus={() => {
+                  if (venueSuggestions.length > 0 || venueSearched) setShowVenueSuggestions(true);
+                }}
+                onBlur={() => {
+                  window.setTimeout(() => setShowVenueSuggestions(false), 150);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setShowVenueSuggestions(false);
+                }}
+                autoComplete="off"
+                placeholder="Start typing — e.g. Makeni, Manda Hill, Levy Junction…"
+                className={`mt-1.5 w-full px-3.5 py-2.5 rounded-xl border text-[13px] font-medium text-slate-900 tracking-normal normal-case focus:outline-none ${
+                  fieldErrors.venue ? 'border-rose-300 focus:border-rose-400' : 'border-slate-200 focus:border-[#C9973A]'
+                }`}
+              />
+              {venueSearching && (
+                <div className="absolute right-3 top-1/2 mt-0.5 -translate-y-1/2">
+                  <Loader2 className="w-4 h-4 animate-spin text-[#C9973A]" />
+                </div>
+              )}
+
+              {showVenueSuggestions &&
+                (venueSuggestions.length > 0 ||
+                  (venueSearched && !venueSearching && venueSuggestions.length === 0)) && (
+                  <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                    {venueSuggestions.length > 0 ? (
+                      venueSuggestions.map((place) => (
+                        <button
+                          key={place.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => handlePickVenue(place)}
+                          className="w-full text-left px-4 py-2.5 hover:bg-[#faf6ee] transition-colors border-b border-slate-50 last:border-b-0 cursor-pointer"
+                        >
+                          <p className="flex items-center gap-1.5 text-[13px] font-bold text-slate-900 tracking-normal normal-case truncate">
+                            <MapPin className="w-3.5 h-3.5 text-[#C9973A] shrink-0" />
+                            {place.name}
+                          </p>
+                          {place.detail && (
+                            <p className="text-[11px] text-slate-400 tracking-normal normal-case font-medium truncate pl-5">
+                              {place.detail}
+                            </p>
+                          )}
+                        </button>
+                      ))
+                    ) : (
+                      <p className="px-4 py-2.5 text-[12px] text-slate-400 tracking-normal normal-case font-medium">
+                        No Zambian places match — keep typing, or enter the venue name freely.
+                      </p>
+                    )}
+                  </div>
+                )}
+            </div>
+            <FieldNote
+              error={fieldErrors.venue}
+              help="Pick a suggestion to pin the exact spot automatically — shown to everyone who opens your ticket link."
             />
-            <FieldNote error={fieldErrors.venue} help="Shown to everyone who opens your ticket link." />
-          </label>
+          </div>
 
           {/* Exact location pin — lands on the digital ticket as a tappable
               "open in Google Maps" so attendees can navigate to the venue. */}
