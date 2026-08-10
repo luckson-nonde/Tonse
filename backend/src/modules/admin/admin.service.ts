@@ -23,6 +23,7 @@ import { UpdateAdSettingsDto } from '../ads/dto/update-ad-settings.dto';
 import { TicketsService } from '../tickets/tickets.service';
 import { UpdateEventTicketSettingsDto } from '../tickets/dto/update-event-ticket-settings.dto';
 import { StorefrontService } from '../storefront/storefront.service';
+import { JobBoardService } from '../job-board/job-board.service';
 import { CreatePromoTileDto } from '../storefront/dto/create-promo-tile.dto';
 import {
   ReorderPromoTilesDto,
@@ -56,7 +57,8 @@ export class AdminService {
     private readonly siteSettingsService: SiteSettingsService,
     private readonly adsService: AdsService,
     private readonly ticketsService: TicketsService,
-    private readonly storefrontService: StorefrontService
+    private readonly storefrontService: StorefrontService,
+    private readonly jobBoardService: JobBoardService
   ) {}
 
   // ───── Escrow ───────────────────────────────────────────────────────────
@@ -666,6 +668,42 @@ export class AdminService {
       reason: reason || 'No reason provided',
     });
     return ad;
+  }
+
+  // ───── Job board ─────────────────────────────────────────────────────────
+  // Same composition pattern as ads: JobBoardModule owns the logic (postings
+  // + applications); AdminService fronts the moderation queue behind the
+  // class-wide ADMIN guard and writes the audit trail.
+
+  async listPendingJobPostings() {
+    return this.jobBoardService.listPendingPostings();
+  }
+
+  async approveJobPosting(id: string, actingAdmin?: ActingAdmin) {
+    const posting = await this.jobBoardService.approvePosting(id, actingAdmin?.id ?? '');
+    await this.auditAdminAction({
+      action: 'JOB_POSTING_APPROVED',
+      entityType: 'JOB_POSTING',
+      entityId: posting.id,
+      targetUserId: posting.posterId,
+      actingAdmin,
+      status: 'APPROVED',
+    });
+    return posting;
+  }
+
+  async rejectJobPosting(id: string, reason: string | undefined, actingAdmin?: ActingAdmin) {
+    const posting = await this.jobBoardService.rejectPosting(id, actingAdmin?.id ?? '', reason);
+    await this.auditAdminAction({
+      action: 'JOB_POSTING_REJECTED',
+      entityType: 'JOB_POSTING',
+      entityId: posting.id,
+      targetUserId: posting.posterId,
+      actingAdmin,
+      status: 'REJECTED',
+      reason: reason || 'No reason provided',
+    });
+    return posting;
   }
 
   // ───── Landing-page storefront (promo tiles) ────────────────────────────

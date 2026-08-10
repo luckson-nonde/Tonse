@@ -1,6 +1,14 @@
 import { PERMISSIONS } from '../utils/rbac';
 import { MasterAccountSchema } from './accountSchemaTypes';
 import { REPORTING_NAV_ITEM, REPORTING_VIEW } from './reportingNavFragment';
+import {
+  JOB_BOARD_POSTER_NAV_ITEM,
+  JOB_BOARD_POSTER_VIEW,
+  JOB_SEEKER_APPLICATIONS_NAV_ITEM,
+  JOB_SEEKER_APPLICATIONS_VIEW,
+  JOB_SEEKER_FEED_NAV_ITEM,
+  JOB_SEEKER_FEED_VIEW,
+} from './jobBoardNavFragments';
 
 /**
  * MASTER_RENTAL_ACCOUNT_SCHEMA — dashboard for sellers whose primary
@@ -31,6 +39,9 @@ export const MASTER_RENTAL_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'team', label: 'Team Management', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
     { id: 'advertise', label: 'Advertise', icon: 'Megaphone' },
+    JOB_BOARD_POSTER_NAV_ITEM,
+    JOB_SEEKER_FEED_NAV_ITEM,
+    JOB_SEEKER_APPLICATIONS_NAV_ITEM,
     // Events-family sellers only (event-equipment-rental resolves to the
     // RENTAL archetype). 'event' substring-matches every event-* category id
     // after dash→space normalization; see DashboardLayout.
@@ -100,6 +111,9 @@ export const MASTER_RENTAL_ACCOUNT_SCHEMA: MasterAccountSchema = {
       subtitle: 'Promote your shop with a paid homepage or sidebar ad placement',
       componentType: 'ads_manager_renderer',
     },
+    'my-job-posts': JOB_BOARD_POSTER_VIEW,
+    'find-jobs': JOB_SEEKER_FEED_VIEW,
+    'my-applications': JOB_SEEKER_APPLICATIONS_VIEW,
     tickets: {
       title: 'Ticket Manager',
       subtitle: 'Create events, sell tickets through a share link, and track attendees',

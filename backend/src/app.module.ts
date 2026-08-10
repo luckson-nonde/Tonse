@@ -41,6 +41,7 @@ import { CalendarEventsModule } from './modules/calendar-events/calendar-events.
 import { AdsModule } from './modules/ads/ads.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
 import { StorefrontModule } from './modules/storefront/storefront.module';
+import { JobBoardModule } from './modules/job-board/job-board.module';
 
 // Common
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -121,6 +122,7 @@ import webpushConfig from './config/webpush.config';
     AdsModule,
     TicketsModule,
     StorefrontModule,
+    JobBoardModule,
     // The IdempotencyInterceptor (an APP_INTERCEPTOR below) needs this repo.
     TypeOrmModule.forFeature([IdempotencyKey]),
   ],

@@ -452,6 +452,23 @@ export const adminService = {
     return res.data ?? null;
   },
 
+  // ───── Job board moderation (grantable via ADMIN_JOB_BOARD) ────────────────
+
+  async listPendingJobPostings(): Promise<AdminJobPosting[]> {
+    const res = await apiClient.get<AdminJobPosting[]>('/admin/job-postings/pending');
+    return res.data ?? [];
+  },
+
+  async approveJobPosting(id: string): Promise<AdminJobPosting | null> {
+    const res = await apiClient.post<AdminJobPosting>(`/admin/job-postings/${id}/approve`);
+    return res.data ?? null;
+  },
+
+  async rejectJobPosting(id: string, reason?: string): Promise<AdminJobPosting | null> {
+    const res = await apiClient.post<AdminJobPosting>(`/admin/job-postings/${id}/reject`, { reason });
+    return res.data ?? null;
+  },
+
   // ───── Landing-page storefront / promo tiles (primary admin only) ──────────
 
   async listPromoTiles(): Promise<AdminPromoTile[]> {
@@ -698,6 +715,28 @@ export interface AdminAdvertisement {
   status: 'PENDING_PAYMENT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
   rejectionReason: string | null;
   createdAt: string;
+}
+
+/** A job posting in the admin moderation queue (status PENDING_APPROVAL),
+ *  enriched server-side with its trade ids and the poster's identity. */
+export interface AdminJobPosting {
+  id: string;
+  posterId: string;
+  title: string;
+  description: string;
+  workersNeeded: number | null;
+  payOffer: number | string | null;
+  payRateUnit: string | null;
+  applicationDeadline: string | null;
+  location: string | null;
+  province: string | null;
+  city: string | null;
+  attributes: Record<string, any> | null;
+  status: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'FILLED' | 'CLOSED';
+  rejectionReason: string | null;
+  createdAt: string;
+  tradeCategoryIds: string[];
+  poster: { userId: string; name: string; role: string };
 }
 
 export interface AdminSiteSettings {

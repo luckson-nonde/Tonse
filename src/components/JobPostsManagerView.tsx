@@ -1,0 +1,581 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Briefcase,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Loader2,
+  Mail,
+  MapPin,
+  Phone,
+  Plus,
+  Users,
+  X,
+  XCircle,
+} from 'lucide-react';
+import {
+  jobBoardService,
+  type JobApplicationRow,
+  type JobPostingWithApplicants,
+  type MyJobPosting,
+} from '../services/api/jobBoardService';
+import { LABOUR_CATEGORIES, type LabourSubCategory } from '../services/labourCategories';
+import JobPostingDetailsForm, { type JobPostingDetails } from './buyer/JobPostingDetailsForm';
+import LocationDetails from './LocationDetails';
+
+/** Trades a job post may target — the five labour tracks, never machinery. */
+const POSTABLE_TRADES = LABOUR_CATEGORIES.filter((c) => c.category !== 'MACHINERY_HIRE');
+const TRADE_GROUP_LABELS: Record<string, string> = {
+  CONSTRUCTION: 'Construction & Building',
+  DOMESTIC: 'Domestic & Household',
+  INDUSTRIAL: 'Industrial & Factory',
+  AGRICULTURAL: 'Agricultural',
+  TRANSPORT: 'Transport & Logistics',
+};
+
+const tradeLabelOf = (id: string) =>
+  LABOUR_CATEGORIES.find((c) => c.id === id)?.label ?? id.replace(/_/g, ' ');
+
+const STATUS_CHIP: Record<string, { label: string; className: string }> = {
+  PENDING_APPROVAL: { label: 'Pending review', className: 'bg-amber-50 text-amber-700 border-[#fcd34d]' },
+  APPROVED: { label: 'Live', className: 'bg-emerald-50 text-emerald-700 border-[#6ee7b7]' },
+  REJECTED: { label: 'Needs changes', className: 'bg-rose-50 text-rose-700 border-[#fda4af]' },
+  FILLED: { label: 'Filled', className: 'bg-sky-50 text-sky-700 border-[#7dd3fc]' },
+  CLOSED: { label: 'Closed', className: 'bg-slate-100 text-slate-600 border-[#cbd5e1]' },
+};
+
+const formatPay = (payOffer: number | string | null, unit: string | null) => {
+  const n = Number(payOffer);
+  if (!payOffer || Number.isNaN(n) || n <= 0) return null;
+  return `K${n.toLocaleString()} ${unit ?? ''}`.trim();
+};
+
+type CreateFlowState = {
+  mode: 'create' | 'resubmit';
+  step: 'trade' | 'details' | 'location';
+  tradeId?: string;
+  details?: JobPostingDetails;
+  /** resubmit only: the posting being edited. */
+  postingId?: string;
+  initialLocation?: { province?: string; city?: string };
+  initialDetails?: Partial<JobPostingDetails>;
+};
+
+/**
+ * "My Job Posts" — the poster side of the labour job board, shared by every
+ * primary account type (buyer, seller, provider, personal). Self-fetching:
+ * schemas mount it with no props. Lists the user's postings with their
+ * moderation status, the applicant queue per posting (accept/reject with
+ * contact reveal on accept), close/fill controls, and a full "Post a Job"
+ * flow (trade → details → location) that submits straight to admin review.
+ */
+export default function JobPostsManagerView() {
+  const [postings, setPostings] = useState<MyJobPosting[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [details, setDetails] = useState<Record<string, JobPostingWithApplicants>>({});
+  const [detailLoading, setDetailLoading] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [flow, setFlow] = useState<CreateFlowState | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [banner, setBanner] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setError(null);
+      const rows = await jobBoardService.listMyPostings();
+      setPostings(rows);
+    } catch (e) {
+      setError((e as Error)?.message || 'Could not load your job posts.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const loadDetail = useCallback(async (id: string) => {
+    setDetailLoading(id);
+    try {
+      const detail = await jobBoardService.getPosting(id);
+      if (detail) setDetails((prev) => ({ ...prev, [id]: detail }));
+    } finally {
+      setDetailLoading(null);
+    }
+  }, []);
+
+  const toggleExpand = (id: string) => {
+    const next = expandedId === id ? null : id;
+    setExpandedId(next);
+    if (next && !details[next]) void loadDetail(next);
+  };
+
+  const respond = async (posting: MyJobPosting, app: JobApplicationRow, action: 'accept' | 'reject') => {
+    setBusyId(app.id);
+    try {
+      if (action === 'accept') await jobBoardService.acceptApplication(app.id);
+      else await jobBoardService.rejectApplication(app.id);
+      // Refetch the detail — accept changes what the server reveals
+      // (contact fields), so a local status flip would under-render.
+      await loadDetail(posting.id);
+      await load();
+    } catch (e) {
+      alert((e as Error)?.message || 'Could not update the application.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const transition = async (posting: MyJobPosting, action: 'close' | 'fill') => {
+    const verb = action === 'close' ? 'close' : 'mark as filled';
+    if (!window.confirm(`Are you sure you want to ${verb} "${posting.title}"?`)) return;
+    setBusyId(posting.id);
+    try {
+      if (action === 'close') await jobBoardService.closePosting(posting.id);
+      else await jobBoardService.markFilled(posting.id);
+      await load();
+      if (details[posting.id]) await loadDetail(posting.id);
+    } catch (e) {
+      alert((e as Error)?.message || 'Could not update the posting.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const startCreate = () => setFlow({ mode: 'create', step: 'trade' });
+
+  const startResubmit = (posting: MyJobPosting) => {
+    const attrs = posting.attributes ?? {};
+    setFlow({
+      mode: 'resubmit',
+      step: 'details',
+      postingId: posting.id,
+      tradeId: posting.tradeCategoryIds[0],
+      initialLocation: { province: posting.province ?? undefined, city: posting.city ?? undefined },
+      initialDetails: {
+        title: posting.title,
+        description: posting.description,
+        workersNeeded: posting.workersNeeded ?? undefined,
+        payOffer: posting.payOffer != null ? Number(posting.payOffer) : undefined,
+        payRateUnit: (posting.payRateUnit as JobPostingDetails['payRateUnit']) ?? undefined,
+        urgency: (attrs.urgency as string) ?? '',
+        preferredDateTime: (attrs.preferredDateTime as string) ?? undefined,
+      },
+    });
+  };
+
+  const submitFlow = async (locationData: {
+    province: string;
+    city: string;
+    address?: string;
+  }) => {
+    if (!flow?.tradeId || !flow.details) return;
+    setSubmitting(true);
+    try {
+      const d = flow.details;
+      const base = {
+        title: d.title,
+        description: d.description,
+        tradeCategoryIds: [flow.tradeId],
+        ...(d.workersNeeded ? { workersNeeded: d.workersNeeded } : {}),
+        ...(d.payOffer != null ? { payOffer: d.payOffer, payRateUnit: d.payRateUnit } : {}),
+        ...(d.applicationDeadline
+          ? { applicationDeadline: new Date(`${d.applicationDeadline}T23:59:59`).toISOString() }
+          : {}),
+        location: [locationData.address, locationData.city, locationData.province]
+          .filter(Boolean)
+          .join(', ')
+          .slice(0, 255),
+        province: locationData.province,
+        city: locationData.city,
+        attributes: {
+          urgency: d.urgency,
+          ...(d.preferredDateTime ? { preferredDateTime: d.preferredDateTime } : {}),
+        },
+      };
+      const saved =
+        flow.mode === 'resubmit' && flow.postingId
+          ? await jobBoardService.resubmitPosting(flow.postingId, base)
+          : await jobBoardService.createPosting(base);
+      if (!saved) throw new Error('The job post could not be submitted.');
+      setFlow(null);
+      setBanner(
+        flow.mode === 'resubmit'
+          ? 'Your job post was resubmitted for review.'
+          : 'Your job post was submitted — our team will review it shortly.',
+      );
+      setLoading(true);
+      await load();
+    } catch (e) {
+      alert((e as Error)?.message || 'Could not submit the job post.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const tradeGroups = useMemo(() => {
+    const groups = new Map<string, LabourSubCategory[]>();
+    for (const trade of POSTABLE_TRADES) {
+      const list = groups.get(trade.category) ?? [];
+      list.push(trade);
+      groups.set(trade.category, list);
+    }
+    return groups;
+  }, []);
+
+  // ── Create / resubmit overlay ─────────────────────────────────────────
+  const renderFlow = () => {
+    if (!flow) return null;
+    return (
+      <div className="fixed inset-0 z-50 bg-[#f8f7f3] overflow-y-auto">
+        <div className="sticky top-0 z-10 bg-white border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
+          <p className="text-sm font-black text-[#1a1a2e]">
+            {flow.mode === 'resubmit' ? 'Edit & resubmit job post' : 'Post a Job'}
+          </p>
+          <button
+            onClick={() => setFlow(null)}
+            className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {submitting ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-3 text-slate-400">
+            <Loader2 className="w-6 h-6 animate-spin text-[#C9973A]" />
+            <p className="text-[11px] font-bold uppercase tracking-widest">
+              Submitting your job post…
+            </p>
+          </div>
+        ) : flow.step === 'trade' ? (
+          <div className="max-w-2xl mx-auto w-full px-4 py-6">
+            <h3 className="text-lg font-black text-[#1a1a2e] mb-1">What kind of worker do you need?</h3>
+            <p className="text-xs text-slate-500 mb-5">
+              Your post goes to registered workers in the trade you pick.
+            </p>
+            {[...tradeGroups.entries()].map(([group, trades]) => (
+              <div key={group} className="mb-5">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+                  {TRADE_GROUP_LABELS[group] ?? group}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {trades.map((trade) => (
+                    <button
+                      key={trade.id}
+                      onClick={() => setFlow({ ...flow, tradeId: trade.id, step: 'details' })}
+                      className="px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-white text-left text-[13px] font-bold text-slate-700 hover:border-[#C9973A] hover:bg-[#fdf6e9] transition-colors"
+                    >
+                      {trade.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : flow.step === 'details' ? (
+          <JobPostingDetailsForm
+            key={`${flow.mode}-${flow.postingId ?? flow.tradeId}`}
+            tradeLabel={tradeLabelOf(flow.tradeId!)}
+            initial={flow.initialDetails}
+            onBack={() =>
+              flow.mode === 'create' ? setFlow({ ...flow, step: 'trade' }) : setFlow(null)
+            }
+            onSubmit={(d) => setFlow({ ...flow, details: d, step: 'location' })}
+          />
+        ) : (
+          <LocationDetails
+            onBack={() => setFlow({ ...flow, step: 'details' })}
+            onComplete={(loc) => void submitFlow(loc)}
+            submitLabel={flow.mode === 'resubmit' ? 'Resubmit for review' : 'Submit for review'}
+            showGps={false}
+            initialValue={flow.initialLocation}
+          />
+        )}
+      </div>
+    );
+  };
+
+  // ── Applicant card ───────────────────────────────────────────────────
+  const renderApplication = (posting: MyJobPosting, app: JobApplicationRow) => {
+    const accepted = app.status === 'ACCEPTED';
+    const rejected = app.status === 'REJECTED';
+    return (
+      <div
+        key={app.id}
+        className={`rounded-xl border p-3.5 ${
+          accepted ? 'border-[#6ee7b7] bg-emerald-50/50' : rejected ? 'border-[#e2e8f0] bg-slate-50 opacity-70' : 'border-[#e2e8f0] bg-white'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {app.applicant.profilePicture ? (
+              <img
+                src={app.applicant.profilePicture}
+                alt=""
+                className="w-9 h-9 rounded-full object-cover shrink-0"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-[#fdf6e9] border border-[#f0dfc0] flex items-center justify-center shrink-0">
+                <Users className="w-4 h-4 text-[#C9973A]" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-black text-[#1a1a2e] truncate">{app.applicant.name}</p>
+              <p className="text-[11px] text-slate-500 truncate">
+                {[app.applicant.city, app.applicant.trades.map(tradeLabelOf).join(', ')]
+                  .filter(Boolean)
+                  .join(' · ') || 'Registered worker'}
+              </p>
+            </div>
+          </div>
+          <span
+            className={`shrink-0 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full border ${
+              accepted
+                ? 'bg-emerald-50 text-emerald-700 border-[#6ee7b7]'
+                : rejected
+                  ? 'bg-slate-100 text-slate-500 border-[#cbd5e1]'
+                  : 'bg-amber-50 text-amber-700 border-[#fcd34d]'
+            }`}
+          >
+            {accepted ? 'Accepted' : rejected ? 'Rejected' : 'New'}
+          </span>
+        </div>
+
+        <p className="text-[13px] text-slate-600 mt-2.5 whitespace-pre-wrap">{app.coverMessage}</p>
+        <p className="text-[12px] text-slate-500 mt-1.5 font-medium">
+          Asks <span className="font-bold text-slate-700">K{Number(app.expectedRate).toLocaleString()} {app.rateUnit}</span>
+          {' · '}available from{' '}
+          <span className="font-bold text-slate-700">
+            {new Date(app.availabilityDate).toLocaleDateString()}
+          </span>
+        </p>
+
+        {accepted && (app.applicant.phone || app.applicant.email) && (
+          <div className="mt-2.5 flex flex-wrap gap-3 text-[12px] font-bold text-emerald-800">
+            {app.applicant.phone && (
+              <a href={`tel:${app.applicant.phone}`} className="inline-flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5" /> {app.applicant.phone}
+              </a>
+            )}
+            {app.applicant.email && (
+              <a href={`mailto:${app.applicant.email}`} className="inline-flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5" /> {app.applicant.email}
+              </a>
+            )}
+          </div>
+        )}
+
+        {app.status === 'PENDING' && (
+          <div className="flex gap-2 mt-3">
+            <button
+              disabled={busyId === app.id}
+              onClick={() => void respond(posting, app, 'accept')}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-bold transition-colors disabled:opacity-60"
+            >
+              {busyId === app.id ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              )}
+              Accept
+            </button>
+            <button
+              disabled={busyId === app.id}
+              onClick={() => void respond(posting, app, 'reject')}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-[#e2e8f0] bg-white hover:bg-slate-50 text-slate-600 text-[12px] font-bold transition-colors disabled:opacity-60"
+            >
+              <XCircle className="w-3.5 h-3.5" /> Reject
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── Posting card ─────────────────────────────────────────────────────
+  const renderPosting = (posting: MyJobPosting) => {
+    const chip = STATUS_CHIP[posting.status] ?? STATUS_CHIP.CLOSED;
+    const expanded = expandedId === posting.id;
+    const detail = details[posting.id];
+    const pay = formatPay(posting.payOffer, posting.payRateUnit);
+    return (
+      <div key={posting.id} className="bg-white rounded-2xl border border-[#e2e8f0] overflow-hidden">
+        <button className="w-full text-left p-4" onClick={() => toggleExpand(posting.id)}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-black text-[#1a1a2e] truncate">{posting.title}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                {posting.tradeCategoryIds.map(tradeLabelOf).join(', ')}
+                {posting.city ? ` · ${posting.city}` : ''}
+                {pay ? ` · ${pay}` : ''}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span
+                className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full border ${chip.className}`}
+              >
+                {chip.label}
+              </span>
+              {expanded ? (
+                <ChevronUp className="w-4 h-4 text-slate-400" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400" />
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-4 mt-2 text-[11px] font-bold text-slate-500">
+            <span className="inline-flex items-center gap-1">
+              <Users className="w-3.5 h-3.5" /> {posting.applicationsCount} applicant
+              {posting.applicationsCount === 1 ? '' : 's'}
+            </span>
+            {posting.pendingApplicationsCount > 0 && (
+              <span className="text-amber-600">{posting.pendingApplicationsCount} new</span>
+            )}
+            <span className="inline-flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" /> {new Date(posting.createdAt).toLocaleDateString()}
+            </span>
+          </div>
+          {posting.status === 'REJECTED' && posting.rejectionReason && (
+            <p className="mt-2 text-[12px] text-rose-700 bg-rose-50 border border-[#fda4af] rounded-lg px-3 py-2">
+              Admin feedback: {posting.rejectionReason}
+            </p>
+          )}
+        </button>
+
+        {expanded && (
+          <div className="border-t border-[#eef2f6] px-4 py-3.5 space-y-3">
+            <p className="text-[13px] text-slate-600 whitespace-pre-wrap">{posting.description}</p>
+            {posting.location && (
+              <p className="text-[12px] text-slate-500 inline-flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5" /> {posting.location}
+              </p>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              {posting.status === 'REJECTED' && (
+                <button
+                  onClick={() => startResubmit(posting)}
+                  className="px-4 py-2 rounded-lg bg-[#C9973A] hover:bg-[#b8852f] text-white text-[12px] font-bold transition-colors"
+                >
+                  Edit & resubmit
+                </button>
+              )}
+              {posting.status === 'APPROVED' && (
+                <>
+                  <button
+                    disabled={busyId === posting.id}
+                    onClick={() => void transition(posting, 'fill')}
+                    className="px-4 py-2 rounded-lg border border-[#7dd3fc] bg-sky-50 text-sky-700 text-[12px] font-bold hover:bg-sky-100 transition-colors disabled:opacity-60"
+                  >
+                    Mark as filled
+                  </button>
+                  <button
+                    disabled={busyId === posting.id}
+                    onClick={() => void transition(posting, 'close')}
+                    className="px-4 py-2 rounded-lg border border-[#e2e8f0] bg-white text-slate-600 text-[12px] font-bold hover:bg-slate-50 transition-colors disabled:opacity-60"
+                  >
+                    Close post
+                  </button>
+                </>
+              )}
+              {posting.status === 'FILLED' && (
+                <button
+                  disabled={busyId === posting.id}
+                  onClick={() => void transition(posting, 'close')}
+                  className="px-4 py-2 rounded-lg border border-[#e2e8f0] bg-white text-slate-600 text-[12px] font-bold hover:bg-slate-50 transition-colors disabled:opacity-60"
+                >
+                  Close post
+                </button>
+              )}
+            </div>
+
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+                Applicants
+              </p>
+              {detailLoading === posting.id && !detail ? (
+                <div className="flex items-center gap-2 text-slate-400 text-sm py-4">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Loading applicants…
+                </div>
+              ) : detail && detail.applications.length > 0 ? (
+                <div className="space-y-2.5">
+                  {detail.applications.map((app) => renderApplication(posting, app))}
+                </div>
+              ) : (
+                <p className="text-[13px] text-slate-400 py-2">
+                  {posting.status === 'PENDING_APPROVAL'
+                    ? 'Applications open once an admin approves this post.'
+                    : 'No applications yet.'}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      {renderFlow()}
+
+      {banner && (
+        <div className="flex items-start justify-between gap-3 bg-emerald-50 border border-[#6ee7b7] rounded-xl px-4 py-3">
+          <p className="text-[13px] font-bold text-emerald-800">{banner}</p>
+          <button onClick={() => setBanner(null)} className="text-emerald-700" aria-label="Dismiss">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[12px] text-slate-500 font-medium">
+          Posts are reviewed by our team before going live to registered workers.
+        </p>
+        <button
+          onClick={startCreate}
+          className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#C9973A] hover:bg-[#b8852f] text-white text-[13px] font-bold transition-colors"
+        >
+          <Plus className="w-4 h-4" /> Post a Job
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16 text-slate-400">
+          <Loader2 className="w-6 h-6 animate-spin" />
+        </div>
+      ) : error ? (
+        <div className="text-center py-12">
+          <p className="text-sm text-rose-600 font-bold">{error}</p>
+          <button
+            onClick={() => {
+              setLoading(true);
+              void load();
+            }}
+            className="mt-3 px-4 py-2 rounded-lg border border-[#e2e8f0] text-sm font-bold text-slate-600 hover:bg-slate-50"
+          >
+            Try again
+          </button>
+        </div>
+      ) : postings.length === 0 ? (
+        <div className="text-center py-16 bg-white rounded-2xl border border-[#e2e8f0]">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-[#fdf6e9] border border-[#f0dfc0] flex items-center justify-center mb-3">
+            <Briefcase className="w-6 h-6 text-[#C9973A]" />
+          </div>
+          <p className="text-sm font-black text-[#1a1a2e]">No job posts yet</p>
+          <p className="text-[13px] text-slate-500 mt-1 max-w-sm mx-auto">
+            Need a carpenter, cleaner, driver or any skilled worker? Post a job and registered
+            workers in that trade will apply.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">{postings.map(renderPosting)}</div>
+      )}
+    </div>
+  );
+}

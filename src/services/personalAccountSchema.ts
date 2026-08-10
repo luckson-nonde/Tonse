@@ -1,5 +1,6 @@
 import { PERMISSIONS } from '../utils/rbac';
 import { MasterAccountSchema } from './accountSchemaTypes';
+import { JOB_BOARD_POSTER_NAV_ITEM, JOB_BOARD_POSTER_VIEW } from './jobBoardNavFragments';
 
 /**
  * MASTER_PERSONAL_ACCOUNT_SCHEMA — dashboard for the "Personal
@@ -20,6 +21,7 @@ export const MASTER_PERSONAL_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'profile', label: 'Personal Profile', icon: 'User' },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
     { id: 'advertise', label: 'Advertise', icon: 'Megaphone' },
+    JOB_BOARD_POSTER_NAV_ITEM,
     { id: 'audit-trail', label: 'Audit Trail', icon: 'History', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
   ],
   views: {
@@ -38,6 +40,7 @@ export const MASTER_PERSONAL_ACCOUNT_SCHEMA: MasterAccountSchema = {
       subtitle: 'Promote your shop with a paid homepage or sidebar ad placement',
       componentType: 'ads_manager_renderer',
     },
+    'my-job-posts': JOB_BOARD_POSTER_VIEW,
     'audit-trail': {
       title: 'Audit Trail',
       subtitle: 'Activity log of changes to your account',

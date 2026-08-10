@@ -16,6 +16,8 @@ export const ADMIN_PERMISSIONS = {
   VERIFICATIONS: 'ADMIN_VERIFICATIONS',
   /** User-submitted reports: list + resolve/dismiss. */
   REPORTS: 'ADMIN_REPORTS',
+  /** Job board moderation queue: list pending + approve/reject postings. */
+  JOB_BOARD: 'ADMIN_JOB_BOARD',
 } as const;
 
 export type AdminPermissionCode =

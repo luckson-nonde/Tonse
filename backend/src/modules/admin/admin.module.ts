@@ -20,6 +20,7 @@ import { SiteSettingsModule } from '../site-settings/site-settings.module';
 import { AdsModule } from '../ads/ads.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { StorefrontModule } from '../storefront/storefront.module';
+import { JobBoardModule } from '../job-board/job-board.module';
 
 @Module({
   imports: [
@@ -49,6 +50,8 @@ import { StorefrontModule } from '../storefront/storefront.module';
     AdsModule,
     TicketsModule,
     StorefrontModule,
+    // Job-board moderation queue (Job Board tab).
+    JobBoardModule,
   ],
   providers: [AdminService, AdminManagerService],
   controllers: [AdminController],

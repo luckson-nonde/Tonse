@@ -68,9 +68,9 @@ export interface ViewDefinition {
     | 'active_transactions_renderer'
     | 'transaction_history_renderer'
     | 'labour_home'
-    | 'labour_jobs'
-    | 'labour_quotes'
-    | 'labour_schedule'
+    | 'job_posts_manager_renderer'
+    | 'job_seeker_feed_renderer'
+    | 'job_seeker_applications_renderer'
     | 'report_manager'
     | 'staff_overview'
     | 'technician_jobs';

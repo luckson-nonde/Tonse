@@ -22,6 +22,7 @@ export const ADMIN_PERMISSIONS = {
   USERS: 'ADMIN_USERS',
   VERIFICATIONS: 'ADMIN_VERIFICATIONS',
   REPORTS: 'ADMIN_REPORTS',
+  JOB_BOARD: 'ADMIN_JOB_BOARD',
 } as const;
 
 export function hasPermission(user: User | null | undefined, requiredPermission: string): boolean {

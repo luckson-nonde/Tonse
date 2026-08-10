@@ -51,6 +51,7 @@ import {
   Globe,
   Megaphone,
   Ticket,
+  Briefcase,
 } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
 import { ADMIN_PERMISSIONS } from '../../utils/rbac';
@@ -59,6 +60,7 @@ import ReportsView from '../../components/admin/ReportsView';
 import SubscriptionManagerView from '../../components/admin/SubscriptionManagerView';
 import LandingPageSettingsView from '../../components/admin/LandingPageSettingsView';
 import AdsAdminView from '../../components/admin/AdsAdminView';
+import JobBoardAdminView from '../../components/admin/JobBoardAdminView';
 import TicketsAdminView from '../../components/admin/TicketsAdminView';
 import StorefrontView from '../../components/admin/StorefrontView';
 // StatTile / FunnelCard / Switch were extracted to DashboardPrimitives so the
@@ -95,6 +97,7 @@ type AdminTab =
   | 'landing-page'
   | 'storefront'
   | 'ads'
+  | 'job-board'
   | 'tickets'
   | 'milestones'
   | 'inquiries'
@@ -129,6 +132,7 @@ const TABS: {
   { id: 'landing-page', label: 'Landing Page', icon: Globe },
   { id: 'storefront', label: 'Storefront', icon: LayoutGrid },
   { id: 'ads', label: 'Ads', icon: Megaphone },
+  { id: 'job-board', label: 'Job Board', icon: Briefcase, permission: ADMIN_PERMISSIONS.JOB_BOARD },
   { id: 'tickets', label: 'Tickets', icon: Ticket },
   { id: 'milestones', label: 'Milestones', icon: Sparkles },
   { id: 'inquiries', label: 'Inquiries', icon: MessageSquare },
@@ -288,6 +292,7 @@ export default function AdminDashboard() {
             {activeTab === 'landing-page' && tabVisible && <LandingPageSettingsView />}
             {activeTab === 'storefront' && tabVisible && <StorefrontView />}
             {activeTab === 'ads' && tabVisible && <AdsAdminView />}
+            {activeTab === 'job-board' && tabVisible && <JobBoardAdminView />}
             {activeTab === 'tickets' && tabVisible && <TicketsAdminView />}
             {activeTab === 'milestones' && tabVisible && <MilestonesView />}
             {activeTab === 'inquiries' && tabVisible && <InquiriesView />}

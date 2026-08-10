@@ -37,6 +37,11 @@ const PERMISSION_OPTIONS: { code: string; label: string; blurb: string }[] = [
     label: 'Reports',
     blurb: 'Review and resolve user-submitted complaints',
   },
+  {
+    code: ADMIN_PERMISSIONS.JOB_BOARD,
+    label: 'Job Board',
+    blurb: 'Approve or reject job posts before they go live',
+  },
 ];
 
 const permissionLabel = (code: string) =>

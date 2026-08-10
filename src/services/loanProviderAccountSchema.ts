@@ -1,5 +1,13 @@
 import { PERMISSIONS } from '../utils/rbac';
 import { MasterAccountSchema } from './accountSchemaTypes';
+import {
+  JOB_BOARD_POSTER_NAV_ITEM,
+  JOB_BOARD_POSTER_VIEW,
+  JOB_SEEKER_APPLICATIONS_NAV_ITEM,
+  JOB_SEEKER_APPLICATIONS_VIEW,
+  JOB_SEEKER_FEED_NAV_ITEM,
+  JOB_SEEKER_FEED_VIEW,
+} from './jobBoardNavFragments';
 
 /**
  * MASTER_LOAN_PROVIDER_ACCOUNT_SCHEMA — dashboard for a Loan Company (a
@@ -23,6 +31,9 @@ export const MASTER_LOAN_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
     { id: 'team', label: 'Team Management', icon: 'Users', permissions: [PERMISSIONS.MANAGE_TEAM] },
     { id: 'financial', label: 'Financial Account', icon: 'Wallet' },
     { id: 'advertise', label: 'Advertise', icon: 'Megaphone' },
+    JOB_BOARD_POSTER_NAV_ITEM,
+    JOB_SEEKER_FEED_NAV_ITEM,
+    JOB_SEEKER_APPLICATIONS_NAV_ITEM,
     { id: 'audit-trail', label: 'Audit Trail', icon: 'History', permissions: [PERMISSIONS.VIEW_ANALYTICS] },
   ],
   views: {
@@ -74,6 +85,9 @@ export const MASTER_LOAN_PROVIDER_ACCOUNT_SCHEMA: MasterAccountSchema = {
       subtitle: 'Promote your shop with a paid homepage or sidebar ad placement',
       componentType: 'ads_manager_renderer',
     },
+    'my-job-posts': JOB_BOARD_POSTER_VIEW,
+    'find-jobs': JOB_SEEKER_FEED_VIEW,
+    'my-applications': JOB_SEEKER_APPLICATIONS_VIEW,
     'audit-trail': {
       title: 'Audit Trail',
       subtitle: 'Track all activities and changes',

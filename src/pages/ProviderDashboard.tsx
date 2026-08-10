@@ -155,6 +155,26 @@ export default function ProviderDashboard() {
       if (activeTab !== target) setActiveTab(target);
       return;
     }
+    // Pure-labour seller — their schema (MASTER_LABOUR_ACCOUNT_SCHEMA) has
+    // no 'home' view, so the generic `!tab → 'home'` fallback below rendered
+    // "View Not Found" on every first login. Land them on the labour
+    // Overview instead, with the job-board tabs as the valid deep-links.
+    {
+      const bizTypes = getBusinessTypes(user as any);
+      if (bizTypes.length === 1 && bizTypes[0] === 'LABOUR') {
+        const labourTabs = [
+          'find-jobs',
+          'my-applications',
+          'my-job-posts',
+          'financial',
+          'advertise',
+          'reporting',
+        ];
+        const target = labourTabs.includes(tab || '') ? tab! : 'dashboard';
+        if (activeTab !== target) setActiveTab(target);
+        return;
+      }
+    }
     if (
       tab &&
       tab !== activeTab &&
@@ -244,6 +264,10 @@ export default function ProviderDashboard() {
           'dashboard',
           'my-jobs',
           'history',
+          'my-job-posts',
+          'find-jobs',
+          'my-applications',
+          'reporting',
         ].includes(tab)
       ) {
         navigate(`/provider/${tab}`);
@@ -1317,10 +1341,13 @@ export default function ProviderDashboard() {
           onNavigate={handleTabClick}
           user={user}
         />
-      ) : ['dashboard', 'my-jobs', 'history'].includes(activeTab) ? (
-        // Staff surfaces (Overview landing + technician job tabs). Without
-        // this branch the final else hardcodes view="home", which none of the
-        // four staff schemas define — every staff login hit "View Not Found".
+      ) : ['dashboard', 'my-jobs', 'history', 'my-job-posts', 'find-jobs', 'my-applications'].includes(
+          activeTab,
+        ) ? (
+        // Staff surfaces (Overview landing + technician job tabs) plus the
+        // self-fetching job-board views. Without this branch the final else
+        // hardcodes view="home", which the staff and labour schemas don't
+        // define — every such login hit "View Not Found".
         <DynamicAccountRenderer
           schema={currentSchema}
           view={activeTab}

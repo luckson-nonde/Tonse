@@ -24,7 +24,14 @@ export type DurableType =
   | 'REPORT_RECEIVED'
   | 'JOB_ASSIGNED'
   | 'JOB_EVIDENCE_ADDED'
-  | 'ORDER_PAID';
+  | 'ORDER_PAID'
+  // Job board (labour postings — unrelated to technician JOB_* above):
+  | 'JOB_APPROVED'
+  | 'JOB_REJECTED'
+  | 'NEW_JOB_MATCH'
+  | 'NEW_JOB_APPLICATION'
+  | 'APPLICATION_ACCEPTED'
+  | 'APPLICATION_REJECTED';
 export type EphemeralType =
   | 'QUOTE_COUNT_UPDATE'
   | 'LEAD_FULL'
@@ -47,6 +54,16 @@ const PUSH_ROUTE_BY_TYPE: Record<DurableType, string> = {
   JOB_EVIDENCE_ADDED: '/buyer/orders',
   // Direct purchase: the seller's escrow/paid-orders queue.
   ORDER_PAID: '/provider/paid-orders',
+  // Job board. Poster-facing types are fallbacks only — JobBoardService
+  // passes a per-call `route` because the poster's dashboard shell depends
+  // on their role (/buyer vs /provider). Seeker-facing types are static:
+  // seekers are always labour providers.
+  JOB_APPROVED: '/provider/my-job-posts',
+  JOB_REJECTED: '/provider/my-job-posts',
+  NEW_JOB_APPLICATION: '/provider/my-job-posts',
+  NEW_JOB_MATCH: '/provider/find-jobs',
+  APPLICATION_ACCEPTED: '/provider/my-applications',
+  APPLICATION_REJECTED: '/provider/my-applications',
 };
 
 /** DB enum → lowercase SSE event name (EventSource convention). */
@@ -60,6 +77,12 @@ const SSE_EVENT_NAME: Record<DurableType | EphemeralType, string> = {
   JOB_ASSIGNED: 'job_assigned',
   JOB_EVIDENCE_ADDED: 'job_evidence_added',
   ORDER_PAID: 'order_paid',
+  JOB_APPROVED: 'job_approved',
+  JOB_REJECTED: 'job_rejected',
+  NEW_JOB_MATCH: 'new_job_match',
+  NEW_JOB_APPLICATION: 'new_job_application',
+  APPLICATION_ACCEPTED: 'application_accepted',
+  APPLICATION_REJECTED: 'application_rejected',
   QUOTE_COUNT_UPDATE: 'quote_count_update',
   LEAD_FULL: 'lead_full',
   PROVIDER_ACCEPTED: 'provider_accepted',

@@ -92,6 +92,12 @@ export const consentConfigs: Record<string, ConsentConfig> = {
     whyBody:
       'To keep your account verified and your business discoverable. Changes to identity or location details may be re-checked to protect the marketplace.',
   },
+  jobPosting: {
+    icon: ClipboardList,
+    whyTitle: 'Why we ask for these job details',
+    whyBody:
+      'A clear title, pay range, and start date help the right registered workers find and apply to your job. Every post is reviewed by our team before it goes live, and your contact details are only shared with applicants you accept.',
+  },
 };
 
 export type ConsentKey = keyof typeof consentConfigs;

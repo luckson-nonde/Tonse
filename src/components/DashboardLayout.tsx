@@ -53,6 +53,7 @@ import {
   XCircle,
   Megaphone,
   Ticket,
+  Search,
 } from 'lucide-react';
 import Logo from './Logo';
 import HeaderProfileMenu from './HeaderProfileMenu';
@@ -374,6 +375,7 @@ const iconMap: Record<string, any> = {
   XCircle,
   Megaphone,
   Ticket,
+  Search,
   Tool: Wrench, // lucide has no "Tool" — schemas using it mean a wrench
 };
 

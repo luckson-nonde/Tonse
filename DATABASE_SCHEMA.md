@@ -54,12 +54,16 @@ erDiagram
     CATEGORIES ||--o{ SELLER_PROFILE_CATEGORIES : "categoryId"
     CATEGORIES ||--o{ SERVICE_PROVIDER_PROFILE_CATEGORIES : "categoryId"
     CATEGORIES ||--o{ INQUIRY_CATEGORIES : "categoryId"
+    CATEGORIES ||--o{ JOB_POSTING_CATEGORIES : "categoryId"
 
     INQUIRIES ||--o{ INQUIRY_IMAGES : "has"
     INQUIRIES ||--o{ INQUIRY_CATEGORIES : "tagged with"
     INQUIRIES ||--o{ QUOTES : "receives"
 
     QUOTES ||--o{ ORDERS : "converts to (quoteId)"
+
+    JOB_POSTINGS ||--o{ JOB_POSTING_CATEGORIES : "targets"
+    JOB_POSTINGS ||--o{ JOB_APPLICATIONS : "receives"
 
     USER_EMAILS }o--|| USERS : "userId"
     IDENTITY_AUDITS }o--|| USERS : "userId"
@@ -71,6 +75,7 @@ erDiagram
 Notes on the diagram:
 - `audit_logs` is not linked with hard FK relations in the entity (no `@ManyToOne` declared) — it stores loose `userId`/`providerId`/`staffId`/`entityId` uuid columns without relation metadata, so it is intentionally omitted from FK edges above.
 - `shops` is enforced as `OneToOne` to `users`; the buyer/seller/service_provider profiles are logically one-per-user but declared as `ManyToOne` — see per-table notes for the exact decorator kind.
+- `job_postings.posterId` and `job_applications.applicantUserId` are loose `uuid` references to `users` (no `@ManyToOne`/FK declared, same convention as `audit_logs`), so no `USERS ||--o{ JOB_POSTINGS` / `JOB_APPLICATIONS` edge is drawn above.
 
 ---
 
@@ -995,6 +1000,75 @@ Get-or-create singleton (same pattern as `ad_settings`/`billing_settings`). Admi
 
 ---
 
+### Module: Job Board
+
+Labour job postings — distinct from the inquiry/quote flow. Any registered user (buyer, seller, or provider alike) can post a job for free; postings are moderated (deny-until-approved, like ads) rather than answered with price quotes. The trade categories a posting targets live in a junction table (never an array column — repo invariant), and only labour-registered providers whose subscribed trades intersect them see it in their feed. Contact details are never stored on the application row — both sides' phone/email resolve live from profile rows and are only revealed once an application is ACCEPTED.
+
+#### `job_postings`
+A moderated labour job post. Any registered user posts it; an admin approves or rejects it; the poster then marks it FILLED/CLOSED once done. Lifecycle: `PENDING_APPROVAL` → `APPROVED` (admin) → `FILLED`/`CLOSED` (poster), or `PENDING_APPROVAL` → `REJECTED` (admin) → back to `PENDING_APPROVAL` via the poster's edit-and-resubmit path.
+Entity file: `backend/src/modules/job-board/entities/job-posting.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| posterId | uuid | NO | — | users.id of whoever posted — buyer, seller, or provider alike. Loose uuid, no FK relation (care-plans convention) |
+| title | varchar(255) | NO | — | |
+| description | text | NO | — | |
+| workersNeeded | integer | YES | — | |
+| payOffer | numeric(10,2) | YES | — | optional advertised pay; `payRateUnit` qualifies it when set |
+| payRateUnit | varchar(20) | YES | — | `Per Hour, Per Day, Per Week, Per Month` (`JOB_RATE_UNITS`, not a PG enum) |
+| applicationDeadline | timestamp | YES | — | after this instant the posting stops accepting applications and drops out of seeker feeds; NULL = open until filled/closed |
+| location | varchar(255) | YES | — | human-readable snapshot, same shape/meaning as on `Inquiry` |
+| province | varchar(100) | YES | — | |
+| city | varchar(100) | YES | — | |
+| attributes | json | YES | — | per-trade form answers (workers count, start date, tools provided, …) plus urgency/preferredDateTime; JS-filtered after load, never queried in SQL |
+| status | enum | NO | `PENDING_APPROVAL` | `PENDING_APPROVAL, APPROVED, REJECTED, FILLED, CLOSED` |
+| rejectionReason | text | YES | — | |
+| approvedByAdminId | uuid | YES | — | |
+| createdAt | timestamp | NO | — | `@CreateDateColumn()` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn()` |
+
+Indexes: `idx_job_postings_poster` (posterId) · `idx_job_postings_status` (status) · `idx_job_postings_created` (createdAt)
+
+Relations: none — `posterId` is a loose uuid column, no `@ManyToOne`/FK declared (same convention as `audit_logs`).
+
+#### `job_posting_categories`
+Junction between a job posting and the labour trade categories it targets. Composite PK (jobPostingId, categoryId) — exact mirror of `inquiry_categories`. Seeker-feed matching is an equality join from here to `service_provider_profile_categories`.
+Entity file: `backend/src/modules/job-board/entities/job-posting-category.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| jobPostingId | uuid | NO (PK) | — | `@PrimaryColumn`; part of composite PK |
+| categoryId | varchar(64) | NO (PK) | — | `@PrimaryColumn`; part of composite PK |
+
+Indexes: `idx_job_posting_categories_category` (categoryId)
+
+Relations: ManyToOne → `job_postings` (jobPostingId, `@JoinColumn({name:'jobPostingId'})`, `onDelete: CASCADE`) · ManyToOne → `categories` (categoryId, `@JoinColumn({name:'categoryId'})`, `onDelete: CASCADE`)
+
+#### `job_applications`
+A labour provider's application to a posting — a cover message + expected rate + availability, no line items or escrow. Accepting one does NOT auto-reject the others (a posting with `workersNeeded > 1` legitimately accepts several). Contact details are never stored here; both sides' phone/email are resolved live from profile rows and only revealed once `status` is `ACCEPTED` (gating lives in `JobBoardService`, not the client).
+Entity file: `backend/src/modules/job-board/entities/job-application.entity.ts`
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| id | uuid | NO (PK) | — | `@PrimaryGeneratedColumn('uuid')` |
+| jobPostingId | uuid | NO | — | |
+| applicantUserId | uuid | NO | — | users.id of the labour provider applying. Loose uuid, no FK |
+| coverMessage | text | NO | — | |
+| expectedRate | numeric(10,2) | NO | — | |
+| rateUnit | varchar(20) | NO | — | |
+| availabilityDate | date | NO | — | |
+| status | enum | NO | `PENDING` | `PENDING, ACCEPTED, REJECTED` |
+| respondedAt | timestamp | YES | — | when the poster accepted/rejected; NULL while PENDING |
+| createdAt | timestamp | NO | — | `@CreateDateColumn()` |
+| updatedAt | timestamp | NO | — | `@UpdateDateColumn()` |
+
+Indexes: `idx_job_applications_posting` (jobPostingId) · `idx_job_applications_applicant` (applicantUserId) · `idx_job_applications_unique` (jobPostingId, applicantUserId — **unique**; one application per applicant per posting)
+
+Relations: ManyToOne → `job_postings` (jobPostingId, `@JoinColumn({name:'jobPostingId'})`, `onDelete: CASCADE`)
+
+---
+
 ## 4. Enums Reference
 
 | Enum (owning table.column) | Values |
@@ -1024,7 +1098,7 @@ Get-or-create singleton (same pattern as `ad_settings`/`billing_settings`). Admi
 | `categories.archetype` | `RETAIL`, `RENTAL`, `BOOKING`, `LABOUR`, `REPAIR`, `SERVICE`, `EVENTS`, `ENTERTAINMENT`, `WHOLESALE` |
 | `categories.nature` | `PRODUCT`, `SERVICE`, `BOTH` |
 | `categories.actionVariant` | `BUY_NEW`, `REPAIR` |
-| `notifications.type` | `NEW_LEAD`, `QUOTE_RECEIVED`, `RESERVE_RELEASED`, `MILESTONE_UNLOCKED` |
+| `notifications.type` | `NEW_LEAD`, `QUOTE_RECEIVED`, `RESERVE_RELEASED`, `MILESTONE_UNLOCKED`, `JOB_APPROVED`, `JOB_REJECTED`, `NEW_JOB_MATCH`, `NEW_JOB_APPLICATION`, `APPLICATION_ACCEPTED`, `APPLICATION_REJECTED` |
 | `conversions.funnelStage` | `registration`, `inquiry`, `trade_complete` |
 | `milestones.targetStage` | `inquiry`, `trade_complete` |
 | `promoter_profiles.verificationStatus` | `PENDING`, `VERIFIED`, `REJECTED` |
@@ -1032,6 +1106,8 @@ Get-or-create singleton (same pattern as `ad_settings`/`billing_settings`). Admi
 | `ticket_orders.status` | `PENDING`, `PAID`, `FAILED` |
 | `tickets.status` | `VALID`, `REDEEMED`, `VOID` |
 | `ledger_journals.type` (addition) | `TICKET_SALE` added alongside `AD_PURCHASE` etc. |
+| `job_postings.status` | `PENDING_APPROVAL`, `APPROVED`, `REJECTED`, `FILLED`, `CLOSED` |
+| `job_applications.status` | `PENDING`, `ACCEPTED`, `REJECTED` |
 
 ---
 

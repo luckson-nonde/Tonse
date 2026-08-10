@@ -63,6 +63,15 @@ export class Notification {
       // Buyer + seller alert: a quote's escrow was funded, or a buyer bought
       // a listing outright (direct purchase / financed checkout).
       'ORDER_PAID',
+      // Job board (labour job postings — distinct from technician JOB_*):
+      // poster: approved/rejected verdicts + a fresh application arrived;
+      // seeker: a matching job went live + the poster's accept/reject verdict.
+      'JOB_APPROVED',
+      'JOB_REJECTED',
+      'NEW_JOB_MATCH',
+      'NEW_JOB_APPLICATION',
+      'APPLICATION_ACCEPTED',
+      'APPLICATION_REJECTED',
     ],
   })
   type: string;

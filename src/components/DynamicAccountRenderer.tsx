@@ -30,6 +30,9 @@ import {
   Store,
   QrCode,
   ArrowUpRight,
+  Briefcase,
+  Search,
+  ClipboardCheck,
 } from 'lucide-react';
 import { INQUIRY_STATUS_SCHEMA } from '../services/buyerAccountSchema';
 import { MasterAccountSchema } from '../services/accountSchemaTypes';
@@ -90,6 +93,9 @@ const ICON_MAP: Record<string, any> = {
   Calendar,
   Store,
   QrCode,
+  Briefcase,
+  Search,
+  ClipboardCheck,
 };
 
 // Per-tile accent for the buyer Overview activity grid. Backgrounds are opaque
@@ -112,9 +118,9 @@ const ACTIVITY_DOT: Record<string, string> = {
 };
 
 import LabourHomeView from './labour/LabourHomeView';
-import LabourJobsView from './labour/LabourJobsView';
-import LabourQuotesView from './labour/LabourQuotesView';
-import LabourScheduleView from './labour/LabourScheduleView';
+import JobSeekerFeedView from './labour/JobSeekerFeedView';
+import MyApplicationsView from './labour/MyApplicationsView';
+import JobPostsManagerView from './JobPostsManagerView';
 import StaffOverview from './staff/StaffOverview';
 import TechnicianJobsView from './technician/TechnicianJobsView';
 
@@ -721,11 +727,13 @@ export default function DynamicAccountRenderer({
       case 'loan_terms':
         return <LoanTermsEditor />;
       case 'labour_home':
-        return <LabourHomeView {...data?.homeProps} />;
-      case 'labour_jobs':
-        return <LabourJobsView {...data?.jobsProps} />;
-      case 'labour_quotes':
-        return <LabourQuotesView {...data?.quotesProps} />;
+        return <LabourHomeView onNavigate={onNavigate} />;
+      case 'job_seeker_feed_renderer':
+        return <JobSeekerFeedView />;
+      case 'job_seeker_applications_renderer':
+        return <MyApplicationsView />;
+      case 'job_posts_manager_renderer':
+        return <JobPostsManagerView />;
       case 'financial_renderer':
         return <FinancialPage isInsideDashboard={true} />;
       case 'venture_account_renderer':
@@ -750,8 +758,6 @@ export default function DynamicAccountRenderer({
         return <StaffOverview onNavigate={onNavigate} />;
       case 'technician_jobs':
         return <TechnicianJobsView historyOnly={view === 'history'} />;
-      case 'labour_schedule':
-        return <LabourScheduleView {...data?.scheduleProps} />;
       default:
         return <div>Unknown View Type</div>;
     }

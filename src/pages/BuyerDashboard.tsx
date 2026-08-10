@@ -38,6 +38,8 @@ import { isCategoryAvailable } from '../services/categories/availability';
 import { buildInquiryDescription, clampInquiryTitle } from '../services/inquiryDescription';
 import { Inquiry, InquiryItem, Quote } from '../types';
 import { getLabourInquirySchema } from '../services/labourSchemaRegistry';
+import JobPostingDetailsForm, { type JobPostingDetails } from '../components/buyer/JobPostingDetailsForm';
+import { jobBoardService, type CreateJobPostingInput } from '../services/api/jobBoardService';
 import FinancialPage from './FinancialPage';
 import BrowseShopsView from '../components/BrowseShopsView';
 import ShopProfileView from '../components/ShopProfileView';
@@ -60,12 +62,17 @@ function FreeInquiryAutoPublish({
   onReady,
   error,
   onRetry,
+  pendingLabel = 'Publishing your inquiry…',
+  errorTitle = "Your inquiry didn't publish",
 }: {
   onReady: () => void;
   /** Publish failure reason — switches the spinner to an error + retry UI
    *  so the buyer is never stranded on an endless "Publishing…" screen. */
   error?: string | null;
   onRetry?: () => void;
+  /** Copy overrides so the job-posting flow can reuse this shell. */
+  pendingLabel?: string;
+  errorTitle?: string;
 }) {
   const fired = React.useRef(false);
   useEffect(() => {
@@ -80,7 +87,7 @@ function FreeInquiryAutoPublish({
         <div className="flex items-start gap-3 max-w-md w-full bg-rose-50 border border-rose-200 rounded-2xl p-4">
           <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-bold text-rose-700">Your inquiry didn't publish</p>
+            <p className="text-sm font-bold text-rose-700">{errorTitle}</p>
             <p className="text-xs text-rose-600 mt-1">{error}</p>
           </div>
         </div>
@@ -98,7 +105,7 @@ function FreeInquiryAutoPublish({
   return (
     <div className="flex flex-col items-center justify-center py-24 gap-3 text-slate-400">
       <Loader2 className="w-6 h-6 animate-spin text-[#C9973A]" />
-      <p className="text-[11px] font-bold uppercase tracking-widest">Publishing your inquiry…</p>
+      <p className="text-[11px] font-bold uppercase tracking-widest">{pendingLabel}</p>
     </div>
   );
 }
@@ -323,7 +330,17 @@ export default function BuyerDashboard() {
     attributes?: Record<string, any>;
     processType?: 'EXPRESS' | 'STANDARD';
     targetedShop?: { id: string; sellerId: string; name: string; categoryIds?: string[]; city?: string; province?: string; location?: string };
+    /** Post-a-job flow only (labour trades): the posting-level facts
+     *  collected after the per-trade form. */
+    jobPostingDetails?: JobPostingDetails;
   }>({ items: [] });
+
+  // Labour trades now run the JOB-POSTING flow (post → admin approval →
+  // seekers apply) instead of the instant inquiry broadcast. Machinery-hire
+  // shares the same picker/LabourSelection payload but stays an inquiry —
+  // its labourGroup is the discriminator.
+  const isJobPostingFlow =
+    pendingInquiry.isLabour === true && pendingInquiry.labourGroup !== 'MACHINERY_HIRE';
 
   // Drives the InquiryPreferences variant (PRODUCTS / SERVICES / VENUES /
   // LABOR). Resolution happens in services/categories#getCategoryType — an
@@ -839,9 +856,10 @@ export default function BuyerDashboard() {
   const handleLocationComplete = (locationData: any) => {
     // Stash location alongside the rest of the pending inquiry; payment step
     // owns the actual create-inquiry call so we don't publish until the buyer
-    // has paid the service fee.
+    // has paid the service fee. Job posts skip payment entirely (posting is
+    // free) and go straight to submit-for-review.
     setPendingInquiry((prev) => ({ ...prev, location: locationData }));
-    handleTabChange('inquiry-payment');
+    handleTabChange(isJobPostingFlow ? 'job-posting-submit' : 'inquiry-payment');
   };
 
   /** Show the ticket-feature offer unless a decision is already on record.
@@ -1048,6 +1066,66 @@ export default function BuyerDashboard() {
     }
   };
 
+  /**
+   * Submit a labour JOB POSTING for admin review. Parallel to
+   * handlePaymentComplete but deliberately never touches createInquiry or
+   * any payment path — postings are free and deny-until-approved.
+   */
+  const handleJobPostingSubmit = async () => {
+    if (!user) return;
+    const locationData = pendingInquiry.location;
+    const details = pendingInquiry.jobPostingDetails;
+    const tradeId = pendingInquiry.categoryId;
+    if (!details || !tradeId) {
+      alert('Missing job details. Please go back and complete the job post.');
+      return;
+    }
+    if (!locationData?.province || !locationData?.city) {
+      alert('Province and city are required. Please go back and complete the location step.');
+      return;
+    }
+    setIsSubmitting(true);
+    setPublishError(null);
+    try {
+      // Trade-form answers + the urgency pair ride in attributes, same as
+      // inquiry attributes — seekers see them on the job card detail.
+      const attributes = {
+        ...(pendingInquiry.attributes || {}),
+        urgency: details.urgency,
+        ...(details.preferredDateTime ? { preferredDateTime: details.preferredDateTime } : {}),
+      };
+      const payload: CreateJobPostingInput = {
+        title: details.title,
+        description: details.description,
+        tradeCategoryIds: [tradeId],
+        ...(details.workersNeeded ? { workersNeeded: details.workersNeeded } : {}),
+        ...(details.payOffer != null
+          ? { payOffer: details.payOffer, payRateUnit: details.payRateUnit }
+          : {}),
+        ...(details.applicationDeadline
+          ? { applicationDeadline: new Date(`${details.applicationDeadline}T23:59:59`).toISOString() }
+          : {}),
+        location: [locationData.address, locationData.city, locationData.province]
+          .filter(Boolean)
+          .join(', ')
+          .slice(0, 255),
+        province: locationData.province,
+        city: locationData.city,
+        attributes,
+      };
+      const created = await jobBoardService.createPosting(payload);
+      if (!created) throw new Error('The job post could not be submitted.');
+      setPendingInquiry({ items: [] });
+      handleTabChange('job-posting-success');
+    } catch (error) {
+      const reason =
+        (error as Error)?.message || 'Something went wrong while submitting your job post.';
+      setPublishError(reason);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const renderInquiryFlow = () => {
     switch (activeTab) {
       case 'category-selection': {
@@ -1122,12 +1200,29 @@ export default function BuyerDashboard() {
               isLoading={isSubmitting}
               onSubmit={(data) => {
                 setPendingInquiry((prev) => ({ ...prev, attributes: data }));
-                handleTabChange('process-selection');
+                // Labour trades continue into the job-post flow (details →
+                // location → submit for admin review); everything else —
+                // including machinery-hire — keeps the inquiry funnel.
+                handleTabChange(isJobPostingFlow ? 'job-posting-details' : 'process-selection');
               }}
               onBack={() => handleTabChange('category-selection')}
             />
           </div>
         );
+      case 'job-posting-details': {
+        const rawWorkers = parseInt(String(pendingInquiry.attributes?.number_of_workers ?? ''), 10);
+        return (
+          <JobPostingDetailsForm
+            tradeLabel={pendingInquiry.category || 'Worker'}
+            defaultWorkers={Number.isFinite(rawWorkers) && rawWorkers > 0 ? rawWorkers : undefined}
+            onBack={() => handleTabChange('create-inquiry')}
+            onSubmit={(details) => {
+              setPendingInquiry((prev) => ({ ...prev, jobPostingDetails: details }));
+              handleTabChange('location-details');
+            }}
+          />
+        );
+      }
       case 'process-selection':
         return (
           <ProcessSelection
@@ -1178,7 +1273,9 @@ export default function BuyerDashboard() {
       case 'location-details':
         return (
           <LocationDetails
-            onBack={() => handleTabChange('inquiry-preferences')}
+            onBack={() =>
+              handleTabChange(isJobPostingFlow ? 'job-posting-details' : 'inquiry-preferences')
+            }
             onComplete={handleLocationComplete}
           />
         );
@@ -1207,6 +1304,25 @@ export default function BuyerDashboard() {
           />
         );
       }
+      case 'job-posting-submit':
+        return (
+          <FreeInquiryAutoPublish
+            onReady={handleJobPostingSubmit}
+            error={publishError}
+            onRetry={handleJobPostingSubmit}
+            pendingLabel="Submitting your job post…"
+            errorTitle="Your job post didn't submit"
+          />
+        );
+      case 'job-posting-success':
+        return (
+          <InquirySuccess
+            title="Job post submitted!"
+            subtitle="Our team is reviewing your post. Once approved, it goes out to registered workers in the trade you picked — you'll get a notification either way, and applications land in My Job Posts."
+            buttonLabel="View My Job Posts"
+            onGoToDashboard={() => handleTabChange('my-job-posts')}
+          />
+        );
       case 'inquiry-success':
         return <InquirySuccess onGoToDashboard={() => handleTabChange('dashboard')} />;
       case 'financial':
@@ -1251,6 +1367,9 @@ export default function BuyerDashboard() {
     'location-details',
     'inquiry-payment',
     'inquiry-success',
+    'job-posting-details',
+    'job-posting-submit',
+    'job-posting-success',
     'financial',
     'shops',
     'favorites',

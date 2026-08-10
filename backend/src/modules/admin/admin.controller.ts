@@ -245,6 +245,30 @@ export class AdminController {
     return this.adminService.rejectAd(id, body?.reason, this.actor(req));
   }
 
+  // ───── Job board moderation (grantable to User Managers) ───────────────
+
+  @Get('job-postings/pending')
+  @AdminPermission(ADMIN_PERMISSIONS.JOB_BOARD)
+  async listPendingJobPostings() {
+    return this.adminService.listPendingJobPostings();
+  }
+
+  @Post('job-postings/:id/approve')
+  @AdminPermission(ADMIN_PERMISSIONS.JOB_BOARD)
+  async approveJobPosting(@Request() req: any, @Param('id') id: string) {
+    return this.adminService.approveJobPosting(id, this.actor(req));
+  }
+
+  @Post('job-postings/:id/reject')
+  @AdminPermission(ADMIN_PERMISSIONS.JOB_BOARD)
+  async rejectJobPosting(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+  ) {
+    return this.adminService.rejectJobPosting(id, body?.reason, this.actor(req));
+  }
+
   // ───── Event ticketing (undecorated ⇒ primary-admin-only) ──────────────
 
   @Get('tickets/settings')
