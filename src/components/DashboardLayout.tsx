@@ -733,8 +733,15 @@ export default function DashboardLayout({
       // BusinessType-based filtering — lets a schema item declare "only show
       // for repair shops" or "only show for wholesale" without needing
       // separate role/subRole conditionals.
+      //
+      // Tested against the seller's FULL archetype set, not the single
+      // primary type: the contract in accountSchemaTypes.ts is "resolved via
+      // getBusinessTypes(user)", and primary-only matching silently killed
+      // every gate on a low-priority archetype. LABOUR is near the bottom of
+      // BUSINESS_TYPE_PRIORITY, so a RETAIL+LABOUR seller never had a primary
+      // of LABOUR and never saw the job-seeker tabs at all.
       if (item.businessTypes && item.businessTypes.length > 0) {
-        if (!item.businessTypes.includes(businessType)) return false;
+        if (!item.businessTypes.some((t) => businessTypes.includes(t as any))) return false;
       }
 
       // Contextual/activity-gated items (e.g. Loan Offers) stay hidden until

@@ -37,7 +37,7 @@ import { CATEGORIES_DB, getCategorySchema, getCategoryType } from '../services/c
 import { isCategoryAvailable } from '../services/categories/availability';
 import { buildInquiryDescription, clampInquiryTitle } from '../services/inquiryDescription';
 import { Inquiry, InquiryItem, Quote } from '../types';
-import { getLabourInquirySchema } from '../services/labourSchemaRegistry';
+import { getLabourFormFields } from '../services/labourFormSchema';
 import JobPostingDetailsForm, { type JobPostingDetails } from '../components/buyer/JobPostingDetailsForm';
 import { jobBoardService, type CreateJobPostingInput } from '../services/api/jobBoardService';
 import FinancialPage from './FinancialPage';
@@ -1155,18 +1155,9 @@ export default function BuyerDashboard() {
 
         let schema: any[] = [];
         if (isLabour) {
-          const labourSchema = getLabourInquirySchema(pendingInquiry.inquirySchemaKey || 'generic');
-          // LabourInquiryField keys its fields `id`; DynamicInquiryForm
-          // renders by `name` and SKIPS nameless fields — without this
-          // adapter every labour/machinery form rendered empty.
-          schema = (labourSchema?.fields || []).map((f) => ({
-            name: f.id,
-            label: f.label,
-            type: f.type,
-            required: f.required,
-            placeholder: f.placeholder,
-            options: f.options,
-          }));
+          // Shared with JobPostsManagerView's "Post a Job" flow so both
+          // entry points ask the same per-trade requirements.
+          schema = getLabourFormFields(pendingInquiry.inquirySchemaKey);
         } else {
           // pendingInquiry.categories[0] is the stable category ID
           // (e.g. 'mobile-phones-repair'), not the display name. The

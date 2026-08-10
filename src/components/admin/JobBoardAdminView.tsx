@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { adminService, AdminJobPosting } from '../../services/api/adminService';
 import { LABOUR_CATEGORIES } from '../../services/labourCategories';
+import { getLabourRequirements } from '../../services/labourFormSchema';
 
 const CARD =
   'bg-white border border-slate-100 rounded-2xl p-5 sm:p-6 shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)]';
@@ -150,6 +151,29 @@ export default function JobBoardAdminView() {
                   <p className="text-[13px] text-slate-600 mt-2 whitespace-pre-wrap">
                     {posting.description}
                   </p>
+
+                  {(() => {
+                    const requirements = getLabourRequirements(
+                      posting.tradeCategoryIds[0],
+                      posting.attributes,
+                    );
+                    if (requirements.length === 0) return null;
+                    return (
+                      <div className="mt-2.5 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
+                          Requirements
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                          {requirements.map((r) => (
+                            <div key={r.label} className="flex items-baseline gap-2 text-[12px]">
+                              <span className="text-slate-500">{r.label}:</span>
+                              <span className="font-bold text-slate-700">{r.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[11px] font-bold text-slate-500">
                     {posting.location && (

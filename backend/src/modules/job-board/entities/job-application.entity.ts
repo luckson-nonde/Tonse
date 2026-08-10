@@ -12,6 +12,14 @@ import { JobPosting } from './job-posting.entity';
 
 export type JobApplicationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
 
+/** One piece of evidence the applicant attached, labelled with the posting
+ *  requirement it answers (e.g. "Certifications Required" → a licence scan).
+ *  `url` is always a `/files/secure/...` path — encrypted at rest, auth-gated. */
+export interface JobApplicationAttachment {
+  label: string;
+  url: string;
+}
+
 /**
  * A job seeker's application to a posting. Applicant-shaped, not
  * quote-shaped: a cover message + expected rate + availability, no line
@@ -52,6 +60,12 @@ export class JobApplication {
 
   @Column({ type: 'date' })
   availabilityDate: string;
+
+  /** Evidence against the posting's requirements. Visible to the poster from
+   *  the moment the application lands — that is what they judge it on — while
+   *  contact details stay gated until they accept. */
+  @Column({ type: 'json', nullable: true })
+  attachments: JobApplicationAttachment[] | null;
 
   @Column({
     type: 'enum',

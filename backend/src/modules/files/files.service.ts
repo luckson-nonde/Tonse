@@ -22,6 +22,10 @@ const SENSITIVE_CATEGORIES = new Set([
   // Lender loan Terms & Conditions documents — encrypted at rest, served only
   // to authenticated parties (the borrower reviewing an offer).
   'loan-terms',
+  // Job-board application evidence (trade certificates, licences, permits a
+  // job poster asked for). Never world-readable: a worker's credentials are
+  // theirs, shared with the poster they applied to — not the open internet.
+  'job-application',
 ]);
 
 /** Phone-camera video containers accepted for job evidence (Android emits

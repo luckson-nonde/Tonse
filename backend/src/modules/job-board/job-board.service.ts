@@ -136,6 +136,9 @@ export class JobBoardService {
           expectedRate: a.expectedRate,
           rateUnit: a.rateUnit,
           availabilityDate: a.availabilityDate,
+          // Requirement evidence is what the poster JUDGES the application
+          // on, so unlike contact details it is visible before accepting.
+          attachments: a.attachments ?? [],
           respondedAt: a.respondedAt,
           createdAt: a.createdAt,
           applicant: {
@@ -293,6 +296,7 @@ export class JobBoardService {
           expectedRate: dto.expectedRate,
           rateUnit: dto.rateUnit,
           availabilityDate: dto.availabilityDate,
+          attachments: dto.attachments?.length ? dto.attachments : null,
           status: 'PENDING',
         }),
       );

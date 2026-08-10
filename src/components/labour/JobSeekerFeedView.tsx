@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useRef } from 'react';
 import {
   Briefcase,
   CheckCircle2,
   Clock,
+  FileCheck,
   Loader2,
   MapPin,
+  Paperclip,
   Search,
   Users,
   X,
@@ -12,10 +15,13 @@ import {
 import {
   JOB_RATE_UNITS,
   jobBoardService,
+  type JobApplicationAttachment,
   type JobFeedItem,
   type JobRateUnit,
 } from '../../services/api/jobBoardService';
+import { apiClient } from '../../services/api/client';
 import { LABOUR_CATEGORIES } from '../../services/labourCategories';
+import { getLabourRequirements } from '../../services/labourFormSchema';
 import DateTimePicker from '../DateTimePicker';
 
 const tradeLabelOf = (id: string) =>
@@ -120,6 +126,26 @@ export default function JobSeekerFeedView() {
 
               <p className="text-[13px] text-slate-600 mt-2 whitespace-pre-wrap">{job.description}</p>
 
+              {(() => {
+                const requirements = getLabourRequirements(job.tradeCategoryIds[0], job.attributes);
+                if (requirements.length === 0) return null;
+                return (
+                  <div className="mt-3 rounded-xl border border-[#eef2f6] bg-[#fbfaf7] px-3.5 py-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                      Requirements
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+                      {requirements.map((r) => (
+                        <div key={r.label} className="flex items-baseline gap-2 text-[12px]">
+                          <span className="text-slate-500">{r.label}:</span>
+                          <span className="font-bold text-slate-700">{r.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 text-[11px] font-bold text-slate-500">
                 {job.location && (
                   <span className="inline-flex items-center gap-1">
@@ -176,6 +202,10 @@ export default function JobSeekerFeedView() {
   );
 }
 
+/** An attachment being composed in the modal: the API shape plus the local
+ *  file name, shown so the applicant can tell two uploads apart. */
+type DraftAttachment = JobApplicationAttachment & { fileName?: string };
+
 function ApplyModal({
   job,
   onClose,
@@ -193,6 +223,65 @@ function ApplyModal({
   const [availabilityDate, setAvailabilityDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Each attachment is labelled with the posting requirement it answers, so
+  // the poster sees "Certifications Required → licence.pdf" rather than a
+  // pile of anonymous files. The label is picked per file (below) instead of
+  // hanging an Attach button off every requirement row — most requirements
+  // ("Number of Workers: 2") are facts, not things you attach proof to.
+  // `fileName` is a local display nicety only — it is NOT part of the API
+  // contract, and the backend's ValidationPipe runs forbidNonWhitelisted, so
+  // it must be stripped before submit or the whole request 400s.
+  const [attachments, setAttachments] = useState<DraftAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement | null>(null);
+  const requirements = getLabourRequirements(job.tradeCategoryIds[0], job.attributes);
+  const labelOptions = [...requirements.map((r) => r.label), 'Supporting document'];
+
+  const upload = async (file: File | undefined) => {
+    if (!file) return;
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (file.type && !allowed.includes(file.type)) {
+      setError(`"${file.name}" isn't supported — attach a JPG, PNG or PDF.`);
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError(`"${file.name}" is too large — the limit is 10MB.`);
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      // 'job-application' is a SENSITIVE category: encrypted at rest and
+      // served only through the authenticated /files/secure endpoint.
+      const res = await apiClient.post<{ url: string }>(
+        '/files/upload?category=job-application',
+        formData,
+      );
+      const url = res.data?.url;
+      if (!url) throw new Error('Upload returned no file URL.');
+      // Default the label to the first requirement not yet answered, so the
+      // common case (one requirement, one document) needs no extra tap.
+      const used = new Set(attachments.map((a) => a.label));
+      const suggested = requirements.map((r) => r.label).find((l) => !used.has(l));
+      setAttachments((prev) => [
+        ...prev,
+        { label: suggested ?? 'Supporting document', url, fileName: file.name },
+      ]);
+    } catch (e) {
+      setError((e as Error)?.message || 'Could not upload that file.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeAttachment = (url: string) =>
+    setAttachments((prev) => prev.filter((a) => a.url !== url));
+
+  const relabel = (url: string, label: string) =>
+    setAttachments((prev) => prev.map((a) => (a.url === url ? { ...a, label } : a)));
 
   const submit = async () => {
     if (coverMessage.trim().length < 10) {
@@ -216,6 +305,9 @@ function ApplyModal({
         expectedRate: rate,
         rateUnit,
         availabilityDate,
+        ...(attachments.length
+          ? { attachments: attachments.map(({ label, url }) => ({ label, url })) }
+          : {}),
       });
       onApplied(job.id);
     } catch (e) {
@@ -299,6 +391,92 @@ function ApplyModal({
               mode="date"
               placeholder="Earliest day you can start"
             />
+          </div>
+
+          <div className="rounded-xl border border-[#eef2f6] bg-[#fbfaf7] px-3.5 py-3">
+            <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+              Attach proof
+            </p>
+            {requirements.length > 0 ? (
+              <>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  What this employer specified — attach documents for anything you can prove.
+                  Only they can open your files.
+                </p>
+                <ul className="mt-2 space-y-0.5">
+                  {requirements.map((r) => (
+                    <li key={r.label} className="text-[12px] text-slate-600">
+                      <span className="text-slate-500">{r.label}:</span>{' '}
+                      <span className="font-bold text-slate-700">{r.value}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Certificates, licences or photos of your work. Only this employer can open them.
+              </p>
+            )}
+
+            {attachments.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {attachments.map((att) => (
+                  <div
+                    key={att.url}
+                    className="flex items-center gap-2 rounded-lg border border-[#e2e8f0] bg-white px-2.5 py-2"
+                  >
+                    <FileCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <select
+                      value={att.label}
+                      onChange={(e) => relabel(att.url, e.target.value)}
+                      className="min-w-0 flex-1 text-[12px] font-bold text-slate-700 bg-transparent focus:outline-none"
+                    >
+                      {labelOptions.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-[11px] text-slate-400 truncate max-w-[40%]">
+                      {att.fileName ?? 'Document'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(att.url)}
+                      className="shrink-0 text-slate-400 hover:text-rose-500"
+                      aria-label="Remove attachment"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                void upload(e.target.files?.[0]);
+                e.target.value = '';
+              }}
+            />
+            <button
+              type="button"
+              disabled={uploading || attachments.length >= 10}
+              onClick={() => fileInput.current?.click()}
+              className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#e2e8f0] bg-white text-[12px] font-bold text-slate-600 hover:border-[#C9973A] hover:text-[#8a6420] transition-colors disabled:opacity-60"
+            >
+              {uploading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Paperclip className="w-3.5 h-3.5" />
+              )}
+              {uploading ? 'Uploading…' : 'Add document'}
+            </button>
+            <p className="text-[10px] text-slate-400 mt-1">JPG, PNG or PDF · up to 10MB each</p>
           </div>
 
           {error && <p className="text-[13px] text-rose-600 font-bold">{error}</p>}

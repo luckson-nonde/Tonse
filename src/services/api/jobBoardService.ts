@@ -61,6 +61,13 @@ export interface JobFeedItem extends JobPosting {
   myApplicationStatus: JobApplicationStatus | null;
 }
 
+/** Evidence the applicant attached against a posting requirement. `url` is a
+ *  `/files/secure/...` path — render it with SecureFile, never a bare <img>. */
+export interface JobApplicationAttachment {
+  label: string;
+  url: string;
+}
+
 export interface JobApplicant {
   userId: string;
   name: string;
@@ -80,6 +87,9 @@ export interface JobApplicationRow {
   expectedRate: number | string;
   rateUnit: string;
   availabilityDate: string;
+  /** Visible to the poster from the moment the application lands — it's what
+   *  they judge it on (unlike contact details, which unlock on accept). */
+  attachments: JobApplicationAttachment[];
   respondedAt: string | null;
   createdAt: string;
   applicant: JobApplicant;
@@ -97,6 +107,7 @@ export interface MyJobApplication {
   expectedRate: number | string;
   rateUnit: string;
   availabilityDate: string;
+  attachments?: JobApplicationAttachment[] | null;
   respondedAt: string | null;
   createdAt: string;
   posting: {
@@ -132,6 +143,7 @@ export interface ApplyToJobInput {
   expectedRate: number;
   rateUnit: JobRateUnit;
   availabilityDate: string;
+  attachments?: JobApplicationAttachment[];
 }
 
 export const jobBoardService = {

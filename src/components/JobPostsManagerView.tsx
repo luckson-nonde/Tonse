@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Briefcase,
   CheckCircle2,
@@ -8,6 +8,7 @@ import {
   Loader2,
   Mail,
   MapPin,
+  Paperclip,
   Phone,
   Plus,
   Users,
@@ -20,19 +21,13 @@ import {
   type JobPostingWithApplicants,
   type MyJobPosting,
 } from '../services/api/jobBoardService';
-import { LABOUR_CATEGORIES, type LabourSubCategory } from '../services/labourCategories';
+import { LABOUR_CATEGORIES } from '../services/labourCategories';
+import { getLabourFormFields, getLabourRequirements } from '../services/labourFormSchema';
 import JobPostingDetailsForm, { type JobPostingDetails } from './buyer/JobPostingDetailsForm';
+import SecureFile from './SecureFile';
+import BuyerCategoryPicker, { type LabourSelection } from './buyer/BuyerCategoryPicker';
+import DynamicInquiryForm from './DynamicInquiryForm';
 import LocationDetails from './LocationDetails';
-
-/** Trades a job post may target — the five labour tracks, never machinery. */
-const POSTABLE_TRADES = LABOUR_CATEGORIES.filter((c) => c.category !== 'MACHINERY_HIRE');
-const TRADE_GROUP_LABELS: Record<string, string> = {
-  CONSTRUCTION: 'Construction & Building',
-  DOMESTIC: 'Domestic & Household',
-  INDUSTRIAL: 'Industrial & Factory',
-  AGRICULTURAL: 'Agricultural',
-  TRANSPORT: 'Transport & Logistics',
-};
 
 const tradeLabelOf = (id: string) =>
   LABOUR_CATEGORIES.find((c) => c.id === id)?.label ?? id.replace(/_/g, ' ');
@@ -53,8 +48,15 @@ const formatPay = (payOffer: number | string | null, unit: string | null) => {
 
 type CreateFlowState = {
   mode: 'create' | 'resubmit';
-  step: 'trade' | 'details' | 'location';
+  /** trade → requirements → details → location. Identical to the buyer
+   *  funnel's steps, using the same picker and per-trade form. */
+  step: 'trade' | 'requirements' | 'details' | 'location';
   tradeId?: string;
+  tradeLabel?: string;
+  /** Per-trade schema key from the picker, drives the requirements form. */
+  inquirySchemaKey?: string;
+  /** Answers to the per-trade requirements form. */
+  attributes?: Record<string, any>;
   details?: JobPostingDetails;
   /** resubmit only: the posting being edited. */
   postingId?: string;
@@ -155,6 +157,10 @@ export default function JobPostsManagerView() {
       step: 'details',
       postingId: posting.id,
       tradeId: posting.tradeCategoryIds[0],
+      tradeLabel: tradeLabelOf(posting.tradeCategoryIds[0] ?? ''),
+      // Carry the original trade answers through so a resubmit never drops
+      // the requirements the seeker-facing card renders.
+      attributes: attrs,
       initialLocation: { province: posting.province ?? undefined, city: posting.city ?? undefined },
       initialDetails: {
         title: posting.title,
@@ -192,7 +198,10 @@ export default function JobPostsManagerView() {
           .slice(0, 255),
         province: locationData.province,
         city: locationData.city,
+        // Per-trade requirements answers + the urgency pair, same shape the
+        // buyer funnel sends.
         attributes: {
+          ...(flow.attributes ?? {}),
           urgency: d.urgency,
           ...(d.preferredDateTime ? { preferredDateTime: d.preferredDateTime } : {}),
         },
@@ -216,16 +225,6 @@ export default function JobPostsManagerView() {
       setSubmitting(false);
     }
   };
-
-  const tradeGroups = useMemo(() => {
-    const groups = new Map<string, LabourSubCategory[]>();
-    for (const trade of POSTABLE_TRADES) {
-      const list = groups.get(trade.category) ?? [];
-      list.push(trade);
-      groups.set(trade.category, list);
-    }
-    return groups;
-  }, []);
 
   // ── Create / resubmit overlay ─────────────────────────────────────────
   const renderFlow = () => {
@@ -253,37 +252,46 @@ export default function JobPostsManagerView() {
             </p>
           </div>
         ) : flow.step === 'trade' ? (
-          <div className="max-w-2xl mx-auto w-full px-4 py-6">
-            <h3 className="text-lg font-black text-[#1a1a2e] mb-1">What kind of worker do you need?</h3>
-            <p className="text-xs text-slate-500 mb-5">
-              Your post goes to registered workers in the trade you pick.
-            </p>
-            {[...tradeGroups.entries()].map(([group, trades]) => (
-              <div key={group} className="mb-5">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">
-                  {TRADE_GROUP_LABELS[group] ?? group}
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {trades.map((trade) => (
-                    <button
-                      key={trade.id}
-                      onClick={() => setFlow({ ...flow, tradeId: trade.id, step: 'details' })}
-                      className="px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-white text-left text-[13px] font-bold text-slate-700 hover:border-[#C9973A] hover:bg-[#fdf6e9] transition-colors"
-                    >
-                      {trade.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
+          // Same trade picker the buyer funnel uses (image grid, search,
+          // layout toggle), mounted straight on the labour master so a job
+          // post can never target machinery-hire.
+          <div className="max-w-5xl mx-auto w-full px-4 py-6">
+            <BuyerCategoryPicker
+              preselectedParentId="labour"
+              onBack={() => setFlow(null)}
+              onComplete={(selection) => {
+                const picked = selection as LabourSelection;
+                if (Array.isArray(selection) || !picked?.categoryId) return;
+                setFlow({
+                  ...flow,
+                  tradeId: picked.categoryId,
+                  tradeLabel: picked.category,
+                  inquirySchemaKey: picked.inquirySchemaKey,
+                  step: 'requirements',
+                });
+              }}
+            />
+          </div>
+        ) : flow.step === 'requirements' ? (
+          // Per-trade requirements — the same schema-driven form the buyer
+          // funnel renders (getLabourFormFields → DynamicInquiryForm).
+          <div className="max-w-3xl mx-auto w-full px-4 py-6">
+            <DynamicInquiryForm
+              key={flow.tradeId}
+              schema={getLabourFormFields(flow.inquirySchemaKey)}
+              categoryName={flow.tradeLabel || 'Job'}
+              onSubmit={(data) => setFlow({ ...flow, attributes: data, step: 'details' })}
+              onBack={() => setFlow({ ...flow, step: 'trade' })}
+            />
           </div>
         ) : flow.step === 'details' ? (
           <JobPostingDetailsForm
             key={`${flow.mode}-${flow.postingId ?? flow.tradeId}`}
-            tradeLabel={tradeLabelOf(flow.tradeId!)}
+            tradeLabel={flow.tradeLabel || tradeLabelOf(flow.tradeId!)}
+            defaultWorkers={Number(flow.attributes?.number_of_workers) || undefined}
             initial={flow.initialDetails}
             onBack={() =>
-              flow.mode === 'create' ? setFlow({ ...flow, step: 'trade' }) : setFlow(null)
+              flow.mode === 'create' ? setFlow({ ...flow, step: 'requirements' }) : setFlow(null)
             }
             onSubmit={(d) => setFlow({ ...flow, details: d, step: 'location' })}
           />
@@ -354,6 +362,24 @@ export default function JobPostsManagerView() {
             {new Date(app.availabilityDate).toLocaleDateString()}
           </span>
         </p>
+
+        {(app.attachments ?? []).length > 0 && (
+          <div className="mt-2.5">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
+              Attached evidence
+            </p>
+            <div className="space-y-1">
+              {(app.attachments ?? []).map((att) => (
+                <div key={att.url} className="flex items-center gap-2 text-[12px]">
+                  <Paperclip className="w-3 h-3 text-slate-400 shrink-0" />
+                  <span className="text-slate-500 shrink-0">{att.label}:</span>
+                  {/* Auth-gated /files/secure/ URL — a bare <img>/<a> 401s. */}
+                  <SecureFile url={att.url} asLink alt={att.label} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {accepted && (app.applicant.phone || app.applicant.email) && (
           <div className="mt-2.5 flex flex-wrap gap-3 text-[12px] font-bold text-emerald-800">
@@ -450,6 +476,28 @@ export default function JobPostsManagerView() {
         {expanded && (
           <div className="border-t border-[#eef2f6] px-4 py-3.5 space-y-3">
             <p className="text-[13px] text-slate-600 whitespace-pre-wrap">{posting.description}</p>
+            {(() => {
+              const requirements = getLabourRequirements(
+                posting.tradeCategoryIds[0],
+                posting.attributes,
+              );
+              if (requirements.length === 0) return null;
+              return (
+                <div className="rounded-xl border border-[#eef2f6] bg-[#fbfaf7] px-3.5 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                    Requirements
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+                    {requirements.map((r) => (
+                      <div key={r.label} className="flex items-baseline gap-2 text-[12px]">
+                        <span className="text-slate-500">{r.label}:</span>
+                        <span className="font-bold text-slate-700">{r.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             {posting.location && (
               <p className="text-[12px] text-slate-500 inline-flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5" /> {posting.location}
