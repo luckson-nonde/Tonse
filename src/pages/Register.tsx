@@ -159,14 +159,21 @@ export default function Register() {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
+    // A tradesperson is an individual, not an incorporated business — the
+    // PACRA/TPIN "Business Documents" step doesn't apply to them, so Review
+    // is the LAST form a labour registration submits. Without this carve-out
+    // they'd inherit company treatment via role === 'SERVICE_PROVIDER'.
+    const isLabour = role === 'LABOUR' || subRole === 'SKILLED_LABOUR';
+
     const isCompany =
-      subRole?.startsWith('COMPANY_') ||
-      subRole?.includes('SELLER') ||
-      role === 'SELLER' ||
-      role === 'SUPPLIER' ||
-      role === 'SERVICE_PROVIDER' ||
-      role === 'ENTERTAINMENT' ||
-      role === 'EVENTS';
+      !isLabour &&
+      (subRole?.startsWith('COMPANY_') ||
+        subRole?.includes('SELLER') ||
+        role === 'SELLER' ||
+        role === 'SUPPLIER' ||
+        role === 'SERVICE_PROVIDER' ||
+        role === 'ENTERTAINMENT' ||
+        role === 'EVENTS');
 
     // Buyers don't pin a permanent map location at signup — GPS capture is
     // per-inquiry only. Sellers/providers keep the registration pinpoint.
