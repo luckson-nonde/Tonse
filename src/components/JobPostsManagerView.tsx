@@ -254,8 +254,9 @@ export default function JobPostsManagerView() {
         ) : flow.step === 'trade' ? (
           // Same trade picker the buyer funnel uses (image grid, search,
           // layout toggle), mounted straight on the labour master so a job
-          // post can never target machinery-hire.
-          <div className="max-w-5xl mx-auto w-full px-4 py-6">
+          // post can never target machinery-hire. No width wrapper — the
+          // picker centers itself (max-w-7xl), same as in the buyer funnel.
+          <div className="w-full px-4 py-6">
             <BuyerCategoryPicker
               preselectedParentId="labour"
               onBack={() => setFlow(null)}
@@ -274,16 +275,16 @@ export default function JobPostsManagerView() {
           </div>
         ) : flow.step === 'requirements' ? (
           // Per-trade requirements — the same schema-driven form the buyer
-          // funnel renders (getLabourFormFields → DynamicInquiryForm).
-          <div className="max-w-3xl mx-auto w-full px-4 py-6">
-            <DynamicInquiryForm
-              key={flow.tradeId}
-              schema={getLabourFormFields(flow.inquirySchemaKey)}
-              categoryName={flow.tradeLabel || 'Job'}
-              onSubmit={(data) => setFlow({ ...flow, attributes: data, step: 'details' })}
-              onBack={() => setFlow({ ...flow, step: 'trade' })}
-            />
-          </div>
+          // funnel renders. Rendered BARE: the form owns its own layout
+          // (max-w-[1440px] split showcase/fields grid); boxing it in a
+          // narrow wrapper collapses the fields column into a sliver.
+          <DynamicInquiryForm
+            key={flow.tradeId}
+            schema={getLabourFormFields(flow.inquirySchemaKey)}
+            categoryName={flow.tradeLabel || 'Job'}
+            onSubmit={(data) => setFlow({ ...flow, attributes: data, step: 'details' })}
+            onBack={() => setFlow({ ...flow, step: 'trade' })}
+          />
         ) : flow.step === 'details' ? (
           <JobPostingDetailsForm
             key={`${flow.mode}-${flow.postingId ?? flow.tradeId}`}
