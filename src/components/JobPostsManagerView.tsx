@@ -22,15 +22,11 @@ import {
   type MyJobPosting,
 } from '../services/api/jobBoardService';
 import { LABOUR_CATEGORIES } from '../services/labourCategories';
-import {
-  getJobSpecifications,
-  getLabourFormFields,
-  getSeekerRequirements,
-} from '../services/labourFormSchema';
-import JobPostingDetailsForm, { type JobPostingDetails } from './buyer/JobPostingDetailsForm';
+import { isPosterRebuiltAttributeKey } from '../services/labourFormSchema';
+import VacancyComposerForm, { type JobPostingDetails } from './buyer/VacancyComposerForm';
+import JobAttributesDisplay from './labour/JobAttributesDisplay';
 import SecureFile from './SecureFile';
 import BuyerCategoryPicker, { type LabourSelection } from './buyer/BuyerCategoryPicker';
-import DynamicInquiryForm from './DynamicInquiryForm';
 import LocationDetails from './LocationDetails';
 
 const tradeLabelOf = (id: string) =>
@@ -52,14 +48,13 @@ const formatPay = (payOffer: number | string | null, unit: string | null) => {
 
 type CreateFlowState = {
   mode: 'create' | 'resubmit';
-  /** trade → requirements → details → location. Identical to the buyer
-   *  funnel's steps, using the same picker and per-trade form. */
-  step: 'trade' | 'requirements' | 'details' | 'location';
+  /** trade → details → location. Same steps as the buyer funnel, using the
+   *  same picker and the same vacancy composer. */
+  step: 'trade' | 'details' | 'location';
   tradeId?: string;
   tradeLabel?: string;
-  /** Per-trade schema key from the picker, drives the requirements form. */
-  inquirySchemaKey?: string;
-  /** Answers to the per-trade requirements form. */
+  /** The posting's stored attributes on resubmit (poster-rebuilt keys are
+   *  stripped before the composer's fresh values are merged in). */
   attributes?: Record<string, any>;
   details?: JobPostingDetails;
   /** resubmit only: the posting being edited. */
@@ -203,13 +198,13 @@ export default function JobPostsManagerView() {
           .slice(0, 255),
         province: locationData.province,
         city: locationData.city,
-        // Job specifications (trade answers) + urgency pair + applicant
-        // requirements, same shape the buyer funnel sends. Old req_* keys
-        // are stripped first so a requirement REMOVED on resubmit doesn't
-        // survive the merge.
+        // Vacancy content + urgency pair + applicant requirements, same
+        // shape the buyer funnel sends. Every key the composer rebuilds is
+        // stripped first, so a bullet or document REMOVED during an edit
+        // doesn't survive the merge from the original posting.
         attributes: {
           ...Object.fromEntries(
-            Object.entries(flow.attributes ?? {}).filter(([k]) => !k.startsWith('req_')),
+            Object.entries(flow.attributes ?? {}).filter(([k]) => !isPosterRebuiltAttributeKey(k)),
           ),
           urgency: d.urgency,
           ...(d.preferredDateTime ? { preferredDateTime: d.preferredDateTime } : {}),
@@ -277,32 +272,18 @@ export default function JobPostsManagerView() {
                   ...flow,
                   tradeId: picked.categoryId,
                   tradeLabel: picked.category,
-                  inquirySchemaKey: picked.inquirySchemaKey,
-                  step: 'requirements',
+                  step: 'details',
                 });
               }}
             />
           </div>
-        ) : flow.step === 'requirements' ? (
-          // Per-trade requirements — the same schema-driven form the buyer
-          // funnel renders. Rendered BARE: the form owns its own layout
-          // (max-w-[1440px] split showcase/fields grid); boxing it in a
-          // narrow wrapper collapses the fields column into a sliver.
-          <DynamicInquiryForm
-            key={flow.tradeId}
-            schema={getLabourFormFields(flow.inquirySchemaKey)}
-            categoryName={flow.tradeLabel || 'Job'}
-            onSubmit={(data) => setFlow({ ...flow, attributes: data, step: 'details' })}
-            onBack={() => setFlow({ ...flow, step: 'trade' })}
-          />
         ) : flow.step === 'details' ? (
-          <JobPostingDetailsForm
+          <VacancyComposerForm
             key={`${flow.mode}-${flow.postingId ?? flow.tradeId}`}
             tradeLabel={flow.tradeLabel || tradeLabelOf(flow.tradeId!)}
-            defaultWorkers={Number(flow.attributes?.number_of_workers) || undefined}
             initial={flow.initialDetails}
             onBack={() =>
-              flow.mode === 'create' ? setFlow({ ...flow, step: 'requirements' }) : setFlow(null)
+              flow.mode === 'create' ? setFlow({ ...flow, step: 'trade' }) : setFlow(null)
             }
             onSubmit={(d) => setFlow({ ...flow, details: d, step: 'location' })}
           />
@@ -487,44 +468,10 @@ export default function JobPostsManagerView() {
         {expanded && (
           <div className="border-t border-[#eef2f6] px-4 py-3.5 space-y-3">
             <p className="text-[13px] text-slate-600 whitespace-pre-wrap">{posting.description}</p>
-            {(() => {
-              const specs = getJobSpecifications(posting.tradeCategoryIds[0], posting.attributes);
-              const requirements = getSeekerRequirements(posting.attributes);
-              return (
-                <>
-                  {specs.length > 0 && (
-                    <div className="rounded-xl border border-[#eef2f6] bg-[#fbfaf7] px-3.5 py-3">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                        Job specifications
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
-                        {specs.map((r) => (
-                          <div key={r.label} className="flex items-baseline gap-2 text-[12px]">
-                            <span className="text-slate-500">{r.label}:</span>
-                            <span className="font-bold text-slate-700">{r.value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {requirements.length > 0 && (
-                    <div className="rounded-xl border border-[#f0dfc0] bg-[#fdf9f0] px-3.5 py-3">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-[#a87b28] mb-2">
-                        Applicant requirements
-                      </p>
-                      <div className="space-y-1.5">
-                        {requirements.map((r) => (
-                          <div key={r.label} className="flex items-baseline gap-2 text-[12px]">
-                            <span className="text-[#a87b28]">{r.label}:</span>
-                            <span className="font-bold text-slate-700">{r.value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
+            <JobAttributesDisplay
+              tradeId={posting.tradeCategoryIds[0]}
+              attributes={posting.attributes}
+            />
             {posting.location && (
               <p className="text-[12px] text-slate-500 inline-flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5" /> {posting.location}

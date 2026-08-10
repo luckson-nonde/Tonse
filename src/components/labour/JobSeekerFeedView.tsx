@@ -21,11 +21,9 @@ import {
 } from '../../services/api/jobBoardService';
 import { apiClient } from '../../services/api/client';
 import { LABOUR_CATEGORIES } from '../../services/labourCategories';
-import {
-  getAttachmentSlotLabels,
-  getJobSpecifications,
-  getSeekerRequirements,
-} from '../../services/labourFormSchema';
+import { getRequiredAttachmentSlots } from '../../services/labourFormSchema';
+import JobAttributesDisplay from './JobAttributesDisplay';
+import SecureFile from '../SecureFile';
 import DateTimePicker from '../DateTimePicker';
 
 const tradeLabelOf = (id: string) =>
@@ -130,44 +128,10 @@ export default function JobSeekerFeedView() {
 
               <p className="text-[13px] text-slate-600 mt-2 whitespace-pre-wrap">{job.description}</p>
 
-              {(() => {
-                const specs = getJobSpecifications(job.tradeCategoryIds[0], job.attributes);
-                const requirements = getSeekerRequirements(job.attributes);
-                return (
-                  <>
-                    {specs.length > 0 && (
-                      <div className="mt-3 rounded-xl border border-[#eef2f6] bg-[#fbfaf7] px-3.5 py-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                          Job specifications
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
-                          {specs.map((r) => (
-                            <div key={r.label} className="flex items-baseline gap-2 text-[12px]">
-                              <span className="text-slate-500">{r.label}:</span>
-                              <span className="font-bold text-slate-700">{r.value}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {requirements.length > 0 && (
-                      <div className="mt-2 rounded-xl border border-[#f0dfc0] bg-[#fdf9f0] px-3.5 py-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-[#a87b28] mb-2">
-                          You'll need
-                        </p>
-                        <div className="space-y-1.5">
-                          {requirements.map((r) => (
-                            <div key={r.label} className="flex items-baseline gap-2 text-[12px]">
-                              <span className="text-[#a87b28]">{r.label}:</span>
-                              <span className="font-bold text-slate-700">{r.value}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
+              <JobAttributesDisplay
+                tradeId={job.tradeCategoryIds[0]}
+                attributes={job.attributes}
+              />
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 text-[11px] font-bold text-slate-500">
                 {job.location && (
@@ -247,35 +211,31 @@ function ApplyModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Each attachment is labelled with the posting requirement it answers, so
-  // the poster sees "Certifications Required → licence.pdf" rather than a
-  // pile of anonymous files. The label is picked per file (below) instead of
-  // hanging an Attach button off every requirement row — most requirements
-  // ("Number of Workers: 2") are facts, not things you attach proof to.
+  // The documents the POSTER demanded, each its own mandatory upload slot.
   // `fileName` is a local display nicety only — it is NOT part of the API
   // contract, and the backend's ValidationPipe runs forbidNonWhitelisted, so
   // it must be stripped before submit or the whole request 400s.
-  const [attachments, setAttachments] = useState<DraftAttachment[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const fileInput = useRef<HTMLInputElement | null>(null);
-  // What the POSTER demanded (req_* keys) — drives both the checklist shown
-  // here and the labels a file can be attached under, so the seeker submits
-  // exactly the documents the post asked for.
-  const requirements = getSeekerRequirements(job.attributes);
-  const labelOptions = getAttachmentSlotLabels(job.attributes);
+  const requiredSlots = getRequiredAttachmentSlots(job.attributes);
+  const [slotFiles, setSlotFiles] = useState<Record<string, DraftAttachment | undefined>>({});
+  const [extras, setExtras] = useState<DraftAttachment[]>([]);
+  const [uploadingSlot, setUploadingSlot] = useState<string | null>(null);
+  const slotInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const upload = async (file: File | undefined) => {
-    if (!file) return;
+  const missingSlots = requiredSlots.filter((label) => !slotFiles[label]?.url);
+
+  /** Upload one file and hand back its stored secure URL. Shared by the
+   *  required slots and the optional extras bucket. */
+  const uploadFile = async (slotKey: string, file: File): Promise<DraftAttachment | null> => {
     const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
     if (file.type && !allowed.includes(file.type)) {
-      setError(`"${file.name}" isn't supported — attach a JPG, PNG or PDF.`);
-      return;
+      setError(`"${file.name}" isn't supported — attach a PDF, JPG or PNG.`);
+      return null;
     }
     if (file.size > 10 * 1024 * 1024) {
       setError(`"${file.name}" is too large — the limit is 10MB.`);
-      return;
+      return null;
     }
-    setUploading(true);
+    setUploadingSlot(slotKey);
     setError(null);
     try {
       const formData = new FormData();
@@ -288,29 +248,26 @@ function ApplyModal({
       );
       const url = res.data?.url;
       if (!url) throw new Error('Upload returned no file URL.');
-      // Default the label to the first demanded document not yet answered,
-      // so the common case (one document asked, one attached) needs no
-      // extra tap. 'Supporting document' stays the free-extras bucket.
-      const used = new Set(attachments.map((a) => a.label));
-      const suggested = labelOptions
-        .filter((l) => l !== 'Supporting document')
-        .find((l) => !used.has(l));
-      setAttachments((prev) => [
-        ...prev,
-        { label: suggested ?? 'Supporting document', url, fileName: file.name },
-      ]);
+      return { label: slotKey, url, fileName: file.name };
     } catch (e) {
       setError((e as Error)?.message || 'Could not upload that file.');
+      return null;
     } finally {
-      setUploading(false);
+      setUploadingSlot(null);
     }
   };
 
-  const removeAttachment = (url: string) =>
-    setAttachments((prev) => prev.filter((a) => a.url !== url));
+  const uploadToSlot = async (label: string, file: File | undefined) => {
+    if (!file) return;
+    const uploaded = await uploadFile(label, file);
+    if (uploaded) setSlotFiles((prev) => ({ ...prev, [label]: uploaded }));
+  };
 
-  const relabel = (url: string, label: string) =>
-    setAttachments((prev) => prev.map((a) => (a.url === url ? { ...a, label } : a)));
+  const uploadExtra = async (file: File | undefined) => {
+    if (!file || extras.length >= 5) return;
+    const uploaded = await uploadFile('Supporting document', file);
+    if (uploaded) setExtras((prev) => [...prev, uploaded]);
+  };
 
   const submit = async () => {
     if (coverMessage.trim().length < 10) {
@@ -326,17 +283,25 @@ function ApplyModal({
       setError('Pick the earliest day you can start.');
       return;
     }
+    if (missingSlots.length > 0) {
+      setError(`Attach these documents before you can apply: ${missingSlots.join(', ')}.`);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
+      // Required documents first (labels matched exactly against what the
+      // posting demands — the server re-checks the same list), then extras.
+      const attachments = [
+        ...requiredSlots.map((label) => ({ label, url: slotFiles[label]!.url })),
+        ...extras.map(({ label, url }) => ({ label, url })),
+      ];
       await jobBoardService.applyToJob(job.id, {
         coverMessage: coverMessage.trim(),
         expectedRate: rate,
         rateUnit,
         availabilityDate,
-        ...(attachments.length
-          ? { attachments: attachments.map(({ label, url }) => ({ label, url })) }
-          : {}),
+        ...(attachments.length ? { attachments } : {}),
       });
       onApplied(job.id);
     } catch (e) {
@@ -422,58 +387,110 @@ function ApplyModal({
             />
           </div>
 
+          {requiredSlots.length > 0 && (
+            <div className="rounded-xl border border-[#f0dfc0] bg-[#fdf9f0] px-3.5 py-3">
+              <p className="text-[11px] font-black uppercase tracking-widest text-[#a87b28]">
+                Required documents
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5 mb-2.5">
+                This employer requires each of these. Upload the PDF or a clear photo — only they
+                can open your files.
+              </p>
+              <div className="space-y-2">
+                {requiredSlots.map((label) => {
+                  const attached = slotFiles[label];
+                  const busy = uploadingSlot === label;
+                  return (
+                    <div
+                      key={label}
+                      className={`rounded-lg border px-2.5 py-2 ${
+                        attached ? 'border-[#6ee7b7] bg-white' : 'border-[#e7d7b8] bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {attached ? (
+                          <FileCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        ) : (
+                          <Paperclip className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        )}
+                        <span className="min-w-0 flex-1 text-[12px] font-bold text-slate-700 truncate">
+                          {label}
+                          {!attached && <span className="text-rose-500"> *</span>}
+                        </span>
+                        <input
+                          ref={(el) => {
+                            slotInputs.current[label] = el;
+                          }}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,application/pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            void uploadToSlot(label, e.target.files?.[0]);
+                            e.target.value = '';
+                          }}
+                        />
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => slotInputs.current[label]?.click()}
+                          className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#e2e8f0] bg-white text-[11px] font-bold text-slate-600 hover:border-[#C9973A] hover:text-[#8a6420] transition-colors disabled:opacity-60"
+                        >
+                          {busy && <Loader2 className="w-3 h-3 animate-spin" />}
+                          {busy ? 'Uploading…' : attached ? 'Replace' : 'Upload'}
+                        </button>
+                        {attached && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSlotFiles((prev) => ({ ...prev, [label]: undefined }))
+                            }
+                            className="shrink-0 text-slate-400 hover:text-rose-500"
+                            aria-label={`Remove ${label}`}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      {attached && (
+                        <div className="flex items-center gap-2 mt-1.5 pl-5.5 text-[11px] text-slate-500">
+                          <span className="truncate max-w-[55%]">{attached.fileName}</span>
+                          {/* Auth-gated /files/secure/ URL — SecureFile fetches
+                              it with the bearer token; a bare <a> 401s. */}
+                          <SecureFile url={attached.url} asLink alt={label} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2">PDF, JPG or PNG · up to 10MB each</p>
+            </div>
+          )}
+
           <div className="rounded-xl border border-[#eef2f6] bg-[#fbfaf7] px-3.5 py-3">
             <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">
-              Attach proof
+              Other documents
             </p>
-            {requirements.length > 0 ? (
-              <>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  What this employer specified — attach documents for anything you can prove.
-                  Only they can open your files.
-                </p>
-                <ul className="mt-2 space-y-0.5">
-                  {requirements.map((r) => (
-                    <li key={r.label} className="text-[12px] text-slate-600">
-                      <span className="text-slate-500">{r.label}:</span>{' '}
-                      <span className="font-bold text-slate-700">{r.value}</span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Certificates, licences or photos of your work. Only this employer can open them.
-              </p>
-            )}
-
-            {attachments.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {attachments.map((att) => (
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Optional — anything else that helps your case (portfolio photos, extra references).
+            </p>
+            {extras.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {extras.map((att) => (
                   <div
                     key={att.url}
                     className="flex items-center gap-2 rounded-lg border border-[#e2e8f0] bg-white px-2.5 py-2"
                   >
                     <FileCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <select
-                      value={att.label}
-                      onChange={(e) => relabel(att.url, e.target.value)}
-                      className="min-w-0 flex-1 text-[12px] font-bold text-slate-700 bg-transparent focus:outline-none"
-                    >
-                      {labelOptions.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="text-[11px] text-slate-400 truncate max-w-[40%]">
-                      {att.fileName ?? 'Document'}
+                    <span className="min-w-0 flex-1 text-[11px] text-slate-600 truncate">
+                      {att.fileName}
                     </span>
+                    <SecureFile url={att.url} asLink alt={att.fileName ?? 'Document'} />
                     <button
                       type="button"
-                      onClick={() => removeAttachment(att.url)}
+                      onClick={() => setExtras((prev) => prev.filter((a) => a.url !== att.url))}
                       className="shrink-0 text-slate-400 hover:text-rose-500"
-                      aria-label="Remove attachment"
+                      aria-label="Remove document"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -481,39 +498,45 @@ function ApplyModal({
                 ))}
               </div>
             )}
-
             <input
-              ref={fileInput}
+              ref={(el) => {
+                slotInputs.current.__extra = el;
+              }}
               type="file"
               accept="image/jpeg,image/png,image/webp,application/pdf"
               className="hidden"
               onChange={(e) => {
-                void upload(e.target.files?.[0]);
+                void uploadExtra(e.target.files?.[0]);
                 e.target.value = '';
               }}
             />
             <button
               type="button"
-              disabled={uploading || attachments.length >= 10}
-              onClick={() => fileInput.current?.click()}
-              className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#e2e8f0] bg-white text-[12px] font-bold text-slate-600 hover:border-[#C9973A] hover:text-[#8a6420] transition-colors disabled:opacity-60"
+              disabled={uploadingSlot === 'Supporting document' || extras.length >= 5}
+              onClick={() => slotInputs.current.__extra?.click()}
+              className="mt-2 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#e2e8f0] bg-white text-[12px] font-bold text-slate-600 hover:border-[#C9973A] hover:text-[#8a6420] transition-colors disabled:opacity-60"
             >
-              {uploading ? (
+              {uploadingSlot === 'Supporting document' ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
                 <Paperclip className="w-3.5 h-3.5" />
               )}
-              {uploading ? 'Uploading…' : 'Add document'}
+              Add document
             </button>
-            <p className="text-[10px] text-slate-400 mt-1">JPG, PNG or PDF · up to 10MB each</p>
           </div>
 
           {error && <p className="text-[13px] text-rose-600 font-bold">{error}</p>}
+          {missingSlots.length > 0 && !error && (
+            <p className="text-[12px] text-slate-500">
+              Still to attach:{' '}
+              <span className="font-bold text-[#a87b28]">{missingSlots.join(', ')}</span>
+            </p>
+          )}
 
           <button
-            disabled={submitting}
+            disabled={submitting || missingSlots.length > 0 || uploadingSlot !== null}
             onClick={() => void submit()}
-            className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#C9973A] hover:bg-[#b8852f] text-white text-sm font-bold transition-colors disabled:opacity-60"
+            className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#C9973A] hover:bg-[#b8852f] text-white text-sm font-bold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Briefcase className="w-4 h-4" />}
             Send application

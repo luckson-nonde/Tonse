@@ -286,6 +286,19 @@ export class JobBoardService {
       );
     }
 
+    // Every document the posting demands must actually be attached. The apply
+    // modal blocks on the same list client-side; this is the authority.
+    const requiredSlots = this.getRequiredAttachmentSlots(posting.attributes);
+    if (requiredSlots.length > 0) {
+      const provided = new Set((dto.attachments ?? []).map((a) => a.label));
+      const missing = requiredSlots.filter((label) => !provided.has(label));
+      if (missing.length > 0) {
+        throw new BadRequestException(
+          `Attach the required documents before applying: ${missing.join(', ')}`,
+        );
+      }
+    }
+
     let saved: JobApplication;
     try {
       saved = await this.applicationsRepository.save(
@@ -425,6 +438,24 @@ export class JobBoardService {
   }
 
   // ── Internals ────────────────────────────────────────────────────────
+
+  /**
+   * The documents a posting demands, each of which an application MUST carry
+   * an attachment for (matched on the exact label string).
+   *
+   * MUST mirror getRequiredAttachmentSlots in
+   * src/services/labourFormSchema.ts — the apply modal blocks submit on that
+   * copy, so any drift here either rejects applications the applicant was
+   * told were complete, or silently accepts ones missing a demanded document.
+   */
+  private getRequiredAttachmentSlots(
+    attributes: Record<string, any> | null | undefined,
+  ): string[] {
+    const docs: string[] = Array.isArray(attributes?.req_documents)
+      ? attributes!.req_documents
+      : [];
+    return [...docs, ...(attributes?.req_certifications ? ['Certification'] : [])];
+  }
 
   /** Every id must be an existing, admin-enabled child of `labour` —
    *  machinery-hire (and anything else) is rejected here, keeping the

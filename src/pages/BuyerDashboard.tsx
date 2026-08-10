@@ -38,7 +38,7 @@ import { isCategoryAvailable } from '../services/categories/availability';
 import { buildInquiryDescription, clampInquiryTitle } from '../services/inquiryDescription';
 import { Inquiry, InquiryItem, Quote } from '../types';
 import { getLabourFormFields } from '../services/labourFormSchema';
-import JobPostingDetailsForm, { type JobPostingDetails } from '../components/buyer/JobPostingDetailsForm';
+import VacancyComposerForm, { type JobPostingDetails } from '../components/buyer/VacancyComposerForm';
 import { jobBoardService, type CreateJobPostingInput } from '../services/api/jobBoardService';
 import FinancialPage from './FinancialPage';
 import BrowseShopsView from '../components/BrowseShopsView';
@@ -850,7 +850,12 @@ export default function BuyerDashboard() {
     } else {
       setPendingInquiry((prev) => ({ ...prev, categories: selectedCategories }));
     }
-    handleTabChange('create-inquiry');
+    // A labour trade opens the VACANCY COMPOSER directly — the per-trade
+    // inquiry form ("how many workers / what rate / how long") can't express
+    // a job ad. Machinery-hire and every non-labour category are untouched.
+    const isJobPost =
+      selectedCategories.isLabour === true && selectedCategories.labourGroup !== 'MACHINERY_HIRE';
+    handleTabChange(isJobPost ? 'job-posting-details' : 'create-inquiry');
   };
 
   const handleLocationComplete = (locationData: any) => {
@@ -1157,8 +1162,10 @@ export default function BuyerDashboard() {
 
         let schema: any[] = [];
         if (isLabour) {
-          // Shared with JobPostsManagerView's "Post a Job" flow so both
-          // entry points ask the same per-trade requirements.
+          // Machinery-hire only now: labour TRADES skip this step entirely
+          // and go straight to the vacancy composer (a job ad can't be
+          // expressed as "how many workers / what rate / how long"). The
+          // isLabour flag still covers both because they share the picker.
           schema = getLabourFormFields(pendingInquiry.inquirySchemaKey);
         } else {
           // pendingInquiry.categories[0] is the stable category ID
@@ -1202,20 +1209,19 @@ export default function BuyerDashboard() {
             />
           </div>
         );
-      case 'job-posting-details': {
-        const rawWorkers = parseInt(String(pendingInquiry.attributes?.number_of_workers ?? ''), 10);
+      case 'job-posting-details':
         return (
-          <JobPostingDetailsForm
+          <VacancyComposerForm
             tradeLabel={pendingInquiry.category || 'Worker'}
-            defaultWorkers={Number.isFinite(rawWorkers) && rawWorkers > 0 ? rawWorkers : undefined}
-            onBack={() => handleTabChange('create-inquiry')}
+            // Reached straight from the trade picker — the per-trade inquiry
+            // form is skipped for job posts.
+            onBack={() => handleTabChange('category-selection')}
             onSubmit={(details) => {
               setPendingInquiry((prev) => ({ ...prev, jobPostingDetails: details }));
               handleTabChange('location-details');
             }}
           />
         );
-      }
       case 'process-selection':
         return (
           <ProcessSelection

@@ -23,14 +23,41 @@ export function getLabourFormFields(schemaKey: string | undefined): FieldSchema[
   })) as FieldSchema[];
 }
 
+/**
+ * Reserved attribute keys the VACANCY COMPOSER owns. A job post created by
+ * the composer stamps `postShape: 'vacancy'` and these alongside it, inside
+ * the same `attributes` json the trade answers used to occupy — no column,
+ * no migration (nothing filters or sorts on them; the column is documented
+ * as JS-filtered-after-load, never queried in SQL).
+ */
+export const VACANCY_RESERVED_KEYS = [
+  'postShape',
+  'resp_list',
+  'min_requirements',
+  'employment_type',
+  'pay_note',
+] as const;
+
+/**
+ * True for any attribute key the poster's form REBUILDS from scratch on every
+ * submit. An edit-and-resubmit must strip these from the stored attributes
+ * before merging fresh form state, or a bullet/requirement the poster DELETED
+ * survives from the original posting. Single source of truth — used by
+ * JobPostsManagerView.submitFlow.
+ */
+export function isPosterRebuiltAttributeKey(key: string): boolean {
+  return key.startsWith('req_') || (VACANCY_RESERVED_KEYS as readonly string[]).includes(key);
+}
+
 /** Keys that are rendered as first-class card facts elsewhere (start date,
  *  location) — excluded so the specifications list doesn't repeat them. */
-const SPEC_BLOCKLIST = new Set([
+const SPEC_BLOCKLIST = new Set<string>([
   'urgency',
   'preferredDateTime',
   'location',
   'site_location',
   'additional_notes',
+  ...VACANCY_RESERVED_KEYS,
 ]);
 
 export interface LabourRequirement {
@@ -69,17 +96,32 @@ export function getJobSpecifications(
 }
 
 // ── Applicant requirements (what the WORKER must have) ────────────────────
-// Uniform across all trades, collected in JobPostingDetailsForm and stored
+// Uniform across all trades, collected in VacancyComposerForm and stored
 // as req_* keys inside the posting's attributes json — no schema change and
 // no per-trade drift. The apply modal derives its attach-proof slots from
 // these, so what the poster demands is exactly what the seeker can answer.
 
 export const EXPERIENCE_OPTIONS = ['Any level', '1+ years', '3+ years', '5+ years'] as const;
 
-export const REQUIRED_DOCUMENT_OPTIONS = [
+export const EMPLOYMENT_TYPE_OPTIONS = [
+  'Full-time',
+  'Part-time',
+  'Contract',
+  'Casual / Piece work',
+  'Seasonal',
+] as const;
+
+/** Common documents a Zambian job ad asks for. The poster can also type any
+ *  custom name ("Forklift operator permit"); both land in the same
+ *  `req_documents` string array, and each entry becomes a MANDATORY upload
+ *  slot in the application. Labels are matched exactly end to end — renaming
+ *  one here does not migrate postings that already stored the old string. */
+export const REQUIRED_DOCUMENT_PRESETS = [
   'NRC / National ID',
+  'Grade 12 Certificate',
+  'CV / Résumé',
+  "Driver's Licence",
   'Trade certificate',
-  "Driver's licence",
   'Police clearance',
   'References',
 ] as const;
@@ -108,17 +150,49 @@ export function getSeekerRequirements(
     }));
 }
 
+export interface VacancyDetails {
+  responsibilities: string[];
+  minimumRequirements: string[];
+  employmentType: string | null;
+  payNote: string | null;
+}
+
 /**
- * Attach-slot labels for the apply modal: one per demanded document, plus a
- * certification slot when one is required, plus a free extras slot.
+ * The vacancy-ad content of a posting, or NULL for legacy postings created
+ * before the composer existed (they carry per-trade inquiry answers instead
+ * — callers fall back to getJobSpecifications for those). `postShape` is the
+ * discriminator; there is no backfill.
  */
-export function getAttachmentSlotLabels(
+export function getVacancyDetails(
+  attributes: Record<string, any> | null | undefined,
+): VacancyDetails | null {
+  if (!attributes || attributes.postShape !== 'vacancy') return null;
+  const bullets = (raw: any): string[] =>
+    Array.isArray(raw) ? raw.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim()) : [];
+  return {
+    responsibilities: bullets(attributes.resp_list),
+    minimumRequirements: bullets(attributes.min_requirements),
+    employmentType:
+      typeof attributes.employment_type === 'string' && attributes.employment_type.trim()
+        ? attributes.employment_type
+        : null,
+    payNote:
+      typeof attributes.pay_note === 'string' && attributes.pay_note.trim()
+        ? attributes.pay_note.trim()
+        : null,
+  };
+}
+
+/**
+ * MANDATORY upload slots for an application: one per demanded document,
+ * plus a certification slot when one is required. Every slot must carry a
+ * file before the application can be submitted — the apply modal blocks on
+ * it and JobBoardService.applyToJob enforces the same list server-side
+ * (keep the two in lockstep: labels are matched exactly).
+ */
+export function getRequiredAttachmentSlots(
   attributes: Record<string, any> | null | undefined,
 ): string[] {
   const docs: string[] = Array.isArray(attributes?.req_documents) ? attributes!.req_documents : [];
-  return [
-    ...docs,
-    ...(attributes?.req_certifications ? ['Certification'] : []),
-    'Supporting document',
-  ];
+  return [...docs, ...(attributes?.req_certifications ? ['Certification'] : [])];
 }
