@@ -21,13 +21,16 @@ interface ShopCardProps {
  *
  * BUSINESS-branded only — the owner's personal profile picture never
  * appears here (it lives on the shop profile page): navy "hat" header
- * carrying the business logo ("LTS"-style monogram until shops get a
- * real logo upload) over a subtle data-pattern texture → circular shop
- * image (the seller's newest product photo) straddling the header seam,
- * rendered only when a real image exists → centered identity block with
- * a large rating number over stars (real review aggregates; "New on
- * Nyuwe" until the first review) → grey category pills → one dominant
- * Send Inquiry button with a quiet View-profile link under it.
+ * whose circle always shows REAL imagery when any exists (uploaded logo
+ * first, else the seller's newest product photo) over a subtle
+ * data-pattern texture; the "LTS"-style monogram is strictly a last
+ * resort for shops with no imagery at all — never stacked above a real
+ * photo. A second circle straddles the header seam only when it adds a
+ * second real image (logo up top AND a product photo). Then a centered
+ * identity block with a large rating number over stars (real review
+ * aggregates; "New on Nyuwe" until the first review) → grey category
+ * pills → one dominant Send Inquiry button with a quiet View-profile
+ * link under it.
  *
  * Border/ring colors are opaque on purpose — translucent borders on
  * rounded elements mis-rasterize on Mali-GPU Android phones.
@@ -63,6 +66,13 @@ export default function ShopCard({
   // SVG ids are document-global and the grid renders many cards — the
   // texture pattern id must be unique per card.
   const patternId = `sc-dots-${shop.id}`;
+
+  // Real imagery beats the placeholder: header circle shows the uploaded
+  // logo, else the newest product photo. The seam circle only earns its
+  // place when it adds a SECOND real image — never a duplicate, and never
+  // a photo sitting under an initials placeholder.
+  const headerImage = shop.logo || shop.coverImage || null;
+  const seamImage = shop.logo && shop.coverImage ? shop.coverImage : null;
 
   return (
     <div className="group bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200 hover:shadow-xl hover:border-[#C9973A] hover:-translate-y-1 transition-all duration-300 flex flex-col">
@@ -104,11 +114,11 @@ export default function ShopCard({
           </button>
         )}
         <div className="absolute inset-x-0 top-4 flex justify-center">
-          {shop.logo ? (
+          {headerImage ? (
             <img
-              src={shop.logo}
-              alt={`${shop.name} logo`}
-              className="w-22 h-22 rounded-full object-cover ring-4 ring-white shadow-lg"
+              src={headerImage}
+              alt={`${shop.name} ${headerImage === shop.logo ? 'logo' : 'showcase'}`}
+              className="w-22 h-22 rounded-full object-cover ring-4 ring-white shadow-lg bg-white"
             />
           ) : (
             <div className="w-22 h-22 rounded-full bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] ring-4 ring-white shadow-lg flex flex-col items-center justify-center">
@@ -120,13 +130,12 @@ export default function ShopCard({
         </div>
       </div>
 
-      {/* ── Circular shop image straddling the header seam — only when a
-             real product photo exists (a second initial circle under the
-             monogram is just noise) ── */}
-      {shop.coverImage && (
+      {/* ── Second circle straddling the header seam — only when the shop
+             has BOTH a logo (shown above) and a product photo to add ── */}
+      {seamImage && (
         <div className="flex justify-center -mt-9 relative z-10">
           <img
-            src={shop.coverImage}
+            src={seamImage}
             alt={`${shop.name} showcase`}
             className="w-18 h-18 rounded-full object-cover ring-4 ring-white shadow-lg bg-white"
           />
@@ -134,7 +143,7 @@ export default function ShopCard({
       )}
 
       {/* ── Centered identity + rating block ── */}
-      <div className={`px-5 ${shop.coverImage ? 'pt-3' : 'pt-4'} flex flex-col items-center text-center`}>
+      <div className={`px-5 ${seamImage ? 'pt-3' : 'pt-4'} flex flex-col items-center text-center`}>
         <h4 className="font-serif text-[17px] font-bold text-[#1a1612] leading-tight">{shop.name}</h4>
         <p className="text-[11px] text-slate-400 font-medium mt-1 flex items-center gap-1 max-w-full">
           <MapPin className="w-3 h-3 shrink-0" />
