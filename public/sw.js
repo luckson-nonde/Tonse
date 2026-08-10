@@ -15,7 +15,7 @@
  */
 
 // v8: Nyuwe rebrand — same-named icon files changed, old caches must drop.
-const VERSION = 'v8';
+const VERSION = 'v9';
 const SHELL_CACHE = 'tonse-shell-' + VERSION;
 const FONT_CACHE = 'tonse-fonts-' + VERSION;
 const IMG_CACHE = 'tonse-img-' + VERSION;
@@ -140,7 +140,12 @@ function staleWhileRevalidate(request, cacheName) {
           }
           return response;
         })
-        .catch(() => cached);
+        // respondWith() MUST get a real Response — resolving with undefined
+        // (nothing cached + network rejected, e.g. a deleted upload whose
+        // JSON 404 gets ORB-blocked for image requests) makes the browser
+        // kill the request with a loud TypeError + ERR_FAILED. Response.error()
+        // is the clean "network failed" answer for that case.
+        .catch(() => cached || Response.error());
       return cached || network;
     })
   );

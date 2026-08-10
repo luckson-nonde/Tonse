@@ -8,6 +8,7 @@ import { TicketEvent } from './entities/ticket-event.entity';
 import { TicketOrder } from './entities/ticket-order.entity';
 import { TicketTier } from './entities/ticket-tier.entity';
 import { Ticket } from './entities/ticket.entity';
+import { TicketPosterSweepService } from './ticket-poster-sweep.service';
 import { TicketsPublicController } from './tickets-public.controller';
 import { TicketsController } from './tickets.controller';
 import { TicketsService } from './tickets.service';
@@ -34,7 +35,7 @@ import { TicketsService } from './tickets.service';
     LedgerModule,
   ],
   controllers: [TicketsController, TicketsPublicController],
-  providers: [TicketsService, MailerService],
+  providers: [TicketsService, MailerService, TicketPosterSweepService],
   exports: [TicketsService],
 })
 export class TicketsModule {}
