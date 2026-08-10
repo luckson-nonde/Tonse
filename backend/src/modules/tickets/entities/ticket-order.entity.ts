@@ -7,7 +7,7 @@ import {
   Index,
 } from 'typeorm';
 
-export type TicketOrderStatus = 'PENDING' | 'PAID' | 'FAILED';
+export type TicketOrderStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
 
 export interface TicketOrderLineItem {
   tierId: string;
@@ -61,8 +61,13 @@ export class TicketOrder {
   @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
   commissionZmw: number | null;
 
-  @Column({ type: 'enum', enum: ['PENDING', 'PAID', 'FAILED'], default: 'PENDING' })
+  @Column({ type: 'enum', enum: ['PENDING', 'PAID', 'FAILED', 'REFUNDED'], default: 'PENDING' })
   status: TicketOrderStatus;
+
+  /** Set when the buyer's money was returned (event cancelled) — the
+   *  TICKET_SALE journal is reversed and the order's tickets go VOID. */
+  @Column({ type: 'timestamp', nullable: true })
+  refundedAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

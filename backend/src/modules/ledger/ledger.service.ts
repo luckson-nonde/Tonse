@@ -199,6 +199,21 @@ export class LedgerService {
     return manager ? run(manager) : this.dataSource.transaction(run);
   }
 
+  /**
+   * Find a journal by the deterministic key its poster used (e.g.
+   * `ticket-sale:<orderId>`). Lets a caller locate the journal it needs to
+   * `reverse()` without reaching into the journal repository itself.
+   */
+  async findByIdempotencyKey(
+    idempotencyKey: string,
+    manager?: EntityManager,
+  ): Promise<LedgerJournal | null> {
+    const repo = manager
+      ? manager.getRepository(LedgerJournal)
+      : this.dataSource.getRepository(LedgerJournal);
+    return repo.findOne({ where: { idempotencyKey } });
+  }
+
   /** Trial balance — every account's net position. Debits must equal credits
    *  overall; a non-zero total is a broken ledger. */
   async trialBalance(): Promise<{

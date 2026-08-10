@@ -272,11 +272,15 @@ export class TicketsService {
     return this.getEventForSeller(sellerId, eventId);
   }
 
-  /** Attendee/purchase list for one of the seller's events. */
+  /** Attendee/purchase list for one of the seller's events — paid orders plus
+   *  refunded ones, so the seller keeps the history after a cancellation. */
   async salesForEvent(sellerId: string, eventId: string) {
     await this.assertOwnership(sellerId, eventId);
     const orders = await this.orders.find({
-      where: { eventId, status: 'PAID' },
+      where: [
+        { eventId, status: 'PAID' },
+        { eventId, status: 'REFUNDED' },
+      ],
       order: { createdAt: 'DESC' },
     });
 
@@ -306,8 +310,194 @@ export class TicketsService {
       checkedInCount: scannedByOrder.get(order.id) ?? 0,
       totalAmountZmw: Number(order.totalAmountZmw),
       netZmw: Number(order.totalAmountZmw) - Number(order.commissionZmw ?? 0),
+      status: order.status,
+      refundedAt: order.refundedAt,
       purchasedAt: order.createdAt,
     }));
+  }
+
+  // ───── Delete / refund ─────────────────────────────────────────────────
+
+  /**
+   * Permanently remove an event that never sold a ticket. Anything with a
+   * paid order is refused — those buyers must be refunded first, and the
+   * order history has to survive as the audit trail behind the reversals.
+   */
+  async deleteEvent(sellerId: string, eventId: string) {
+    await this.assertOwnership(sellerId, eventId);
+
+    const sold = await this.orders.count({
+      where: [
+        { eventId, status: 'PAID' },
+        { eventId, status: 'REFUNDED' },
+      ],
+    });
+    if (sold > 0) {
+      throw new ConflictException(
+        'This event has ticket sales — cancel it and refund the buyers instead of deleting it.',
+      );
+    }
+
+    await this.dataSource.transaction(async (m) => {
+      // Abandoned PENDING/FAILED orders never minted tickets or moved money;
+      // the ticket delete is defensive so no orphan can outlive its event.
+      await m.getRepository(Ticket).delete({ eventId });
+      await m.getRepository(TicketOrder).delete({ eventId });
+      await m.getRepository(TicketEventScanner).delete({ eventId });
+      await m.getRepository(TicketTier).delete({ eventId });
+      await m.getRepository(TicketEvent).delete({ id: eventId });
+    });
+
+    return { deleted: true, eventId };
+  }
+
+  /**
+   * Give every buyer their money back after the event was called off.
+   *
+   * Each order is refunded on its OWN transaction so one failure can't strand
+   * the rest, and each is idempotent: the reversal carries the deterministic
+   * key `reversal:<journalId>`, so a re-click re-reports rather than
+   * double-pays. The refund amount is never recomputed — reversing the
+   * original TICKET_SALE journal mirrors exactly what was charged, commission
+   * included, so the buyer gets back precisely what they paid.
+   */
+  async refundAllForEvent(sellerId: string, eventId: string) {
+    const event = await this.assertOwnership(sellerId, eventId);
+    // Refunding while tickets are still on sale would be incoherent — money
+    // going out one door as new buyers come in the other. Cancel first.
+    if (event.status !== 'CANCELLED') {
+      throw new ConflictException('Cancel the event first, then refund the buyers.');
+    }
+    const orders = await this.orders.find({
+      where: [
+        { eventId, status: 'PAID' },
+        { eventId, status: 'REFUNDED' },
+      ],
+      order: { createdAt: 'ASC' },
+    });
+
+    const failed: Array<{ orderId: string; buyerName: string; reason: string }> = [];
+    const emailQueue: TicketOrder[] = [];
+    let refunded = 0;
+    let alreadyRefunded = 0;
+    let refundedAmountZmw = 0;
+
+    for (const order of orders) {
+      if (order.status === 'REFUNDED') {
+        alreadyRefunded++;
+        continue;
+      }
+      try {
+        const journal = await this.ledger.findByIdempotencyKey(`ticket-sale:${order.id}`);
+        if (!journal) {
+          failed.push({
+            orderId: order.id,
+            buyerName: order.buyerName,
+            reason: 'No sale record found for this order — refund it manually.',
+          });
+          continue;
+        }
+
+        // The seller's venture balance is what funds the claw-back. Checked
+        // per order, immediately before reversing it, because an earlier
+        // refund in this same loop has already reduced the balance.
+        const sellerNetNgwee =
+          toNgwee(String(order.totalAmountZmw)) - toNgwee(String(order.commissionZmw ?? 0));
+        const balanceNgwee = toNgwee(await this.ledger.sellerBalance(event.sellerId));
+        if (balanceNgwee < sellerNetNgwee) {
+          failed.push({
+            orderId: order.id,
+            buyerName: order.buyerName,
+            reason: `Your balance (ZMW ${fromNgwee(balanceNgwee)}) can't cover this refund of ZMW ${fromNgwee(sellerNetNgwee)}.`,
+          });
+          continue;
+        }
+
+        await this.dataSource.transaction(async (m) => {
+          await this.ledger.reverse(
+            journal.id,
+            `Event cancelled — refunded ${order.buyerName} (${order.reference})`,
+            m,
+          );
+          await m
+            .getRepository(Ticket)
+            .update({ orderId: order.id }, { status: 'VOID' });
+          await m
+            .getRepository(TicketOrder)
+            .update({ id: order.id }, { status: 'REFUNDED', refundedAt: new Date() });
+        });
+
+        refunded++;
+        refundedAmountZmw += Number(order.totalAmountZmw);
+        if (order.buyerEmail) emailQueue.push(order);
+      } catch (e: any) {
+        this.logger.error(`Refund failed for order ${order.reference}: ${e?.message}`);
+        failed.push({
+          orderId: order.id,
+          buyerName: order.buyerName,
+          reason: e?.message || 'Refund failed — please try again.',
+        });
+      }
+    }
+
+    // Notices go out after all the money has moved — never inside the loop's
+    // transactions, and never allowed to fail a refund that already settled.
+    for (const order of emailQueue) {
+      this.sendRefundEmail(event, order).catch((e) =>
+        this.logger.error(`Refund email for ${order.reference} failed: ${e?.message}`),
+      );
+    }
+
+    return {
+      total: orders.length,
+      refunded,
+      alreadyRefunded,
+      refundedAmountZmw,
+      emailsQueued: this.mailer.enabled ? emailQueue.length : 0,
+      failed,
+    };
+  }
+
+  /** Plain "your money is on its way back" notice — no QR codes, the
+   *  tickets it would have shown are void. */
+  private async sendRefundEmail(event: TicketEvent, order: TicketOrder) {
+    const esc = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const when = new Date(event.eventDate).toLocaleString('en-GB', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+
+    await this.mailer.send({
+      to: order.buyerEmail!,
+      subject: `Refunded — ${event.title} was cancelled`,
+      html: `
+      <div style="margin:0 auto;max-width:520px;font-family:Segoe UI,Arial,sans-serif;background:#f8fafc;padding:20px;">
+        <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:22px;">
+          <p style="margin:0 0 4px;font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#C9973A;">Nyuwe Tickets</p>
+          <h1 style="margin:0 0 10px;font-size:22px;color:#0f172a;">${esc(event.title)} was cancelled</h1>
+          <p style="margin:0 0 14px;font-size:14px;color:#334155;">
+            Hi ${esc(order.buyerName)}, the organiser has cancelled this event
+            (it was scheduled for ${esc(when)}), so your tickets have been
+            voided and your money refunded in full.
+          </p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;">
+            <tr><td style="padding:16px;">
+              <p style="margin:0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Refunded</p>
+              <p style="margin:4px 0 0;font-size:26px;font-weight:800;color:#059669;">ZMW ${Number(order.totalAmountZmw).toFixed(2)}</p>
+              <p style="margin:8px 0 0;font-size:12px;color:#94a3b8;">Original payment ref ${esc(order.reference)}</p>
+            </td></tr>
+          </table>
+          <p style="margin:14px 0 0;font-size:12px;color:#94a3b8;">
+            The refund goes back to the mobile-money number you paid with. Nothing else is needed from you.
+          </p>
+        </div>
+      </div>`,
+    });
   }
 
   // ───── Door team (scanners) + check-in ─────────────────────────────────

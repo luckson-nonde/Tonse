@@ -67,6 +67,19 @@ export class TicketsController {
     return this.tickets.cancelEvent(req.user.id, id);
   }
 
+  /** Permanent removal — refused if the event ever sold a ticket. */
+  @Delete(':id')
+  async remove(@Param('id') id: string, @Request() req) {
+    return this.tickets.deleteEvent(req.user.id, id);
+  }
+
+  /** Bulk-refund every buyer of a cancelled event, for exactly what they paid. */
+  @Post(':id/refund-all')
+  @HttpCode(HttpStatus.OK)
+  async refundAll(@Param('id') id: string, @Request() req) {
+    return this.tickets.refundAllForEvent(req.user.id, id);
+  }
+
   @Get(':id/sales')
   async sales(@Param('id') id: string, @Request() req) {
     return this.tickets.salesForEvent(req.user.id, id);

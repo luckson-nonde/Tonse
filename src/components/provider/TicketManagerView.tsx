@@ -21,6 +21,8 @@ import {
   ScanLine,
   UserPlus,
   ShieldCheck,
+  Undo2,
+  AlertTriangle,
 } from 'lucide-react';
 import emptyStateImage from '../../assets/images/empty-states/owl_reading.webp';
 import { formatCurrency } from '../../utils/financeUtils';
@@ -35,6 +37,7 @@ import {
   TicketSaleRow,
   TicketEventStatus,
   TicketScannerRow,
+  RefundAllResult,
 } from '../../services/api/ticketsService';
 import { searchZambiaPlaces, ZambiaPlace } from '../../utils/zambiaPlaces';
 import DateTimePicker from '../DateTimePicker';
@@ -138,6 +141,13 @@ export default function TicketManagerView() {
   const [copiedCode, setCopiedCode] = useState('');
   const [cancellingId, setCancellingId] = useState('');
   const [confirmCancelId, setConfirmCancelId] = useState('');
+  const [deletingId, setDeletingId] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState('');
+
+  // Bulk-refund state for the sales view
+  const [confirmRefund, setConfirmRefund] = useState(false);
+  const [refunding, setRefunding] = useState(false);
+  const [refundResult, setRefundResult] = useState<RefundAllResult | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -411,6 +421,8 @@ export default function TicketManagerView() {
     setView('sales');
     setSalesLoading(true);
     setScannerError('');
+    setConfirmRefund(false);
+    setRefundResult(null);
     try {
       const [salesRows, scannerRows] = await Promise.all([
         ticketsService.salesForEvent(event.id),
@@ -471,6 +483,39 @@ export default function TicketManagerView() {
     }
   };
 
+  const handleDeleteEvent = async (eventId: string) => {
+    setDeletingId(eventId);
+    setError('');
+    try {
+      await ticketsService.deleteEvent(eventId);
+      setConfirmDeleteId('');
+      await load();
+    } catch (e: any) {
+      setError(e?.message || 'Could not delete the event.');
+    } finally {
+      setDeletingId('');
+    }
+  };
+
+  /** Pay every buyer of this cancelled event back what they paid. */
+  const handleRefundAll = async () => {
+    if (!salesEvent) return;
+    setRefunding(true);
+    setError('');
+    try {
+      const result = await ticketsService.refundAllForEvent(salesEvent.id);
+      setRefundResult(result);
+      setConfirmRefund(false);
+      // Rows flip to "Refunded"; the list view's totals move too.
+      setSales(await ticketsService.salesForEvent(salesEvent.id));
+      await load();
+    } catch (e: any) {
+      setError(e?.message || 'Could not refund the buyers.');
+    } finally {
+      setRefunding(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24 text-slate-400">
@@ -506,6 +551,95 @@ export default function TicketManagerView() {
               <ScanLine className="w-3.5 h-3.5" /> Scan tickets
             </button>
           </div>
+
+          {/* Refund station — the money owed back after a cancellation. Only
+              appears when there is something genuinely outstanding. */}
+          {salesEvent.status === 'CANCELLED' &&
+            (() => {
+              const owed = sales.filter((s) => s.status !== 'REFUNDED');
+              const owedTotal = owed.reduce((sum, s) => sum + s.totalAmountZmw, 0);
+              const done = sales.filter((s) => s.status === 'REFUNDED');
+              if (sales.length === 0) return null;
+
+              return owed.length > 0 ? (
+                <div className="rounded-2xl bg-rose-50 border border-rose-100 px-4 py-4 space-y-3">
+                  <div>
+                    <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-rose-600">
+                      <AlertTriangle className="w-3.5 h-3.5" /> Refund owed
+                    </p>
+                    <p className="mt-1 text-[12px] text-rose-700 font-semibold tracking-normal normal-case">
+                      {owed.length} {owed.length === 1 ? 'buyer' : 'buyers'} paid ZMW{' '}
+                      {formatCurrency(owedTotal)} for this cancelled event.
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-rose-500 font-medium tracking-normal normal-case leading-relaxed">
+                      Refunding sends every one of them back exactly what they paid, voids their
+                      tickets, and emails them a notice. The money comes out of your Financial
+                      Account.
+                    </p>
+                  </div>
+                  {confirmRefund ? (
+                    <button
+                      type="button"
+                      onClick={handleRefundAll}
+                      disabled={refunding}
+                      className="w-full inline-flex items-center justify-center gap-1.5 py-3 rounded-2xl bg-rose-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-rose-600 transition-colors disabled:opacity-50"
+                    >
+                      {refunding ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Undo2 className="w-3.5 h-3.5" />
+                      )}
+                      {refunding
+                        ? 'Sending refunds…'
+                        : `Confirm — refund ZMW ${formatCurrency(owedTotal)} to ${owed.length} ${owed.length === 1 ? 'buyer' : 'buyers'}`}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmRefund(true)}
+                      className="w-full inline-flex items-center justify-center gap-1.5 py-3 rounded-2xl border border-rose-300 text-rose-600 text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 transition-colors"
+                    >
+                      <Undo2 className="w-3.5 h-3.5" /> Refund all buyers
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-3.5">
+                  <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-emerald-600">
+                    <Check className="w-3.5 h-3.5" /> All buyers refunded
+                  </p>
+                  <p className="mt-1 text-[12px] text-emerald-700 font-semibold tracking-normal normal-case">
+                    {done.length} {done.length === 1 ? 'buyer has' : 'buyers have'} been paid back
+                    in full.
+                  </p>
+                </div>
+              );
+            })()}
+
+          {/* Outcome of the last bulk refund, including anything that failed —
+              never silently swallowed. */}
+          {refundResult && (
+            <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3.5 space-y-1.5">
+              <p className="text-[12px] font-bold text-slate-800 tracking-normal normal-case">
+                Refunded {refundResult.refunded} of {refundResult.total} — ZMW{' '}
+                {formatCurrency(refundResult.refundedAmountZmw)} returned
+                {refundResult.emailsQueued > 0 && `, ${refundResult.emailsQueued} emailed`}.
+              </p>
+              {refundResult.alreadyRefunded > 0 && (
+                <p className="text-[11px] text-slate-400 font-medium tracking-normal normal-case">
+                  {refundResult.alreadyRefunded} had already been refunded.
+                </p>
+              )}
+              {refundResult.failed.map((f) => (
+                <p
+                  key={f.orderId}
+                  className="text-[11px] text-rose-500 font-semibold tracking-normal normal-case"
+                >
+                  {f.buyerName}: {f.reason}
+                </p>
+              ))}
+            </div>
+          )}
 
           {/* Live attendance — how many sold tickets have been scanned in. */}
           <div className="rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-3.5">
@@ -613,14 +747,33 @@ export default function TicketManagerView() {
                 <div key={sale.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-bold text-[13px] text-slate-900 truncate">{sale.buyerName}</p>
+                      <p className="font-bold text-[13px] text-slate-900 truncate">
+                        {sale.buyerName}
+                        {sale.status === 'REFUNDED' && (
+                          <span className="ml-2 px-2 py-0.5 rounded-full bg-slate-200 text-slate-500 text-[9px] font-black uppercase tracking-widest align-middle">
+                            Refunded
+                          </span>
+                        )}
+                      </p>
                       <p className="text-[11px] text-slate-400 font-medium truncate">
                         {sale.buyerPhone || sale.buyerEmail || '—'}
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="font-black text-[13px] text-slate-900">ZMW {formatCurrency(sale.totalAmountZmw)}</p>
-                      <p className="text-[10px] text-emerald-600 font-bold">ZMW {formatCurrency(sale.netZmw)} to you</p>
+                      <p
+                        className={`font-black text-[13px] ${
+                          sale.status === 'REFUNDED' ? 'text-slate-400 line-through' : 'text-slate-900'
+                        }`}
+                      >
+                        ZMW {formatCurrency(sale.totalAmountZmw)}
+                      </p>
+                      {sale.status === 'REFUNDED' ? (
+                        <p className="text-[10px] text-slate-400 font-bold">
+                          Returned {sale.refundedAt ? prettyDateTime(sale.refundedAt) : ''}
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-emerald-600 font-bold">ZMW {formatCurrency(sale.netZmw)} to you</p>
+                      )}
                     </div>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 font-medium">
@@ -984,6 +1137,7 @@ export default function TicketManagerView() {
               {events.map((event) => {
                 const shareUrl = ticketRichShareUrl(event.code);
                 const mapsUrl = ticketMapsUrl(event);
+                const needsRefund = event.status === 'CANCELLED' && event.ticketsSold > 0;
                 return (
                   <div key={event.id} className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
                     {event.posterUrl && (
@@ -1076,6 +1230,26 @@ export default function TicketManagerView() {
                         </div>
                       )}
 
+                      {/* A cancelled event that took money owes it back —
+                          point the seller at the refund station. */}
+                      {needsRefund && (
+                        <button
+                          type="button"
+                          onClick={() => openSales(event)}
+                          className="w-full flex items-center gap-2 rounded-2xl bg-rose-50 border border-rose-100 px-3.5 py-2.5 text-left hover:bg-rose-100 transition-colors"
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                          <span className="flex-1 min-w-0 text-[11px] font-bold text-rose-600">
+                            Cancelled with {event.ticketsSold} ticket
+                            {event.ticketsSold === 1 ? '' : 's'} sold — buyers may still be owed a
+                            refund.
+                          </span>
+                          <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-rose-500">
+                            Review
+                          </span>
+                        </button>
+                      )}
+
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -1106,6 +1280,32 @@ export default function TicketManagerView() {
                               className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 rounded-2xl border border-rose-200 text-[10px] font-black uppercase tracking-widest text-rose-500 hover:bg-rose-50 transition-colors"
                             >
                               <XCircle className="w-3.5 h-3.5" /> Cancel event
+                            </button>
+                          ))}
+                        {/* Nothing was ever sold, so there's nothing to protect —
+                            the event can be wiped for good. */}
+                        {event.ticketsSold === 0 &&
+                          (confirmDeleteId === event.id ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteEvent(event.id)}
+                              disabled={deletingId === event.id}
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 rounded-2xl bg-rose-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-rose-600 transition-colors disabled:opacity-50"
+                            >
+                              {deletingId === event.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
+                              Confirm — delete forever
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(event.id)}
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 rounded-2xl border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:border-rose-200 hover:text-rose-500 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Delete
                             </button>
                           ))}
                       </div>

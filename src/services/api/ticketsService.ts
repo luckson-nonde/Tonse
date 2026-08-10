@@ -76,7 +76,20 @@ export interface TicketSaleRow {
   checkedInCount: number;
   totalAmountZmw: number;
   netZmw: number;
+  /** REFUNDED once the buyer's money was returned (its tickets are VOID). */
+  status: 'PAID' | 'REFUNDED';
+  refundedAt: string | null;
   purchasedAt: string;
+}
+
+/** Outcome of bulk-refunding every buyer of a cancelled event. */
+export interface RefundAllResult {
+  total: number;
+  refunded: number;
+  alreadyRefunded: number;
+  refundedAmountZmw: number;
+  emailsQueued: number;
+  failed: Array<{ orderId: string; buyerName: string; reason: string }>;
 }
 
 /** A door-team member the organizer assigned by email. */
@@ -223,6 +236,18 @@ export const ticketsService = {
   async salesForEvent(eventId: string): Promise<TicketSaleRow[]> {
     const res = await apiClient.get(`/tickets/${encodeURIComponent(eventId)}/sales`);
     return payload<TicketSaleRow[]>(res, []);
+  },
+
+  /** Permanently remove an event — the backend refuses if it ever sold. */
+  async deleteEvent(eventId: string): Promise<void> {
+    await apiClient.delete(`/tickets/${encodeURIComponent(eventId)}`);
+  },
+
+  /** Refund every buyer of a cancelled event, exactly what each of them paid.
+   *  Safe to re-run: already-refunded orders come back as alreadyRefunded. */
+  async refundAllForEvent(eventId: string): Promise<RefundAllResult> {
+    const res = await apiClient.post(`/tickets/${encodeURIComponent(eventId)}/refund-all`);
+    return payload<RefundAllResult>(res, {} as RefundAllResult);
   },
 
   // ───── Door team + check-in (auth) ─────────────────────────────────────
