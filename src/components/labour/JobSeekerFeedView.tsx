@@ -21,7 +21,11 @@ import {
 } from '../../services/api/jobBoardService';
 import { apiClient } from '../../services/api/client';
 import { LABOUR_CATEGORIES } from '../../services/labourCategories';
-import { getLabourRequirements } from '../../services/labourFormSchema';
+import {
+  getAttachmentSlotLabels,
+  getJobSpecifications,
+  getSeekerRequirements,
+} from '../../services/labourFormSchema';
 import DateTimePicker from '../DateTimePicker';
 
 const tradeLabelOf = (id: string) =>
@@ -127,22 +131,41 @@ export default function JobSeekerFeedView() {
               <p className="text-[13px] text-slate-600 mt-2 whitespace-pre-wrap">{job.description}</p>
 
               {(() => {
-                const requirements = getLabourRequirements(job.tradeCategoryIds[0], job.attributes);
-                if (requirements.length === 0) return null;
+                const specs = getJobSpecifications(job.tradeCategoryIds[0], job.attributes);
+                const requirements = getSeekerRequirements(job.attributes);
                 return (
-                  <div className="mt-3 rounded-xl border border-[#eef2f6] bg-[#fbfaf7] px-3.5 py-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                      Requirements
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
-                      {requirements.map((r) => (
-                        <div key={r.label} className="flex items-baseline gap-2 text-[12px]">
-                          <span className="text-slate-500">{r.label}:</span>
-                          <span className="font-bold text-slate-700">{r.value}</span>
+                  <>
+                    {specs.length > 0 && (
+                      <div className="mt-3 rounded-xl border border-[#eef2f6] bg-[#fbfaf7] px-3.5 py-3">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                          Job specifications
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+                          {specs.map((r) => (
+                            <div key={r.label} className="flex items-baseline gap-2 text-[12px]">
+                              <span className="text-slate-500">{r.label}:</span>
+                              <span className="font-bold text-slate-700">{r.value}</span>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      </div>
+                    )}
+                    {requirements.length > 0 && (
+                      <div className="mt-2 rounded-xl border border-[#f0dfc0] bg-[#fdf9f0] px-3.5 py-3">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-[#a87b28] mb-2">
+                          You'll need
+                        </p>
+                        <div className="space-y-1.5">
+                          {requirements.map((r) => (
+                            <div key={r.label} className="flex items-baseline gap-2 text-[12px]">
+                              <span className="text-[#a87b28]">{r.label}:</span>
+                              <span className="font-bold text-slate-700">{r.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 );
               })()}
 
@@ -235,8 +258,11 @@ function ApplyModal({
   const [attachments, setAttachments] = useState<DraftAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement | null>(null);
-  const requirements = getLabourRequirements(job.tradeCategoryIds[0], job.attributes);
-  const labelOptions = [...requirements.map((r) => r.label), 'Supporting document'];
+  // What the POSTER demanded (req_* keys) — drives both the checklist shown
+  // here and the labels a file can be attached under, so the seeker submits
+  // exactly the documents the post asked for.
+  const requirements = getSeekerRequirements(job.attributes);
+  const labelOptions = getAttachmentSlotLabels(job.attributes);
 
   const upload = async (file: File | undefined) => {
     if (!file) return;
@@ -262,10 +288,13 @@ function ApplyModal({
       );
       const url = res.data?.url;
       if (!url) throw new Error('Upload returned no file URL.');
-      // Default the label to the first requirement not yet answered, so the
-      // common case (one requirement, one document) needs no extra tap.
+      // Default the label to the first demanded document not yet answered,
+      // so the common case (one document asked, one attached) needs no
+      // extra tap. 'Supporting document' stays the free-extras bucket.
       const used = new Set(attachments.map((a) => a.label));
-      const suggested = requirements.map((r) => r.label).find((l) => !used.has(l));
+      const suggested = labelOptions
+        .filter((l) => l !== 'Supporting document')
+        .find((l) => !used.has(l));
       setAttachments((prev) => [
         ...prev,
         { label: suggested ?? 'Supporting document', url, fileName: file.name },

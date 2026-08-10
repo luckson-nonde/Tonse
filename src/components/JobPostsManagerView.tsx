@@ -22,7 +22,11 @@ import {
   type MyJobPosting,
 } from '../services/api/jobBoardService';
 import { LABOUR_CATEGORIES } from '../services/labourCategories';
-import { getLabourFormFields, getLabourRequirements } from '../services/labourFormSchema';
+import {
+  getJobSpecifications,
+  getLabourFormFields,
+  getSeekerRequirements,
+} from '../services/labourFormSchema';
 import JobPostingDetailsForm, { type JobPostingDetails } from './buyer/JobPostingDetailsForm';
 import SecureFile from './SecureFile';
 import BuyerCategoryPicker, { type LabourSelection } from './buyer/BuyerCategoryPicker';
@@ -170,6 +174,7 @@ export default function JobPostsManagerView() {
         payRateUnit: (posting.payRateUnit as JobPostingDetails['payRateUnit']) ?? undefined,
         urgency: (attrs.urgency as string) ?? '',
         preferredDateTime: (attrs.preferredDateTime as string) ?? undefined,
+        requirementsAttributes: attrs,
       },
     });
   };
@@ -198,12 +203,17 @@ export default function JobPostsManagerView() {
           .slice(0, 255),
         province: locationData.province,
         city: locationData.city,
-        // Per-trade requirements answers + the urgency pair, same shape the
-        // buyer funnel sends.
+        // Job specifications (trade answers) + urgency pair + applicant
+        // requirements, same shape the buyer funnel sends. Old req_* keys
+        // are stripped first so a requirement REMOVED on resubmit doesn't
+        // survive the merge.
         attributes: {
-          ...(flow.attributes ?? {}),
+          ...Object.fromEntries(
+            Object.entries(flow.attributes ?? {}).filter(([k]) => !k.startsWith('req_')),
+          ),
           urgency: d.urgency,
           ...(d.preferredDateTime ? { preferredDateTime: d.preferredDateTime } : {}),
+          ...(d.requirementsAttributes ?? {}),
         },
       };
       const saved =
@@ -478,25 +488,41 @@ export default function JobPostsManagerView() {
           <div className="border-t border-[#eef2f6] px-4 py-3.5 space-y-3">
             <p className="text-[13px] text-slate-600 whitespace-pre-wrap">{posting.description}</p>
             {(() => {
-              const requirements = getLabourRequirements(
-                posting.tradeCategoryIds[0],
-                posting.attributes,
-              );
-              if (requirements.length === 0) return null;
+              const specs = getJobSpecifications(posting.tradeCategoryIds[0], posting.attributes);
+              const requirements = getSeekerRequirements(posting.attributes);
               return (
-                <div className="rounded-xl border border-[#eef2f6] bg-[#fbfaf7] px-3.5 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                    Requirements
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
-                    {requirements.map((r) => (
-                      <div key={r.label} className="flex items-baseline gap-2 text-[12px]">
-                        <span className="text-slate-500">{r.label}:</span>
-                        <span className="font-bold text-slate-700">{r.value}</span>
+                <>
+                  {specs.length > 0 && (
+                    <div className="rounded-xl border border-[#eef2f6] bg-[#fbfaf7] px-3.5 py-3">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                        Job specifications
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+                        {specs.map((r) => (
+                          <div key={r.label} className="flex items-baseline gap-2 text-[12px]">
+                            <span className="text-slate-500">{r.label}:</span>
+                            <span className="font-bold text-slate-700">{r.value}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    </div>
+                  )}
+                  {requirements.length > 0 && (
+                    <div className="rounded-xl border border-[#f0dfc0] bg-[#fdf9f0] px-3.5 py-3">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-[#a87b28] mb-2">
+                        Applicant requirements
+                      </p>
+                      <div className="space-y-1.5">
+                        {requirements.map((r) => (
+                          <div key={r.label} className="flex items-baseline gap-2 text-[12px]">
+                            <span className="text-[#a87b28]">{r.label}:</span>
+                            <span className="font-bold text-slate-700">{r.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               );
             })()}
             {posting.location && (

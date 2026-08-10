@@ -1,9 +1,13 @@
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, Briefcase } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Briefcase, ClipboardCheck } from 'lucide-react';
 import ConsentModal from '../consent/ConsentModal';
 import { useConsentGate } from '../../hooks/useConsentGate';
 import DateTimePicker from '../DateTimePicker';
 import { JOB_RATE_UNITS, type JobRateUnit } from '../../services/api/jobBoardService';
+import {
+  EXPERIENCE_OPTIONS,
+  REQUIRED_DOCUMENT_OPTIONS,
+} from '../../services/labourFormSchema';
 
 /** Platform-wide urgency convention — the exact pair every urgency select
  *  uses (see categories/schemas/*): never add a third option here. */
@@ -18,6 +22,10 @@ export interface JobPostingDetails {
   urgency: string;
   preferredDateTime?: string;
   applicationDeadline?: string;
+  /** Applicant requirements as ready-to-merge req_* attribute keys — what
+   *  the worker must have (experience, tools, certification, documents).
+   *  The apply modal's attach-proof slots are derived from these. */
+  requirementsAttributes?: Record<string, any>;
 }
 
 interface Props {
@@ -58,6 +66,28 @@ export default function JobPostingDetailsForm({ tradeLabel, defaultWorkers, init
   const [applicationDeadline, setApplicationDeadline] = useState(initial?.applicationDeadline ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Applicant requirements — prefilled from req_* keys on resubmit.
+  const initReq = initial?.requirementsAttributes ?? {};
+  const [experience, setExperience] = useState<string>(
+    (initReq.req_experience as string) ?? 'Any level',
+  );
+  const [ownTools, setOwnTools] = useState<boolean>(initReq.req_own_tools === true);
+  const [certRequired, setCertRequired] = useState<boolean>(!!initReq.req_certifications);
+  const [certDetail, setCertDetail] = useState<string>(
+    typeof initReq.req_certifications === 'string' && initReq.req_certifications !== 'Required'
+      ? initReq.req_certifications
+      : '',
+  );
+  const [documents, setDocuments] = useState<string[]>(
+    Array.isArray(initReq.req_documents) ? initReq.req_documents : [],
+  );
+  const [otherRequirements, setOtherRequirements] = useState<string>(
+    (initReq.req_other as string) ?? '',
+  );
+
+  const toggleDocument = (doc: string) =>
+    setDocuments((prev) => (prev.includes(doc) ? prev.filter((d) => d !== doc) : [...prev, doc]));
+
   const handleSubmit = () => {
     const next: Record<string, string> = {};
     if (title.trim().length < 3) next.title = 'Give the job a short, clear title.';
@@ -75,6 +105,14 @@ export default function JobPostingDetailsForm({ tradeLabel, defaultWorkers, init
     if (Object.keys(next).length > 0) return;
 
     const workers = parseInt(workersNeeded, 10);
+    // 'Any level' means "no experience bar" — omit rather than store noise.
+    const requirementsAttributes: Record<string, any> = {
+      ...(experience && experience !== 'Any level' ? { req_experience: experience } : {}),
+      ...(ownTools ? { req_own_tools: true } : {}),
+      ...(certRequired ? { req_certifications: certDetail.trim() || 'Required' } : {}),
+      ...(documents.length ? { req_documents: documents } : {}),
+      ...(otherRequirements.trim() ? { req_other: otherRequirements.trim() } : {}),
+    };
     onSubmit({
       title: title.trim(),
       description: description.trim(),
@@ -85,6 +123,7 @@ export default function JobPostingDetailsForm({ tradeLabel, defaultWorkers, init
         ? { preferredDateTime }
         : {}),
       ...(applicationDeadline ? { applicationDeadline } : {}),
+      ...(Object.keys(requirementsAttributes).length ? { requirementsAttributes } : {}),
     });
   };
 
@@ -230,6 +269,112 @@ export default function JobPostingDetailsForm({ tradeLabel, defaultWorkers, init
                 )}
               </div>
             )}
+          </div>
+
+          <div className="rounded-2xl border border-[#f0dfc0] bg-[#fdf9f0] p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <ClipboardCheck className="w-4 h-4 text-[#C9973A]" />
+              <p className="text-sm font-black text-[#1a1a2e]">Applicant requirements</p>
+            </div>
+            <p className="text-[11px] text-slate-500 mb-4">
+              What must a worker have to apply? Anything you list here is shown on the job, and
+              applicants are asked to attach proof for the documents you tick.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">
+                  Experience required
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {EXPERIENCE_OPTIONS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setExperience(option)}
+                      className={`px-3.5 py-2 rounded-lg border text-[12px] font-bold transition-colors ${
+                        experience === option
+                          ? 'border-[#C9973A] bg-white text-[#8a6420]'
+                          : 'border-[#e7d7b8] bg-white/60 text-slate-600 hover:border-[#C9973A]'
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setOwnTools((v) => !v)}
+                  className={`px-3.5 py-2.5 rounded-lg border text-left text-[12px] font-bold transition-colors ${
+                    ownTools
+                      ? 'border-[#C9973A] bg-white text-[#8a6420]'
+                      : 'border-[#e7d7b8] bg-white/60 text-slate-600 hover:border-[#C9973A]'
+                  }`}
+                >
+                  {ownTools ? '✓ ' : ''}Must bring their own tools
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCertRequired((v) => !v)}
+                  className={`px-3.5 py-2.5 rounded-lg border text-left text-[12px] font-bold transition-colors ${
+                    certRequired
+                      ? 'border-[#C9973A] bg-white text-[#8a6420]'
+                      : 'border-[#e7d7b8] bg-white/60 text-slate-600 hover:border-[#C9973A]'
+                  }`}
+                >
+                  {certRequired ? '✓ ' : ''}Certification required
+                </button>
+              </div>
+              {certRequired && (
+                <input
+                  type="text"
+                  value={certDetail}
+                  onChange={(e) => setCertDetail(e.target.value)}
+                  maxLength={120}
+                  className="w-full px-4 py-2.5 rounded-lg border border-[#e7d7b8] bg-white text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#C9973A]/40"
+                  placeholder="Which certification? e.g. TEVETA craft certificate, EIZ registration"
+                />
+              )}
+
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">
+                  Documents applicants must attach
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {REQUIRED_DOCUMENT_OPTIONS.map((doc) => (
+                    <button
+                      key={doc}
+                      type="button"
+                      onClick={() => toggleDocument(doc)}
+                      className={`px-3.5 py-2 rounded-lg border text-[12px] font-bold transition-colors ${
+                        documents.includes(doc)
+                          ? 'border-[#C9973A] bg-white text-[#8a6420]'
+                          : 'border-[#e7d7b8] bg-white/60 text-slate-600 hover:border-[#C9973A]'
+                      }`}
+                    >
+                      {documents.includes(doc) ? '✓ ' : ''}
+                      {doc}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">
+                  Other requirements
+                </label>
+                <textarea
+                  value={otherRequirements}
+                  onChange={(e) => setOtherRequirements(e.target.value)}
+                  rows={2}
+                  className="w-full px-4 py-2.5 rounded-lg border border-[#e7d7b8] bg-white text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#C9973A]/40"
+                  placeholder="Anything else — e.g. must live near Woodlands, able to start at 06:00…"
+                />
+              </div>
+            </div>
           </div>
 
           <div>

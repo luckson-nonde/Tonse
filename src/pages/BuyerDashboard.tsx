@@ -1087,12 +1087,14 @@ export default function BuyerDashboard() {
     setIsSubmitting(true);
     setPublishError(null);
     try {
-      // Trade-form answers + the urgency pair ride in attributes, same as
-      // inquiry attributes — seekers see them on the job card detail.
+      // Trade-form answers (job specifications) + the urgency pair +
+      // applicant requirements (req_* keys) all ride in attributes —
+      // seekers see specs and requirements as separate blocks on the card.
       const attributes = {
         ...(pendingInquiry.attributes || {}),
         urgency: details.urgency,
         ...(details.preferredDateTime ? { preferredDateTime: details.preferredDateTime } : {}),
+        ...(details.requirementsAttributes ?? {}),
       };
       const payload: CreateJobPostingInput = {
         title: details.title,
