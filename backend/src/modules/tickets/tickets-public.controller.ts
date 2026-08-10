@@ -1,5 +1,5 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Res } from '@nestjs/common';
-import type { Response } from 'express';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { CheckoutTicketsDto } from './dto/checkout-tickets.dto';
 import { TicketsService } from './tickets.service';
 
@@ -29,8 +29,12 @@ export class TicketsPublicController {
    *  humans are instantly redirected to the SPA ticket page. Raw @Res on
    *  purpose: this returns HTML, not the JSON envelope. */
   @Get(':code/share')
-  async share(@Param('code') code: string, @Res() res: Response) {
-    res.type('html').send(await this.tickets.getShareHtml(code));
+  async share(@Param('code') code: string, @Req() req: Request, @Res() res: Response) {
+    // The API's own public origin, for resolving relative poster URLs in the
+    // OG tags — honour the proxy header (Render terminates TLS upstream).
+    const proto = (req.headers['x-forwarded-proto'] as string)?.split(',')[0] || req.protocol;
+    const apiOrigin = `${proto}://${req.get('host')}`;
+    res.type('html').send(await this.tickets.getShareHtml(code, apiOrigin));
   }
 
   @Get(':code')

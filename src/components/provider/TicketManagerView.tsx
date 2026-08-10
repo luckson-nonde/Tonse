@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Loader2,
   Plus,
@@ -17,6 +18,9 @@ import {
   X,
   Share2,
   Copy,
+  ScanLine,
+  UserPlus,
+  ShieldCheck,
 } from 'lucide-react';
 import emptyStateImage from '../../assets/images/empty-states/owl_reading.webp';
 import { formatCurrency } from '../../utils/financeUtils';
@@ -30,6 +34,7 @@ import {
   MyTicketEvent,
   TicketSaleRow,
   TicketEventStatus,
+  TicketScannerRow,
 } from '../../services/api/ticketsService';
 import { searchZambiaPlaces, ZambiaPlace } from '../../utils/zambiaPlaces';
 import DateTimePicker from '../DateTimePicker';
@@ -82,6 +87,7 @@ function FieldNote({ error, help }: { error?: string; help?: string }) {
  * to the venture balance the moment a guest completes the (simulated) payment.
  */
 export default function TicketManagerView() {
+  const navigate = useNavigate();
   const [events, setEvents] = useState<MyTicketEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -121,6 +127,13 @@ export default function TicketManagerView() {
   const [salesEvent, setSalesEvent] = useState<MyTicketEvent | null>(null);
   const [sales, setSales] = useState<TicketSaleRow[]>([]);
   const [salesLoading, setSalesLoading] = useState(false);
+
+  // Door team (scanner) state for the sales detail view
+  const [scanners, setScanners] = useState<TicketScannerRow[]>([]);
+  const [scannerEmail, setScannerEmail] = useState('');
+  const [scannerName, setScannerName] = useState('');
+  const [scannerBusy, setScannerBusy] = useState(false);
+  const [scannerError, setScannerError] = useState('');
 
   const [copiedCode, setCopiedCode] = useState('');
   const [cancellingId, setCancellingId] = useState('');
@@ -300,6 +313,10 @@ export default function TicketManagerView() {
     if (!description.trim()) errs.description = 'Tell people what the event is.';
     if (!venue.trim()) errs.venue = 'Where is it happening?';
     if (!eventDate) errs.eventDate = 'Pick the event date and time.';
+    // The poster is what decorates the WhatsApp share preview, the public
+    // ticket page AND every attendee's ticket — an event without one shares
+    // as a bare link, so it's required.
+    if (!posterUrl) errs.poster = 'Add an event image — it appears on the shared link, the ticket page and every ticket.';
 
     const cleanTiers = tiers
       .map((t) => ({
@@ -393,12 +410,50 @@ export default function TicketManagerView() {
     setSalesEvent(event);
     setView('sales');
     setSalesLoading(true);
+    setScannerError('');
     try {
-      setSales(await ticketsService.salesForEvent(event.id));
+      const [salesRows, scannerRows] = await Promise.all([
+        ticketsService.salesForEvent(event.id),
+        ticketsService.listScanners(event.id),
+      ]);
+      setSales(salesRows);
+      setScanners(scannerRows);
     } catch (e: any) {
       setError(e?.message || 'Failed to load sales.');
     } finally {
       setSalesLoading(false);
+    }
+  };
+
+  const handleAddScanner = async () => {
+    if (!salesEvent) return;
+    const email = scannerEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setScannerError('Enter a valid email address — the one they log in to Nyuwe with.');
+      return;
+    }
+    setScannerBusy(true);
+    setScannerError('');
+    try {
+      setScanners(await ticketsService.addScanner(salesEvent.id, email, scannerName.trim() || undefined));
+      setScannerEmail('');
+      setScannerName('');
+    } catch (e: any) {
+      setScannerError(e?.message || 'Could not add the door manager.');
+    } finally {
+      setScannerBusy(false);
+    }
+  };
+
+  const handleRemoveScanner = async (scannerId: string) => {
+    if (!salesEvent) return;
+    setScannerBusy(true);
+    try {
+      setScanners(await ticketsService.removeScanner(salesEvent.id, scannerId));
+    } catch (e: any) {
+      setScannerError(e?.message || 'Could not remove the door manager.');
+    } finally {
+      setScannerBusy(false);
     }
   };
 
@@ -439,10 +494,109 @@ export default function TicketManagerView() {
             <button type="button" onClick={() => { setView('list'); setSalesEvent(null); }} className="text-slate-400 hover:text-slate-600">
               <ArrowLeft className="w-4 h-4" />
             </button>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h3 className="font-black text-slate-900 truncate">{salesEvent.title}</h3>
               <p className="text-[11px] text-slate-400 font-medium">Ticket sales & attendees</p>
             </div>
+            <button
+              type="button"
+              onClick={() => navigate('/scan')}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#1B3068] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#142450] transition-colors"
+            >
+              <ScanLine className="w-3.5 h-3.5" /> Scan tickets
+            </button>
+          </div>
+
+          {/* Live attendance — how many sold tickets have been scanned in. */}
+          <div className="rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-3.5">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600">
+                At the door
+              </p>
+              <p className="text-[13px] font-black text-emerald-700">
+                {salesEvent.checkedIn ?? 0} of {salesEvent.ticketsSold} attended
+              </p>
+            </div>
+            <div className="mt-2 h-2 rounded-full bg-emerald-100 overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 transition-all duration-500"
+                style={{
+                  width: `${salesEvent.ticketsSold ? Math.min(100, ((salesEvent.checkedIn ?? 0) / salesEvent.ticketsSold) * 100) : 0}%`,
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Door team — people (by account email) allowed to scan tickets at
+              the door. They open /scan on their own login. */}
+          <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 space-y-3">
+            <div>
+              <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-slate-500">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#C9973A]" /> Door team
+              </p>
+              <p className="mt-1 text-[11px] text-slate-400 font-medium leading-relaxed">
+                Add a ticket manager by the email they log in to Nyuwe with — they'll scan tickets
+                at <span className="font-bold text-slate-500">{window.location.origin}/scan</span> and
+                every scan counts into your attendance above.
+              </p>
+            </div>
+
+            {scanners.length > 0 && (
+              <div className="space-y-2">
+                {scanners.map((scanner) => (
+                  <div
+                    key={scanner.id}
+                    className="flex items-center justify-between gap-2 rounded-xl bg-white border border-slate-200 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-bold text-slate-800 truncate">
+                        {scanner.name || scanner.email}
+                      </p>
+                      {scanner.name && (
+                        <p className="text-[11px] text-slate-400 font-medium truncate">{scanner.email}</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveScanner(scanner.id)}
+                      disabled={scannerBusy}
+                      aria-label={`Remove ${scanner.email} from the door team`}
+                      className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-rose-500 disabled:opacity-40"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-[2fr_1.4fr_auto] gap-2">
+              <input
+                value={scannerEmail}
+                onChange={(e) => { setScannerEmail(e.target.value); setScannerError(''); }}
+                inputMode="email"
+                placeholder="their-email@example.com"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-[12px] font-medium text-slate-900 tracking-normal normal-case focus:outline-none focus:border-[#C9973A]"
+              />
+              <input
+                value={scannerName}
+                onChange={(e) => setScannerName(e.target.value)}
+                placeholder="Name (optional)"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-[12px] font-medium text-slate-900 tracking-normal normal-case focus:outline-none focus:border-[#C9973A]"
+              />
+              <button
+                type="button"
+                onClick={handleAddScanner}
+                disabled={scannerBusy || !scannerEmail.trim()}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#C9973A] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#b07f24] transition-colors disabled:opacity-40"
+              >
+                {scannerBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+                Add
+              </button>
+            </div>
+            {scannerError && (
+              <p className="text-[11px] font-semibold text-rose-500 tracking-normal normal-case">{scannerError}</p>
+            )}
           </div>
 
           {salesLoading ? (
@@ -473,6 +627,18 @@ export default function TicketManagerView() {
                     <span className="inline-flex items-center gap-1">
                       <TicketIcon className="w-3 h-3 text-[#C9973A]" />
                       {sale.lineItems.map((li) => `${li.quantity}× ${li.tierName}`).join(', ')}
+                    </span>
+                    <span
+                      className={`inline-flex items-center gap-1 font-bold ${
+                        (sale.checkedInCount ?? 0) >= sale.ticketCount
+                          ? 'text-emerald-600'
+                          : (sale.checkedInCount ?? 0) > 0
+                            ? 'text-amber-600'
+                            : 'text-slate-400'
+                      }`}
+                    >
+                      <ScanLine className="w-3 h-3" />
+                      {sale.checkedInCount ?? 0}/{sale.ticketCount} in
                     </span>
                     <span>{prettyDateTime(sale.purchasedAt)}</span>
                     <span className="text-slate-300">{sale.reference}</span>
@@ -661,15 +827,20 @@ export default function TicketManagerView() {
             <FieldNote error={fieldErrors.eventDate} />
           </div>
 
-          {/* Poster (optional) */}
+          {/* Event image — REQUIRED: it decorates the WhatsApp/Facebook share
+              preview, headlines the public ticket page, and rides on every
+              attendee's digital ticket. */}
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">Poster (optional)</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">Event image</p>
             <label className="block cursor-pointer">
               <input
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => handlePosterChange(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  setFieldErrors((x) => ({ ...x, poster: '' }));
+                  handlePosterChange(e.target.files?.[0] ?? null);
+                }}
               />
               {posterPreview ? (
                 <img
@@ -678,14 +849,22 @@ export default function TicketManagerView() {
                   className="w-full max-h-64 object-cover rounded-2xl border border-slate-200"
                 />
               ) : (
-                <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 py-10 text-slate-400 hover:border-[#C9973A] hover:text-[#C9973A] transition-colors">
+                <div
+                  className={`flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed py-10 transition-colors hover:border-[#C9973A] hover:text-[#C9973A] ${
+                    fieldErrors.poster ? 'border-rose-300 text-rose-400' : 'border-slate-200 text-slate-400'
+                  }`}
+                >
                   {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImageIcon className="w-5 h-5" />}
                   <span className="text-[11px] font-bold uppercase tracking-widest">
-                    {uploading ? 'Uploading…' : 'Upload a poster image'}
+                    {uploading ? 'Uploading…' : 'Upload the event image'}
                   </span>
                 </div>
               )}
             </label>
+            <FieldNote
+              error={fieldErrors.poster}
+              help="This image decorates your shared link on WhatsApp, your ticket page, and every buyer's ticket."
+            />
           </div>
 
           {/* Ticket tiers */}
@@ -772,12 +951,23 @@ export default function TicketManagerView() {
                 Sell tickets through a link you can share anywhere.
               </p>
             </div>
-            <Button
-              onClick={() => setView('create')}
-              className="px-4 py-2.5 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center gap-1.5"
-            >
-              <Plus className="w-3.5 h-3.5" /> New event
-            </Button>
+            <div className="flex items-center gap-2">
+              {events.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/scan')}
+                  className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-slate-500 font-black uppercase tracking-widest text-[10px] flex items-center gap-1.5 hover:border-[#C9973A] hover:text-[#C9973A] transition-colors"
+                >
+                  <ScanLine className="w-3.5 h-3.5" /> Scan
+                </button>
+              )}
+              <Button
+                onClick={() => setView('create')}
+                className="px-4 py-2.5 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" /> New event
+              </Button>
+            </div>
           </div>
 
           {events.length === 0 ? (
@@ -841,11 +1031,15 @@ export default function TicketManagerView() {
                         ))}
                       </div>
 
-                      {/* Sales summary */}
-                      <div className="grid grid-cols-3 gap-2 text-center">
+                      {/* Sales + attendance summary */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                         <div className="rounded-2xl bg-slate-50 border border-slate-100 py-2.5">
                           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Sold</p>
                           <p className="font-black text-slate-900 text-[15px]">{event.ticketsSold}</p>
+                        </div>
+                        <div className="rounded-2xl bg-slate-50 border border-slate-100 py-2.5">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Attended</p>
+                          <p className="font-black text-slate-900 text-[15px]">{event.checkedIn ?? 0}</p>
                         </div>
                         <div className="rounded-2xl bg-slate-50 border border-slate-100 py-2.5">
                           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Gross</p>

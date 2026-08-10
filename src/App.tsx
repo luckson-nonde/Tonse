@@ -53,6 +53,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import DiscoverPage from './pages/DiscoverPage';
 import PublicShopProfile from './pages/PublicShopProfile';
 import TicketPurchasePage from './pages/TicketPurchasePage';
+import TicketScanPage from './pages/TicketScanPage';
 
 function ProtectedRoute({
   children,
@@ -244,6 +245,19 @@ export default function App() {
                   <PageTransition transitionKey="ticket-purchase">
                     <TicketPurchasePage />
                   </PageTransition>
+                }
+              />
+              {/* Door check-in — any logged-in user: organizers scan their own
+                  events; assigned door-team members scan events they were
+                  added to by email. No role restriction on purpose. */}
+              <Route
+                path="/scan"
+                element={
+                  <ProtectedRoute>
+                    <PageTransition transitionKey="ticket-scan">
+                      <TicketScanPage />
+                    </PageTransition>
+                  </ProtectedRoute>
                 }
               />
               <Route path="/" element={<RootRedirect />} />

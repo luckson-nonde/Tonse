@@ -65,4 +65,10 @@ export class TicketCodeUtil extends ShortCodeUtil {
   static generateCode(seed: string, salt = 0): string {
     return this.generate(this.PREFIX, this.CODE_LENGTH, seed, salt);
   }
+
+  /** Trim/uppercase and tolerate a missing `TIX-` prefix — door staff may
+   *  type just the 6 characters off a screenshot. */
+  static normalizeCode(raw: string): string {
+    return this.normalize(this.PREFIX, raw);
+  }
 }

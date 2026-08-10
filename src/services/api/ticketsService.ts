@@ -45,6 +45,8 @@ export interface MyTicketEvent {
   updatedAt: string;
   tiers: TicketTierSummary[];
   ticketsSold: number;
+  /** How many sold tickets have been scanned in at the door. */
+  checkedIn: number;
   grossZmw: number;
   netZmw: number;
 }
@@ -70,9 +72,45 @@ export interface TicketSaleRow {
   buyerEmail: string | null;
   lineItems: Array<{ tierId: string; tierName: string; quantity: number; unitPriceZmw: number }>;
   ticketCount: number;
+  /** How many of this order's tickets have been scanned in. */
+  checkedInCount: number;
   totalAmountZmw: number;
   netZmw: number;
   purchasedAt: string;
+}
+
+/** A door-team member the organizer assigned by email. */
+export interface TicketScannerRow {
+  id: string;
+  eventId: string;
+  email: string;
+  name: string | null;
+  createdAt: string;
+}
+
+/** An event the caller may scan for — own events plus assigned ones. */
+export interface ScanEventSummary {
+  id: string;
+  code: string;
+  title: string;
+  venue: string;
+  eventDate: string;
+  posterUrl: string | null;
+  role: 'ORGANIZER' | 'SCANNER';
+  ticketsSold: number;
+  checkedIn: number;
+}
+
+export type ScanResultStatus = 'ADMITTED' | 'ALREADY_USED' | 'VOID' | 'NOT_FOUND' | 'WRONG_EVENT';
+
+export interface ScanResult {
+  result: ScanResultStatus;
+  code: string;
+  tierName?: string;
+  buyerName?: string;
+  buyerPhone?: string | null;
+  eventTitle?: string;
+  checkedInAt?: string | null;
 }
 
 /** What a guest sees on the share link. */
@@ -114,7 +152,11 @@ export interface PaidTicketOrder {
   reference: string;
   status: 'PAID';
   buyerName: string;
+  buyerPhone: string | null;
+  buyerEmail: string | null;
   totalAmountZmw: number;
+  /** True when the backend queued the ticket email to buyerEmail. */
+  emailQueued?: boolean;
   tickets: Array<{ code: string; tierName: string }>;
 }
 
@@ -181,6 +223,40 @@ export const ticketsService = {
   async salesForEvent(eventId: string): Promise<TicketSaleRow[]> {
     const res = await apiClient.get(`/tickets/${encodeURIComponent(eventId)}/sales`);
     return payload<TicketSaleRow[]>(res, []);
+  },
+
+  // ───── Door team + check-in (auth) ─────────────────────────────────────
+
+  async listScanners(eventId: string): Promise<TicketScannerRow[]> {
+    const res = await apiClient.get(`/tickets/${encodeURIComponent(eventId)}/scanners`);
+    return payload<TicketScannerRow[]>(res, []);
+  },
+
+  async addScanner(eventId: string, email: string, name?: string): Promise<TicketScannerRow[]> {
+    const res = await apiClient.post(`/tickets/${encodeURIComponent(eventId)}/scanners`, {
+      email,
+      name: name || undefined,
+    });
+    return payload<TicketScannerRow[]>(res, []);
+  },
+
+  async removeScanner(eventId: string, scannerId: string): Promise<TicketScannerRow[]> {
+    const res = await apiClient.delete(
+      `/tickets/${encodeURIComponent(eventId)}/scanners/${encodeURIComponent(scannerId)}`,
+    );
+    return payload<TicketScannerRow[]>(res, []);
+  },
+
+  /** Events the logged-in user can work the door for (organizer or assigned). */
+  async scanEvents(): Promise<ScanEventSummary[]> {
+    const res = await apiClient.get('/tickets/scan/events');
+    return payload<ScanEventSummary[]>(res, []);
+  },
+
+  /** Check a ticket in. Verdicts come back as results, not thrown errors. */
+  async scanTicket(code: string, eventId?: string): Promise<ScanResult> {
+    const res = await apiClient.post('/tickets/scan', { code, eventId });
+    return payload<ScanResult>(res, { result: 'NOT_FOUND', code });
   },
 
   // ───── Public (guest — no auth) ────────────────────────────────────────

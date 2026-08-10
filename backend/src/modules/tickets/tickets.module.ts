@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { MailerService } from '../../common/mail/mailer.service';
 import { LedgerModule } from '../ledger/ledger.module';
 import { EventTicketSettings } from './entities/event-ticket-settings.entity';
+import { TicketEventScanner } from './entities/ticket-event-scanner.entity';
 import { TicketEvent } from './entities/ticket-event.entity';
 import { TicketOrder } from './entities/ticket-order.entity';
 import { TicketTier } from './entities/ticket-tier.entity';
@@ -21,11 +23,18 @@ import { TicketsService } from './tickets.service';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([TicketEvent, TicketTier, TicketOrder, Ticket, EventTicketSettings]),
+    TypeOrmModule.forFeature([
+      TicketEvent,
+      TicketTier,
+      TicketOrder,
+      Ticket,
+      EventTicketSettings,
+      TicketEventScanner,
+    ]),
     LedgerModule,
   ],
   controllers: [TicketsController, TicketsPublicController],
-  providers: [TicketsService],
+  providers: [TicketsService, MailerService],
   exports: [TicketsService],
 })
 export class TicketsModule {}

@@ -4,7 +4,8 @@ export type TicketStatus = 'VALID' | 'REDEEMED' | 'VOID';
 
 /**
  * One admitted unit — each attendee gets their own TIX-XXXXXX code.
- * `status` future-proofs door check-in and refunds; no endpoint mutates it yet.
+ * Door check-in flips status VALID → REDEEMED (POST /tickets/scan), stamping
+ * when and by whom; VOID is reserved for refunds.
  */
 @Entity('tickets')
 @Index('idx_tickets_order', ['orderId'])
@@ -28,6 +29,14 @@ export class Ticket {
 
   @Column({ type: 'enum', enum: ['VALID', 'REDEEMED', 'VOID'], default: 'VALID' })
   status: TicketStatus;
+
+  /** Set once, at the door — the moment this ticket was scanned in. */
+  @Column({ type: 'timestamp', nullable: true })
+  checkedInAt: Date | null;
+
+  /** The user (organizer or assigned door manager) who scanned it. */
+  @Column({ type: 'uuid', nullable: true })
+  checkedInBy: string | null;
 
   @CreateDateColumn()
   createdAt: Date;
