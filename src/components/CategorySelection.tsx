@@ -67,7 +67,7 @@ import { useLiteMotion } from '../hooks/useLiteMotion';
 import { nudgeRepaint } from '../utils/forceRepaint';
 import { fetchCategories, Category } from '../services/categories';
 import { useCategoryAvailability } from '../services/categories/availability';
-import { LABOUR_CATEGORY_GROUPS, LABOUR_CATEGORIES, MACHINERY_GROUP } from '../services/labourCategories';
+import { LABOUR_CATEGORY_GROUPS, LABOUR_CATEGORIES, MACHINERY_GROUP, ANY_WORK_TRADE } from '../services/labourCategories';
 
 // Border colors on the pick cards/chips are OPAQUE hex equivalents of the old
 // translucent gold (`border-[#C9973A]/NN` ≈ gold blended over the white card):
@@ -1089,18 +1089,31 @@ export default function CategorySelection({
     if (role) {
       setSelectedCategories((prev) => {
         let basePrev = prev[0]?.parentId !== 'labour' ? [] : prev;
-        return basePrev.find((c) => c.id === subType.id)
-          ? basePrev.filter((c) => c.id !== subType.id)
-          : [...basePrev, { id: subType.id, name: subType.label, parentId: 'labour' } as Category];
+        // Re-tapping the active pick clears it (unchanged).
+        if (basePrev.find((c) => c.id === subType.id)) {
+          return basePrev.filter((c) => c.id !== subType.id);
+        }
+        // "All Jobs" and specific trades are mutually exclusive: picking it
+        // drops every trade, picking a trade drops it. Holding both would
+        // register a seeker as "anything, but especially carpentry" — a claim
+        // nothing downstream reads. Trades still multi-select among themselves.
+        const kept =
+          subType.id === ANY_WORK_TRADE.id
+            ? []
+            : basePrev.filter((c) => c.id !== ANY_WORK_TRADE.id);
+        return [...kept, { id: subType.id, name: subType.label, parentId: 'labour' } as Category];
       });
       return;
     }
     if (onComplete)
       onComplete({
+        // The trade's own group, not `activeLabourGroup.id` — identical for
+        // every trade and machinery item, but "All Jobs" is picked from the
+        // track picker itself (activeLabourGroup === 'ROOT', a string).
         category: subType.label,
         categoryId: subType.id,
         isLabour: true,
-        labourGroup: activeLabourGroup.id,
+        labourGroup: subType.category,
         inquirySchemaKey: subType.inquirySchemaKey,
       });
     setActiveLabourGroup(null);
@@ -1606,6 +1619,51 @@ export default function CategorySelection({
                     </button>
                   );
                 })}
+
+                {/* ── "All Jobs": the no-trade pick ─────────────────────────
+                    Sits in the grid's last cell, where a sixth track would be,
+                    but drills nowhere — one tap IS the selection. The board is
+                    ungated (every approved posting shows to every employment
+                    account), so a seeker who doesn't specialise shouldn't have
+                    to invent a trade to get past this step.
+
+                    Employment signup only (autoLabour): a BUYER who reaches
+                    this picker through the "Labour & Skills" tile is requesting
+                    a specific trade or posting a vacancy, and "All Jobs" is
+                    meaningless there. `h-full` so the flat card still fills the
+                    row height set by the image-led track cards beside it. */}
+                {autoLabour && (() => {
+                  const anyWorkSelected = selectedCategories.some(
+                    (c) => c.id === ANY_WORK_TRADE.id,
+                  );
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => handleLabourSubTypeSelect(ANY_WORK_TRADE)}
+                      aria-pressed={anyWorkSelected}
+                      className={`group/card relative h-full min-h-[132px] rounded-2xl p-4 flex flex-col items-center justify-center text-center gap-2 border transition-all duration-300 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9973A]/60 focus-visible:ring-offset-1 focus-visible:ring-offset-white ${
+                        anyWorkSelected
+                          ? 'bg-[#fdf8ee] border-[#DFC189] shadow-[0_10px_24px_-14px_rgba(201,151,58,0.35)]'
+                          : 'bg-white border-[#E9D5B0] hover:border-[#C9973A] lg:hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-14px_rgba(26,22,18,0.18)]'
+                      }`}
+                    >
+                      {anyWorkSelected && (
+                        <div className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-[#C9973A] flex items-center justify-center shadow-md shadow-[#C9973A]/40">
+                          <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+                        </div>
+                      )}
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#fdf6e9] to-[#f3e3bd] text-[#C9973A] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+                        <Briefcase className="w-5 h-5" />
+                      </div>
+                      <h3 className="font-bold text-[#1a1a2e] text-[12px] sm:text-[13px] leading-tight tracking-tight">
+                        All Jobs
+                      </h3>
+                      <p className="text-[11px] text-slate-500 leading-snug">
+                        No specific trade — see every job posted
+                      </p>
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           ) : (

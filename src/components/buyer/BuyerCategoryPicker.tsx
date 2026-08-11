@@ -68,6 +68,9 @@ export default function BuyerCategoryPicker({ onComplete, onBack, preselectedPar
     // synthetic masters. Trades keep their taxonomy order; each id also
     // exists in the backend categories table, so availability applies.
     for (const entry of LABOUR_CATEGORIES) {
+      // "All Jobs" is a jobseeker's no-trade signup pick, not something a buyer
+      // can request or tag a vacancy with — a posting needs a real trade.
+      if (entry.category === 'ANY_WORK') continue;
       const masterId = entry.category === 'MACHINERY_HIRE' ? 'machinery-hire' : 'labour';
       if (!isAvailable(entry.id)) continue;
       (map[masterId] ||= []).push({

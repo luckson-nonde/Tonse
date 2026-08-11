@@ -1111,5 +1111,12 @@
     "parentId": "labour",
     "baseName": null,
     "type": null
+  },
+  {
+    "id": "any_work",
+    "name": "All Jobs",
+    "parentId": "labour",
+    "baseName": null,
+    "type": null
   }
 ]

@@ -14,6 +14,10 @@ export type LabourCategoryGroup =
   | 'INDUSTRIAL'
   | 'AGRICULTURAL'
   | 'TRANSPORT'
+  // Not a track either — the "All Jobs" pick for a jobseeker who doesn't
+  // specialise. Absent from LABOUR_CATEGORY_GROUPS on purpose, so it never
+  // renders as a track and never appears inside a track's trade list.
+  | 'ANY_WORK'
   // Not a labour track — the equipment-hire provider type reuses this taxonomy
   // (LabourSubCategory shape + trade-picker rendering) but is entered from its
   // own tier-2 card, never from the "Choose a track" grid.
@@ -77,7 +81,27 @@ export const LABOUR_CATEGORIES: LabourSubCategory[] = [
   { id: 'driver_heavy', label: 'Driver (Heavy Vehicle / HGV)', category: 'TRANSPORT', inquirySchemaKey: 'driverHeavyInquirySchema', profileSchemaKey: 'driverHeavyProfileSchema', icon: 'Truck', description: 'Heavy goods vehicle driving' },
   { id: 'loader', label: 'Loader / Offloader', category: 'TRANSPORT', inquirySchemaKey: 'loaderInquirySchema', profileSchemaKey: 'loaderProfileSchema', icon: 'PackageOpen', description: 'Loading and offloading services' },
   { id: 'delivery_rider', label: 'Delivery Rider', category: 'TRANSPORT', inquirySchemaKey: 'deliveryRiderInquirySchema', profileSchemaKey: 'deliveryRiderProfileSchema', icon: 'Bike', description: 'Motorcycle delivery services' },
+
+  // ALL JOBS — the no-trade pick, offered as its own card on the track picker
+  // (employment signup only). The job board is ungated anyway, so a seeker who
+  // doesn't specialise shouldn't have to invent a trade just to finish signup.
+  //
+  // It lives in this array rather than beside it because extract-catalog.cjs
+  // scans THIS block: every id here becomes a row under the `labour` root in
+  // the backend catalog, and the profile↔category junction FKs into
+  // `categories` — an id absent from the catalog would roll the registration
+  // back. Being here also means every `find((c) => c.id === …)` label lookup
+  // resolves it. Generic schema keys: there is no trade-specific form to show.
+  { id: 'any_work', label: 'All Jobs', category: 'ANY_WORK', inquirySchemaKey: 'genericLabourInquirySchema', profileSchemaKey: 'genericLabourProfileSchema', icon: 'Briefcase', description: 'Open to any kind of work — every job posted shows in your account' },
 ];
+
+/** The "All Jobs" pseudo-trade. Pickers that must offer REAL trades only —
+ *  a buyer requesting labour, a poster tagging a vacancy — filter it out by
+ *  `category === 'ANY_WORK'`; see BuyerCategoryPicker. */
+export const ANY_WORK_TRADE_ID = 'any_work';
+export const ANY_WORK_TRADE = LABOUR_CATEGORIES.find(
+  (c) => c.id === ANY_WORK_TRADE_ID,
+)!;
 
 export const LABOUR_CATEGORY_GROUPS = [
   { id: 'CONSTRUCTION', label: 'Construction & Building', icon: 'HardHat' },
