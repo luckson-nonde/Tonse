@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MailerService } from '../../common/mail/mailer.service';
 import { LedgerModule } from '../ledger/ledger.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { EventTicketSettings } from './entities/event-ticket-settings.entity';
 import { TicketEventScanner } from './entities/ticket-event-scanner.entity';
 import { TicketEvent } from './entities/ticket-event.entity';
@@ -18,9 +19,11 @@ import { TicketsService } from './tickets.service';
  * tiers and sell to guests through a public share link; proceeds land in the
  * seller's venture balance net of the admin-set commission.
  *
- * No PaymentsModule import on purpose: the guest payment is simulated inside
- * this module (see tickets-public.controller.ts) rather than routed through
- * the JWT-guarded CheckoutService.
+ * Guest payments run through the REAL PSP now: TicketsPublicController calls
+ * CheckoutService's guest-capable ticket methods (initiate/status/verify, no
+ * JWT — ownership is the reference + context.kind), and a verified payment
+ * calls back into TicketsService.commitPaidTicketOrder for the atomic mint.
+ * That call-back is why the PaymentsModule import is a forwardRef cycle.
  */
 @Module({
   imports: [
@@ -33,6 +36,7 @@ import { TicketsService } from './tickets.service';
       TicketEventScanner,
     ]),
     LedgerModule,
+    forwardRef(() => PaymentsModule),
   ],
   controllers: [TicketsController, TicketsPublicController],
   providers: [TicketsService, MailerService, TicketPosterSweepService],

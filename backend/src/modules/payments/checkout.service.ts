@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  forwardRef,
   Inject,
   Injectable,
   Logger,
@@ -17,6 +18,8 @@ import { Inquiry } from '../inquiries/entities/inquiry.entity';
 import { Order } from '../orders/entities/order.entity';
 import { Advertisement } from '../ads/entities/advertisement.entity';
 import { JobPosting } from '../job-board/entities/job-posting.entity';
+import { TicketOrder } from '../tickets/entities/ticket-order.entity';
+import { TicketsService } from '../tickets/tickets.service';
 import { LedgerService } from '../ledger/ledger.service';
 import { ACCOUNT } from '../ledger/ledger-accounts';
 import { isEscrowHolding } from '../quotes/quote-status';
@@ -62,7 +65,18 @@ export class CheckoutService {
     private readonly notifications: NotificationsService,
     private readonly dataSource: DataSource,
     private readonly config: ConfigService,
+    // forwardRef: TicketsModule imports PaymentsModule for the guest checkout
+    // routes, and settling a verified ticket payment needs TicketsService's
+    // atomic stock/mint/journal commit — a deliberate, documented cycle.
+    @Inject(forwardRef(() => TicketsService))
+    private readonly tickets: TicketsService,
   ) {}
+
+  /** Whether the active provider is the sandbox — public "simulate" endpoints
+   *  outside this module gate on this so a live deploy can't be simulated. */
+  isSandbox(): boolean {
+    return this.provider.name === 'sandbox';
+  }
 
   /**
    * Start a collection for a quote. Returns what the payer must do next —
@@ -504,6 +518,141 @@ export class CheckoutService {
   }
 
   /**
+   * Start paying for a GUEST ticket order. The payer has no account —
+   * `counterpartyId` stays NULL and the transaction is owned by its
+   * reference + `context.kind` alone, which is why the guest-facing
+   * status/verify methods below exist instead of the JWT-gated generic ones.
+   * DPO gets the order's buyer name/phone/email as the customer identity.
+   */
+  async initiateTicketPurchase(
+    orderReference: string,
+    dto: { channel?: Channel; phone?: string; operator?: string },
+  ): Promise<{
+    reference: string;
+    provider?: string;
+    status: string;
+    amount: string;
+    fee: string;
+    totalCharged: string;
+    instruction?: string;
+    redirectUrl?: string;
+  }> {
+    const order = await this.dataSource
+      .getRepository(TicketOrder)
+      .findOne({ where: { reference: orderReference } });
+    if (!order) throw new NotFoundException('Ticket order not found');
+    if (order.status !== 'PENDING') {
+      throw new ConflictException(`This order can't be paid from status ${order.status}`);
+    }
+
+    const amount = String(order.totalAmountZmw);
+    const bearer = this.config.get<'customer' | 'merchant'>('psp.feeBearer') || 'customer';
+    const channel: Channel = dto.channel || 'mobile-money';
+    const fees = await this.provider.quoteFees({ amount, channel, bearer });
+
+    const reference = `TPF-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+
+    await this.pspTx.save(
+      this.pspTx.create({
+        reference,
+        provider: this.provider.name,
+        type: 'COLLECTION',
+        status: 'PENDING',
+        amount: fees.amount,
+        feeAmount: fees.fee,
+        feeBearer: bearer,
+        currency: fees.currency,
+        quoteId: null,
+        counterpartyId: null, // guest payer — no user account
+        context: { kind: 'TICKET_SALE', ticketOrderId: order.id, orderReference: order.reference },
+        payerMsisdn: dto.phone ?? order.buyerPhone ?? null,
+        channel,
+        idempotencyKey: `ticket-sale-collection:${reference}`,
+      } as any),
+    );
+
+    let result;
+    try {
+      result = await this.provider.initiateCollection({
+        reference,
+        amount: fees.amount,
+        currency: fees.currency,
+        channel,
+        bearer,
+        phone: dto.phone ?? order.buyerPhone ?? undefined,
+        operator: dto.operator,
+        email: order.buyerEmail ?? undefined,
+        name: order.buyerName ?? undefined,
+        description: `Nyuwe tickets — ${order.reference}`.slice(0, 100),
+      });
+    } catch (e) {
+      await this.pspTx.update({ reference }, { status: 'FAILED', lastError: (e as Error).message });
+      throw e;
+    }
+
+    await this.pspTx.update(
+      { reference },
+      {
+        providerReference: result.providerReference ?? null,
+        status:
+          result.status === 'successful'
+            ? 'SUCCESSFUL'
+            : result.status === 'failed'
+              ? 'FAILED'
+              : result.status === 'pay-offline'
+                ? 'PAY_OFFLINE'
+                : 'PENDING',
+        rawPayload: result.raw ?? null,
+      },
+    );
+
+    return {
+      reference,
+      provider: this.provider.name,
+      status: result.status,
+      amount: fees.amount,
+      fee: fees.fee,
+      totalCharged: fees.totalCharged,
+      instruction: result.instruction,
+      redirectUrl: result.redirectUrl,
+    };
+  }
+
+  /** Load a TICKET_SALE psp transaction by reference, or 404. The kind check
+   *  is the whole ownership model for guests: these methods can only ever
+   *  touch ticket transactions, never an authenticated user's payment. */
+  private async ticketTx(reference: string): Promise<PspTransaction> {
+    const tx = await this.pspTx.findOne({ where: { reference } });
+    if (!tx || (tx.context as any)?.kind !== 'TICKET_SALE') {
+      throw new NotFoundException('Ticket payment not found');
+    }
+    return tx;
+  }
+
+  /** Guest polling — same shape as status(), no user ownership check. */
+  async ticketPaymentStatus(reference: string): Promise<any> {
+    const tx = await this.ticketTx(reference);
+    return {
+      reference: tx.reference,
+      status: tx.status,
+      amount: tx.amount,
+      currency: tx.currency,
+    };
+  }
+
+  /** Guest verify-and-settle — the payer's return trip / poll for a ticket
+   *  payment. Proves nothing itself: the provider is re-asked, and every
+   *  funding step is idempotent (mirrors settleFromReturn minus the userId). */
+  async settleTicketFromReturn(
+    reference: string,
+  ): Promise<{ handled: boolean; reason?: string; status: string }> {
+    const tx = await this.ticketTx(reference);
+    const outcome = await this.verifyAndSettle(reference, tx.providerReference ?? undefined);
+    const settled = await this.pspTx.findOne({ where: { reference } });
+    return { ...outcome, status: settled?.status ?? tx.status };
+  }
+
+  /**
    * Handle a provider callback. Idempotent twice over: the
    * (provider, eventId) unique index rejects a redelivery, and the journal's
    * own idempotency key rejects a double-post.
@@ -638,6 +787,8 @@ export class CheckoutService {
       await this.fundAdPurchase(reference, verified.amount, verified.fee, verified.raw, (tx.context as any).adId);
     } else if ((tx.context as any)?.kind === 'JOB_POST_FEE') {
       await this.fundJobPostFee(reference, verified.amount, verified.fee, verified.raw, (tx.context as any).jobPostingId);
+    } else if ((tx.context as any)?.kind === 'TICKET_SALE') {
+      await this.fundTicketSale(reference, verified.raw, (tx.context as any).orderReference);
     } else {
       await this.fundVentureDeposit(reference, verified.amount, verified.fee, verified.raw);
     }
@@ -1152,6 +1303,49 @@ export class CheckoutService {
     });
 
     this.logger.log(`Job posting fee funded for ${reference}`);
+  }
+
+  /**
+   * A verified GUEST ticket payment becomes tickets. The atomic commit
+   * (stock re-check, mint, TICKET_SALE journal with the seller's net and the
+   * platform's commission, order → PAID) lives in TicketsService and is
+   * idempotent on the order — so the tickets are minted FIRST, and only then
+   * is the psp transaction marked SUCCESSFUL. If this crashes in between, a
+   * replayed webhook/verify re-runs the commit (which no-ops) and completes
+   * the psp update; the reverse order could strand a paid order forever.
+   *
+   * Sold-out-while-paying is the one genuinely bad path: money verified but
+   * stock gone. The commit throws, the psp row keeps lastError, and it stays
+   * un-SUCCESSFUL for an admin to refund manually — logged as CRITICAL.
+   */
+  private async fundTicketSale(
+    reference: string,
+    raw: Record<string, any> | undefined,
+    orderReference: string,
+  ): Promise<void> {
+    const tx = await this.pspTx.findOne({ where: { reference } });
+    if (!tx) throw new NotFoundException(`Unknown PSP transaction ${reference}`);
+    if (tx.status === 'SUCCESSFUL') return; // already funded — replay
+
+    try {
+      await this.tickets.commitPaidTicketOrder(orderReference);
+    } catch (e) {
+      this.logger.error(
+        `CRITICAL: verified ticket payment ${reference} could not be committed ` +
+          `(order ${orderReference}): ${(e as Error).message} — needs manual refund/review`,
+      );
+      await this.pspTx.update(
+        { reference },
+        { lastError: `Paid but not committed: ${(e as Error).message}` },
+      );
+      throw e;
+    }
+
+    await this.pspTx.update(
+      { reference },
+      { status: 'SUCCESSFUL', settledAt: new Date(), rawPayload: raw ?? null } as any,
+    );
+    this.logger.log(`Ticket sale funded for ${reference} (order ${orderReference})`);
   }
 
   /** Payment status for a polling UI. Visible to the payer (buyer for cash,

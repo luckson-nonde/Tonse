@@ -7,6 +7,7 @@ import {
   paymentsService,
   readHostedPaymentHandoff,
 } from '../services/api/paymentsService';
+import { ticketsService } from '../services/api/ticketsService';
 
 type Outcome = 'checking' | 'paid' | 'pending' | 'failed' | 'cancelled' | 'unknown';
 
@@ -45,7 +46,11 @@ export default function PaymentReturnPage() {
   const check = useCallback(async () => {
     if (!reference) return;
     try {
-      const result = await paymentsService.verifyReturn(reference);
+      // Guest ticket payments (TPF-…) verify via the public tickets endpoint —
+      // the payer has no account, so the JWT-gated verify would 401 them.
+      const result = reference.startsWith('TPF-')
+        ? await ticketsService.verifyTicketPayment(reference)
+        : await paymentsService.verifyReturn(reference);
       if (result.status === 'SUCCESSFUL') {
         setOutcome('paid');
         clearHostedPaymentHandoff();

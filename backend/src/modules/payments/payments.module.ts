@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Payment } from './entities/payment.entity';
@@ -9,6 +9,8 @@ import { Inquiry } from '../inquiries/entities/inquiry.entity';
 import { Order } from '../orders/entities/order.entity';
 import { Advertisement } from '../ads/entities/advertisement.entity';
 import { JobPosting } from '../job-board/entities/job-posting.entity';
+import { TicketOrder } from '../tickets/entities/ticket-order.entity';
+import { TicketsModule } from '../tickets/tickets.module';
 import { PaymentsService } from './payments.service';
 import { CheckoutService } from './checkout.service';
 import { PaymentsController } from './controllers/payments.controller';
@@ -29,9 +31,12 @@ import { NotificationsModule } from '../notifications/notifications.module';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Payment, PspTransaction, WebhookEventRecord, Quote, Inquiry, Order, Advertisement, JobPosting]),
+    TypeOrmModule.forFeature([Payment, PspTransaction, WebhookEventRecord, Quote, Inquiry, Order, Advertisement, JobPosting, TicketOrder]),
     LedgerModule,
     NotificationsModule,
+    // forwardRef: TicketsModule ↔ PaymentsModule — a verified guest ticket
+    // payment settles by calling TicketsService.commitPaidTicketOrder.
+    forwardRef(() => TicketsModule),
   ],
   providers: [
     PaymentsService,

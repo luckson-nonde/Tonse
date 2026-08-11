@@ -17,7 +17,9 @@ import {
   Phone,
 } from 'lucide-react';
 import Logo from '../components/Logo';
+import PushPaymentWait from '../components/PushPaymentWait';
 import { formatCurrency } from '../utils/financeUtils';
+import { beginHostedPayment } from '../services/api/paymentsService';
 import {
   ticketsService,
   ticketMapsUrl,
@@ -41,14 +43,17 @@ const prettyDateTime = (value: string) => {
         d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 };
 
-type Step = 'details' | 'processing' | 'done';
+type Step = 'details' | 'processing' | 'push' | 'done';
 
 /**
  * The public ticket page behind a seller's share link (`/e/:code`) —
  * deliberately guest-first: no account, no login, no ProtectedRoute. A
- * visitor picks their tickets, leaves a name and phone/email, "pays" via the
- * simulated mobile-money step, and gets their ticket codes on screen. The
- * seller's venture balance is credited for real on the backend commit.
+ * visitor picks their tickets, leaves a name and phone/email, and pays for
+ * REAL through the PSP: mobile money is an in-app push approved on their
+ * handset (PushPaymentWait polling the public verify endpoint), any hosted
+ * fallback redirects to the provider's page, and the sandbox provider keeps
+ * the old instant-simulate rhythm for dev. Tickets mint server-side only
+ * after the payment verifies; the seller's venture balance credit is real.
  */
 export default function TicketPurchasePage() {
   const { code } = useParams<{ code: string }>();
@@ -67,6 +72,13 @@ export default function TicketPurchasePage() {
   const [submitError, setSubmitError] = useState('');
   const [order, setOrder] = useState<PaidTicketOrder | null>(null);
   const [copiedCode, setCopiedCode] = useState('');
+  const [push, setPush] = useState<{
+    /** The PSP payment reference (TPF-…). */
+    paymentReference: string;
+    /** The parked order's reference (TKT-…) — what the tickets hang off. */
+    orderReference: string;
+    instruction?: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     if (!code) return;
@@ -119,8 +131,33 @@ export default function TicketPurchasePage() {
         buyerPhone: buyerPhone.trim() || undefined,
         buyerEmail: buyerEmail.trim() || undefined,
       });
-      // Simulated mobile-money approval — the same fake-delay rhythm every
-      // other payment in the app uses (the ledger credit behind it is real).
+
+      // Start the REAL collection against the parked order.
+      const payment = await ticketsService.payTickets(checkout.reference, {
+        channel: 'mobile-money',
+        phone: buyerPhone.trim() || undefined,
+        operator,
+      });
+      if (!payment?.reference || payment.status === 'failed') {
+        throw new Error('Payment could not be started. You have not been charged — please try again.');
+      }
+
+      // Hosted fallback (e.g. a network without in-app push): pay on the
+      // provider's page; DPO returns the guest to /payment/return.
+      if (beginHostedPayment(payment, { label: `Tickets — ${event.title}` })) return;
+
+      if (payment.provider === 'dpo') {
+        // In-app push: the prompt is on the buyer's handset.
+        setPush({
+          paymentReference: payment.reference,
+          orderReference: checkout.reference,
+          instruction: payment.instruction,
+        });
+        setStep('push');
+        return;
+      }
+
+      // Sandbox: keep the instant-approval dev rhythm.
       await new Promise((resolve) => setTimeout(resolve, 1600));
       const paid = await ticketsService.simulateTicketPayment(checkout.reference);
       setOrder(paid);
@@ -130,6 +167,22 @@ export default function TicketPurchasePage() {
       setSubmitError(e?.message || 'Payment failed. You have not been charged — please try again.');
       // Stock may have moved (e.g. sold out mid-payment) — refresh what's left.
       load();
+    }
+  };
+
+  /** Push approved and verified — fetch the minted tickets for the done screen. */
+  const finishPushPaid = async () => {
+    if (!push) return;
+    try {
+      const paid = await ticketsService.getPaidOrder(push.orderReference);
+      setOrder(paid);
+      setPush(null);
+      setStep('done');
+    } catch (e: any) {
+      setStep('details');
+      setSubmitError(
+        e?.message || 'Payment settled but the tickets could not be loaded — refresh this page.',
+      );
     }
   };
 
@@ -353,8 +406,29 @@ export default function TicketPurchasePage() {
               </p>
             </div>
           </div>
+        ) : step === 'push' && push ? (
+          /* ── Real in-app mobile money: approve on the handset, poll the
+                public verify endpoint until DPO confirms. ── */
+          <PushPaymentWait
+            reference={push.paymentReference}
+            amountLabel={`ZMW ${formatCurrency(totalZmw)}`}
+            instruction={push.instruction}
+            verify={ticketsService.verifyTicketPayment}
+            onDone={(status) => {
+              if (status === 'SUCCESSFUL') void finishPushPaid();
+              else {
+                setPush(null);
+                setStep('details');
+                setSubmitError('The payment was not completed. You have not been charged — please try again.');
+                load();
+              }
+            }}
+            onCancel={() => {
+              setPush(null);
+              setStep('details');
+            }}
+          />
         ) : step === 'processing' ? (
-          /* ── Fake mobile-money processing ── */
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-10 flex flex-col items-center gap-4 text-center">
             <Loader2 className="w-8 h-8 animate-spin text-[#C9973A]" />
             <p className="font-black text-slate-900">Processing {operator} payment…</p>

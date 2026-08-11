@@ -261,18 +261,19 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
-              {/* Where DPO returns the payer after its hosted page. Protected
-                  because verifying settles a real payment against the payer's
-                  own transaction — the round trip stays in the same tab, so the
-                  session is still live. The URL is DPO_REDIRECT_URL. */}
+              {/* Where DPO returns the payer after its hosted page. NOT
+                  protected: guest ticket buyers (no account) land here too, and
+                  verifying proves nothing by itself — the server re-asks the
+                  provider before any money moves. Authenticated payments still
+                  verify through the JWT-gated endpoint (a logged-out visitor
+                  with someone else's reference just sees "not confirmed").
+                  The URL is DPO_REDIRECT_URL. */}
               <Route
                 path="/payment/return"
                 element={
-                  <ProtectedRoute>
-                    <PageTransition transitionKey="payment-return">
-                      <PaymentReturnPage />
-                    </PageTransition>
-                  </ProtectedRoute>
+                  <PageTransition transitionKey="payment-return">
+                    <PaymentReturnPage />
+                  </PageTransition>
                 }
               />
               <Route path="/" element={<RootRedirect />} />

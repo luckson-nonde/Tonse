@@ -22,6 +22,7 @@ export default function PushPaymentWait({
   instruction,
   onDone,
   onCancel,
+  verify,
 }: {
   reference: string;
   /** e.g. "ZMW 48.00" — shown so the payer knows what they're approving. */
@@ -30,6 +31,9 @@ export default function PushPaymentWait({
   instruction?: string;
   onDone: (status: 'SUCCESSFUL' | 'FAILED') => void;
   onCancel?: () => void;
+  /** Override the verify call — guest flows (tickets) poll a public endpoint
+   *  instead of the JWT-gated one. Defaults to paymentsService.verifyReturn. */
+  verify?: (reference: string) => Promise<{ status: string }>;
 }) {
   const [checking, setChecking] = useState(false);
   const [outcome, setOutcome] = useState<'SUCCESSFUL' | 'FAILED' | null>(null);
@@ -48,7 +52,7 @@ export default function PushPaymentWait({
   const check = async () => {
     setChecking(true);
     try {
-      const res = await paymentsService.verifyReturn(reference);
+      const res = await (verify ?? paymentsService.verifyReturn)(reference);
       if (res.status === 'SUCCESSFUL') finish('SUCCESSFUL');
       else if (res.status === 'FAILED') finish('FAILED');
     } catch {

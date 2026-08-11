@@ -750,13 +750,19 @@ export class TicketsService {
   }
 
   /**
-   * Step 2 — the ONE atomic commit, standing in for a real PSP webhook:
+   * Step 2 — the ONE atomic commit that turns a paid-for order into tickets:
    * lock the order and its tiers `FOR UPDATE`, re-check stock, decrement,
    * mint per-attendee ticket codes, flip the order to PAID and post the
    * TICKET_SALE journal — all in a single transaction, so money and state
    * can never disagree. Replays return the already-minted tickets.
+   *
+   * TWO callers, one code path: CheckoutService.fundTicketSale after the PSP
+   * verifies a real guest payment, and the public sandbox simulate endpoint
+   * (which the controller gates to the sandbox provider). Idempotent on the
+   * order (PAID short-circuit + `ticket-sale:${order.id}` journal key), so a
+   * webhook racing a manual verify can never double-decrement stock.
    */
-  async simulatePublicPayment(reference: string) {
+  async commitPaidTicketOrder(reference: string) {
     const committed = await this.dataSource.transaction(async (m) => {
       const order = await m
         .getRepository(TicketOrder)
@@ -1042,6 +1048,22 @@ export class TicketsService {
     <a href="${esc(target)}">Continue to get your tickets</a>
 </body>
 </html>`;
+  }
+
+  /**
+   * The guest's paid order + minted ticket codes, by order reference — what
+   * the ticket page renders after a REAL payment settles (the settle endpoint
+   * only reports a status; the tickets come from here). The reference is a
+   * capability token, exactly as it already was for the simulate endpoint.
+   */
+  async getPaidPublicOrder(reference: string) {
+    const order = await this.orders.findOne({ where: { reference } });
+    if (!order) throw new NotFoundException('Payment reference not found');
+    if (order.status !== 'PAID') {
+      throw new ConflictException('This order has not been paid yet');
+    }
+    const minted = await this.tickets.find({ where: { orderId: order.id } });
+    return this.paidOrderResponse(order, minted);
   }
 
   private paidOrderResponse(order: TicketOrder, tickets: Ticket[]) {

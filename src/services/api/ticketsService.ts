@@ -160,6 +160,18 @@ export interface TicketCheckoutResult {
   eventTitle: string;
 }
 
+/** Result of starting the PSP collection for a ticket order — the standard
+ *  initiate shape (reference here is the PAYMENT ref `TPF-…`, not the order). */
+export interface TicketPaymentResult {
+  reference: string;
+  status: 'pending' | 'successful' | 'failed' | 'pay-offline' | string;
+  amount: string;
+  /** 'sandbox' → simulate; 'dpo' → approve-on-phone polling card. */
+  provider?: string;
+  instruction?: string;
+  redirectUrl?: string;
+}
+
 export interface PaidTicketOrder {
   orderId: string;
   reference: string;
@@ -301,8 +313,41 @@ export const ticketsService = {
     return payload<TicketCheckoutResult>(res, {} as TicketCheckoutResult);
   },
 
-  /** Step 2: the simulated payment commit — returns the minted ticket codes.
-   *  Idempotent: replays return the same tickets. */
+  /** Step 2: start the REAL PSP collection for a parked order. Mobile money
+   *  on live DPO is an in-app push (no redirect); card comes back with the
+   *  hosted-page redirectUrl. Guest-safe — no auth. */
+  async payTickets(
+    orderReference: string,
+    dto: { channel?: 'mobile-money' | 'card'; phone?: string; operator?: string },
+  ): Promise<TicketPaymentResult> {
+    const res = await apiClient.post(
+      `/tickets/public/checkout/${encodeURIComponent(orderReference)}/pay`,
+      dto,
+    );
+    return payload<TicketPaymentResult>(res, {} as TicketPaymentResult);
+  },
+
+  /** Ask the server to re-verify a ticket payment with the provider and settle
+   *  it if paid — the guest's approve-on-phone poll. Idempotent. */
+  async verifyTicketPayment(
+    paymentReference: string,
+  ): Promise<{ handled: boolean; status: string }> {
+    const res = await apiClient.post(
+      `/tickets/public/checkout/payment/${encodeURIComponent(paymentReference)}/verify`,
+    );
+    return payload(res, { handled: false, status: 'PENDING' });
+  },
+
+  /** The paid order + minted ticket codes, once payment settled. */
+  async getPaidOrder(orderReference: string): Promise<PaidTicketOrder> {
+    const res = await apiClient.get(
+      `/tickets/public/checkout/${encodeURIComponent(orderReference)}/order`,
+    );
+    return payload<PaidTicketOrder>(res, {} as PaidTicketOrder);
+  },
+
+  /** SANDBOX ONLY: the simulated payment commit — returns the minted ticket
+   *  codes. Refused by the server when a live provider is configured. */
   async simulateTicketPayment(reference: string): Promise<PaidTicketOrder> {
     const res = await apiClient.post(
       `/tickets/public/checkout/${encodeURIComponent(reference)}/simulate`,
