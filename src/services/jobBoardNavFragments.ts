@@ -14,6 +14,10 @@ import { NavigationItem, ViewDefinition } from './accountSchemaTypes';
  * carry businessTypes ['LABOUR'] so on mixed-archetype schemas they appear
  * only for sellers who registered labour trades. labourAccountSchema (the
  * pure-labour dashboard) splices SEEKER_* unconditionally.
+ *
+ * NB: 'LABOUR' here gates who gets the Find Jobs TAB — it no longer says
+ * anything about WHICH jobs they see. The feed is the entire board for every
+ * employment account; registered trades are a filter, not a match.
  */
 export const JOB_BOARD_POSTER_NAV_ITEM: NavigationItem = {
   id: 'my-job-posts',
@@ -36,7 +40,7 @@ export const JOB_SEEKER_FEED_NAV_ITEM: NavigationItem = {
 
 export const JOB_SEEKER_FEED_VIEW: ViewDefinition = {
   title: 'Find Jobs',
-  subtitle: 'Approved job posts matching your registered trades',
+  subtitle: 'Every open vacancy posted on Nyuwe — search and filter the board',
   componentType: 'job_seeker_feed_renderer',
 };
 

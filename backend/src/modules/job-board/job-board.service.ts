@@ -18,6 +18,30 @@ import { NotificationsService } from '../notifications/notifications.service';
 /** Postgres unique-violation SQLSTATE — the double-apply guard's error. */
 const PG_UNIQUE_VIOLATION = '23505';
 
+/**
+ * What makes a `service_provider_profiles pp` row an employment account —
+ * i.e. someone the job board is FOR. Two arms on purpose:
+ *
+ *  1. subRole — how the "Looking for Employment" signup lands.
+ *  2. any registered labour trade — before the board was ungated, eligibility
+ *     was a category join, so providers holding labour trades under another
+ *     subRole could already apply. Collapsing to arm 1 alone would silently
+ *     lock those existing accounts out.
+ *
+ * Used by both the apply gate and the new-job alert audience; they must agree,
+ * or we'd notify people who then get a 403 when they act on it.
+ */
+const EMPLOYMENT_ACCOUNT_PREDICATE = `(
+  pp."subRole" = 'SKILLED_LABOUR'
+  OR EXISTS (
+    SELECT 1
+      FROM service_provider_profile_categories spc
+      JOIN categories c ON c.id = spc."categoryId"
+     WHERE spc."serviceProviderProfileId" = pp.id
+       AND c."parentId" = 'labour'
+  )
+)`;
+
 /** Minimal identity used for both applicant cards and poster reveal. */
 export interface JobBoardContact {
   userId: string;
@@ -214,26 +238,26 @@ export class JobBoardService {
   // ── Seeker surface ───────────────────────────────────────────────────
 
   /**
-   * Approved, still-open postings whose trades intersect the seeker's
-   * registered trade categories. Plain equality join — labour trades are
-   * flat leaves under `labour`, so no tree expansion is needed. A seeker
-   * with zero registered trades simply gets an empty feed.
+   * Every approved, still-open posting on the platform — the whole job
+   * board, not a trade-matched slice.
+   *
+   * This used to inner-join the seeker's registered trade categories, so a
+   * carpenter never saw a driver vacancy and a seeker with no registered
+   * trades saw nothing at all. An employment account is no longer a
+   * statement about which trades you do; it's an account for seeing what
+   * work is going. Trades survive only as a card tag and an optional
+   * client-side filter, so browsing is a search problem, not a matching one.
+   *
+   * No junction join means no duplicate rows, so the old IN-subquery dedup
+   * is gone too — which also sidesteps the json-DISTINCT trap (`attributes`
+   * is json and Postgres has no equality operator for it, so a SELECT
+   * DISTINCT over jp.* 500s; don't reintroduce one).
    */
-  async listFeedForSeeker(userId: string): Promise<any[]> {
-    // Dedup via IN-subquery, not SELECT DISTINCT — `attributes` is a json
-    // column and Postgres has no equality operator for json, so DISTINCT
-    // over jp.* 500s.
+  async listOpenJobs(userId: string): Promise<any[]> {
     const rows: JobPosting[] = await this.dataSource.query(
       `SELECT jp.*
          FROM job_postings jp
-        WHERE jp.id IN (
-                SELECT jpc."jobPostingId"
-                  FROM job_posting_categories jpc
-                  JOIN service_provider_profile_categories spc ON spc."categoryId" = jpc."categoryId"
-                  JOIN service_provider_profiles pp ON pp.id = spc."serviceProviderProfileId"
-                 WHERE pp."userId" = $1
-              )
-          AND jp.status = 'APPROVED'
+        WHERE jp.status = 'APPROVED'
           AND jp."posterId" <> $1
           AND (jp."applicationDeadline" IS NULL OR jp."applicationDeadline" > NOW())
         ORDER BY jp."createdAt" DESC`,
@@ -271,18 +295,27 @@ export class JobBoardService {
     if (posting.applicationDeadline && posting.applicationDeadline.getTime() <= Date.now()) {
       throw new ConflictException('The application deadline for this job has passed');
     }
+    // Eligibility is now "do you hold an employment account", not "do your
+    // registered trades match THIS posting". A jobseeker applies for the work
+    // they want, not only the work their signup trade box happens to name.
+    //
+    // Two ways to qualify, deliberately: the subRole (how the Looking for
+    // Employment signup lands) OR any registered labour trade. The second arm
+    // is not redundant — before this change eligibility was a category join,
+    // so providers who registered labour trades under some other subRole could
+    // already apply. Dropping them to satisfy a tidier one-line check would be
+    // a silent regression for existing accounts.
     const eligible: Array<{ ok: number }> = await this.dataSource.query(
       `SELECT 1 AS ok
-         FROM service_provider_profile_categories spc
-         JOIN service_provider_profiles pp ON pp.id = spc."serviceProviderProfileId"
-         JOIN job_posting_categories jpc ON jpc."categoryId" = spc."categoryId"
-        WHERE pp."userId" = $1 AND jpc."jobPostingId" = $2
+         FROM service_provider_profiles pp
+        WHERE pp."userId" = $1
+          AND ${EMPLOYMENT_ACCOUNT_PREDICATE}
         LIMIT 1`,
-      [applicantUserId, jobPostingId],
+      [applicantUserId],
     );
     if (eligible.length === 0) {
       throw new ForbiddenException(
-        'Only providers registered for this job\'s trade can apply',
+        'Register a Looking for Employment account to apply for jobs',
       );
     }
 
@@ -536,16 +569,15 @@ export class JobBoardService {
     return saved;
   }
 
-  /** All labour providers whose registered trades intersect the posting's,
-   *  minus the poster themself (a user can hold both sides). */
+  /** Every employment account, minus the poster themself (a user can hold
+   *  both sides). Matches the feed: if a job is visible to all jobseekers,
+   *  the "new job" alert has to reach the same audience, or the notification
+   *  and the board would disagree about who the job is for. */
   private async dispatchJobMatchNotifications(posting: JobPosting): Promise<void> {
     const rows: Array<{ userId: string }> = await this.dataSource.query(
       `SELECT DISTINCT pp."userId"
-         FROM service_provider_profile_categories spc
-         JOIN service_provider_profiles pp ON pp.id = spc."serviceProviderProfileId"
-         JOIN job_posting_categories jpc ON jpc."categoryId" = spc."categoryId"
-        WHERE jpc."jobPostingId" = $1`,
-      [posting.id],
+         FROM service_provider_profiles pp
+        WHERE ${EMPLOYMENT_ACCOUNT_PREDICATE}`,
     );
     const audience = rows.map((r) => r.userId).filter((id) => id !== posting.posterId);
     if (audience.length === 0) return;

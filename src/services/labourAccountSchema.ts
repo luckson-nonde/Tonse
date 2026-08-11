@@ -36,11 +36,11 @@ export const MASTER_LABOUR_ACCOUNT_SCHEMA: MasterAccountSchema = {
   views: {
     dashboard: {
       title: 'Labour Overview',
-      subtitle: 'Jobs matching your trades and your applications at a glance',
+      subtitle: 'Open jobs on the board and your applications at a glance',
       componentType: 'labour_home',
       showWalletCard: true,
       metrics: [
-        { id: 'matched_jobs', label: 'Jobs For You', value: 0, icon: 'Search' },
+        { id: 'matched_jobs', label: 'Open Jobs', value: 0, icon: 'Search' },
         { id: 'open_applications', label: 'Open Applications', value: 0, icon: 'ClipboardCheck' },
         { id: 'accepted_jobs', label: 'Accepted', value: 0, icon: 'CheckCircle' },
       ],

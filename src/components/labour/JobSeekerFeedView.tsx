@@ -1,14 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRef } from 'react';
 import {
+  ArrowLeft,
+  Banknote,
   Briefcase,
+  CalendarClock,
   CheckCircle2,
+  ChevronDown,
   Clock,
   FileCheck,
+  FileText,
   Loader2,
   MapPin,
   Paperclip,
   Search,
+  SlidersHorizontal,
   Users,
   X,
 } from 'lucide-react';
@@ -35,18 +41,81 @@ const formatPay = (payOffer: number | string | null, unit: string | null) => {
   return `K${n.toLocaleString()} ${unit ?? ''}`.trim();
 };
 
+/** Rate units expressed as a per-day multiplier, so "highest pay" can rank a
+ *  K50/hour job against a K4,000/month one instead of comparing raw figures
+ *  across incompatible units. Zambian norms: 8h day, 5-day week, 22-day month. */
+const PER_DAY_FACTOR: Record<string, number> = {
+  'Per Hour': 8,
+  'Per Day': 1,
+  'Per Week': 1 / 5,
+  'Per Month': 1 / 22,
+};
+
+const payPerDay = (job: JobFeedItem): number | null => {
+  const n = Number(job.payOffer);
+  if (!job.payOffer || Number.isNaN(n) || n <= 0) return null;
+  return n * (PER_DAY_FACTOR[job.payRateUnit ?? 'Per Day'] ?? 1);
+};
+
+const timeAgo = (iso: string): string => {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const mins = Math.max(0, Math.floor((Date.now() - then) / 60000));
+  if (mins < 60) return `${mins || 1}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+};
+
+const POSTED_WITHIN = [
+  { value: 'any', label: 'Any time', days: null as number | null },
+  { value: '1', label: 'Past 24 hours', days: 1 },
+  { value: '7', label: 'Past 7 days', days: 7 },
+  { value: '30', label: 'Past 30 days', days: 30 },
+];
+
+const SORTS = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'pay', label: 'Highest pay' },
+  { value: 'closing', label: 'Closing soonest' },
+];
+
+interface Filters {
+  q: string;
+  trade: string;
+  location: string;
+  postedWithin: string;
+  sort: string;
+}
+
+const EMPTY_FILTERS: Filters = {
+  q: '',
+  trade: 'all',
+  location: 'all',
+  postedWithin: 'any',
+  sort: 'newest',
+};
+
 /**
- * "Find Jobs" — the labour provider's job feed: admin-approved postings
- * whose trades match the trades this provider registered with (the match
- * happens server-side; an empty feed just means nothing matches yet).
- * Applying is applicant-shaped: a message + expected rate + availability,
- * NOT a price quote.
+ * "Find Jobs" — the job board. Every approved, still-open posting on the
+ * platform, whoever posted it (buyer, shop or provider).
+ *
+ * Deliberately NOT trade-matched any more: an employment account is for
+ * seeing what work is going, not for being shown only the trade you ticked
+ * at signup. Trades survive as a card tag and one filter among several, so
+ * narrowing the board is the jobseeker's choice rather than the system's.
+ * The backend now returns the whole board, so all filtering here is
+ * client-side over the loaded list.
  */
 export default function JobSeekerFeedView() {
   const [jobs, setJobs] = useState<JobFeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [applyTarget, setApplyTarget] = useState<JobFeedItem | null>(null);
+  const [openJobId, setOpenJobId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
 
   const load = useCallback(async () => {
     try {
@@ -72,122 +141,573 @@ export default function JobSeekerFeedView() {
     setApplyTarget(null);
   };
 
+  // Option lists are derived from what's actually on the board, so the
+  // dropdowns can never offer a filter that returns nothing.
+  const tradeOptions = useMemo(() => {
+    const ids = new Set<string>();
+    jobs.forEach((j) => j.tradeCategoryIds.forEach((id) => ids.add(id)));
+    return Array.from(ids)
+      .map((id) => ({ id, label: tradeLabelOf(id) }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [jobs]);
+
+  const locationOptions = useMemo(() => {
+    const names = new Set<string>();
+    jobs.forEach((j) => {
+      const name = j.city || j.location;
+      if (name) names.add(name);
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [jobs]);
+
+  const visible = useMemo(() => {
+    const q = filters.q.trim().toLowerCase();
+    const window = POSTED_WITHIN.find((p) => p.value === filters.postedWithin)?.days ?? null;
+    const cutoff = window === null ? null : Date.now() - window * 86400000;
+
+    const rows = jobs.filter((job) => {
+      if (filters.trade !== 'all' && !job.tradeCategoryIds.includes(filters.trade)) return false;
+      if (filters.location !== 'all' && (job.city || job.location) !== filters.location) {
+        return false;
+      }
+      if (cutoff !== null && new Date(job.createdAt).getTime() < cutoff) return false;
+      if (q) {
+        const haystack = [
+          job.title,
+          job.description,
+          job.posterName,
+          job.location,
+          job.city,
+          ...job.tradeCategoryIds.map(tradeLabelOf),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+
+    // Jobs with no figure sort last under "highest pay", and jobs with no
+    // deadline sort last under "closing soonest" — an open-ended job isn't
+    // urgent, and a blank is not the same as zero.
+    const sorted = [...rows];
+    if (filters.sort === 'pay') {
+      sorted.sort((a, b) => (payPerDay(b) ?? -1) - (payPerDay(a) ?? -1));
+    } else if (filters.sort === 'closing') {
+      const deadline = (j: JobFeedItem) =>
+        j.applicationDeadline ? new Date(j.applicationDeadline).getTime() : Infinity;
+      sorted.sort((a, b) => deadline(a) - deadline(b));
+    } else {
+      sorted.sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+    }
+    return sorted;
+  }, [jobs, filters]);
+
+  const activeCount = useMemo(
+    () =>
+      (filters.q.trim() ? 1 : 0) +
+      (filters.trade !== 'all' ? 1 : 0) +
+      (filters.location !== 'all' ? 1 : 0) +
+      (filters.postedWithin !== 'any' ? 1 : 0),
+    [filters],
+  );
+
+  const openJob = openJobId ? jobs.find((j) => j.id === openJobId) ?? null : null;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-slate-400">
+        <Loader2 className="w-6 h-6 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-sm text-rose-600 font-bold">{error}</p>
+        <button
+          onClick={() => {
+            setLoading(true);
+            void load();
+          }}
+          className="mt-3 px-4 py-2 rounded-lg border border-[#e2e8f0] text-sm font-bold text-slate-600 hover:bg-slate-50"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  if (openJob) {
+    return (
+      <>
+        {applyTarget && (
+          <ApplyModal
+            job={applyTarget}
+            onClose={() => setApplyTarget(null)}
+            onApplied={onApplied}
+          />
+        )}
+        <JobDetail
+          job={openJob}
+          onBack={() => setOpenJobId(null)}
+          onApply={() => setApplyTarget(openJob)}
+        />
+      </>
+    );
+  }
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {applyTarget && (
         <ApplyModal job={applyTarget} onClose={() => setApplyTarget(null)} onApplied={onApplied} />
       )}
 
-      {loading ? (
-        <div className="flex items-center justify-center py-16 text-slate-400">
-          <Loader2 className="w-6 h-6 animate-spin" />
-        </div>
-      ) : error ? (
-        <div className="text-center py-12">
-          <p className="text-sm text-rose-600 font-bold">{error}</p>
-          <button
-            onClick={() => {
-              setLoading(true);
-              void load();
-            }}
-            className="mt-3 px-4 py-2 rounded-lg border border-[#e2e8f0] text-sm font-bold text-slate-600 hover:bg-slate-50"
-          >
-            Try again
-          </button>
-        </div>
-      ) : jobs.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-[#e2e8f0]">
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-[#fdf6e9] border border-[#f0dfc0] flex items-center justify-center mb-3">
-            <Search className="w-6 h-6 text-[#C9973A]" />
-          </div>
-          <p className="text-sm font-black text-[#1a1a2e]">No jobs for your trades right now</p>
-          <p className="text-[13px] text-slate-500 mt-1 max-w-sm mx-auto">
-            When someone posts a job matching the trades on your profile, it appears here and you
-            get a notification.
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h2 className="text-[19px] font-black text-[#0A1931]">All Jobs on Nyuwe</h2>
+          <p className="text-[12px] text-slate-500 mt-0.5">
+            Every open vacancy posted on the platform — shops, service providers and buyers.
           </p>
         </div>
-      ) : (
-        jobs.map((job) => {
-          const pay = formatPay(job.payOffer, job.payRateUnit);
-          const urgency = (job.attributes?.urgency as string) || null;
-          return (
-            <div key={job.id} className="bg-white rounded-2xl border border-[#e2e8f0] p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-black text-[#1a1a2e]">{job.title}</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    {job.tradeCategoryIds.map(tradeLabelOf).join(', ')} · Posted by {job.posterName}
-                  </p>
-                </div>
-                {pay && (
-                  <span className="shrink-0 text-[12px] font-black text-[#8a6420] bg-[#fdf6e9] border border-[#f0dfc0] px-2.5 py-1 rounded-full">
-                    {pay}
-                  </span>
-                )}
+        <span className="shrink-0 text-[12px] font-bold text-slate-500">
+          {visible.length} {visible.length === 1 ? 'job' : 'jobs'}
+        </span>
+      </div>
+
+      {/* Filter placement is the only thing that moves between breakpoints:
+          a right-hand sidebar on desktop (order-2), a collapsible bar pinned
+          above the results on mobile (order-1). Same component, same state —
+          rendering it twice would desynchronise the two copies. */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_290px]">
+        <div className="order-2 lg:order-1 space-y-3">
+          {visible.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-2xl border border-[#e8e4dc]">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-[#fdf6e9] border border-[#f0dfc0] flex items-center justify-center mb-3">
+                <Search className="w-6 h-6 text-[#C9973A]" />
               </div>
-
-              <p className="text-[13px] text-slate-600 mt-2 whitespace-pre-wrap">{job.description}</p>
-
-              <JobAttributesDisplay
-                tradeId={job.tradeCategoryIds[0]}
-                attributes={job.attributes}
-              />
-
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 text-[11px] font-bold text-slate-500">
-                {job.location && (
-                  <span className="inline-flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5" /> {job.location}
-                  </span>
-                )}
-                {job.workersNeeded ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Users className="w-3.5 h-3.5" /> {job.workersNeeded} worker
-                    {job.workersNeeded === 1 ? '' : 's'} needed
-                  </span>
-                ) : null}
-                {urgency && (
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    {urgency === 'Immediately'
-                      ? 'Starts immediately'
-                      : job.attributes?.preferredDateTime
-                        ? `Starts ${new Date(String(job.attributes.preferredDateTime)).toLocaleString()}`
-                        : urgency}
-                  </span>
-                )}
-                {job.applicationDeadline && (
-                  <span className="text-rose-500">
-                    Apply by {new Date(job.applicationDeadline).toLocaleDateString()}
-                  </span>
-                )}
-              </div>
-
-              <div className="mt-3">
-                {job.hasApplied ? (
-                  <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-emerald-700 bg-emerald-50 border border-[#6ee7b7] px-3 py-1.5 rounded-lg">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    {job.myApplicationStatus === 'ACCEPTED'
-                      ? 'Accepted — check My Applications'
-                      : job.myApplicationStatus === 'REJECTED'
-                        ? 'Applied — not selected'
-                        : 'Application sent'}
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => setApplyTarget(job)}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#C9973A] hover:bg-[#b8852f] text-white text-[13px] font-bold transition-colors"
-                  >
-                    <Briefcase className="w-4 h-4" /> Apply
-                  </button>
-                )}
-              </div>
+              <p className="text-sm font-black text-[#1a1a2e]">
+                {jobs.length === 0 ? 'No jobs posted yet' : 'No jobs match these filters'}
+              </p>
+              <p className="text-[13px] text-slate-500 mt-1 max-w-sm mx-auto">
+                {jobs.length === 0
+                  ? 'As soon as anyone on Nyuwe posts a vacancy and it clears review, it shows up here.'
+                  : 'Try a different search, or clear the filters to see the whole board again.'}
+              </p>
+              {jobs.length > 0 && activeCount > 0 && (
+                <button
+                  onClick={() => setFilters(EMPTY_FILTERS)}
+                  className="mt-4 px-4 py-2 rounded-lg border border-[#e2e8f0] text-[13px] font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
-          );
-        })
+          ) : (
+            visible.map((job) => (
+              <JobCard
+                key={job.id}
+                job={job}
+                onOpen={() => setOpenJobId(job.id)}
+                onApply={() => setApplyTarget(job)}
+              />
+            ))
+          )}
+        </div>
+
+        <aside className="order-1 lg:order-2">
+          <JobFilters
+            filters={filters}
+            onChange={setFilters}
+            tradeOptions={tradeOptions}
+            locationOptions={locationOptions}
+            activeCount={activeCount}
+          />
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Filters ─────────────────────────────────────────────────────────── */
+
+function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="block text-[11px] font-bold text-slate-600 mb-1">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+const selectClass =
+  'w-full px-3 py-2 rounded-lg border border-[#e2e8f0] bg-white text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#C9973A]/40';
+
+function JobFilters({
+  filters,
+  onChange,
+  tradeOptions,
+  locationOptions,
+  activeCount,
+}: {
+  filters: Filters;
+  onChange: (next: Filters) => void;
+  tradeOptions: Array<{ id: string; label: string }>;
+  locationOptions: string[];
+  activeCount: number;
+}) {
+  // Mobile-only disclosure. On desktop the `lg:grid` below always wins over
+  // `hidden`, so the sidebar is permanently open and this state is inert —
+  // which is why there's no matching lg branch to keep in sync.
+  const [open, setOpen] = useState(false);
+  const set = (patch: Partial<Filters>) => onChange({ ...filters, ...patch });
+
+  return (
+    <div className="bg-white rounded-2xl border border-[#e8e4dc] p-4 lg:sticky lg:top-4">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="text-[13px] font-black text-[#0A1931]">Filter</span>
+        {activeCount > 0 && (
+          <button
+            onClick={() => onChange(EMPTY_FILTERS)}
+            className="text-[11px] font-bold text-[#C9973A] hover:text-[#a87b28]"
+          >
+            Clear all
+          </button>
+        )}
+      </div>
+
+      {/* Search stays visible at every size — it's the primary action. */}
+      <div className="relative">
+        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        <input
+          value={filters.q}
+          onChange={(e) => set({ q: e.target.value })}
+          placeholder="Job title, employer, trade…"
+          className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-[#e2e8f0] bg-white text-[13px] text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#C9973A]/40"
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="lg:hidden mt-3 w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-[#e2e8f0] bg-white text-[13px] font-bold text-slate-600"
+      >
+        <SlidersHorizontal className="w-4 h-4" />
+        {open ? 'Hide filters' : 'More filters'}
+        {activeCount > 0 && (
+          <span className="px-1.5 py-0.5 rounded-full bg-[#fdf6e9] text-[#a87b28] text-[11px] font-black">
+            {activeCount}
+          </span>
+        )}
+        <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      <div
+        className={`${open ? 'grid' : 'hidden'} grid-cols-2 gap-3 mt-3 lg:grid lg:grid-cols-1 lg:gap-3.5 lg:mt-4`}
+      >
+        <FilterField label="Category">
+          <select
+            value={filters.trade}
+            onChange={(e) => set({ trade: e.target.value })}
+            className={selectClass}
+          >
+            <option value="all">All categories</option>
+            {tradeOptions.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+
+        <FilterField label="Location">
+          <select
+            value={filters.location}
+            onChange={(e) => set({ location: e.target.value })}
+            className={selectClass}
+          >
+            <option value="all">All locations</option>
+            {locationOptions.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+
+        <FilterField label="Posted At">
+          <select
+            value={filters.postedWithin}
+            onChange={(e) => set({ postedWithin: e.target.value })}
+            className={selectClass}
+          >
+            {POSTED_WITHIN.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+
+        <FilterField label="Sort By">
+          <select
+            value={filters.sort}
+            onChange={(e) => set({ sort: e.target.value })}
+            className={selectClass}
+          >
+            {SORTS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+      </div>
+    </div>
+  );
+}
+
+/* ─── List card ───────────────────────────────────────────────────────── */
+
+function AppliedBadge({ status }: { status: JobFeedItem['myApplicationStatus'] }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-emerald-700 bg-emerald-50 border border-[#6ee7b7] px-3 py-1.5 rounded-lg">
+      <CheckCircle2 className="w-3.5 h-3.5" />
+      {status === 'ACCEPTED'
+        ? 'Accepted'
+        : status === 'REJECTED'
+          ? 'Not selected'
+          : 'Applied'}
+    </span>
+  );
+}
+
+function JobCard({
+  job,
+  onOpen,
+  onApply,
+}: {
+  job: JobFeedItem;
+  onOpen: () => void;
+  onApply: () => void;
+}) {
+  const pay = formatPay(job.payOffer, job.payRateUnit);
+  const place = job.city || job.location;
+  const initial = (job.posterName || '?').trim().charAt(0).toUpperCase();
+
+  return (
+    <div className="group bg-white rounded-2xl border border-[#e8e4dc] hover:border-[#E9D5B0] hover:shadow-[0_8px_24px_-18px_rgba(26,22,18,0.25)] transition-all">
+      <div className="flex items-start gap-3 p-4">
+        {/* The whole block is the link to the detail view; Apply sits outside
+            it so the two targets can't swallow one another. */}
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex-1 min-w-0 flex items-start gap-3 text-left"
+        >
+          <span className="w-11 h-11 shrink-0 rounded-xl bg-[#fdf6e9] border border-[#f0dfc0] flex items-center justify-center text-[15px] font-black text-[#C9973A]">
+            {initial}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-bold text-[#0A1931] leading-snug group-hover:text-[#C9973A] transition-colors">
+              {job.title}
+            </span>
+            <span className="block text-[12px] text-slate-500 mt-0.5 truncate">
+              {[job.posterName, pay, place].filter(Boolean).join(' · ')}
+            </span>
+            {job.tradeCategoryIds.length > 0 && (
+              <span className="flex flex-wrap gap-1.5 mt-2">
+                {job.tradeCategoryIds.map((id) => (
+                  <span
+                    key={id}
+                    className="px-2 py-0.5 rounded-md border border-[#f0dfc0] bg-[#fdfaf3] text-[11px] font-bold text-[#a87b28]"
+                  >
+                    {tradeLabelOf(id)}
+                  </span>
+                ))}
+              </span>
+            )}
+          </span>
+        </button>
+
+        <div className="shrink-0 flex flex-col items-end gap-2">
+          <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 whitespace-nowrap">
+            <Clock className="w-3 h-3" />
+            {timeAgo(job.createdAt)}
+          </span>
+          {job.hasApplied ? (
+            <AppliedBadge status={job.myApplicationStatus} />
+          ) : (
+            <button
+              onClick={onApply}
+              className="px-4 py-2 rounded-lg bg-[#C9973A] hover:bg-[#b8852f] text-white text-[12px] font-bold transition-colors"
+            >
+              Apply
+            </button>
+          )}
+        </div>
+      </div>
+
+      {job.applicationDeadline && (
+        <p className="px-4 pb-3 -mt-1 text-[11px] font-bold text-rose-500">
+          Apply by {new Date(job.applicationDeadline).toLocaleDateString()}
+        </p>
       )}
     </div>
   );
 }
+
+/* ─── Detail ──────────────────────────────────────────────────────────── */
+
+function JobDetail({
+  job,
+  onBack,
+  onApply,
+}: {
+  job: JobFeedItem;
+  onBack: () => void;
+  onApply: () => void;
+}) {
+  const pay = formatPay(job.payOffer, job.payRateUnit);
+  const place = job.city || job.location;
+  const urgency = (job.attributes?.urgency as string) || null;
+  const requiredDocs = getRequiredAttachmentSlots(job.attributes);
+
+  return (
+    <div className="space-y-4">
+      <button
+        onClick={onBack}
+        className="inline-flex items-center gap-1.5 text-[13px] font-bold text-slate-500 hover:text-[#C9973A] transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Jobs search
+      </button>
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_290px] items-start">
+        <div className="bg-white rounded-2xl border border-[#e8e4dc] overflow-hidden">
+          <div className="px-5 py-4 border-b border-[#eef2f6]">
+            <h2 className="text-[20px] font-black text-[#0A1931] leading-tight">{job.title}</h2>
+            <p className="text-[12px] text-slate-500 mt-1">
+              {[job.posterName, pay, place, timeAgo(job.createdAt)].filter(Boolean).join(' · ')}
+            </p>
+            {job.tradeCategoryIds.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2.5">
+                {job.tradeCategoryIds.map((id) => (
+                  <span
+                    key={id}
+                    className="px-2 py-0.5 rounded-md border border-[#f0dfc0] bg-[#fdfaf3] text-[11px] font-bold text-[#a87b28]"
+                  >
+                    {tradeLabelOf(id)}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="p-5 space-y-4">
+            <div className="flex flex-wrap gap-x-5 gap-y-2 text-[12px] font-bold text-slate-500">
+              {place && (
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5" /> {place}
+                </span>
+              )}
+              {pay && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Banknote className="w-3.5 h-3.5" /> {pay}
+                </span>
+              )}
+              {job.workersNeeded ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5" /> {job.workersNeeded} worker
+                  {job.workersNeeded === 1 ? '' : 's'} needed
+                </span>
+              ) : null}
+              {urgency && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" />
+                  {urgency === 'Immediately'
+                    ? 'Starts immediately'
+                    : job.attributes?.preferredDateTime
+                      ? `Starts ${new Date(String(job.attributes.preferredDateTime)).toLocaleString()}`
+                      : urgency}
+                </span>
+              )}
+              {job.applicationDeadline && (
+                <span className="inline-flex items-center gap-1.5 text-rose-500">
+                  <CalendarClock className="w-3.5 h-3.5" />
+                  Apply by {new Date(job.applicationDeadline).toLocaleDateString()}
+                </span>
+              )}
+            </div>
+
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
+                Job description
+              </p>
+              <p className="text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap">
+                {job.description}
+              </p>
+            </div>
+
+            <JobAttributesDisplay tradeId={job.tradeCategoryIds[0]} attributes={job.attributes} />
+
+            {requiredDocs.length > 0 && (
+              <div className="rounded-xl border border-[#f0dfc0] bg-[#fdf9f0] px-3.5 py-3">
+                <p className="text-[11px] font-black uppercase tracking-widest text-[#a87b28]">
+                  Documents you must attach
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  {requiredDocs.map((label) => (
+                    <li
+                      key={label}
+                      className="flex items-center gap-2 text-[12px] font-bold text-slate-700"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-[#C9973A] shrink-0" />
+                      {label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <aside className="bg-white rounded-2xl border border-[#e8e4dc] p-5 text-center lg:sticky lg:top-4">
+          <span className="w-12 h-12 mx-auto rounded-xl bg-[#fdf6e9] border border-[#f0dfc0] flex items-center justify-center text-[17px] font-black text-[#C9973A]">
+            {(job.posterName || '?').trim().charAt(0).toUpperCase()}
+          </span>
+          <p className="text-[14px] font-black text-[#0A1931] mt-2.5">{job.posterName}</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">Posted this vacancy</p>
+
+          <div className="mt-4">
+            {job.hasApplied ? (
+              <AppliedBadge status={job.myApplicationStatus} />
+            ) : (
+              <button
+                onClick={onApply}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#C9973A] hover:bg-[#b8852f] text-white text-[13px] font-bold transition-colors"
+              >
+                <Briefcase className="w-4 h-4" />
+                Apply for this job
+              </button>
+            )}
+          </div>
+
+          <p className="text-[11px] text-slate-400 mt-3 leading-relaxed">
+            Your contact details stay private until this employer accepts your application.
+          </p>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Apply modal ─────────────────────────────────────────────────────── */
 
 /** An attachment being composed in the modal: the API shape plus the local
  *  file name, shown so the applicant can tell two uploads apart. */

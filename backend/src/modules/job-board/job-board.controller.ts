@@ -5,9 +5,9 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 /**
  * Poster + seeker surface of the job board. No role gate anywhere here —
- * ANY authenticated user may post (ads precedent), and the seeker routes
- * self-gate by data (no registered trades → empty feed / 403 on apply).
- * Admin approve/reject lives in AdminController, not here.
+ * ANY authenticated user may post (ads precedent). The feed is the whole
+ * board (every approved, open posting); applying self-gates on holding an
+ * employment account. Admin approve/reject lives in AdminController.
  *
  * Static routes ('mine', 'feed') are declared before ':id' so they aren't
  * swallowed by the param route (repo convention).
@@ -29,7 +29,7 @@ export class JobPostingsController {
 
   @Get('feed')
   async feed(@Request() req) {
-    return this.jobBoard.listFeedForSeeker(req.user.id);
+    return this.jobBoard.listOpenJobs(req.user.id);
   }
 
   @Get(':id')
