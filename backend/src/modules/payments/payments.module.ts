@@ -8,6 +8,7 @@ import { Quote } from '../quotes/entities/quote.entity';
 import { Inquiry } from '../inquiries/entities/inquiry.entity';
 import { Order } from '../orders/entities/order.entity';
 import { Advertisement } from '../ads/entities/advertisement.entity';
+import { JobPosting } from '../job-board/entities/job-posting.entity';
 import { PaymentsService } from './payments.service';
 import { CheckoutService } from './checkout.service';
 import { PaymentsController } from './controllers/payments.controller';
@@ -28,7 +29,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Payment, PspTransaction, WebhookEventRecord, Quote, Inquiry, Order, Advertisement]),
+    TypeOrmModule.forFeature([Payment, PspTransaction, WebhookEventRecord, Quote, Inquiry, Order, Advertisement, JobPosting]),
     LedgerModule,
     NotificationsModule,
   ],

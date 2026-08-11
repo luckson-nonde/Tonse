@@ -17,7 +17,7 @@
  * routes are undecorated, so sub-admins never see or reach it.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, Loader2, CreditCard, Users, Wallet, Layers } from 'lucide-react';
+import { RefreshCw, Loader2, CreditCard, Users, Wallet, Layers, Briefcase } from 'lucide-react';
 import {
   adminService,
   AdminBillingSettings,
@@ -33,6 +33,7 @@ export default function SubscriptionManagerView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [togglePending, setTogglePending] = useState(false);
+  const [jobFeeTogglePending, setJobFeeTogglePending] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
@@ -60,6 +61,7 @@ export default function SubscriptionManagerView() {
     !!draft &&
     (draft.targetedInquiryFee !== settings.targetedInquiryFee ||
       draft.monthlyFee !== settings.monthlyFee ||
+      draft.jobPostingFee !== settings.jobPostingFee ||
       JSON.stringify(draft.quoteTiers) !== JSON.stringify(settings.quoteTiers));
 
   /** Sync server truth in; optionally preserve unsaved draft price edits. */
@@ -72,6 +74,7 @@ export default function SubscriptionManagerView() {
             quoteTiers: d.quoteTiers,
             targetedInquiryFee: d.targetedInquiryFee,
             monthlyFee: d.monthlyFee,
+            jobPostingFee: d.jobPostingFee,
           }
         : updated
     );
@@ -95,6 +98,24 @@ export default function SubscriptionManagerView() {
     }
   };
 
+  // Optimistic job-posting-fee switch — independent of the master switch,
+  // same reconcile shape as toggleEnabled.
+  const toggleJobFee = async () => {
+    if (!settings || jobFeeTogglePending) return;
+    const next = !settings.jobPostingFeeEnabled;
+    setJobFeeTogglePending(true);
+    setSettings((s) => (s ? { ...s, jobPostingFeeEnabled: next } : s));
+    try {
+      const updated = await adminService.updateBillingSettings({ jobPostingFeeEnabled: next });
+      if (updated) applyServer(updated, pricesDirty);
+    } catch (e: any) {
+      setSettings((s) => (s ? { ...s, jobPostingFeeEnabled: !next } : s));
+      alert(e?.message || 'Failed to update the job posting fee switch.');
+    } finally {
+      setJobFeeTogglePending(false);
+    }
+  };
+
   const savePrices = async () => {
     if (!draft || saving) return;
     setSaving(true);
@@ -103,6 +124,7 @@ export default function SubscriptionManagerView() {
         quoteTiers: draft.quoteTiers,
         targetedInquiryFee: draft.targetedInquiryFee,
         monthlyFee: draft.monthlyFee,
+        jobPostingFee: draft.jobPostingFee,
       });
       if (updated) {
         applyServer(updated, false);
@@ -166,7 +188,7 @@ export default function SubscriptionManagerView() {
       </div>
 
       {/* Stat tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4 mb-6">
         <StatTile
           label="Monetization"
           value={enabled ? 'ON' : 'OFF'}
@@ -188,6 +210,13 @@ export default function SubscriptionManagerView() {
           icon={Wallet}
           tone="amber"
         />
+        <StatTile
+          label="Job Posting Fee"
+          value={settings.jobPostingFeeEnabled ? `K${settings.jobPostingFee}` : 'OFF'}
+          hint={settings.jobPostingFeeEnabled ? 'Charged per job post' : 'Posting jobs is free'}
+          icon={Briefcase}
+          tone={settings.jobPostingFeeEnabled ? 'gold' : 'default'}
+        />
       </div>
 
       {/* Master switch */}
@@ -207,6 +236,27 @@ export default function SubscriptionManagerView() {
             disabled={togglePending}
             onChange={toggleEnabled}
             title="Toggle platform monetization"
+          />
+        </div>
+      </div>
+
+      {/* Job posting fee switch — independent of the master switch above */}
+      <div className={`${CARD} mb-6 flex items-center justify-between gap-4`}>
+        <div className="min-w-0">
+          <p className="text-[13px] font-bold text-[#1a1a2e]">Job posting fee</p>
+          <p className="text-[12px] text-slate-500 mt-1 leading-relaxed">
+            {settings.jobPostingFeeEnabled
+              ? `ON — anyone posting a job on the job board pays K${settings.jobPostingFee} before the post reaches your review queue.`
+              : 'OFF — posting a job on the job board is free (posts still need your approval).'}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          {jobFeeTogglePending && <Loader2 className="w-4 h-4 animate-spin text-[#C9973A]" />}
+          <Switch
+            checked={settings.jobPostingFeeEnabled}
+            disabled={jobFeeTogglePending}
+            onChange={toggleJobFee}
+            title="Toggle the job posting fee"
           />
         </div>
       </div>
@@ -288,6 +338,25 @@ export default function SubscriptionManagerView() {
             />
             <span className="block mt-1 text-[10px] font-medium normal-case tracking-normal text-slate-400">
               What every shop pays for 30 days of dashboard access while monetization is on.
+            </span>
+          </label>
+          <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+            Job posting fee (K)
+            <input
+              type="number"
+              min={0}
+              value={draft.jobPostingFee}
+              onChange={(e) =>
+                setDraft((d) =>
+                  d ? { ...d, jobPostingFee: Math.max(0, Number(e.target.value) || 0) } : d
+                )
+              }
+              className="mt-1.5 w-full px-3 py-2.5 rounded-lg border border-slate-200 text-[13px] font-bold text-[#1a1a2e] tracking-normal focus:outline-none focus:border-[#C9973A]"
+            />
+            <span className="block mt-1 text-[10px] font-medium normal-case tracking-normal text-slate-400">
+              What a poster pays to publish one job on the job board, while the job posting fee
+              switch above is on. Charged before your review — a rejected post can be edited and
+              resubmitted without paying again.
             </span>
           </label>
         </div>

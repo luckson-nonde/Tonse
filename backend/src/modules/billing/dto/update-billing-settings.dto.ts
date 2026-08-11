@@ -45,4 +45,13 @@ export class UpdateBillingSettingsDto {
   @IsNumber()
   @Min(0)
   monthlyFee?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  jobPostingFeeEnabled?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  jobPostingFee?: number;
 }

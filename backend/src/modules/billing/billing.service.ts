@@ -51,6 +51,8 @@ export class BillingService {
         quoteTiers: DEFAULT_TIERS,
         targetedInquiryFee: 10,
         monthlyFee: 100,
+        jobPostingFeeEnabled: false,
+        jobPostingFee: 50,
       }),
     );
   }
@@ -63,7 +65,16 @@ export class BillingService {
       quoteTiers: settings.quoteTiers?.length ? settings.quoteTiers : DEFAULT_TIERS,
       targetedInquiryFee: Number(settings.targetedInquiryFee),
       monthlyFee: Number(settings.monthlyFee),
+      jobPostingFeeEnabled: settings.jobPostingFeeEnabled,
+      jobPostingFee: Number(settings.jobPostingFee),
     };
+  }
+
+  /** The fee a new job posting owes right now, or null when posting is free. */
+  async getActiveJobPostingFee(): Promise<number | null> {
+    const settings = await this.getOrCreateSettings();
+    const fee = Number(settings.jobPostingFee);
+    return settings.jobPostingFeeEnabled && fee > 0 ? fee : null;
   }
 
   async updateSettings(dto: UpdateBillingSettingsDto): Promise<BillingSettings> {
@@ -72,6 +83,8 @@ export class BillingService {
     if (dto.quoteTiers !== undefined) settings.quoteTiers = dto.quoteTiers;
     if (dto.targetedInquiryFee !== undefined) settings.targetedInquiryFee = dto.targetedInquiryFee;
     if (dto.monthlyFee !== undefined) settings.monthlyFee = dto.monthlyFee;
+    if (dto.jobPostingFeeEnabled !== undefined) settings.jobPostingFeeEnabled = dto.jobPostingFeeEnabled;
+    if (dto.jobPostingFee !== undefined) settings.jobPostingFee = dto.jobPostingFee;
     return this.settingsRepository.save(settings);
   }
 

@@ -666,13 +666,21 @@ export interface AdminBillingSettings {
   quoteTiers: { count: number; price: number }[];
   targetedInquiryFee: number;
   monthlyFee: number;
+  /** Job-board posting fee — its own switch, independent of subscriptionsEnabled. */
+  jobPostingFeeEnabled: boolean;
+  jobPostingFee: number;
   activeSubscriberCount: number;
 }
 
 export type UpdateBillingSettingsInput = Partial<
   Pick<
     AdminBillingSettings,
-    'subscriptionsEnabled' | 'quoteTiers' | 'targetedInquiryFee' | 'monthlyFee'
+    | 'subscriptionsEnabled'
+    | 'quoteTiers'
+    | 'targetedInquiryFee'
+    | 'monthlyFee'
+    | 'jobPostingFeeEnabled'
+    | 'jobPostingFee'
   >
 >;
 

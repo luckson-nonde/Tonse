@@ -7,12 +7,20 @@ import { JobBoardService } from './job-board.service';
 import { JobApplicationsController, JobPostingsController } from './job-board.controller';
 import { CategoriesModule } from '../categories/categories.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { BillingModule } from '../billing/billing.module';
+import { LedgerModule } from '../ledger/ledger.module';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([JobPosting, JobPostingCategory, JobApplication]),
     CategoriesModule,
     NotificationsModule,
+    // The admin-controlled posting fee: BillingModule owns the switch+price,
+    // LedgerModule the balance-pay journal, PaymentsModule the PSP checkout.
+    BillingModule,
+    LedgerModule,
+    PaymentsModule,
   ],
   providers: [JobBoardService],
   controllers: [JobPostingsController, JobApplicationsController],

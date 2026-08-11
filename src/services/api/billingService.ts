@@ -28,6 +28,10 @@ export interface BillingSettingsPublic {
   quoteTiers: QuoteTier[];
   targetedInquiryFee: number;
   monthlyFee: number;
+  /** Job-board posting fee (independent switch). Display-only on the client —
+   *  the server decides whether a new posting parks at PENDING_PAYMENT. */
+  jobPostingFeeEnabled: boolean;
+  jobPostingFee: number;
 }
 
 export interface MySubscriptionStatus {
@@ -54,6 +58,11 @@ const FALLBACK_SETTINGS: BillingSettingsPublic = {
   quoteTiers: DEFAULT_QUOTE_TIERS,
   targetedInquiryFee: 10,
   monthlyFee: 100,
+  // Fails toward FREE display on purpose: this pair only powers "you'll pay
+  // K__" notices — the server alone decides whether a posting needs payment,
+  // so a fetch hiccup must not scare posters with a fee that may be off.
+  jobPostingFeeEnabled: false,
+  jobPostingFee: 50,
 };
 
 const CACHE_TTL_MS = 60_000;

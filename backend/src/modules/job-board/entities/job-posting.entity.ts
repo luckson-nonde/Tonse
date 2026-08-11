@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 
 export type JobPostingStatus =
+  | 'PENDING_PAYMENT'
   | 'PENDING_APPROVAL'
   | 'APPROVED'
   | 'REJECTED'
@@ -25,9 +26,12 @@ export type JobRateUnit = (typeof JOB_RATE_UNITS)[number];
  * array column — repo invariant), and only labour-registered providers
  * whose subscribed trades intersect them see it in their feed.
  *
- * Lifecycle: PENDING_APPROVAL → APPROVED (admin) → FILLED/CLOSED (poster),
- * or PENDING_APPROVAL → REJECTED (admin) → back to PENDING_APPROVAL via
- * the poster's edit-and-resubmit path.
+ * Lifecycle: [PENDING_PAYMENT →] PENDING_APPROVAL → APPROVED (admin) →
+ * FILLED/CLOSED (poster), or PENDING_APPROVAL → REJECTED (admin) → back to
+ * PENDING_APPROVAL via the poster's edit-and-resubmit path (no re-charge —
+ * the fee was paid on the way in). PENDING_PAYMENT only occurs while the
+ * admin's job-posting fee switch is ON (billing_settings.jobPostingFeeEnabled);
+ * `feeAmount` snapshots the price charged at creation, ads-style.
  */
 @Entity('job_postings')
 @Index('idx_job_postings_poster', ['posterId'])
@@ -82,10 +86,15 @@ export class JobPosting {
 
   @Column({
     type: 'enum',
-    enum: ['PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'FILLED', 'CLOSED'],
+    enum: ['PENDING_PAYMENT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'FILLED', 'CLOSED'],
     default: 'PENDING_APPROVAL',
   })
   status: JobPostingStatus;
+
+  /** The posting fee charged at creation (ZMW), NULL when posting was free.
+   *  A snapshot, never re-read from settings — the price the poster saw. */
+  @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
+  feeAmount: number | null;
 
   @Column({ type: 'text', nullable: true })
   rejectionReason: string | null;

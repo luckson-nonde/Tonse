@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  AlertTriangle,
+  ArrowLeft,
   Briefcase,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Clock,
+  FlaskConical,
   Loader2,
   Mail,
   MapPin,
@@ -12,15 +15,21 @@ import {
   Phone,
   Plus,
   Users,
+  Wallet,
   X,
   XCircle,
 } from 'lucide-react';
 import {
   jobBoardService,
   type JobApplicationRow,
+  type JobPosting,
   type JobPostingWithApplicants,
   type MyJobPosting,
 } from '../services/api/jobBoardService';
+import { ventureService } from '../services/api/ventureService';
+import { getBillingSettings } from '../services/api/billingService';
+import { beginHostedPayment } from '../services/api/paymentsService';
+import PaymentSheet, { type PaymentSheetSubmitPayload } from './PaymentSheet';
 import { LABOUR_CATEGORIES } from '../services/labourCategories';
 import { isPosterRebuiltAttributeKey } from '../services/labourFormSchema';
 import VacancyComposerForm, { type JobPostingDetails } from './buyer/VacancyComposerForm';
@@ -33,6 +42,9 @@ const tradeLabelOf = (id: string) =>
   LABOUR_CATEGORIES.find((c) => c.id === id)?.label ?? id.replace(/_/g, ' ');
 
 const STATUS_CHIP: Record<string, { label: string; className: string }> = {
+  // Deliberately NOT "awaiting payment"-as-if-submitted: an unpaid post has
+  // not been sent for review and the admin cannot see it at all (ads stance).
+  PENDING_PAYMENT: { label: 'Payment required', className: 'bg-rose-50 text-rose-700 border-[#fda4af]' },
   PENDING_APPROVAL: { label: 'Pending review', className: 'bg-amber-50 text-amber-700 border-[#fcd34d]' },
   APPROVED: { label: 'Live', className: 'bg-emerald-50 text-emerald-700 border-[#6ee7b7]' },
   REJECTED: { label: 'Needs changes', className: 'bg-rose-50 text-rose-700 border-[#fda4af]' },
@@ -82,6 +94,31 @@ export default function JobPostsManagerView() {
   const [flow, setFlow] = useState<CreateFlowState | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
+
+  // ── Posting-fee payment step (ads pattern) ────────────────────────────
+  const [payingPosting, setPayingPosting] = useState<JobPosting | MyJobPosting | null>(null);
+  const [pendingCheckout, setPendingCheckout] = useState<{ reference: string } | null>(null);
+  const [showPaymentSheet, setShowPaymentSheet] = useState(false);
+  const [payingFromBalance, setPayingFromBalance] = useState(false);
+  const [simulating, setSimulating] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  const [balance, setBalance] = useState('0.00');
+
+  useEffect(() => {
+    // Balance is only needed while the payment step is open; a fetch failure
+    // just leaves the balance button disabled, never blocks the PSP path.
+    if (!payingPosting) return;
+    void ventureService.getBalance().then(setBalance).catch(() => setBalance('0.00'));
+  }, [payingPosting]);
+
+  // Display-only fee notice so the fee is never a surprise at the end of the
+  // flow — the server alone decides whether a new post actually owes it.
+  const [postingFeeNotice, setPostingFeeNotice] = useState<number | null>(null);
+  useEffect(() => {
+    void getBillingSettings().then((s) =>
+      setPostingFeeNotice(s.jobPostingFeeEnabled && s.jobPostingFee > 0 ? s.jobPostingFee : null),
+    );
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -217,11 +254,18 @@ export default function JobPostsManagerView() {
           : await jobBoardService.createPosting(base);
       if (!saved) throw new Error('The job post could not be submitted.');
       setFlow(null);
-      setBanner(
-        flow.mode === 'resubmit'
-          ? 'Your job post was resubmitted for review.'
-          : 'Your job post was submitted — our team will review it shortly.',
-      );
+      if (saved.status === 'PENDING_PAYMENT') {
+        // The admin's posting fee is on — the post is parked until paid, so
+        // open the payment step instead of claiming it was submitted.
+        setBanner(null);
+        setPayingPosting(saved);
+      } else {
+        setBanner(
+          flow.mode === 'resubmit'
+            ? 'Your job post was resubmitted for review.'
+            : 'Your job post was submitted — our team will review it shortly.',
+        );
+      }
       setLoading(true);
       await load();
     } catch (e) {
@@ -229,6 +273,161 @@ export default function JobPostsManagerView() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // ── Posting-fee payment handlers ──────────────────────────────────────
+
+  const closePaymentStep = () => {
+    setPayingPosting(null);
+    setPendingCheckout(null);
+    setPayError(null);
+  };
+
+  const handlePayFromBalance = async () => {
+    if (!payingPosting) return;
+    setPayingFromBalance(true);
+    setPayError(null);
+    try {
+      await jobBoardService.payPostingFromBalance(payingPosting.id);
+      closePaymentStep();
+      setBanner('Payment received — your job post is now with our review team.');
+      await load();
+    } catch (e) {
+      setPayError((e as Error)?.message || 'Payment failed. Please try again.');
+    } finally {
+      setPayingFromBalance(false);
+    }
+  };
+
+  const handleCheckoutSubmit = async (payload: PaymentSheetSubmitPayload) => {
+    if (!payingPosting) return;
+    const result = await jobBoardService.checkoutPosting(payingPosting.id, {
+      channel: payload.method === 'card' ? 'card' : 'mobile-money',
+      phone: payload.phone,
+      operator: payload.provider,
+    });
+    setShowPaymentSheet(false);
+    if (result.status === 'failed') {
+      setPayError('Payment could not be started. Please try again.');
+      return;
+    }
+    // Live (DPO): the money is taken on the provider's own page, so leave the
+    // app. Sandbox returns no redirect and falls through to the pending card.
+    if (beginHostedPayment(result, { label: `Job post "${payingPosting.title}"` })) return;
+    setPendingCheckout({ reference: result.reference });
+  };
+
+  const handleSimulateApproval = async () => {
+    if (!pendingCheckout) return;
+    setSimulating(true);
+    try {
+      await jobBoardService.simulatePayment(pendingCheckout.reference, 'successful');
+      closePaymentStep();
+      setBanner('Payment received — your job post is now with our review team.');
+      await load();
+    } catch (e) {
+      setPayError((e as Error)?.message || 'Could not confirm the payment. Please try again.');
+    } finally {
+      setSimulating(false);
+    }
+  };
+
+  const feeOf = (posting: JobPosting | MyJobPosting) => Number(posting.feeAmount ?? 0);
+  const balanceCoversFee = payingPosting ? Number(balance) >= feeOf(payingPosting) : false;
+
+  /** The payment step for a just-created (or resumed) PENDING_PAYMENT post. */
+  const renderPaymentStep = () => {
+    if (!payingPosting) return null;
+    return (
+      <div className="bg-[#0A1931] rounded-2xl p-5 sm:p-7 text-white space-y-4">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={closePaymentStep}
+            className="text-white/50 hover:text-white"
+            aria-label="Back"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">
+              Complete payment
+            </p>
+            <p className="font-bold truncate">{payingPosting.title}</p>
+          </div>
+        </div>
+        <p className="text-3xl sm:text-4xl font-black">
+          K{feeOf(payingPosting).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+        </p>
+        <p className="text-[11px] text-white/60">Job posting fee — one-time, per post.</p>
+        <p className="text-[11px] text-amber-300/90 flex items-start gap-1.5">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+          Your post goes to our review team once this is paid — until then it isn't submitted, and
+          workers can't see it.
+        </p>
+
+        {payError && <p className="text-[12px] font-bold text-rose-300">{payError}</p>}
+
+        {pendingCheckout ? (
+          <div className="bg-white/10 rounded-2xl p-5 border border-white/10 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-400/20 flex items-center justify-center text-amber-300 shrink-0">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="font-bold text-sm">Awaiting approval</h4>
+                <p className="text-[11px] text-white/50">{pendingCheckout.reference}</p>
+              </div>
+            </div>
+            <p className="text-[12px] text-white/60 leading-relaxed">
+              In production you'd approve this on your phone. This environment runs on the sandbox
+              payment provider, so use the button below to simulate that approval.
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleSimulateApproval()}
+              disabled={simulating}
+              className="w-full py-3 rounded-2xl bg-[#C9973A] hover:bg-[#b8852f] font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 disabled:opacity-60 transition-colors"
+            >
+              {simulating ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FlaskConical className="w-3.5 h-3.5" />
+              )}
+              Simulate approval (sandbox)
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => void handlePayFromBalance()}
+              disabled={!balanceCoversFee || payingFromBalance}
+              title={
+                !balanceCoversFee
+                  ? `Your balance (K${Number(balance).toLocaleString()}) doesn't cover this`
+                  : undefined
+              }
+              className="flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-white/15 bg-white/5 hover:bg-white/10 font-black uppercase tracking-widest text-[10px] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              {payingFromBalance ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Wallet className="w-3.5 h-3.5" />
+              )}
+              Pay from balance
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowPaymentSheet(true)}
+              className="py-3.5 rounded-2xl bg-[#C9973A] hover:bg-[#b8852f] font-black uppercase tracking-widest text-[10px] transition-colors"
+            >
+              Mobile Money / Card
+            </button>
+          </div>
+        )}
+      </div>
+    );
   };
 
   // ── Create / resubmit overlay ─────────────────────────────────────────
@@ -479,6 +678,19 @@ export default function JobPostsManagerView() {
             )}
 
             <div className="flex flex-wrap gap-2">
+              {posting.status === 'PENDING_PAYMENT' && (
+                <button
+                  onClick={() => {
+                    setPayError(null);
+                    setPendingCheckout(null);
+                    setPayingPosting(posting);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="px-4 py-2 rounded-lg bg-[#C9973A] hover:bg-[#b8852f] text-white text-[12px] font-bold transition-colors"
+                >
+                  Complete payment — K{Number(posting.feeAmount ?? 0).toLocaleString()}
+                </button>
+              )}
               {posting.status === 'REJECTED' && (
                 <button
                   onClick={() => startResubmit(posting)}
@@ -530,9 +742,11 @@ export default function JobPostsManagerView() {
                 </div>
               ) : (
                 <p className="text-[13px] text-slate-400 py-2">
-                  {posting.status === 'PENDING_APPROVAL'
-                    ? 'Applications open once an admin approves this post.'
-                    : 'No applications yet.'}
+                  {posting.status === 'PENDING_PAYMENT'
+                    ? "This post hasn't been submitted yet — complete the payment above to send it for review."
+                    : posting.status === 'PENDING_APPROVAL'
+                      ? 'Applications open once an admin approves this post.'
+                      : 'No applications yet.'}
                 </p>
               )}
             </div>
@@ -545,6 +759,24 @@ export default function JobPostsManagerView() {
   return (
     <div className="space-y-4">
       {renderFlow()}
+      {renderPaymentStep()}
+
+      {payingPosting && (
+        <PaymentSheet
+          open={showPaymentSheet}
+          onClose={() => setShowPaymentSheet(false)}
+          title="Pay Job Posting Fee"
+          subtitle="Secure Transaction"
+          amountMode="fixed"
+          fixedAmount={feeOf(payingPosting)}
+          methods={['mobile_money', 'card']}
+          actionLabel={(amount) =>
+            `Pay ZMW ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          }
+          onSubmit={handleCheckoutSubmit}
+          context={[{ label: 'Job post', value: payingPosting.title }]}
+        />
+      )}
 
       {banner && (
         <div className="flex items-start justify-between gap-3 bg-emerald-50 border border-[#6ee7b7] rounded-xl px-4 py-3">
@@ -558,6 +790,11 @@ export default function JobPostsManagerView() {
       <div className="flex items-center justify-between gap-3">
         <p className="text-[12px] text-slate-500 font-medium">
           Posts are reviewed by our team before going live to registered workers.
+          {postingFeeNotice !== null && (
+            <span className="block mt-0.5 font-bold text-[#a87b28]">
+              Publishing a job costs K{postingFeeNotice.toLocaleString()} per post.
+            </span>
+          )}
         </p>
         <button
           onClick={startCreate}

@@ -14,6 +14,7 @@ function payload<T>(res: any, fallback: T): T {
 }
 
 export type JobPostingStatus =
+  | 'PENDING_PAYMENT'
   | 'PENDING_APPROVAL'
   | 'APPROVED'
   | 'REJECTED'
@@ -40,6 +41,9 @@ export interface JobPosting {
   city: string | null;
   attributes: Record<string, any> | null;
   status: JobPostingStatus;
+  /** The posting fee snapshotted at creation (numeric → string from Postgres);
+   *  null when the post was created while posting was free. */
+  feeAmount: number | string | null;
   rejectionReason: string | null;
   approvedByAdminId: string | null;
   createdAt: string;
@@ -141,6 +145,19 @@ export interface CreateJobPostingInput {
   attributes?: Record<string, any>;
 }
 
+/** Result of starting a PSP collection for a posting fee — same shape the
+ *  ads/venture checkouts return off the shared /payments/checkout endpoints. */
+export interface JobPostCheckoutResult {
+  reference: string;
+  status: 'pending' | 'successful' | 'failed' | 'pay-offline' | string;
+  amount: string;
+  fee?: string;
+  totalCharged?: string;
+  instruction?: string;
+  /** Present on live DPO — the hosted payment page to send the payer to. */
+  redirectUrl?: string;
+}
+
 export interface ApplyToJobInput {
   coverMessage: string;
   expectedRate: number;
@@ -173,6 +190,47 @@ export const jobBoardService = {
   ): Promise<JobPosting | null> {
     const res = await apiClient.patch<JobPosting>(`/job-postings/${id}`, input);
     return payload<JobPosting | null>(res, null);
+  },
+
+  /** Start a PSP collection (mobile money / card) for a PENDING_PAYMENT posting. */
+  async checkoutPosting(
+    id: string,
+    dto: { channel?: 'mobile-money' | 'card'; phone?: string; operator?: string },
+  ): Promise<JobPostCheckoutResult> {
+    const res = await apiClient.post<JobPostCheckoutResult>(
+      `/job-postings/${encodeURIComponent(id)}/checkout`,
+      dto,
+    );
+    return payload<JobPostCheckoutResult>(res, {} as JobPostCheckoutResult);
+  },
+
+  /** Pay the posting fee from the poster's venture balance — instant, no PSP
+   *  round-trip. Also the path that free-promotes if the admin fee is now off. */
+  async payPostingFromBalance(id: string): Promise<JobPosting | null> {
+    const res = await apiClient.post<JobPosting>(
+      `/job-postings/${encodeURIComponent(id)}/pay-from-balance`,
+    );
+    return payload<JobPosting | null>(res, null);
+  },
+
+  /** Poll a checkout's PSP status — the endpoint is reference-generic. */
+  async getPaymentStatus(reference: string): Promise<JobPostCheckoutResult> {
+    const res = await apiClient.get<JobPostCheckoutResult>(
+      `/payments/checkout/${encodeURIComponent(reference)}`,
+    );
+    return payload<JobPostCheckoutResult>(res, {} as JobPostCheckoutResult);
+  },
+
+  /** Sandbox-only: stand in for the poster approving on their phone. */
+  async simulatePayment(
+    reference: string,
+    outcome: 'successful' | 'failed' = 'successful',
+  ): Promise<{ handled: boolean }> {
+    const res = await apiClient.post(
+      `/payments/checkout/${encodeURIComponent(reference)}/simulate`,
+      { outcome },
+    );
+    return payload(res, { handled: false });
   },
 
   async closePosting(id: string): Promise<JobPosting | null> {

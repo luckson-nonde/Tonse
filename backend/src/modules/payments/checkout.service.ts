@@ -16,6 +16,7 @@ import { Quote } from '../quotes/entities/quote.entity';
 import { Inquiry } from '../inquiries/entities/inquiry.entity';
 import { Order } from '../orders/entities/order.entity';
 import { Advertisement } from '../ads/entities/advertisement.entity';
+import { JobPosting } from '../job-board/entities/job-posting.entity';
 import { LedgerService } from '../ledger/ledger.service';
 import { ACCOUNT } from '../ledger/ledger-accounts';
 import { isEscrowHolding } from '../quotes/quote-status';
@@ -382,6 +383,111 @@ export class CheckoutService {
   }
 
   /**
+   * Start paying the admin-set job-posting fee. Mirrors `initiateAdPurchase()`
+   * — the amount comes from the posting's own feeAmount snapshot (never the
+   * request body), and `context.kind` routes the eventual webhook to
+   * `fundJobPostFee`.
+   */
+  async initiateJobPostFee(
+    posterId: string,
+    jobPostingId: string,
+    dto: { channel?: Channel; phone?: string; operator?: string },
+  ): Promise<{
+    reference: string;
+    status: string;
+    amount: string;
+    fee: string;
+    totalCharged: string;
+    instruction?: string;
+    redirectUrl?: string;
+  }> {
+    const posting = await this.dataSource
+      .getRepository(JobPosting)
+      .findOne({ where: { id: jobPostingId } });
+    if (!posting) throw new NotFoundException('Job posting not found');
+    if (posting.posterId !== posterId) {
+      throw new BadRequestException('This job posting is not yours to pay for');
+    }
+    if (posting.status !== 'PENDING_PAYMENT') {
+      throw new ConflictException(`This posting can't be paid from status ${posting.status}`);
+    }
+    if (!posting.feeAmount || Number(posting.feeAmount) <= 0) {
+      // A zero-fee posting has nothing to collect — the pay-from-balance
+      // endpoint free-promotes it instead of starting a PSP round-trip.
+      throw new ConflictException('This posting has no fee to pay');
+    }
+
+    const amount = String(posting.feeAmount);
+    const bearer = this.config.get<'customer' | 'merchant'>('psp.feeBearer') || 'customer';
+    const channel: Channel = dto.channel || 'mobile-money';
+    const fees = await this.provider.quoteFees({ amount, channel, bearer });
+
+    const reference = `JPF-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+
+    await this.pspTx.save(
+      this.pspTx.create({
+        reference,
+        provider: this.provider.name,
+        type: 'COLLECTION',
+        status: 'PENDING',
+        amount: fees.amount,
+        feeAmount: fees.fee,
+        feeBearer: bearer,
+        currency: fees.currency,
+        quoteId: null,
+        counterpartyId: posterId,
+        context: { kind: 'JOB_POST_FEE', jobPostingId: posting.id },
+        payerMsisdn: dto.phone ?? null,
+        channel,
+        idempotencyKey: `job-post-fee-collection:${reference}`,
+      } as any),
+    );
+
+    let result;
+    try {
+      result = await this.provider.initiateCollection({
+        reference,
+        amount: fees.amount,
+        currency: fees.currency,
+        channel,
+        bearer,
+        phone: dto.phone,
+        operator: dto.operator,
+        description: `Nyuwe job post — ${posting.title}`.slice(0, 100),
+      });
+    } catch (e) {
+      await this.pspTx.update({ reference }, { status: 'FAILED', lastError: (e as Error).message });
+      throw e;
+    }
+
+    await this.pspTx.update(
+      { reference },
+      {
+        providerReference: result.providerReference ?? null,
+        status:
+          result.status === 'successful'
+            ? 'SUCCESSFUL'
+            : result.status === 'failed'
+              ? 'FAILED'
+              : result.status === 'pay-offline'
+                ? 'PAY_OFFLINE'
+                : 'PENDING',
+        rawPayload: result.raw ?? null,
+      },
+    );
+
+    return {
+      reference,
+      status: result.status,
+      amount: fees.amount,
+      fee: fees.fee,
+      totalCharged: fees.totalCharged,
+      instruction: result.instruction,
+      redirectUrl: result.redirectUrl,
+    };
+  }
+
+  /**
    * Handle a provider callback. Idempotent twice over: the
    * (provider, eventId) unique index rejects a redelivery, and the journal's
    * own idempotency key rejects a double-post.
@@ -514,6 +620,8 @@ export class CheckoutService {
       await this.fundEscrow(reference, verified.amount, verified.fee, verified.raw);
     } else if ((tx.context as any)?.kind === 'AD_PURCHASE') {
       await this.fundAdPurchase(reference, verified.amount, verified.fee, verified.raw, (tx.context as any).adId);
+    } else if ((tx.context as any)?.kind === 'JOB_POST_FEE') {
+      await this.fundJobPostFee(reference, verified.amount, verified.fee, verified.raw, (tx.context as any).jobPostingId);
     } else {
       await this.fundVentureDeposit(reference, verified.amount, verified.fee, verified.raw);
     }
@@ -954,6 +1062,64 @@ export class CheckoutService {
     });
 
     this.logger.log(`Ad purchase funded for ${reference}`);
+  }
+
+  /**
+   * The moment a job-posting fee becomes real. Same locking/idempotency shape
+   * as `fundAdPurchase`: money to JOB_BOARD_REVENUE (the platform earned it),
+   * and the paid posting advances into the admin review queue.
+   */
+  private async fundJobPostFee(
+    reference: string,
+    verifiedAmount: string,
+    verifiedFee: string | undefined,
+    raw: Record<string, any> | undefined,
+    jobPostingId: string,
+  ): Promise<void> {
+    await this.dataSource.transaction(async (m) => {
+      const [tx]: PspTransaction[] = await m.query(
+        'SELECT * FROM psp_transactions WHERE reference = $1 FOR UPDATE',
+        [reference],
+      );
+      if (!tx) throw new NotFoundException(`Unknown PSP transaction ${reference}`);
+      if (tx.status === 'SUCCESSFUL') return; // idempotent — never double-credit
+
+      const amountNgwee = toNgwee(verifiedAmount);
+
+      await this.ledger.postJournal(
+        {
+          type: 'JOB_POST_FEE',
+          idempotencyKey: `job-post-fee:${tx.id}`,
+          pspTransactionId: tx.id,
+          currency: tx.currency,
+          description: 'Job posting fee',
+          memo: {
+            jobPostingId,
+            pspReference: tx.providerReference,
+            pspFee: verifiedFee ?? tx.feeAmount,
+            feeBearer: tx.feeBearer,
+          },
+          lines: [
+            { accountCode: ACCOUNT.PSP_HOLDING, direction: 'DEBIT', amountNgwee },
+            { accountCode: ACCOUNT.JOB_BOARD_REVENUE, direction: 'CREDIT', amountNgwee },
+          ],
+        },
+        m,
+      );
+
+      await m.query(
+        `UPDATE psp_transactions SET status='SUCCESSFUL', "settledAt"=NOW(), "rawPayload"=$2 WHERE reference=$1`,
+        [reference, raw ? JSON.stringify(raw) : null],
+      );
+
+      // Only out of PENDING_PAYMENT — a webhook replay after the poster
+      // already paid via balance must not yank an APPROVED posting backwards.
+      await m
+        .getRepository(JobPosting)
+        .update({ id: jobPostingId, status: 'PENDING_PAYMENT' }, { status: 'PENDING_APPROVAL' });
+    });
+
+    this.logger.log(`Job posting fee funded for ${reference}`);
   }
 
   /** Payment status for a polling UI. Visible to the payer (buyer for cash,

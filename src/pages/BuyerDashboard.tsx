@@ -310,6 +310,11 @@ export default function BuyerDashboard() {
   // Publish-failure reason for the inquiry flow — drives the error/retry UI
   // in FreeInquiryAutoPublish and enriches the paid-path alert.
   const [publishError, setPublishError] = useState<string | null>(null);
+  // True when the just-created job post parked at PENDING_PAYMENT (the
+  // admin's job-posting fee is on) — the success screen sends the poster to
+  // My Job Posts, where the payment step lives, instead of claiming the post
+  // is already in review.
+  const [jobPostNeedsPayment, setJobPostNeedsPayment] = useState(false);
 
   // Inquiry Flow State
   const [pendingInquiry, setPendingInquiry] = useState<{
@@ -1208,6 +1213,7 @@ export default function BuyerDashboard() {
       const created = await jobBoardService.createPosting(payload);
       if (!created) throw new Error('The job post could not be submitted.');
       setPendingInquiry({ items: [] });
+      setJobPostNeedsPayment(created.status === 'PENDING_PAYMENT');
       handleTabChange('job-posting-success');
     } catch (error) {
       const reason =
@@ -1417,7 +1423,14 @@ export default function BuyerDashboard() {
           />
         );
       case 'job-posting-success':
-        return (
+        return jobPostNeedsPayment ? (
+          <InquirySuccess
+            title="Job post created — payment needed"
+            subtitle="Your post is saved but NOT yet submitted: the platform charges a job posting fee. Open My Job Posts and complete the payment — the moment it's paid, your post goes to our review team."
+            buttonLabel="Pay in My Job Posts"
+            onGoToDashboard={() => handleTabChange('my-job-posts')}
+          />
+        ) : (
           <InquirySuccess
             title="Job post submitted!"
             subtitle="Our team is reviewing your post. Once approved, it goes out to registered workers in the trade you picked — you'll get a notification either way, and applications land in My Job Posts."

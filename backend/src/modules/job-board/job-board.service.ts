@@ -14,6 +14,10 @@ import { JobApplication } from './entities/job-application.entity';
 import { ApplyToJobDto, CreateJobPostingDto, UpdateJobPostingDto } from './dto';
 import { CategoriesService } from '../categories/categories.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { BillingService } from '../billing/billing.service';
+import { LedgerService } from '../ledger/ledger.service';
+import { ACCOUNT } from '../ledger/ledger-accounts';
+import { toNgwee } from '../../common/money/money';
 
 /** Postgres unique-violation SQLSTATE — the double-apply guard's error. */
 const PG_UNIQUE_VIOLATION = '23505';
@@ -65,6 +69,8 @@ export class JobBoardService {
     private readonly dataSource: DataSource,
     private readonly categoriesService: CategoriesService,
     private readonly notificationsService: NotificationsService,
+    private readonly billingService: BillingService,
+    private readonly ledger: LedgerService,
   ) {}
 
   // ── Poster surface ───────────────────────────────────────────────────
@@ -74,6 +80,12 @@ export class JobBoardService {
     const uniqueTradeIds = Array.from(new Set(tradeCategoryIds));
     await this.assertLabourTrades(uniqueTradeIds);
 
+    // Admin-controlled posting fee (billing_settings). When it's on, the
+    // posting parks at PENDING_PAYMENT — invisible to the admin queue — until
+    // paid via venture balance or PSP checkout (ads pattern). The price is
+    // snapshotted so a later admin edit never changes what THIS poster owes.
+    const fee = await this.billingService.getActiveJobPostingFee();
+
     const saved = await this.dataSource.transaction(async (manager) => {
       const postingRepo = manager.getRepository(JobPosting);
       const junctionRepo = manager.getRepository(JobPostingCategory);
@@ -82,7 +94,8 @@ export class JobBoardService {
           ...rest,
           posterId,
           applicationDeadline: applicationDeadline ? new Date(applicationDeadline) : null,
-          status: 'PENDING_APPROVAL',
+          status: fee !== null ? 'PENDING_PAYMENT' : 'PENDING_APPROVAL',
+          feeAmount: fee,
         }),
       );
       await junctionRepo.save(
@@ -225,6 +238,47 @@ export class JobBoardService {
 
   async markFilled(id: string, posterId: string): Promise<JobPosting> {
     return this.transitionOwnPosting(id, posterId, ['APPROVED'], 'FILLED');
+  }
+
+  /**
+   * Pay a PENDING_PAYMENT posting straight out of the poster's venture
+   * balance — an internal transfer, no PSP round-trip (ads pattern). Two
+   * escape hatches promote the posting FREE instead of charging: the admin
+   * turned the fee off after this posting was created, or the snapshot is
+   * zero — money must never be taken for a feature that is now free.
+   */
+  async payFromBalance(id: string, posterId: string): Promise<JobPosting> {
+    const posting = await this.postingsRepository.findOne({ where: { id } });
+    if (!posting) throw new NotFoundException('Job posting not found');
+    if (posting.posterId !== posterId) {
+      throw new ForbiddenException('This job posting is not yours to pay for');
+    }
+    if (posting.status !== 'PENDING_PAYMENT') {
+      throw new ConflictException(`This posting can't be paid from status ${posting.status}`);
+    }
+
+    const feeStillOn = (await this.billingService.getActiveJobPostingFee()) !== null;
+    const amount = Number(posting.feeAmount ?? 0);
+    if (feeStillOn && amount > 0) {
+      const balance = await this.ledger.sellerBalance(posterId);
+      if (Number(balance) < amount) {
+        throw new BadRequestException('Insufficient account balance');
+      }
+      await this.ledger.postJournal({
+        type: 'JOB_POST_FEE',
+        idempotencyKey: `job-post-balance:${posting.id}`,
+        currency: 'ZMW',
+        description: `Job posting fee — ${posting.title}`,
+        memo: { jobPostingId: posting.id, source: 'VENTURE_BALANCE' },
+        lines: [
+          { accountCode: ACCOUNT.SELLER_PAYABLE, direction: 'DEBIT', amountNgwee: toNgwee(String(amount)), counterpartyId: posterId },
+          { accountCode: ACCOUNT.JOB_BOARD_REVENUE, direction: 'CREDIT', amountNgwee: toNgwee(String(amount)) },
+        ],
+      });
+    }
+
+    posting.status = 'PENDING_APPROVAL';
+    return this.postingsRepository.save(posting);
   }
 
   async acceptApplication(applicationId: string, posterId: string): Promise<any> {

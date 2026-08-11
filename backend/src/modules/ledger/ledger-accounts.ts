@@ -9,6 +9,7 @@ export const ACCOUNT = {
   PSP_PAYOUT_IN_FLIGHT: 'PSP_PAYOUT_IN_FLIGHT_ZMW',
   PLATFORM_COMMISSION_REVENUE: 'PLATFORM_COMMISSION_REVENUE_ZMW',
   AD_REVENUE: 'AD_REVENUE_ZMW',
+  JOB_BOARD_REVENUE: 'JOB_BOARD_REVENUE_ZMW',
   PSP_FEE_EXPENSE: 'PSP_FEE_EXPENSE_ZMW',
   SUSPENSE: 'SUSPENSE_ZMW',
 } as const;
@@ -88,6 +89,15 @@ export const LEDGER_ACCOUNTS: AccountSeed[] = [
     currency: 'ZMW',
     description:
       'Earned when a seller-purchased ad placement (homepage banner / sidebar) is paid for. Debited back on admin rejection.',
+  },
+  {
+    code: ACCOUNT.JOB_BOARD_REVENUE,
+    name: 'Job board posting revenue',
+    type: 'REVENUE',
+    normalSide: 'CREDIT',
+    currency: 'ZMW',
+    description:
+      'Earned when a poster pays the admin-set job-posting fee. A rejected posting is NOT refunded — the poster edits and resubmits on the same paid fee.',
   },
   {
     code: ACCOUNT.PSP_FEE_EXPENSE,

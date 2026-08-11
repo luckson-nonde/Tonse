@@ -1,7 +1,24 @@
 import { Body, Controller, Get, Param, Patch, Post, Request, UseGuards } from '@nestjs/common';
+import { IsIn, IsOptional, IsString } from 'class-validator';
 import { JobBoardService } from './job-board.service';
 import { ApplyToJobDto, CreateJobPostingDto, UpdateJobPostingDto } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CheckoutService } from '../payments/checkout.service';
+
+/** Same shape as the ads checkout body — the PSP channel details. */
+class JobPostCheckoutDto {
+  @IsOptional()
+  @IsIn(['mobile-money', 'card'])
+  channel?: 'mobile-money' | 'card';
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  operator?: string;
+}
 
 /**
  * Poster + seeker surface of the job board. No role gate anywhere here —
@@ -15,7 +32,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @Controller('job-postings')
 @UseGuards(JwtAuthGuard)
 export class JobPostingsController {
-  constructor(private readonly jobBoard: JobBoardService) {}
+  constructor(
+    private readonly jobBoard: JobBoardService,
+    private readonly checkout: CheckoutService,
+  ) {}
 
   @Post()
   async create(@Body() dto: CreateJobPostingDto, @Request() req) {
@@ -40,6 +60,24 @@ export class JobPostingsController {
   @Patch(':id')
   async resubmit(@Param('id') id: string, @Body() dto: UpdateJobPostingDto, @Request() req) {
     return this.jobBoard.resubmitPosting(id, req.user.id, dto);
+  }
+
+  /** Start a PSP collection (mobile money / card) for a PENDING_PAYMENT
+   *  posting. Poll/simulate reuse the generic /payments/checkout endpoints. */
+  @Post(':id/checkout')
+  async checkoutPosting(
+    @Param('id') id: string,
+    @Body() dto: JobPostCheckoutDto,
+    @Request() req,
+  ) {
+    return this.checkout.initiateJobPostFee(req.user.id, id, dto);
+  }
+
+  /** Pay the posting fee straight out of the poster's venture balance —
+   *  instant, no PSP round-trip. Free-promotes if the admin fee is now off. */
+  @Post(':id/pay-from-balance')
+  async payFromBalance(@Param('id') id: string, @Request() req) {
+    return this.jobBoard.payFromBalance(id, req.user.id);
   }
 
   @Post(':id/close')

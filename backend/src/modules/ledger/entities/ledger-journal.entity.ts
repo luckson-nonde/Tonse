@@ -25,6 +25,7 @@ export type LedgerJournalType =
   | 'VENTURE_DEPOSIT'
   | 'AD_PURCHASE'
   | 'AD_REJECTED_REFUND'
+  | 'JOB_POST_FEE'
   | 'TICKET_SALE'
   | 'REFUND_INITIATED'
   | 'REFUND_SETTLED'
@@ -40,6 +41,7 @@ export const LEDGER_JOURNAL_TYPES: LedgerJournalType[] = [
   'VENTURE_DEPOSIT',
   'AD_PURCHASE',
   'AD_REJECTED_REFUND',
+  'JOB_POST_FEE',
   'TICKET_SALE',
   'REFUND_INITIATED',
   'REFUND_SETTLED',
