@@ -463,7 +463,12 @@ export default function JobPostsManagerView() {
   const renderFlow = () => {
     if (!flow) return null;
     return (
-      <div className="fixed inset-0 z-50 bg-[#f8f7f3] overflow-y-auto">
+      // Left edge stops at the sidebar rather than at the viewport: the
+      // sidebar is md:sticky at z-199, so a plain `inset-0` overlay runs
+      // underneath it and its centered content ends up centered on the whole
+      // window — visually shoved left, with every pixel of slack piling up on
+      // the right. Below md the sidebar is off-canvas, so full width is right.
+      <div className="fixed inset-y-0 right-0 left-0 md:left-64 z-50 bg-[#f8f7f3] overflow-y-auto">
         <div className="sticky top-0 z-10 bg-white border-b border-[#e2e8f0] px-4 py-3 flex items-center justify-between">
           <p className="text-sm font-black text-[#1a1a2e]">
             {flow.mode === 'resubmit' ? 'Edit & resubmit job post' : 'Post a Job'}
