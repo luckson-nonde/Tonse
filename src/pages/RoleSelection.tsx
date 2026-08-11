@@ -517,8 +517,11 @@ export default function RoleSelection() {
               data-tier-panel="1"
               {...slide(-1)}
               // Constrained column: the 16:9 artwork stays elegant on wide
-              // panes (aspect-ratio sizing — never height-cropped).
-              className="flex flex-col w-full max-w-[520px] mx-auto"
+              // panes (aspect-ratio sizing — never height-cropped). At 1600px
+              // the cap is released so RoleCardStack's second column can claim
+              // the pane's empty left half instead of leaving all six cards in
+              // one tall scroll — keep this breakpoint in step with the grid's.
+              className="flex flex-col w-full max-w-[520px] mx-auto min-[1600px]:max-w-none"
             >
               {/* Vertical role stack — all three roles visible at once, each
                   with its artwork, description, and its own Continue button.

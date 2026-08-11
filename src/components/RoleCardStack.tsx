@@ -57,13 +57,20 @@ interface RoleCardStackProps {
 }
 
 /**
- * Vertical role stack — one composed 60/40 card per role, straight down the
- * column: gold tag → serif headline → body → three circular value-prop
- * icons → pill CTA, with crisp photography inset on the right 40%.
+ * Role stack — one composed 60/40 card per role: gold tag → serif headline →
+ * body → three circular value-prop icons → pill CTA, with crisp photography
+ * inset on the right 40%.
+ *
+ * One column until 1600px, where the right pane (58% of the viewport, less
+ * its px-12) finally has room for two. That threshold is load-bearing, not
+ * taste: the copy side is 60% of a card less 48px of padding, and the three
+ * value-prop icons need 192px (3 × w-14 + 2 × gap-x-3). At 1600px that lands
+ * on 194px — the first width where the icon row still fits on one line. Stock
+ * 2xl (1536px) gives 183px and breaks it, which is why this is arbitrary.
  */
 export default function RoleCardStack({ banners, onSelect }: RoleCardStackProps) {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="grid grid-cols-1 gap-6 min-[1600px]:grid-cols-2">
       {banners.map((b) => {
         const art = b.artKey ? artFor(b.artKey) : undefined;
         const photo = b.image ?? art ?? b.fallbackImage;
