@@ -1,4 +1,16 @@
-import { Body, Controller, Get, Param, Post, Query, Request, UseGuards, BadRequestException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  Request,
+  UseGuards,
+  BadRequestException,
+} from '@nestjs/common';
 import { IsIn, IsOptional, IsString } from 'class-validator';
 import { AdsService } from './ads.service';
 import { CreateAdvertisementDto } from './dto/create-advertisement.dto';
@@ -44,6 +56,26 @@ export class AdsController {
       throw new BadRequestException(`placement must be one of ${PLACEMENTS.join(', ')}`);
     }
     return this.ads.getActiveAdsForPlacement(placement as AdPlacementLocation, category);
+  }
+
+  /**
+   * The Spotlight pop-up for THIS viewer, or `{ ad: null }` when they've had
+   * their fill (frequency cap) or nothing is running. Public — a browsing
+   * guest is exactly the audience, so `viewer` is a browser-minted anonymous
+   * id when there's no account. Declared before `:id` so it isn't swallowed.
+   */
+  @Get('popup')
+  async popup(@Query('viewer') viewer: string, @Query('category') category?: string) {
+    if (!viewer) throw new BadRequestException('viewer is required');
+    const ad = await this.ads.pickPopupForViewer(viewer, category);
+    return { ad };
+  }
+
+  /** Attribution for a pop-up click. Fire-and-forget; never blocks the click. */
+  @Post('popup/:id/click')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async popupClick(@Param('id') id: string, @Body() body: { viewer?: string }) {
+    await this.ads.recordPopupClick(id, body?.viewer ?? '');
   }
 
   @Post('create')

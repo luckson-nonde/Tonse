@@ -8,12 +8,34 @@ import {
 } from 'typeorm';
 
 export type AdMediaType = 'IMAGE' | 'VIDEO';
-/** BUNDLE_ALL is retired — one ad now carries a LIST of placements, which is
- *  what "bundle" was working around. The migration expands legacy bundle rows
- *  into all three real placements. */
-export type AdPlacementLocation = 'HOMEPAGE_CENTER' | 'SECONDARY_SIDEBAR' | 'CATEGORY_SIDEBAR';
+/**
+ * BUNDLE_ALL is retired — one ad now carries a LIST of placements, which is
+ * what "bundle" was working around. The migration expands legacy bundle rows
+ * into all three real placements.
+ *
+ * POPUP is the odd one out and deliberately so: it is the "Spotlight" ad that
+ * interrupts the screen rather than sitting on the page, it carries its OWN
+ * per-day rate (`ad_settings.popupRatePerDay`), and it is therefore
+ * EXCLUSIVE — an ad is either a pop-up or a set of on-page placements, never
+ * both, because one row can only carry one price. AdsService enforces that.
+ *
+ * `placements` is a json column, so adding a value here needs no migration.
+ */
+export type AdPlacementLocation =
+  | 'HOMEPAGE_CENTER'
+  | 'SECONDARY_SIDEBAR'
+  | 'CATEGORY_SIDEBAR'
+  | 'POPUP';
 
 export const AD_PLACEMENTS: AdPlacementLocation[] = [
+  'HOMEPAGE_CENTER',
+  'SECONDARY_SIDEBAR',
+  'CATEGORY_SIDEBAR',
+  'POPUP',
+];
+
+/** The on-page placements — everything that is NOT the interrupting pop-up. */
+export const ON_PAGE_PLACEMENTS: AdPlacementLocation[] = [
   'HOMEPAGE_CENTER',
   'SECONDARY_SIDEBAR',
   'CATEGORY_SIDEBAR',

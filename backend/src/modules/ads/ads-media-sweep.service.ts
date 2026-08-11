@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Advertisement } from './entities/advertisement.entity';
+import { AdsService } from './ads.service';
 import {
   STORAGE_DRIVER,
   StorageDriver,
@@ -37,6 +38,7 @@ export class AdsMediaSweepService implements OnModuleInit {
     private readonly ads: Repository<Advertisement>,
     @Inject(STORAGE_DRIVER)
     private readonly storage: StorageDriver,
+    private readonly adsService: AdsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -47,6 +49,16 @@ export class AdsMediaSweepService implements OnModuleInit {
       }
     } catch (e) {
       this.logger.error(`Ad media sweep failed (ads left as-is): ${(e as Error).message}`);
+    }
+
+    // Pop-up impressions only ever answer "recently" (the frequency cap and
+    // the fairness ordering) — older rows are storage cost with no reader.
+    // Separate try: losing the prune must never look like a media failure.
+    try {
+      const pruned = await this.adsService.prunePopupImpressions();
+      if (pruned > 0) this.logger.log(`Pruned ${pruned} pop-up impression(s) older than 30 days`);
+    } catch (e) {
+      this.logger.error(`Pop-up impression prune failed: ${(e as Error).message}`);
     }
   }
 

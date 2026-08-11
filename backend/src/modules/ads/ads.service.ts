@@ -2,16 +2,33 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
 import { AdSettings, AdDiscountTier } from './entities/ad-settings.entity';
-import { Advertisement, AdPlacementLocation, EffectiveAdStatus } from './entities/advertisement.entity';
+import {
+  Advertisement,
+  AdPlacementLocation,
+  EffectiveAdStatus,
+  ON_PAGE_PLACEMENTS,
+} from './entities/advertisement.entity';
+import { AdPopupImpression } from './entities/ad-popup-impression.entity';
 import { CreateAdvertisementDto } from './dto/create-advertisement.dto';
 import { UpdateAdSettingsDto } from './dto/update-ad-settings.dto';
 import { LedgerService } from '../ledger/ledger.service';
 import { ACCOUNT } from '../ledger/ledger-accounts';
 import { toNgwee } from '../../common/money/money';
 
-/** ONE rate for every placement: an ad is priced on how many DAYS it runs,
- *  never on where it appears, so ticking more placements is free. */
+/** ONE rate for every ON-PAGE placement: a banner ad is priced on how many
+ *  DAYS it runs, never on how many of them it appears in, so ticking more
+ *  on-page placements is free. Pop-ups are the exception — see below. */
 const DEFAULT_BASE_RATE_PER_DAY = 8;
+
+/** Pop-ups interrupt the screen, so they are the premium product and carry
+ *  their own (higher) daily rate — see AdSettings.popupRatePerDay. */
+const DEFAULT_POPUP_RATE_PER_DAY = 25;
+
+/** True when this ad is the interrupting Spotlight pop-up rather than an
+ *  on-page banner. Drives which daily rate applies. */
+export function isPopupAd(placements: AdPlacementLocation[] | null | undefined): boolean {
+  return (placements ?? []).includes('POPUP');
+}
 
 const DEFAULT_DISCOUNT_TIERS: AdDiscountTier[] = [
   { minDays: 30, discountPercentage: 15 },
@@ -52,6 +69,8 @@ export class AdsService {
     private readonly settingsRepository: Repository<AdSettings>,
     @InjectRepository(Advertisement)
     private readonly ads: Repository<Advertisement>,
+    @InjectRepository(AdPopupImpression)
+    private readonly popupImpressions: Repository<AdPopupImpression>,
     private readonly ledger: LedgerService,
     private readonly dataSource: DataSource,
   ) {}
@@ -91,6 +110,11 @@ export class AdsService {
       // this straight into a running total.
       baseRatePerDay: Number(settings.baseRatePerDay ?? DEFAULT_BASE_RATE_PER_DAY),
       discountTiers: settings.discountTiers?.length ? settings.discountTiers : DEFAULT_DISCOUNT_TIERS,
+      // Pop-up ("Spotlight") — its own premium rate, same coercion rule.
+      popupEnabled: settings.popupEnabled ?? true,
+      popupRatePerDay: Number(settings.popupRatePerDay ?? DEFAULT_POPUP_RATE_PER_DAY),
+      popupMaxPerSession: Number(settings.popupMaxPerSession ?? 1),
+      popupMinMinutesBetween: Number(settings.popupMinMinutesBetween ?? 360),
     };
   }
 
@@ -98,29 +122,59 @@ export class AdsService {
     const settings = await this.getOrCreateSettings();
     if (dto.baseRatePerDay !== undefined) settings.baseRatePerDay = dto.baseRatePerDay;
     if (dto.discountTiers !== undefined) settings.discountTiers = dto.discountTiers;
+    if (dto.popupEnabled !== undefined) settings.popupEnabled = dto.popupEnabled;
+    if (dto.popupRatePerDay !== undefined) settings.popupRatePerDay = dto.popupRatePerDay;
+    if (dto.popupMaxPerSession !== undefined) settings.popupMaxPerSession = dto.popupMaxPerSession;
+    if (dto.popupMinMinutesBetween !== undefined) {
+      settings.popupMinMinutesBetween = dto.popupMinMinutesBetween;
+    }
     return this.settingsRepository.save(settings);
   }
 
-  /** `baseRatePerDay * days * (1 - bestTierDiscount)`, ZMW rounded to 2dp.
+  /** `ratePerDay * days * (1 - bestTierDiscount)`, ZMW rounded to 2dp.
    *  The best tier is the largest minDays the duration actually clears.
-   *  Placement count is deliberately NOT a factor. */
-  private priceFor(durationDays: number, baseRatePerDay: number, tiers: AdDiscountTier[]): number {
+   *  Placement COUNT is deliberately not a factor; placement KIND is — a
+   *  pop-up bills at the premium rate (see calculatePrice). */
+  private priceFor(durationDays: number, ratePerDay: number, tiers: AdDiscountTier[]): number {
     const bestTier = [...tiers]
       .filter((t) => durationDays >= t.minDays)
       .sort((a, b) => b.minDays - a.minDays)[0];
     const discount = bestTier ? bestTier.discountPercentage / 100 : 0;
-    const total = baseRatePerDay * durationDays * (1 - discount);
+    const total = ratePerDay * durationDays * (1 - discount);
     return Math.round(total * 100) / 100;
   }
 
-  async calculatePrice(durationDays: number): Promise<number> {
-    const { baseRatePerDay, discountTiers } = await this.getPricingRatesPublic();
-    return this.priceFor(durationDays, baseRatePerDay, discountTiers);
+  /** Placement-aware: pop-ups bill at `popupRatePerDay`, everything else at
+   *  `baseRatePerDay`. Safe to pass an empty/omitted list — that's a banner. */
+  async calculatePrice(
+    durationDays: number,
+    placements: AdPlacementLocation[] = [],
+  ): Promise<number> {
+    const rates = await this.getPricingRatesPublic();
+    const ratePerDay = isPopupAd(placements) ? rates.popupRatePerDay : rates.baseRatePerDay;
+    return this.priceFor(durationDays, ratePerDay, rates.discountTiers);
   }
 
   async createDraftAd(sellerId: string, dto: CreateAdvertisementDto): Promise<Advertisement> {
     if (dto.mediaType === 'VIDEO' && (dto.videoDurationSeconds ?? 0) > 15) {
       throw new BadRequestException('Video length exceeds the 15-second maximum limit.');
+    }
+
+    // A pop-up is a DIFFERENT PRODUCT at a different price, and an ad row
+    // carries exactly one price — so it cannot also be a banner. Rejecting the
+    // mix here (rather than silently charging one rate for both) is what keeps
+    // "what you were quoted" and "what you bought" the same thing.
+    if (isPopupAd(dto.placements)) {
+      const alsoOnPage = dto.placements.filter((p) => ON_PAGE_PLACEMENTS.includes(p));
+      if (alsoOnPage.length > 0) {
+        throw new BadRequestException(
+          'A Spotlight pop-up is booked on its own — create a separate ad for on-page placements.',
+        );
+      }
+      const { popupEnabled } = await this.getPricingRatesPublic();
+      if (!popupEnabled) {
+        throw new BadRequestException('Spotlight pop-up ads are not available at the moment.');
+      }
     }
 
     const startDate = parseDayBoundary(dto.startDate, 'start');
@@ -139,7 +193,7 @@ export class AdsService {
 
     // Inclusive: the 10th to the 10th is one full day of advertising.
     const durationDays = daysBetween(startDate, parseDayBoundary(dto.endDate, 'start')) + 1;
-    const totalPaidAmount = await this.calculatePrice(durationDays);
+    const totalPaidAmount = await this.calculatePrice(durationDays, dto.placements);
 
     const ad = this.ads.create({
       sellerId,
@@ -299,5 +353,109 @@ export class AdsService {
     const targeted = rows.filter((a) => !!categoryId && a.targetCategoryId === categoryId);
     const untargeted = rows.filter((a) => !a.targetCategoryId);
     return [...targeted, ...untargeted];
+  }
+
+  // ── Spotlight pop-ups ──────────────────────────────────────────────────
+
+  /**
+   * Pick the ONE pop-up to show this viewer right now — or nothing.
+   *
+   * Three rules, in order:
+   *   1. RATIONING. If this viewer has already been shown `popupMaxPerSession`
+   *      pop-ups inside the last `popupMinMinutesBetween` minutes, return null.
+   *      This is the whole "don't be annoying" guarantee and it is enforced
+   *      server-side, so clearing browser storage cannot buy more.
+   *   2. RELEVANCE. A pop-up targeting the category the viewer is actually
+   *      browsing beats an untargeted one. Untargeted ads stay eligible, so a
+   *      category nobody bought still shows something.
+   *   3. FAIRNESS. Among equals, show whichever this viewer saw LEAST recently
+   *      (never-seen first), tie-broken by fewest impressions overall so a
+   *      brand-new advertiser catches up instead of starving behind an
+   *      incumbent. That is the round-robin.
+   *
+   * Recording the impression here — at hand-out — is what makes both the
+   * rationing and the rotation real. See AdPopupImpression for the trade-off.
+   */
+  async pickPopupForViewer(
+    viewerKey: string,
+    categoryId?: string,
+  ): Promise<Advertisement | null> {
+    const key = (viewerKey || '').trim().slice(0, 64);
+    if (!key) return null;
+
+    const rates = await this.getPricingRatesPublic();
+    if (!rates.popupEnabled) return null;
+
+    // 1. Rationing.
+    const windowStart = new Date(Date.now() - rates.popupMinMinutesBetween * 60 * 1000);
+    const shownRecently = await this.popupImpressions.count({
+      where: { viewerKey: key, shownAt: MoreThanOrEqual(windowStart) },
+    });
+    if (shownRecently >= rates.popupMaxPerSession) return null;
+
+    const now = new Date();
+    const live = await this.ads.find({
+      where: { status: 'APPROVED', startDate: LessThanOrEqual(now), endDate: MoreThanOrEqual(now) },
+    });
+    // json column → filter in JS, never in SQL (repo invariant).
+    const candidates = live.filter((a) => isPopupAd(a.placements));
+    if (candidates.length === 0) return null;
+
+    // 2. Relevance: targeted-at-this-category first, else the untargeted pool.
+    const targeted = categoryId
+      ? candidates.filter((a) => a.targetCategoryId === categoryId)
+      : [];
+    const pool = targeted.length > 0
+      ? targeted
+      : candidates.filter((a) => !a.targetCategoryId || !categoryId);
+    const finalPool = pool.length > 0 ? pool : candidates;
+
+    // 3. Fairness, decided in one indexed query over a small id set.
+    const ids = finalPool.map((a) => a.id);
+    const [ranked]: Array<{ adId: string }> = await this.dataSource.query(
+      `SELECT a.id AS "adId",
+              MAX(i."shownAt") FILTER (WHERE i."viewerKey" = $1) AS "lastSeen",
+              COUNT(i.id) AS "totalShown"
+         FROM advertisements a
+         LEFT JOIN ad_popup_impressions i ON i."adId" = a.id
+        WHERE a.id = ANY($2::uuid[])
+        GROUP BY a.id
+        ORDER BY "lastSeen" ASC NULLS FIRST, "totalShown" ASC, a."createdAt" ASC
+        LIMIT 1`,
+      [key, ids],
+    );
+    const chosen = finalPool.find((a) => a.id === ranked?.adId) ?? finalPool[0];
+
+    await this.popupImpressions.save(
+      this.popupImpressions.create({ adId: chosen.id, viewerKey: key }),
+    );
+    return chosen;
+  }
+
+  /** Attribute a click to this viewer's most recent impression of the ad.
+   *  Best-effort: a missing impression row must never fail the navigation. */
+  async recordPopupClick(adId: string, viewerKey: string): Promise<void> {
+    const key = (viewerKey || '').trim().slice(0, 64);
+    if (!key) return;
+    const [latest] = await this.popupImpressions.find({
+      where: { adId, viewerKey: key },
+      order: { shownAt: 'DESC' },
+      take: 1,
+    });
+    if (!latest || latest.clickedAt) return;
+    latest.clickedAt = new Date();
+    await this.popupImpressions.save(latest);
+  }
+
+  /** Impressions only answer "recently" — anything older is cost without
+   *  value. Called from the boot sweep. Returns rows removed. */
+  async prunePopupImpressions(olderThanDays = 30): Promise<number> {
+    const cutoff = new Date(Date.now() - olderThanDays * MS_PER_DAY);
+    const res = await this.popupImpressions
+      .createQueryBuilder()
+      .delete()
+      .where('"shownAt" < :cutoff', { cutoff })
+      .execute();
+    return res.affected ?? 0;
   }
 }

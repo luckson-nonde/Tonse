@@ -34,6 +34,28 @@ export class AdSettings {
   @Column({ type: 'json', nullable: true })
   discountTiers: AdDiscountTier[] | null;
 
+  // ── Pop-up ("Spotlight") ads ─────────────────────────────────────────
+  // A separate, premium product: it interrupts the screen, so it is priced
+  // on its own per-day rate and rationed by the two frequency knobs below.
+
+  /** Master switch. OFF stops NEW pop-up ads being created AND stops any
+   *  being served — the admin's brake if pop-ups prove annoying. */
+  @Column({ type: 'boolean', default: true })
+  popupEnabled: boolean;
+
+  /** ZMW per day for a pop-up campaign. Duration discount tiers still apply. */
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 25 })
+  popupRatePerDay: number;
+
+  /** How many pop-ups one viewer may see inside the window below. */
+  @Column({ type: 'integer', default: 1 })
+  popupMaxPerSession: number;
+
+  /** The window that `popupMaxPerSession` is counted over, in minutes.
+   *  Default 360 (6h) ≈ "about once a session" for a typical visitor. */
+  @Column({ type: 'integer', default: 360 })
+  popupMinMinutesBetween: number;
+
   @CreateDateColumn()
   createdAt: Date;
 
