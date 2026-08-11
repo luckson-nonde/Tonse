@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Search, Plus, ChevronLeft } from 'lucide-react';
 import type { Category } from '../../services/categories';
-import AdCarousel from '../ads/AdCarousel';
+import AdRail from '../ads/AdRail';
 import { SubLayoutToggle } from './LayoutToggle';
 import SubList from './categoryLayouts/SubList';
 import SubCards from './categoryLayouts/SubCards';
@@ -157,15 +157,8 @@ export default function SubcategoryScreen({
 
       {/* Category-targeted ad rail — keyed to the master the buyer is
           browsing, so Electronics shows electronics ads and Loans shows
-          lender ads. Sticky so it stays in view down a long subcategory list. */}
-      <aside className="hidden xl:block w-72 shrink-0">
-        <div className="sticky top-4">
-          <p className="text-[10px] font-extrabold tracking-[0.18em] text-slate-400 mb-2 px-1">
-            SPONSORED
-          </p>
-          <AdCarousel placement="CATEGORY_SIDEBAR" variant="sidebar" categoryId={master.id} />
-        </div>
-      </aside>
+          lender ads. Two stacked slots, sticky down a long subcategory list. */}
+      <AdRail placement="CATEGORY_SIDEBAR" categoryId={master.id} />
     </div>
   );
 }

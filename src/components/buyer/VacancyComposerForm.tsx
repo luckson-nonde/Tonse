@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, ArrowRight, Briefcase, ClipboardCheck, Plus, X } from 'lucide-react';
+import AdRail from '../ads/AdRail';
 import ConsentModal from '../consent/ConsentModal';
 import { useConsentGate } from '../../hooks/useConsentGate';
 import DateTimePicker from '../DateTimePicker';
@@ -203,357 +204,367 @@ export default function VacancyComposerForm({ tradeLabel, initial, onBack, onSub
         }}
       />
 
-      <div className="max-w-3xl mx-auto w-full px-4 py-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-11 h-11 rounded-2xl bg-[#fdf6e9] border border-[#f0dfc0] flex items-center justify-center">
-            <Briefcase className="w-5 h-5 text-[#C9973A]" />
-          </div>
-          <div>
-            <h2 className="text-xl font-black text-[#1a1a2e]">Write the job advert</h2>
-            <p className="text-xs text-slate-500 font-medium">
-              This is exactly what {tradeLabel.toLowerCase()} job seekers will read. Your post goes
-              live once an admin approves it.
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-[#e2e8f0] p-5 space-y-5">
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">Job title *</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={255}
-              className={fieldClass('title')}
-              placeholder={`e.g. ${tradeLabel} — Copperbelt`}
-            />
-            {err('title')}
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              About the role *
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              className={fieldClass('description')}
-              placeholder="We are seeking energetic, self-driven individuals to join our team as… Say who you are, what the role is, and where it is based."
-            />
-            {err('description')}
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Key Responsibilities *
-            </label>
-            <p className="text-[11px] text-slate-500 mb-2">
-              One task per line — what this person will actually do day to day.
-            </p>
-            <BulletListEditor
-              value={responsibilities}
-              onChange={setResponsibilities}
-              placeholder="e.g. Drive assigned sales routes and ensure customer coverage"
-              addLabel="Add responsibility"
-              error={!!errors.responsibilities}
-            />
-            {err('responsibilities')}
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Minimum Requirements *
-            </label>
-            <p className="text-[11px] text-slate-500 mb-2">
-              One per line — the bar an applicant must meet to be considered.
-            </p>
-            <BulletListEditor
-              value={minimumRequirements}
-              onChange={setMinimumRequirements}
-              placeholder="e.g. Grade 12 Certificate · Valid Driver's Licence · 2 years' experience"
-              addLabel="Add requirement"
-              error={!!errors.minimumRequirements}
-            />
-            {err('minimumRequirements')}
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Employment type *
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {EMPLOYMENT_TYPE_OPTIONS.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setEmploymentType(option)}
-                  className={chipClass(employmentType === option)}
-                >
-                  {option}
-                </button>
-              ))}
+      {/* Two columns from xl up — mirrors the trade picker one step back
+          (SubcategoryScreen): the composer keeps its reading-width column and
+          the freed space on the right carries the sponsored rail. Below xl the
+          rail drops and the composer is unchanged. */}
+      <div className="w-full max-w-7xl mx-auto flex justify-center gap-6">
+        <div className="max-w-3xl w-full min-w-0 px-4 py-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-11 h-11 rounded-2xl bg-[#fdf6e9] border border-[#f0dfc0] flex items-center justify-center">
+              <Briefcase className="w-5 h-5 text-[#C9973A]" />
             </div>
-            {err('employmentType')}
+            <div>
+              <h2 className="text-xl font-black text-[#1a1a2e]">Write the job advert</h2>
+              <p className="text-xs text-slate-500 font-medium">
+                This is exactly what {tradeLabel.toLowerCase()} job seekers will read. Your post goes
+                live once an admin approves it.
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-white rounded-2xl border border-[#e2e8f0] p-5 space-y-5">
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-1.5">Job title *</label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                maxLength={255}
+                className={fieldClass('title')}
+                placeholder={`e.g. ${tradeLabel} — Copperbelt`}
+              />
+              {err('title')}
+            </div>
+
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-1.5">
-                Workers needed
+                About the role *
               </label>
-              <input
-                type="number"
-                min={1}
-                value={workersNeeded}
-                onChange={(e) => setWorkersNeeded(e.target.value)}
-                className={fieldClass('workersNeeded')}
-                placeholder="e.g. 2"
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                className={fieldClass('description')}
+                placeholder="We are seeking energetic, self-driven individuals to join our team as… Say who you are, what the role is, and where it is based."
               />
+              {err('description')}
             </div>
+
             <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1.5">Pay (ZMW)</label>
-              <div className="flex gap-2">
+              <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                Key Responsibilities *
+              </label>
+              <p className="text-[11px] text-slate-500 mb-2">
+                One task per line — what this person will actually do day to day.
+              </p>
+              <BulletListEditor
+                value={responsibilities}
+                onChange={setResponsibilities}
+                placeholder="e.g. Drive assigned sales routes and ensure customer coverage"
+                addLabel="Add responsibility"
+                error={!!errors.responsibilities}
+              />
+              {err('responsibilities')}
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                Minimum Requirements *
+              </label>
+              <p className="text-[11px] text-slate-500 mb-2">
+                One per line — the bar an applicant must meet to be considered.
+              </p>
+              <BulletListEditor
+                value={minimumRequirements}
+                onChange={setMinimumRequirements}
+                placeholder="e.g. Grade 12 Certificate · Valid Driver's Licence · 2 years' experience"
+                addLabel="Add requirement"
+                error={!!errors.minimumRequirements}
+              />
+              {err('minimumRequirements')}
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                Employment type *
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {EMPLOYMENT_TYPE_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setEmploymentType(option)}
+                    className={chipClass(employmentType === option)}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+              {err('employmentType')}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                  Workers needed
+                </label>
                 <input
                   type="number"
-                  min={0}
-                  value={payOffer}
-                  onChange={(e) => setPayOffer(e.target.value)}
-                  className={fieldClass('payOffer')}
-                  placeholder="Optional"
+                  min={1}
+                  value={workersNeeded}
+                  onChange={(e) => setWorkersNeeded(e.target.value)}
+                  className={fieldClass('workersNeeded')}
+                  placeholder="e.g. 2"
                 />
-                {payOffer && (
-                  <select
-                    value={payRateUnit}
-                    onChange={(e) => setPayRateUnit(e.target.value as JobRateUnit)}
-                    className="px-3 py-3 rounded-xl border border-[#e2e8f0] bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#C9973A]/40"
-                  >
-                    {JOB_RATE_UNITS.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
-                )}
               </div>
-              {err('payOffer')}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Pay structure note
-            </label>
-            {/* Deliberately not gated on payOffer — a real ad can be
-                commission-only with no figure at all. */}
-            <input
-              type="text"
-              value={payNote}
-              onChange={(e) => setPayNote(e.target.value)}
-              maxLength={160}
-              className={fieldClass('payNote')}
-              placeholder="e.g. Commission-based with a fixed basic pay component"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              When should the work start? *
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {URGENCY_OPTIONS.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setUrgency(option)}
-                  className={`px-4 py-3 rounded-xl border text-sm font-bold transition-colors ${
-                    urgency === option
-                      ? 'border-[#C9973A] bg-[#fdf6e9] text-[#8a6420]'
-                      : 'border-[#e2e8f0] bg-white text-slate-600 hover:border-[#cbd5e1]'
-                  }`}
-                >
-                  {option}
-                </button>
-              ))}
-            </div>
-            {err('urgency')}
-            {urgency === 'On a specific date & time' && (
-              <div className="mt-3">
-                <DateTimePicker
-                  value={preferredDateTime}
-                  onChange={setPreferredDateTime}
-                  mode="datetime"
-                  placeholder="Pick the start day & time"
-                  error={!!errors.preferredDateTime}
-                />
-                {err('preferredDateTime')}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-2xl border border-[#f0dfc0] bg-[#fdf9f0] p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <ClipboardCheck className="w-4 h-4 text-[#C9973A]" />
-              <p className="text-sm font-black text-[#1a1a2e]">Applicant requirements</p>
-            </div>
-            <p className="text-[11px] text-slate-500 mb-4">
-              What must a worker have to apply? Every document you tick becomes a required upload —
-              the applicant cannot submit without attaching it.
-            </p>
-
-            <div className="space-y-4">
               <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">
-                  Experience required
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {EXPERIENCE_OPTIONS.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => setExperience(option)}
-                      className={chipClass(experience === option)}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setOwnTools((v) => !v)}
-                  className={`${chipClass(ownTools)} text-left`}
-                >
-                  {ownTools ? '✓ ' : ''}Must bring their own tools
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCertRequired((v) => !v)}
-                  className={`${chipClass(certRequired)} text-left`}
-                >
-                  {certRequired ? '✓ ' : ''}Certification required
-                </button>
-              </div>
-              {certRequired && (
-                <input
-                  type="text"
-                  value={certDetail}
-                  onChange={(e) => setCertDetail(e.target.value)}
-                  maxLength={120}
-                  className="w-full px-4 py-2.5 rounded-lg border border-[#e7d7b8] bg-white text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#C9973A]/40"
-                  placeholder="Which certification? e.g. TEVETA craft certificate, EIZ registration"
-                />
-              )}
-
-              <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">
-                  Documents applicants must upload
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {REQUIRED_DOCUMENT_PRESETS.map((doc) => (
-                    <button
-                      key={doc}
-                      type="button"
-                      onClick={() => toggleDocument(doc)}
-                      className={chipClass(documents.includes(doc))}
-                    >
-                      {documents.includes(doc) ? '✓ ' : ''}
-                      {doc}
-                    </button>
-                  ))}
-                  {customDocuments.map((doc) => (
-                    <span
-                      key={doc}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#C9973A] bg-white text-[12px] font-bold text-[#8a6420]"
-                    >
-                      ✓ {doc}
-                      <button
-                        type="button"
-                        onClick={() => toggleDocument(doc)}
-                        className="text-[#a87b28] hover:text-rose-500"
-                        aria-label={`Remove ${doc}`}
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex gap-2 mt-2.5">
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">Pay (ZMW)</label>
+                <div className="flex gap-2">
                   <input
-                    type="text"
-                    value={customDoc}
-                    onChange={(e) => setCustomDoc(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addCustomDoc();
-                      }
-                    }}
-                    maxLength={120}
-                    className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-[#e7d7b8] bg-white text-[12px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#C9973A]/40"
-                    placeholder="Add another document… e.g. Forklift operator permit"
+                    type="number"
+                    min={0}
+                    value={payOffer}
+                    onChange={(e) => setPayOffer(e.target.value)}
+                    className={fieldClass('payOffer')}
+                    placeholder="Optional"
                   />
+                  {payOffer && (
+                    <select
+                      value={payRateUnit}
+                      onChange={(e) => setPayRateUnit(e.target.value as JobRateUnit)}
+                      className="px-3 py-3 rounded-xl border border-[#e2e8f0] bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#C9973A]/40"
+                    >
+                      {JOB_RATE_UNITS.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                {err('payOffer')}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                Pay structure note
+              </label>
+              {/* Deliberately not gated on payOffer — a real ad can be
+                  commission-only with no figure at all. */}
+              <input
+                type="text"
+                value={payNote}
+                onChange={(e) => setPayNote(e.target.value)}
+                maxLength={160}
+                className={fieldClass('payNote')}
+                placeholder="e.g. Commission-based with a fixed basic pay component"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                When should the work start? *
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {URGENCY_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setUrgency(option)}
+                    className={`px-4 py-3 rounded-xl border text-sm font-bold transition-colors ${
+                      urgency === option
+                        ? 'border-[#C9973A] bg-[#fdf6e9] text-[#8a6420]'
+                        : 'border-[#e2e8f0] bg-white text-slate-600 hover:border-[#cbd5e1]'
+                    }`}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+              {err('urgency')}
+              {urgency === 'On a specific date & time' && (
+                <div className="mt-3">
+                  <DateTimePicker
+                    value={preferredDateTime}
+                    onChange={setPreferredDateTime}
+                    mode="datetime"
+                    placeholder="Pick the start day & time"
+                    error={!!errors.preferredDateTime}
+                  />
+                  {err('preferredDateTime')}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-[#f0dfc0] bg-[#fdf9f0] p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <ClipboardCheck className="w-4 h-4 text-[#C9973A]" />
+                <p className="text-sm font-black text-[#1a1a2e]">Applicant requirements</p>
+              </div>
+              <p className="text-[11px] text-slate-500 mb-4">
+                What must a worker have to apply? Every document you tick becomes a required upload —
+                the applicant cannot submit without attaching it.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1.5">
+                    Experience required
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {EXPERIENCE_OPTIONS.map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setExperience(option)}
+                        className={chipClass(experience === option)}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={addCustomDoc}
-                    disabled={!customDoc.trim() || documents.length >= MAX_DOCUMENTS}
-                    className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-[#e7d7b8] bg-white text-[12px] font-bold text-slate-600 hover:border-[#C9973A] hover:text-[#8a6420] disabled:opacity-40 transition-colors"
+                    onClick={() => setOwnTools((v) => !v)}
+                    className={`${chipClass(ownTools)} text-left`}
                   >
-                    <Plus className="w-3.5 h-3.5" /> Add
+                    {ownTools ? '✓ ' : ''}Must bring their own tools
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCertRequired((v) => !v)}
+                    className={`${chipClass(certRequired)} text-left`}
+                  >
+                    {certRequired ? '✓ ' : ''}Certification required
                   </button>
                 </div>
-              </div>
+                {certRequired && (
+                  <input
+                    type="text"
+                    value={certDetail}
+                    onChange={(e) => setCertDetail(e.target.value)}
+                    maxLength={120}
+                    className="w-full px-4 py-2.5 rounded-lg border border-[#e7d7b8] bg-white text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#C9973A]/40"
+                    placeholder="Which certification? e.g. TEVETA craft certificate, EIZ registration"
+                  />
+                )}
 
-              <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">
-                  Other requirements
-                </label>
-                <textarea
-                  value={otherRequirements}
-                  onChange={(e) => setOtherRequirements(e.target.value)}
-                  rows={2}
-                  className="w-full px-4 py-2.5 rounded-lg border border-[#e7d7b8] bg-white text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#C9973A]/40"
-                  placeholder="Anything else — e.g. must live near Woodlands, able to start at 06:00…"
-                />
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1.5">
+                    Documents applicants must upload
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {REQUIRED_DOCUMENT_PRESETS.map((doc) => (
+                      <button
+                        key={doc}
+                        type="button"
+                        onClick={() => toggleDocument(doc)}
+                        className={chipClass(documents.includes(doc))}
+                      >
+                        {documents.includes(doc) ? '✓ ' : ''}
+                        {doc}
+                      </button>
+                    ))}
+                    {customDocuments.map((doc) => (
+                      <span
+                        key={doc}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#C9973A] bg-white text-[12px] font-bold text-[#8a6420]"
+                      >
+                        ✓ {doc}
+                        <button
+                          type="button"
+                          onClick={() => toggleDocument(doc)}
+                          className="text-[#a87b28] hover:text-rose-500"
+                          aria-label={`Remove ${doc}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 mt-2.5">
+                    <input
+                      type="text"
+                      value={customDoc}
+                      onChange={(e) => setCustomDoc(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addCustomDoc();
+                        }
+                      }}
+                      maxLength={120}
+                      className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-[#e7d7b8] bg-white text-[12px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#C9973A]/40"
+                      placeholder="Add another document… e.g. Forklift operator permit"
+                    />
+                    <button
+                      type="button"
+                      onClick={addCustomDoc}
+                      disabled={!customDoc.trim() || documents.length >= MAX_DOCUMENTS}
+                      className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-[#e7d7b8] bg-white text-[12px] font-bold text-slate-600 hover:border-[#C9973A] hover:text-[#8a6420] disabled:opacity-40 transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-bold text-slate-700 mb-1.5">
+                    Other requirements
+                  </label>
+                  <textarea
+                    value={otherRequirements}
+                    onChange={(e) => setOtherRequirements(e.target.value)}
+                    rows={2}
+                    className="w-full px-4 py-2.5 rounded-lg border border-[#e7d7b8] bg-white text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#C9973A]/40"
+                    placeholder="Anything else — e.g. must live near Woodlands, able to start at 06:00…"
+                  />
+                </div>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                Application deadline
+              </label>
+              <DateTimePicker
+                value={applicationDeadline}
+                onChange={setApplicationDeadline}
+                mode="date"
+                placeholder="Optional — last day to apply"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                After this day the post stops taking applications automatically.
+              </p>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Application deadline
-            </label>
-            <DateTimePicker
-              value={applicationDeadline}
-              onChange={setApplicationDeadline}
-              mode="date"
-              placeholder="Optional — last day to apply"
-            />
-            <p className="text-[11px] text-slate-400 mt-1">
-              After this day the post stops taking applications automatically.
-            </p>
+          <div className="flex items-center justify-between gap-3 mt-6">
+            <button
+              type="button"
+              onClick={onBack}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-[#e2e8f0] bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" /> Back
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              className="inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-[#C9973A] hover:bg-[#b8852f] text-sm font-bold text-white transition-colors"
+            >
+              Continue <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 mt-6">
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-[#e2e8f0] bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            className="inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-[#C9973A] hover:bg-[#b8852f] text-sm font-bold text-white transition-colors"
-          >
-            Continue <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
+        {/* Job posts only ever run under the labour master, so the rail stays
+            targeted at the same ads the trade picker showed a step earlier. */}
+        <AdRail placement="CATEGORY_SIDEBAR" categoryId="labour" />
       </div>
     </>
   );
