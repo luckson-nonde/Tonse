@@ -1,6 +1,11 @@
 import React from 'react';
 import type { StorefrontCard, StorefrontMode } from '../../services/api/storefrontService';
 import StorefrontProductCard from './StorefrontProductCard';
+import InlineAdSlot from '../ads/InlineAdSlot';
+
+/** Products per ad slot. Three products + one ad = four cells, so on the
+ *  lg 4-column grid EVERY ROW carries exactly one sponsored slot. */
+export const AD_EVERY = 3;
 
 interface StorefrontCardGridProps {
   cards: StorefrontCard[];
@@ -40,10 +45,21 @@ export default function StorefrontCardGrid({ cards, mode, onOpen }: StorefrontCa
         </div>
       </div>
 
+      {/* Every AD_EVERY products, one cell goes to a sponsored slot; a
+          partial final row still gets one so no row runs ad-free. Offsets
+          climb so each row shows a different advertiser from the pool. */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-4.5 items-stretch">
         {cards.map((card, i) => (
-          <StorefrontProductCard key={`${card.kind}-${card.id}`} card={card} index={i} onOpen={onOpen} />
+          <React.Fragment key={`${card.kind}-${card.id}`}>
+            <StorefrontProductCard card={card} index={i} onOpen={onOpen} />
+            {(i + 1) % AD_EVERY === 0 && (
+              <InlineAdSlot placement="HOMEPAGE_CENTER" offset={(i + 1) / AD_EVERY - 1} />
+            )}
+          </React.Fragment>
         ))}
+        {cards.length % AD_EVERY !== 0 && (
+          <InlineAdSlot placement="HOMEPAGE_CENTER" offset={Math.floor(cards.length / AD_EVERY)} />
+        )}
       </div>
     </section>
   );

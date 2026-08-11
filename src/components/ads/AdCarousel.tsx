@@ -43,6 +43,10 @@ interface AdCarouselProps {
    *  different advertisers instead of two copies of the same ad. With fewer
    *  ads than slots it wraps and they repeat — better than a blank slot. */
   offset?: number;
+  /** Fill the parent's height instead of imposing an aspect ratio — for
+   *  slots living inside a product grid cell, where the row's cards set the
+   *  height and a fixed aspect would leave the ad short. */
+  fill?: boolean;
 }
 
 /**
@@ -53,7 +57,7 @@ interface AdCarouselProps {
  * (the only precedent, DashboardCalendar's counter-card rotation, is tightly
  * coupled to that shape) — this one is self-contained.
  */
-export default function AdCarousel({ placement, variant, categoryId, offset = 0 }: AdCarouselProps) {
+export default function AdCarousel({ placement, variant, categoryId, offset = 0, fill = false }: AdCarouselProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [ads, setAds] = useState<Advertisement[]>([]);
@@ -124,7 +128,11 @@ export default function AdCarousel({ placement, variant, categoryId, offset = 0 
     navigate('/buyer/process-selection');
   };
 
-  const aspectClass = resolvedVariant === 'banner' ? 'aspect-video' : 'aspect-[4/5]';
+  const aspectClass = fill
+    ? 'h-full min-h-60'
+    : resolvedVariant === 'banner'
+      ? 'aspect-video'
+      : 'aspect-[4/5]';
 
   // Nothing loaded yet — render nothing rather than a flash of the fallback.
   if (!loaded) return null;
