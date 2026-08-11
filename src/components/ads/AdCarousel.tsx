@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Megaphone } from 'lucide-react';
 import { adsService, adMediaUrl, Advertisement, AdPlacementLocation } from '../../services/api/adsService';
+import { saveAdInquiryIntent } from '../../services/adInquiryIntent';
+import { useAuth } from '../../AuthContext';
 
 const ROTATE_MS = 10000;
 
@@ -27,6 +29,7 @@ interface AdCarouselProps {
  */
 export default function AdCarousel({ placement, variant, categoryId }: AdCarouselProps) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [ads, setAds] = useState<Advertisement[]>([]);
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -66,14 +69,34 @@ export default function AdCarousel({ placement, variant, categoryId }: AdCarouse
   }, [paused, ads.length]);
 
   /**
-   * A click opens the advertiser's own shop page, where the quote form sits —
-   * `?ad=` carries the attribution through so the resulting inquiry tells the
-   * seller which ad brought the buyer in. Works for logged-out visitors too:
-   * that page saves the draft and submits it after they sign in.
+   * A click drops the buyer straight into the inquiry funnel aimed at the
+   * advertiser — no shop page, no directory, no searching: the ad already
+   * says who they're buying from. First stop is "how do you want to buy"
+   * (ProcessSelection); the intent (incl. ad attribution) is stashed first so
+   * it survives the login bounce for a visitor who isn't signed in yet.
+   *
+   * Non-buyers (a seller seeing the sidebar rail) can't file an inquiry and
+   * are blocked out of /buyer/* anyway, so they keep the old destination —
+   * the advertiser's public shop page, `?ad=` carrying the attribution.
    */
   const handleAdClick = (ad: Advertisement) => {
     if (!ad.shopProfileId) return;
-    navigate(`/discover/${ad.shopProfileId}?ad=${encodeURIComponent(ad.id)}`);
+    const shopPage = `/discover/${ad.shopProfileId}?ad=${encodeURIComponent(ad.id)}`;
+
+    if (user && user.role !== 'BUYER') {
+      navigate(shopPage);
+      return;
+    }
+
+    saveAdInquiryIntent({ shopProfileId: ad.shopProfileId, adId: ad.id, adTitle: ad.title });
+
+    if (!user) {
+      // Sign in first — Login resumes the funnel for buyer accounts and
+      // falls back to the shop page for anything else.
+      navigate('/login', { state: { pendingAdTitle: ad.title } });
+      return;
+    }
+    navigate('/buyer/process-selection');
   };
 
   const aspectClass = resolvedVariant === 'banner' ? 'aspect-video' : 'aspect-[4/5]';

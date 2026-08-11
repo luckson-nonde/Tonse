@@ -21,6 +21,8 @@ import { newIdempotencyKey } from '../services/offlineWriteQueue';
 import { isLoanQuote } from '../utils/loan';
 import { isEventContext } from '../utils/events';
 import { getMyConsents } from '../services/api/consentService';
+import { takeAdInquiryIntent, AD_INQUIRY_INTENT_EVENT } from '../services/adInquiryIntent';
+import { fetchDiscoverShopProfile } from '../services/api/discoverService';
 import { formatRelativeTime } from '../utils/time';
 import { ViewType, MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
 import DynamicAccountRenderer from '../components/DynamicAccountRenderer';
@@ -330,6 +332,10 @@ export default function BuyerDashboard() {
     attributes?: Record<string, any>;
     processType?: 'EXPRESS' | 'STANDARD';
     targetedShop?: { id: string; sellerId: string; name: string; categoryIds?: string[]; city?: string; province?: string; location?: string };
+    /** Set when the funnel was entered by clicking an advert — copied onto
+     *  the published inquiry's attributes so the seller can see which ad
+     *  earned the lead (same keys PublicShopProfile writes). */
+    adSource?: { id: string; title?: string };
     /** Post-a-job flow only (labour trades): the posting-level facts
      *  collected after the per-trade form. */
     jobPostingDetails?: JobPostingDetails;
@@ -341,6 +347,16 @@ export default function BuyerDashboard() {
   // its labourGroup is the discriminator.
   const isJobPostingFlow =
     pendingInquiry.isLabour === true && pendingInquiry.labourGroup !== 'MACHINERY_HIRE';
+
+  // The funnel runs in two orders, and this is what tells them apart at the
+  // process-selection step:
+  //   untargeted  — category → form → process → preferences
+  //   targeted    — process → category → form → preferences   (advert click
+  //                 or a shop card: the shop is known up front, the category
+  //                 isn't yet)
+  const hasChosenCategory = !!(
+    pendingInquiry.categories?.filter(Boolean).length || pendingInquiry.categoryId
+  );
 
   // Drives the InquiryPreferences variant (PRODUCTS / SERVICES / VENUES /
   // LABOR). Resolution happens in services/categories#getCategoryType — an
@@ -546,6 +562,62 @@ export default function BuyerDashboard() {
         : `${basePath}/${tab}`;
     navigate(path);
   };
+
+  // ── Advert → inquiry funnel ──────────────────────────────────────────
+  // An advert already names its advertiser, so a buyer who clicked one has
+  // nothing to search for and nobody to pick: AdCarousel (or Login, after the
+  // sign-in bounce) sends them straight here. This hydrates the targeted shop
+  // behind the "how do you want to buy" step they land on — the shop page,
+  // the "Need a price?" card and the shops directory are all skipped.
+  //
+  // Two arrival shapes, one handler: a fresh mount (coming from /login, or
+  // from an ad rail on another page) reads storage, and the event covers a
+  // click made while this dashboard is already on screen — its sidebar,
+  // banner and category rails all live inside it. The intent is
+  // read-and-cleared either way, so one click opens the funnel once.
+  useEffect(() => {
+    if (!user || user.role !== 'BUYER') return;
+    let cancelled = false;
+
+    const consume = async () => {
+      const intent = takeAdInquiryIntent();
+      if (!intent) return;
+      const shop = await fetchDiscoverShopProfile(intent.shopProfileId);
+      if (cancelled) return;
+      if (!shop) {
+        // Advertiser's profile has gone — hand off to the public shop page,
+        // which owns the "this shop couldn't be found" message, rather than
+        // opening a funnel aimed at nobody.
+        navigate(`/discover/${intent.shopProfileId}`);
+        return;
+      }
+      // Replaces (not merges into) any half-finished inquiry: this is a new
+      // request aimed at the advertiser, so nothing earlier should leak in.
+      setPendingInquiry({
+        items: [],
+        targetedShop: {
+          id: shop.id,
+          sellerId: shop.sellerId,
+          name: shop.name,
+          categoryIds: shop.categoryIds ?? [],
+          city: shop.city ?? undefined,
+          province: shop.province ?? undefined,
+          location: shop.location,
+        },
+        ...(intent.adId ? { adSource: { id: intent.adId, title: intent.adTitle } } : {}),
+      });
+      handleTabChange('process-selection');
+    };
+
+    void consume();
+    const onIntent = () => void consume();
+    window.addEventListener(AD_INQUIRY_INTENT_EVENT, onIntent);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(AD_INQUIRY_INTENT_EVENT, onIntent);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.role]);
 
   const handleAction = async (actionId: string, payload?: any) => {
     switch (actionId) {
@@ -1015,7 +1087,20 @@ export default function BuyerDashboard() {
         city: locationData.city,
         status: 'OPEN',
         preferences: JSON.stringify(preferencesWithPayment),
-        attributes: JSON.stringify(pendingInquiry.attributes || {}),
+        // Ad attribution lives INSIDE attributes on purpose — a new top-level
+        // key would be stripped by the backend's whitelisting ValidationPipe.
+        // Same keys PublicShopProfile writes, so sellers read one shape.
+        attributes: JSON.stringify({
+          ...(pendingInquiry.attributes || {}),
+          ...(pendingInquiry.adSource
+            ? {
+                sourceAdId: pendingInquiry.adSource.id,
+                ...(pendingInquiry.adSource.title
+                  ? { sourceAdTitle: pendingInquiry.adSource.title }
+                  : {}),
+              }
+            : {}),
+        }),
         processType: pendingInquiry.processType || 'STANDARD',
         ...(hasCoords && {
           latitude: locationData.latitude,
@@ -1148,7 +1233,11 @@ export default function BuyerDashboard() {
         })();
         return (
           <BuyerCategoryPicker
-            onBack={() => handleTabChange('dashboard')}
+            // A targeted entry reached the picker THROUGH process-selection —
+            // back goes to the path choice, not out of the funnel.
+            onBack={() =>
+              handleTabChange(pendingInquiry.processType ? 'process-selection' : 'dashboard')
+            }
             onComplete={handleInquiryComplete}
             preselectedParentId={shopParentId}
           />
@@ -1203,7 +1292,15 @@ export default function BuyerDashboard() {
                 // Labour trades continue into the job-post flow (details →
                 // location → submit for admin review); everything else —
                 // including machinery-hire — keeps the inquiry funnel.
-                handleTabChange(isJobPostingFlow ? 'job-posting-details' : 'process-selection');
+                // A targeted entry already chose its path on the way in, so
+                // don't ask twice.
+                handleTabChange(
+                  isJobPostingFlow
+                    ? 'job-posting-details'
+                    : pendingInquiry.processType
+                      ? 'inquiry-preferences'
+                      : 'process-selection'
+                );
               }}
               onBack={() => handleTabChange('category-selection')}
             />
@@ -1230,9 +1327,11 @@ export default function BuyerDashboard() {
                 ...prev,
                 processType: processType.toUpperCase() as 'EXPRESS' | 'STANDARD',
               }));
-              handleTabChange('inquiry-preferences');
+              // Targeted entry (advert / shop card) lands here FIRST — what
+              // they're buying still has to be picked before preferences.
+              handleTabChange(hasChosenCategory ? 'inquiry-preferences' : 'category-selection');
             }}
-            onBack={() => handleTabChange('create-inquiry')}
+            onBack={() => handleTabChange(hasChosenCategory ? 'create-inquiry' : 'dashboard')}
           />
         );
       case 'inquiry-preferences':
@@ -1240,7 +1339,11 @@ export default function BuyerDashboard() {
           <InquiryPreferences
             categoryType={categoryType as any}
             categoryKey={pendingInquiry.categories?.[0]}
-            onBack={() => handleTabChange('process-selection')}
+            // Mirrors the two funnel orders: targeted came via the form,
+            // untargeted via the path choice.
+            onBack={() =>
+              handleTabChange(pendingInquiry.targetedShop ? 'create-inquiry' : 'process-selection')
+            }
             onNext={(prefs) => {
               const shop = pendingInquiry.targetedShop;
               const isThisShopOnly = !!shop && prefs.targetOption === 'this_shop';
