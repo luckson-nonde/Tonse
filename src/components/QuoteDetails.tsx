@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { createOrder } from '../services/api/orderService';
+import {
+  beginHostedPayment,
+  paymentsService,
+} from '../services/api/paymentsService';
 import { financingService } from '../services/api/financingService';
 import { isFinancingActive } from '../services/lifecycleFilters';
 import { motion, AnimatePresence } from 'motion/react';
@@ -36,15 +39,19 @@ import QuoteInvoice from '../components/QuoteInvoice';
 import { db } from '../services/api/database';
 
 import PaymentSheet from './PaymentSheet';
+import PushPaymentWait from './PushPaymentWait';
 import PortfolioShowcase from './PortfolioShowcase';
 
 /**
- * Thin wrapper around the shared {@link PaymentSheet} component. Owns
- * only the side-effects specific to paying for a quote: simulate the
- * gateway round-trip, create the Order row, mark the quote + inquiry
- * PAID, and bubble success up to the parent. The Wallet method
- * redirects to /buyer/financial with the quote in location.state so
- * the buyer reviews their balance + the basket before debiting.
+ * Thin wrapper around the shared {@link PaymentSheet} component. Runs the
+ * REAL escrow checkout: POST /payments/checkout starts a verified PSP
+ * collection (the amount is read from the quote server-side), and the Order,
+ * the quote's PAID status and the collection code are all created by the
+ * backend only after the provider confirms the money. Mobile money on live
+ * DPO is an in-app push approved on the payer's handset; card goes to the
+ * provider's hosted page; sandbox keeps its simulate button. The old Wallet
+ * method is gone — it debited a simulated balance while creating a real
+ * order, which is exactly the bypass the server now rejects.
  */
 function PaymentModal({
   quote,
@@ -58,49 +65,110 @@ function PaymentModal({
   const { user } = useAuth();
   const navigate = useNavigate();
   const total = quote.price;
+  const [pending, setPending] = useState<{
+    reference: string;
+    provider?: string;
+    instruction?: string;
+  } | null>(null);
+  const [simulating, setSimulating] = useState(false);
+  const [pendingError, setPendingError] = useState('');
 
-  const handlePaymentSubmit = async () => {
+  const handlePaymentSubmit = async (payload: {
+    amount: number;
+    method: string;
+    provider?: string;
+    phone?: string;
+  }) => {
     if (!user?.id) throw new Error('You must be signed in to pay.');
-    // Gateway integration is intentionally deferred. Simulate the USSD
-    // round-trip so the spinner button feels real.
-    await new Promise((resolve) => setTimeout(resolve, 1800));
-
-    // Create the Order row so the item lands in Order History.
-    if (typeof quote.id === 'string' && quote.providerId) {
-      try {
-        await createOrder({
-          quoteId: String(quote.id),
-          buyerId: user.id,
-          sellerId: String(quote.providerId),
-          totalAmount: total,
-        });
-      } catch (e) {
-        console.warn('Order row create failed (payment already taken):', e);
-      }
+    const result = await paymentsService.checkoutQuote(String(quote.id), {
+      channel: payload.method === 'card' ? 'card' : 'mobile-money',
+      phone: payload.phone,
+      operator: payload.provider,
+    });
+    if (!result?.reference || result.status === 'failed') {
+      throw new Error('Payment could not be started. Please try again.');
     }
-
-    // Inquiry status sync (the buyer owns the inquiry, so this is
-    // allowed). Quote status updates are intentionally NOT made here:
-    // the backend authorizes PATCH /quotes/:id to the seller only
-    // ("You can only update your own quotes"), and the cascade from
-    // order → quote PAID is a backend concern. Calling it from the
-    // buyer side reliably 403s and pollutes the console.
-    // Inquiry status enum on the backend is ['OPEN', 'QUOTED', 'CLOSED'] —
-    // 'PAID' isn't a valid value (that lives on the quote / order, not
-    // the inquiry). Mark the inquiry CLOSED so it stops accepting new
-    // quotes and disappears from the buyer's open-inquiry views.
-    if (quote.inquiryId) {
-      try {
-        const { updateInquiryStatus } = await import('../services/api/inquiryService');
-        await updateInquiryStatus(String(quote.inquiryId), 'CLOSED');
-      } catch (e) {
-        console.warn('Inquiry status sync failed (payment + order succeeded):', e);
-      }
-    }
-
-    onSuccess();
-    onClose();
+    // Live card (and any mobile fallback): pay on the provider's own page.
+    if (beginHostedPayment(result, { label: `Payment to ${quote.providerName || 'provider'}` })) return;
+    // In-app: mobile push (dpo) or sandbox pending — swap the sheet for the wait card.
+    setPending({
+      reference: result.reference,
+      provider: result.provider,
+      instruction: result.instruction,
+    });
   };
+
+  const handleSimulateApproval = async () => {
+    if (!pending) return;
+    setSimulating(true);
+    try {
+      await paymentsService.simulateCheckout(pending.reference, 'successful');
+      onSuccess();
+      onClose();
+    } catch (e: any) {
+      setPendingError(e?.message || 'Could not confirm the payment. Please try again.');
+    } finally {
+      setSimulating(false);
+    }
+  };
+
+  if (pending) {
+    return (
+      <div className="fixed inset-0 z-[300] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-3">
+          {pending.provider === 'dpo' ? (
+            <PushPaymentWait
+              reference={pending.reference}
+              amountLabel={`ZMW ${total.toLocaleString()}`}
+              instruction={pending.instruction}
+              onDone={(status) => {
+                setPending(null);
+                if (status === 'SUCCESSFUL') {
+                  onSuccess();
+                  onClose();
+                } else {
+                  setPendingError('The payment was not completed. You can try again.');
+                }
+              }}
+              onCancel={onClose}
+            />
+          ) : (
+            <div className="rounded-2xl border border-[#e2e8f0] bg-white p-5 space-y-4">
+              <p className="text-sm font-black text-[#1a1a2e]">Awaiting approval</p>
+              <p className="text-[12px] text-slate-500 leading-relaxed">
+                In production you'd approve this on your phone. This environment runs on the
+                sandbox payment provider, so use the button below to simulate that approval.
+              </p>
+              <p className="text-[11px] text-slate-400">{pending.reference}</p>
+              {pendingError && (
+                <p className="text-[12px] font-bold text-rose-600">{pendingError}</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-500 text-[12px] font-bold hover:bg-slate-50"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  disabled={simulating}
+                  onClick={() => void handleSimulateApproval()}
+                  className="flex-1 py-3 rounded-xl bg-[#C9973A] hover:bg-[#b8852f] text-white text-[12px] font-bold disabled:opacity-60"
+                >
+                  {simulating ? 'Confirming…' : 'Simulate approval (sandbox)'}
+                </button>
+              </div>
+            </div>
+          )}
+          {pendingError && pending.provider === 'dpo' && (
+            <p className="text-center text-[12px] font-bold text-rose-200">{pendingError}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <PaymentSheet
@@ -112,14 +180,8 @@ function PaymentModal({
       amountMode="fixed"
       fixedAmount={total}
       defaultPhone={(user as any)?.phone || ''}
-      methods={['wallet', 'mobile_money', 'card', 'lending']}
+      methods={['mobile_money', 'card', 'lending']}
       defaultMethod="mobile_money"
-      onWalletSelected={() => {
-        // Wallet payments go through /buyer/financial so the buyer
-        // reviews their balance + the basket before the debit.
-        onClose();
-        navigate('/buyer/financial', { state: { payQuote: quote } });
-      }}
       onLendingSelected={() => {
         // "Pay via lending institution" (government workers): route to the
         // financing-request flow, which opens a salary-backed loan request
@@ -1073,11 +1135,11 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
                 </div>
               ) : (
                 <Button
-                  onClick={() =>
-                    quote.processType === 'EXPRESS'
-                      ? setShowPayModal(true)
-                      : onAction('generate_po', quote)
-                  }
+                  // Both process types now END in the same real payment — the
+                  // Order (the "PO") is minted by the backend only after the
+                  // PSP verifies the money, so "Generate PO" opens the pay
+                  // sheet rather than writing an unpaid order.
+                  onClick={() => setShowPayModal(true)}
                   className={`w-full py-4 ${
                     quote.processType === 'EXPRESS'
                       ? 'bg-[#C9973A] hover:bg-[#b08432]'

@@ -94,7 +94,46 @@ export function clearHostedPaymentHandoff(): void {
   }
 }
 
+/** Result of starting a quote checkout — the standard initiate shape. */
+export interface QuoteCheckoutResult {
+  reference: string;
+  status: 'pending' | 'successful' | 'failed' | 'pay-offline' | string;
+  amount: string;
+  fee?: string;
+  totalCharged?: string;
+  /** Which adapter answered ('sandbox' | 'dpo') — picks the pending UI:
+   *  simulate button vs the approve-on-phone polling card. */
+  provider?: string;
+  instruction?: string;
+  redirectUrl?: string;
+}
+
 export const paymentsService = {
+  /**
+   * Buyer pays a quote — funds ESCROW on verified success (the server creates
+   * the Order, flips the quote to PAID and mints the collection code; the
+   * amount is read from the quote server-side, never from here).
+   */
+  async checkoutQuote(
+    quoteId: string,
+    dto: { channel?: 'mobile-money' | 'card'; phone?: string; operator?: string },
+  ): Promise<QuoteCheckoutResult> {
+    const res = await apiClient.post('/payments/checkout', { quoteId, ...dto });
+    return payload<QuoteCheckoutResult>(res, {} as QuoteCheckoutResult);
+  },
+
+  /** Sandbox-only: stand in for the payer approving on their phone. */
+  async simulateCheckout(
+    reference: string,
+    outcome: 'successful' | 'failed' = 'successful',
+  ): Promise<{ handled: boolean }> {
+    const res = await apiClient.post(
+      `/payments/checkout/${encodeURIComponent(reference)}/simulate`,
+      { outcome },
+    );
+    return payload(res, { handled: false });
+  },
+
   /**
    * Ask the server to re-check this payment with the provider and settle it if
    * it really was paid. Safe to call repeatedly and safe to race the provider's

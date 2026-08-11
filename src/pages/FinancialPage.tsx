@@ -25,7 +25,6 @@ import Button from '../components/Button';
 import { generateVirtualAccount, formatCurrency } from '../utils/financeUtils';
 import ReadingOwl from '../assets/images/empty-states/owl_reading.webp';
 import TriumphantOwl from '../assets/images/empty-states/owl_triumphant.webp';
-import { createOrder } from '../services/api/orderService';
 import PaymentSheet from '../components/PaymentSheet';
 
 interface FinancialPageProps {
@@ -137,46 +136,18 @@ export default function FinancialPage({ isInsideDashboard = false }: FinancialPa
     }
   };
 
-  // Confirm a pending wallet payment that arrived via location.state
-  // (set by QuoteDetails' PaymentModal when the buyer picked Wallet).
-  // Wallet ledger debit is intentionally simulated rather than POSTed —
-  // the user is iterating on UX, not gateway integration. The order +
-  // status sync calls hit the real backend so downstream views (Order
-  // History / provider dashboard) reflect the booking.
+  // Wallet-pay-for-quote is RETIRED. The wallet balance here is simulated,
+  // and its old confirm handler created a REAL order via POST /orders — a
+  // payment bypass the server now rejects (orders are minted only by the
+  // verified PSP checkout). QuoteDetails no longer offers Wallet; anything
+  // stale that still lands here with a payQuote is pointed back at the
+  // quote's real pay sheet.
   const handleConfirmWalletPayment = async () => {
-    if (!pendingQuote || !user?.id) return;
-    const total = Number(pendingQuote.price || 0);
-    if (availableBalance < total) {
-      // Balance dropped between mount and confirm (rare but possible if
-      // the user topped up elsewhere). Surface it instead of silently
-      // failing the sync calls.
-      return;
-    }
-    setIsConfirmingPayment(true);
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-    try {
-      if (typeof pendingQuote.id === 'string' && pendingQuote.providerId) {
-        // createOrder is server-authoritative: it moves the quote to PAID and
-        // the inquiry to CLOSED inside one transaction. The client no longer
-        // pushes those statuses itself — PAID is a money status and is now
-        // server-written only (a client could otherwise mint escrow). The old
-        // updateInquiryStatus(...,'PAID') call was also invalid: the inquiry
-        // enum is OPEN|QUOTED|CLOSED, so it always failed.
-        await createOrder({
-          quoteId: String(pendingQuote.id),
-          buyerId: user.id,
-          sellerId: String(pendingQuote.providerId),
-          totalAmount: total,
-        });
-      }
-    } catch (e) {
-      console.warn('Wallet payment status sync failed:', e);
-    }
-    setIsConfirmingPayment(false);
-    setPaymentDone(true);
-    // Wipe location.state so a refresh / back-nav doesn't keep showing
-    // the basket card. The success state stays visible in-page until
-    // the user dismisses or navigates away.
+    if (!pendingQuote) return;
+    alert(
+      'Wallet payment for quotes has been replaced by Mobile Money / Card — open the quote and use Pay to complete your purchase.',
+    );
+    setPendingQuote(null);
     navigate('.', { replace: true, state: {} });
   };
 

@@ -761,7 +761,19 @@ export class CheckoutService {
         } as any),
       );
 
-      await m.getRepository(Quote).update(quote.id, { status: 'PAID' });
+      // The collection code is what the seller's handover flow looks up
+      // (CollectionService finds the quote BY this code), so a paid quote
+      // without one can never be collected. Same shape direct-order uses;
+      // 4 random bytes collide rarely, but retry because a duplicate would
+      // make CollectionService resolve someone else's deal.
+      let collectionCode = quote.collectionCode;
+      if (!collectionCode) {
+        do {
+          collectionCode = `PQ-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+        } while (await m.getRepository(Quote).countBy({ collectionCode }));
+      }
+
+      await m.getRepository(Quote).update(quote.id, { status: 'PAID', collectionCode });
       if (quote.inquiryId) {
         await m.getRepository(Inquiry).update(quote.inquiryId, { status: 'CLOSED' });
       }

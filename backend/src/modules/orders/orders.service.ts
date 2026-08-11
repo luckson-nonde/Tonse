@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Order } from './entities/order.entity';
@@ -47,6 +47,25 @@ export class OrdersService {
   }
 
   async create(createOrderDto: CreateOrderDto): Promise<Order> {
+    // PAYMENT BYPASS GUARD. This endpoint used to be the de-facto "convert
+    // quote to order" for the buyer UIs, which meant any client could flip a
+    // quote to PAID — a money status — without a single ngwee moving. Paid
+    // orders are now created ONLY by CheckoutService.fundEscrow after the PSP
+    // verifies the payment. What legitimately remains here: zero-priced deals
+    // and LOAN offers (a loan acceptance has no buyer-pays step — the money
+    // flows lender→escrow later through the disbursement checkout).
+    if (createOrderDto.quoteId && Number(createOrderDto.totalAmount) > 0) {
+      const quote = await this.dataSource.getRepository(Quote).findOne({
+        where: { id: createOrderDto.quoteId },
+        select: ['id', 'condition'],
+      });
+      if (quote && quote.condition !== 'LOAN') {
+        throw new ForbiddenException(
+          'Paid orders are created by the payment flow — pay the quote to generate its order.',
+        );
+      }
+    }
+
     const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substring(7).toUpperCase()}`;
 
     // The order is the moment of payment in this app's lifecycle:
