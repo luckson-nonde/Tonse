@@ -50,7 +50,7 @@ export default function TopCategoryRow({
           name + count in a pill. Clicking one swaps the section below for
           that category's product grid — the pill is the CONTROL, the grid is
           the display. Horizontal snap-scroll on phones, wrapping from sm up. */}
-      <div className="flex gap-2.5 overflow-x-auto snap-x scrollbar-hide sm:flex-wrap sm:overflow-visible -mx-1 px-1 pb-1">
+      <div className="flex gap-3 overflow-x-auto snap-x scrollbar-hide sm:flex-wrap sm:overflow-visible -mx-1 px-1 pb-1">
         {categories.map((category, i) => {
           // Photo resolution: dropped local artwork first, then the catalog's
           // own image URL — every button gets a real photo; the icon chip is
@@ -76,13 +76,15 @@ export default function TopCategoryRow({
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, delay: Math.min(i * 0.04, 0.3) }}
-              className={`snap-start shrink-0 inline-flex items-center gap-2.5 pl-1.5 pr-4 py-1.5 rounded-full border text-left transition-all duration-150 hover:shadow-[0_8px_18px_-8px_rgba(20,37,80,0.2)] ${
+              className={`snap-start shrink-0 inline-flex items-center gap-3 pl-2 pr-5 py-2 rounded-full border text-left transition-all duration-150 hover:shadow-[0_8px_18px_-8px_rgba(20,37,80,0.2)] ${
                 isActive
                   ? 'border-[#c9973a] bg-[#fdf6e9] shadow-[0_6px_16px_-8px_rgba(201,151,58,0.55)]'
                   : 'border-[#e7e0d5] bg-[#fffaf5] hover:border-[#e9d2aa]'
               }`}
             >
-              <span className="w-9 h-9 rounded-full overflow-hidden bg-[#f1ece1] flex items-center justify-center shrink-0">
+              {/* Thumbnail sized so the category photo actually reads as a
+                  photo, not a dot — the pill shape is unchanged. */}
+              <span className="w-14 h-14 rounded-full overflow-hidden bg-[#f1ece1] flex items-center justify-center shrink-0">
                 {art ? (
                   <img
                     src={art}
@@ -92,15 +94,15 @@ export default function TopCategoryRow({
                   />
                 ) : (
                   <span style={{ color: meta.accent }}>
-                    <Icon className="w-4 h-4" />
+                    <Icon className="w-6 h-6" />
                   </span>
                 )}
               </span>
               <span className="min-w-0">
-                <p className="text-[12px] font-semibold text-[#1B3068] leading-tight whitespace-nowrap">
+                <p className="text-[14px] font-semibold text-[#1B3068] leading-tight whitespace-nowrap">
                   {category.name}
                 </p>
-                <p className="text-[10.5px] text-[#8a8577] leading-tight whitespace-nowrap">{caption}</p>
+                <p className="text-[12px] text-[#8a8577] leading-tight whitespace-nowrap mt-0.5">{caption}</p>
               </span>
             </motion.button>
           );
