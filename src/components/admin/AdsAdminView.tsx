@@ -15,7 +15,7 @@ import {
   AdAdminPlacementLocation,
 } from '../../services/api/adminService';
 import { adMediaUrl } from '../../services/api/adsService';
-import { StatTile } from './DashboardPrimitives';
+import { StatTile, Switch } from './DashboardPrimitives';
 
 const CARD =
   'bg-white border border-slate-100 rounded-2xl p-5 sm:p-6 shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)]';
@@ -24,6 +24,7 @@ const PLACEMENT_LABEL: Record<AdAdminPlacementLocation, string> = {
   HOMEPAGE_CENTER: 'Homepage Center',
   SECONDARY_SIDEBAR: 'Secondary Sidebar',
   CATEGORY_SIDEBAR: 'Category Sidebar',
+  POPUP: 'Spotlight Pop-up',
 };
 
 const placementList = (ad: AdminAdvertisement) =>
@@ -248,6 +249,93 @@ export default function AdsAdminView() {
               </button>
             </div>
           ))}
+        </div>
+
+        {/* ── Spotlight pop-ups: the premium, interrupting product ── */}
+        <div className="mt-6 pt-5 border-t border-slate-100">
+          <div className="flex items-start justify-between gap-4 mb-1">
+            <div className="min-w-0">
+              <h3 className="text-[12px] font-black uppercase tracking-widest text-[#1a1a2e]">
+                Spotlight pop-ups
+              </h3>
+              <p className="text-[12px] text-slate-500 mt-1 leading-relaxed">
+                A card that opens over a buyer's screen the moment they say what they're shopping
+                for. Priced on its own because it interrupts — and rationed below so it never
+                becomes a nuisance. Turning this off stops new bookings AND stops any running
+                pop-up being shown.
+              </p>
+            </div>
+            <div className="shrink-0 pt-1">
+              <Switch
+                checked={draft.popupEnabled !== false}
+                onChange={() =>
+                  setDraft((d) => (d ? { ...d, popupEnabled: !(d.popupEnabled !== false) } : d))
+                }
+                title="Toggle Spotlight pop-up ads"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+              ZMW per day
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <span className="text-[#C9973A] font-black text-[13px]">K</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={draft.popupRatePerDay ?? 0}
+                  onChange={(e) =>
+                    setDraft((d) =>
+                      d ? { ...d, popupRatePerDay: Math.max(0, Number(e.target.value) || 0) } : d,
+                    )
+                  }
+                  className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-[13px] font-bold text-[#1a1a2e] tracking-normal focus:outline-none focus:border-[#C9973A]"
+                />
+              </div>
+              <span className="block mt-1 text-[10px] font-medium normal-case tracking-normal text-slate-400">
+                What a seller pays per day of Spotlight.
+              </span>
+            </label>
+
+            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+              Max per viewer
+              <input
+                type="number"
+                min={1}
+                value={draft.popupMaxPerSession ?? 1}
+                onChange={(e) =>
+                  setDraft((d) =>
+                    d ? { ...d, popupMaxPerSession: Math.max(1, Number(e.target.value) || 1) } : d,
+                  )
+                }
+                className="mt-1.5 w-full px-3 py-2.5 rounded-lg border border-slate-200 text-[13px] font-bold text-[#1a1a2e] tracking-normal focus:outline-none focus:border-[#C9973A]"
+              />
+              <span className="block mt-1 text-[10px] font-medium normal-case tracking-normal text-slate-400">
+                Most pop-ups one person sees inside the window.
+              </span>
+            </label>
+
+            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+              Window (minutes)
+              <input
+                type="number"
+                min={1}
+                value={draft.popupMinMinutesBetween ?? 360}
+                onChange={(e) =>
+                  setDraft((d) =>
+                    d
+                      ? { ...d, popupMinMinutesBetween: Math.max(1, Number(e.target.value) || 1) }
+                      : d,
+                  )
+                }
+                className="mt-1.5 w-full px-3 py-2.5 rounded-lg border border-slate-200 text-[13px] font-bold text-[#1a1a2e] tracking-normal focus:outline-none focus:border-[#C9973A]"
+              />
+              <span className="block mt-1 text-[10px] font-medium normal-case tracking-normal text-slate-400">
+                360 ≈ once a session. Counted per person, enforced server-side.
+              </span>
+            </label>
+          </div>
         </div>
 
         <div className="mt-5 flex items-center gap-3">

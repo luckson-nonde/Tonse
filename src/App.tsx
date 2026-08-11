@@ -12,6 +12,7 @@ import { CategoryAvailabilityProvider } from './services/categories/availability
 import { ErrorBoundary } from './components/ErrorBoundary';
 import PageTransition from './components/PageTransition';
 import FloatingHub from './components/FloatingHub';
+import SpotlightAd from './components/ads/SpotlightAd';
 import InstallAppBanner from './components/InstallAppBanner';
 import OfflineBanner from './components/OfflineBanner';
 import Login from './pages/Login';
@@ -565,6 +566,10 @@ export default function App() {
                 only ever appears once signed in and minimized. */}
             <InstallAppBanner />
             <FloatingHub />
+            {/* Paid pop-up advert. Self-gating and silent by default: it only
+                ever appears in response to a shopping-intent event, and only
+                when the server says this viewer is due one. */}
+            <SpotlightAd />
           </Router>
           </BackgroundModeProvider>
           </MotionConfig>

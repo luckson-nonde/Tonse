@@ -13,11 +13,13 @@ import {
   Check,
   Store,
   AlertTriangle,
+  Megaphone,
 } from 'lucide-react';
 import emptyStateImage from '../../assets/images/empty-states/owl_reading.webp';
 import { formatCurrency } from '../../utils/financeUtils';
 import { compressImage } from '../../utils/compressImage';
 import { CATEGORIES_DB } from '../../services/categories';
+import { masterCategoriesFor } from '../../services/categories/masterOf';
 import { useAuth } from '../../AuthContext';
 import { apiClient, API_BASE_URL } from '../../services/api/client';
 import { ventureService } from '../../services/api/ventureService';
@@ -43,12 +45,15 @@ const PLACEMENT_LABEL: Record<AdPlacementLocation, string> = {
   HOMEPAGE_CENTER: 'Homepage Center Banner',
   SECONDARY_SIDEBAR: 'Secondary Page Sidebar',
   CATEGORY_SIDEBAR: 'Category Page Sidebar',
+  POPUP: 'Spotlight Pop-up',
 };
 
 const PLACEMENT_HELP: Record<AdPlacementLocation, string> = {
   HOMEPAGE_CENTER: 'The wide banner on the buyer home screen, under the main call to action.',
   SECONDARY_SIDEBAR: 'The right-hand panel on inquiries, quotes and order pages.',
   CATEGORY_SIDEBAR: 'Beside the subcategory list while a buyer is choosing what to request.',
+  POPUP:
+    'A full-attention card that opens over the screen the moment a buyer says what they are shopping for.',
 };
 
 /** Master categories a category-rail ad can target — the same list the buyer
@@ -60,19 +65,11 @@ const MASTER_CATEGORIES = CATEGORIES_DB.filter((c) => c.parentId === null);
  * ids chosen at onboarding. Each id is walked up its parent chain because a
  * seller's selection is usually a SUBcategory ('mobile-phones-sell'), while
  * the ad rail is keyed on the master ('electronics').
+ *
+ * The walk itself now lives in services/categories/masterOf so the Spotlight
+ * trigger resolves a shopper's category the SAME way targeting stores it.
  */
-function sellerMasterCategories(categoryIds: string[] | undefined): string[] {
-  const out: string[] = [];
-  for (const id of categoryIds ?? []) {
-    let node = CATEGORIES_DB.find((c) => c.id === id);
-    while (node?.parentId) {
-      const parentId: string = node.parentId;
-      node = CATEGORIES_DB.find((c) => c.id === parentId);
-    }
-    if (node && !out.includes(node.id)) out.push(node.id);
-  }
-  return out;
-}
+const sellerMasterCategories = masterCategoriesFor;
 
 const todayISO = () => {
   const d = new Date();
@@ -274,6 +271,16 @@ export default function AdsManagerView() {
     );
   };
 
+  /** Spotlight is a separate product at its own daily rate, so it is booked
+   *  ALONE — the server rejects a mix, and an ad row can only carry one
+   *  price. Switching mode therefore replaces the selection rather than
+   *  adding to it. */
+  const isPopupMode = placements.includes('POPUP');
+  const setPopupMode = (on: boolean) => {
+    setFieldErrors((e) => ({ ...e, placements: '' }));
+    setPlacements(on ? ['POPUP'] : ['HOMEPAGE_CENTER']);
+  };
+
   const handleFileChange = async (file: File | null) => {
     if (!file) return;
     setFormError('');
@@ -315,7 +322,7 @@ export default function AdsManagerView() {
   const unpaidAds = myAds.filter((a) => (a.effectiveStatus ?? a.status) === 'PENDING_PAYMENT');
 
   const durationDays = countAdDays(startDate, endDate);
-  const price = rates ? calculateAdPrice(durationDays, rates) : 0;
+  const price = rates ? calculateAdPrice(durationDays, rates, placements) : 0;
 
   const handleCreate = async () => {
     setFormError('');
@@ -610,8 +617,58 @@ export default function AdsManagerView() {
             )}
           </div>
 
-          {/* Placements — multi-select. Cost doesn't change with how many are
-              picked, so there's deliberately no per-tile price. */}
+          {/* Ad TYPE. Two products: on-page placements (one shared price,
+              tick as many as you like) and the Spotlight pop-up (its own,
+              higher daily rate — so it's booked on its own). */}
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+              What kind of ad?
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => setPopupMode(false)}
+                aria-pressed={!isPopupMode}
+                className={`p-3.5 rounded-xl border text-left transition-all ${
+                  !isPopupMode ? 'border-[#C9973A] bg-[#fdf6e9]' : 'border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span className="block text-[11px] font-black text-slate-900">On the page</span>
+                <span className="block text-[10px] text-slate-400 mt-0.5 leading-snug">
+                  Banners and sidebars while buyers browse.
+                  {rates ? ` K${rates.baseRatePerDay}/day` : ''}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPopupMode(true)}
+                aria-pressed={isPopupMode}
+                disabled={rates ? rates.popupEnabled === false : false}
+                className={`p-3.5 rounded-xl border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                  isPopupMode ? 'border-[#C9973A] bg-[#fdf6e9]' : 'border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span className="block text-[11px] font-black text-slate-900">
+                  Spotlight pop-up
+                </span>
+                <span className="block text-[10px] text-slate-400 mt-0.5 leading-snug">
+                  Opens over the screen the moment someone shops your category.
+                  {rates?.popupRatePerDay ? ` K${rates.popupRatePerDay}/day` : ''}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {isPopupMode ? (
+            <div className="flex items-start gap-2.5 rounded-xl bg-[#fdf6e9] border border-[#f0dfc0] px-3.5 py-3">
+              <Megaphone className="w-4 h-4 text-[#C9973A] shrink-0 mt-0.5" />
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Shown <span className="font-bold text-slate-700">one buyer at a time</span>, and
+                strictly rationed so it never becomes a nuisance — every advertiser gets an equal
+                turn. Pick the category below to reach the buyers already shopping for it.
+              </p>
+            </div>
+          ) : (
           <div>
             <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-1">
               Where should it appear?
@@ -653,9 +710,12 @@ export default function AdsManagerView() {
             </div>
             <FieldNote error={fieldErrors.placements} />
           </div>
+          )}
 
-          {/* Category targeting — only meaningful when the category rail is on */}
-          {placements.includes('CATEGORY_SIDEBAR') && (
+          {/* Category targeting — the category rail needs it to know which
+              rail to sit in; a Spotlight uses it to reach buyers already
+              shopping that category (untargeted still shows everywhere). */}
+          {(placements.includes('CATEGORY_SIDEBAR') || isPopupMode) && (
             <label className="block text-[11px] font-bold uppercase tracking-widest text-slate-400">
               Target category
               <select

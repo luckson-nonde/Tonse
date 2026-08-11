@@ -21,13 +21,25 @@ function payload<T>(res: any, fallback: T): T {
  */
 export const adMediaUrl = uploadUrl;
 
-export type AdPlacementLocation = 'HOMEPAGE_CENTER' | 'SECONDARY_SIDEBAR' | 'CATEGORY_SIDEBAR';
+export type AdPlacementLocation =
+  | 'HOMEPAGE_CENTER'
+  | 'SECONDARY_SIDEBAR'
+  | 'CATEGORY_SIDEBAR'
+  | 'POPUP';
 
+/** On-page placements — the ones that share one price and can be combined. */
 export const AD_PLACEMENTS: AdPlacementLocation[] = [
   'HOMEPAGE_CENTER',
   'SECONDARY_SIDEBAR',
   'CATEGORY_SIDEBAR',
 ];
+
+/** The Spotlight pop-up is a separate product at its own daily rate, so it is
+ *  booked ALONE — the server rejects an ad that mixes it with the above. */
+export const POPUP_PLACEMENT: AdPlacementLocation = 'POPUP';
+
+export const isPopupPlacement = (placements: AdPlacementLocation[]): boolean =>
+  placements.includes('POPUP');
 export type AdMediaType = 'IMAGE' | 'VIDEO';
 export type AdStatus = 'PENDING_PAYMENT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
 export type EffectiveAdStatus = AdStatus | 'EXPIRED';
@@ -65,9 +77,16 @@ export interface AdDiscountTier {
 }
 
 export interface AdPricingRates {
-  /** ZMW per day, whatever the placement — price scales with days only. */
+  /** ZMW per day for any ON-PAGE placement — price scales with days only. */
   baseRatePerDay: number;
   discountTiers: AdDiscountTier[];
+  /** Whether the Spotlight pop-up product is on sale / being served at all. */
+  popupEnabled?: boolean;
+  /** ZMW per day for a Spotlight pop-up — the premium, interrupting product. */
+  popupRatePerDay?: number;
+  /** How many pop-ups one viewer may see inside popupMinMinutesBetween. */
+  popupMaxPerSession?: number;
+  popupMinMinutesBetween?: number;
 }
 
 /** Minimal public view of one ad — what the shop page shows a buyer who
@@ -110,14 +129,22 @@ export interface AdCheckoutResult {
 }
 
 /** Mirrors AdsService.priceFor so the create-ad form can show a live total
- *  before the server round-trip. Deliberately takes no placement argument —
- *  cost is a function of days alone. The server still recomputes. */
-export function calculateAdPrice(durationDays: number, rates: AdPricingRates): number {
+ *  before the server round-trip. Placement COUNT still doesn't matter, but
+ *  KIND does: a Spotlight pop-up bills at its own premium daily rate. The
+ *  server recomputes either way — this is only the preview. */
+export function calculateAdPrice(
+  durationDays: number,
+  rates: AdPricingRates,
+  placements: AdPlacementLocation[] = [],
+): number {
   const bestTier = [...rates.discountTiers]
     .filter((t) => durationDays >= t.minDays)
     .sort((a, b) => b.minDays - a.minDays)[0];
   const discount = bestTier ? bestTier.discountPercentage / 100 : 0;
-  return Math.round(Number(rates.baseRatePerDay) * durationDays * (1 - discount) * 100) / 100;
+  const ratePerDay = isPopupPlacement(placements)
+    ? Number(rates.popupRatePerDay ?? 0)
+    : Number(rates.baseRatePerDay);
+  return Math.round(ratePerDay * durationDays * (1 - discount) * 100) / 100;
 }
 
 /** Inclusive day count between two `yyyy-MM-dd` strings — the 10th to the
@@ -146,6 +173,34 @@ export const adsService = {
     if (categoryId) query.set('category', categoryId);
     const res = await apiClient.get(`/ads/active?${query.toString()}`);
     return payload<Advertisement[]>(res, []);
+  },
+
+  /**
+   * Public — the ONE Spotlight pop-up this viewer should see right now, or
+   * null when they've had their fill (server-side frequency cap) or nothing
+   * is running. `viewer` is the account id when signed in, otherwise the
+   * browser's anonymous key: guests are the audience, so they must be
+   * rationed too. Never throws — a pop-up is the least important thing on
+   * screen and must never surface an error to a shopper.
+   */
+  async getPopupAd(viewer: string, categoryId?: string): Promise<Advertisement | null> {
+    try {
+      const query = new URLSearchParams({ viewer });
+      if (categoryId) query.set('category', categoryId);
+      const res = await apiClient.get(`/ads/popup?${query.toString()}`);
+      return payload<{ ad: Advertisement | null }>(res, { ad: null }).ad ?? null;
+    } catch {
+      return null;
+    }
+  },
+
+  /** Attribution only — fire-and-forget, never blocks the click-through. */
+  async recordPopupClick(adId: string, viewer: string): Promise<void> {
+    try {
+      await apiClient.post(`/ads/popup/${encodeURIComponent(adId)}/click`, { viewer });
+    } catch {
+      // Losing one attribution row must never cost the buyer their click.
+    }
   },
 
   /** Public — the ad a buyer just clicked, so the shop page can name it. */

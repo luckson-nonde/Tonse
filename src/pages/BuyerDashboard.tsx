@@ -22,6 +22,8 @@ import { isLoanQuote } from '../utils/loan';
 import { isEventContext } from '../utils/events';
 import { getMyConsents } from '../services/api/consentService';
 import { takeAdInquiryIntent, AD_INQUIRY_INTENT_EVENT } from '../services/adInquiryIntent';
+import { emitShoppingIntent } from '../services/spotlightTrigger';
+import { masterCategoryOf } from '../services/categories/masterOf';
 import { fetchDiscoverShopProfile } from '../services/api/discoverService';
 import { formatRelativeTime } from '../utils/time';
 import { ViewType, MASTER_BUYER_ACCOUNT_SCHEMA } from '../services/buyerAccountSchema';
@@ -924,6 +926,18 @@ export default function BuyerDashboard() {
     const isJobPost =
       selectedCategories.isLabour === true && selectedCategories.labourGroup !== 'MACHINERY_HIRE';
     handleTabChange(isJobPost ? 'job-posting-details' : 'create-inquiry');
+
+    // The clearest "I'm looking for X" moment in the whole app — the one
+    // place a Spotlight advert is an offer rather than an interruption.
+    // Someone POSTING A JOB isn't shopping, so they're left alone.
+    if (!isJobPost) {
+      const picked = selectedCategories.isLabour
+        ? selectedCategories.categoryId
+        : Array.isArray(selectedCategories)
+          ? selectedCategories[0]
+          : undefined;
+      emitShoppingIntent({ categoryId: masterCategoryOf(picked) });
+    }
   };
 
   const handleLocationComplete = (locationData: any) => {

@@ -698,13 +698,25 @@ export interface AdminPlatformEarnings {
   streams: Array<{ code: string; name: string; balance: string }>;
 }
 
-export type AdAdminPlacementLocation = 'HOMEPAGE_CENTER' | 'SECONDARY_SIDEBAR' | 'CATEGORY_SIDEBAR';
+export type AdAdminPlacementLocation =
+  | 'HOMEPAGE_CENTER'
+  | 'SECONDARY_SIDEBAR'
+  | 'CATEGORY_SIDEBAR'
+  | 'POPUP';
 
-/** Ad pricing — ONE daily rate for every placement (cost scales with days,
- *  not with where the ad runs) plus duration discount tiers (Ads tab). */
+/** Ad pricing — ONE daily rate for every ON-PAGE placement (cost scales with
+ *  days, not with where the ad runs) plus duration discount tiers, and
+ *  separately the Spotlight pop-up: its own premium rate plus the rationing
+ *  knobs that keep it from becoming a nuisance (Ads tab). */
 export interface AdminAdPricing {
   baseRatePerDay: number;
   discountTiers: { minDays: number; discountPercentage: number }[];
+  /** Master switch — off stops new bookings AND serving. */
+  popupEnabled?: boolean;
+  popupRatePerDay?: number;
+  /** Most pop-ups one viewer may see inside popupMinMinutesBetween. */
+  popupMaxPerSession?: number;
+  popupMinMinutesBetween?: number;
 }
 
 export type UpdateAdPricingInput = Partial<AdminAdPricing>;

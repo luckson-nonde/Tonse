@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Megaphone } from 'lucide-react';
 import { adsService, adMediaUrl, Advertisement, AdPlacementLocation } from '../../services/api/adsService';
-import { saveAdInquiryIntent } from '../../services/adInquiryIntent';
+import { runAdClickThrough } from '../../services/adClickThrough';
 import { useAuth } from '../../AuthContext';
 
 const ROTATE_MS = 10000;
@@ -108,25 +108,7 @@ export default function AdCarousel({ placement, variant, categoryId, offset = 0,
    * are blocked out of /buyer/* anyway, so they keep the old destination —
    * the advertiser's public shop page, `?ad=` carrying the attribution.
    */
-  const handleAdClick = (ad: Advertisement) => {
-    if (!ad.shopProfileId) return;
-    const shopPage = `/discover/${ad.shopProfileId}?ad=${encodeURIComponent(ad.id)}`;
-
-    if (user && user.role !== 'BUYER') {
-      navigate(shopPage);
-      return;
-    }
-
-    saveAdInquiryIntent({ shopProfileId: ad.shopProfileId, adId: ad.id, adTitle: ad.title });
-
-    if (!user) {
-      // Sign in first — Login resumes the funnel for buyer accounts and
-      // falls back to the shop page for anything else.
-      navigate('/login', { state: { pendingAdTitle: ad.title } });
-      return;
-    }
-    navigate('/buyer/process-selection');
-  };
+  const handleAdClick = (ad: Advertisement) => runAdClickThrough(ad, user, navigate);
 
   const aspectClass = fill
     ? 'h-full min-h-60'
