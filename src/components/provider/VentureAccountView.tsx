@@ -5,12 +5,16 @@ import { formatCurrency } from '../../utils/financeUtils';
 import { ventureService, VentureJournalEntry } from '../../services/api/ventureService';
 import { beginHostedPayment } from '../../services/api/paymentsService';
 import PaymentSheet, { PaymentSheetSubmitPayload } from '../PaymentSheet';
+import PushPaymentWait from '../PushPaymentWait';
 import Button from '../Button';
 
 interface PendingDeposit {
   reference: string;
   status: string;
   amount: string;
+  /** 'dpo' → the approve-on-phone polling card; anything else → sandbox simulate. */
+  provider?: string;
+  instruction?: string;
 }
 
 /**
@@ -67,7 +71,13 @@ export default function VentureAccountView() {
     // Live (DPO): the money is taken on the provider's own page, so leave the
     // app. Sandbox returns no redirect and falls through to the pending card.
     if (beginHostedPayment(result, { label: 'Your deposit' })) return;
-    setPendingDeposit({ reference: result.reference, status: result.status, amount: result.amount });
+    setPendingDeposit({
+      reference: result.reference,
+      status: result.status,
+      amount: result.amount,
+      provider: result.provider,
+      instruction: result.instruction,
+    });
   };
 
   const handleSimulateApproval = async () => {
@@ -124,8 +134,22 @@ export default function VentureAccountView() {
         </div>
       </div>
 
-      {/* Awaiting approval — real pay-offline UX; sandbox stands in for the phone prompt */}
-      {pendingDeposit && (
+      {/* Awaiting approval. Live DPO push → approve-on-phone polling card;
+          sandbox stands in for the phone prompt with a simulate button. */}
+      {pendingDeposit?.provider === 'dpo' && (
+        <PushPaymentWait
+          reference={pendingDeposit.reference}
+          amountLabel={`ZMW ${formatCurrency(Number(pendingDeposit.amount))}`}
+          instruction={pendingDeposit.instruction}
+          onDone={(status) => {
+            setPendingDeposit(null);
+            if (status === 'SUCCESSFUL') void load();
+            else setError('The deposit was not completed. You can try again.');
+          }}
+          onCancel={() => setPendingDeposit(null)}
+        />
+      )}
+      {pendingDeposit && pendingDeposit.provider !== 'dpo' && (
         <div className="bg-amber-50 rounded-3xl p-6 border border-amber-200 space-y-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">

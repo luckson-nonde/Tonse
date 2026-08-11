@@ -30,6 +30,7 @@ import { ventureService } from '../services/api/ventureService';
 import { getBillingSettings } from '../services/api/billingService';
 import { beginHostedPayment } from '../services/api/paymentsService';
 import PaymentSheet, { type PaymentSheetSubmitPayload } from './PaymentSheet';
+import PushPaymentWait from './PushPaymentWait';
 import { LABOUR_CATEGORIES } from '../services/labourCategories';
 import { isPosterRebuiltAttributeKey } from '../services/labourFormSchema';
 import VacancyComposerForm, { type JobPostingDetails } from './buyer/VacancyComposerForm';
@@ -97,7 +98,12 @@ export default function JobPostsManagerView() {
 
   // ── Posting-fee payment step (ads pattern) ────────────────────────────
   const [payingPosting, setPayingPosting] = useState<JobPosting | MyJobPosting | null>(null);
-  const [pendingCheckout, setPendingCheckout] = useState<{ reference: string } | null>(null);
+  const [pendingCheckout, setPendingCheckout] = useState<{
+    reference: string;
+    /** 'dpo' → the approve-on-phone polling card; anything else → sandbox simulate. */
+    provider?: string;
+    instruction?: string;
+  } | null>(null);
   const [showPaymentSheet, setShowPaymentSheet] = useState(false);
   const [payingFromBalance, setPayingFromBalance] = useState(false);
   const [simulating, setSimulating] = useState(false);
@@ -314,7 +320,11 @@ export default function JobPostsManagerView() {
     // Live (DPO): the money is taken on the provider's own page, so leave the
     // app. Sandbox returns no redirect and falls through to the pending card.
     if (beginHostedPayment(result, { label: `Job post "${payingPosting.title}"` })) return;
-    setPendingCheckout({ reference: result.reference });
+    setPendingCheckout({
+      reference: result.reference,
+      provider: result.provider,
+      instruction: result.instruction,
+    });
   };
 
   const handleSimulateApproval = async () => {
@@ -368,7 +378,26 @@ export default function JobPostsManagerView() {
 
         {payError && <p className="text-[12px] font-bold text-rose-300">{payError}</p>}
 
-        {pendingCheckout ? (
+        {pendingCheckout?.provider === 'dpo' ? (
+          // Live in-app mobile money: DPO pushed the charge to the poster's
+          // handset — poll until they approve. No redirect, no simulate.
+          <PushPaymentWait
+            reference={pendingCheckout.reference}
+            amountLabel={`ZMW ${feeOf(payingPosting).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            instruction={pendingCheckout.instruction}
+            onDone={(status) => {
+              setPendingCheckout(null);
+              if (status === 'SUCCESSFUL') {
+                closePaymentStep();
+                setBanner('Payment received — your job post is now with our review team.');
+                void load();
+              } else {
+                setPayError('The payment was not completed. You can try again.');
+              }
+            }}
+            onCancel={() => setPendingCheckout(null)}
+          />
+        ) : pendingCheckout ? (
           <div className="bg-white/10 rounded-2xl p-5 border border-white/10 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-amber-400/20 flex items-center justify-center text-amber-300 shrink-0">

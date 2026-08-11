@@ -153,6 +153,9 @@ export interface JobPostCheckoutResult {
   amount: string;
   fee?: string;
   totalCharged?: string;
+  /** Which adapter answered ('sandbox' | 'dpo') — picks the pending UI:
+   *  simulate button vs the approve-on-phone polling card. */
+  provider?: string;
   instruction?: string;
   /** Present on live DPO — the hosted payment page to send the payer to. */
   redirectUrl?: string;

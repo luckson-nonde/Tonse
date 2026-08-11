@@ -36,6 +36,7 @@ import {
 import { beginHostedPayment } from '../../services/api/paymentsService';
 import DateTimePicker from '../DateTimePicker';
 import PaymentSheet, { PaymentSheetSubmitPayload } from '../PaymentSheet';
+import PushPaymentWait from '../PushPaymentWait';
 import Button from '../Button';
 
 const PLACEMENT_LABEL: Record<AdPlacementLocation, string> = {
@@ -132,6 +133,9 @@ interface PendingCheckout {
   reference: string;
   status: string;
   amount: string;
+  /** 'dpo' → the approve-on-phone polling card; anything else → sandbox simulate. */
+  provider?: string;
+  instruction?: string;
 }
 
 /** Human-readable placement list, plus the targeted category when the
@@ -383,7 +387,13 @@ export default function AdsManagerView() {
     // Live (DPO): the money is taken on the provider's own page, so leave the
     // app. Sandbox returns no redirect and falls through to the pending card.
     if (beginHostedPayment(result, { label: `Your ad "${payingAd.title}"` })) return;
-    setPendingCheckout({ reference: result.reference, status: result.status, amount: result.amount });
+    setPendingCheckout({
+      reference: result.reference,
+      status: result.status,
+      amount: result.amount,
+      provider: result.provider,
+      instruction: result.instruction,
+    });
   };
 
   const handleSimulateApproval = async () => {
@@ -452,7 +462,25 @@ export default function AdsManagerView() {
             Your ad goes to our review team once this is paid — until then it isn't submitted.
           </p>
 
-          {pendingCheckout ? (
+          {pendingCheckout?.provider === 'dpo' ? (
+            // Live in-app mobile money: DPO pushed the charge to the payer's
+            // handset — poll until they approve. No redirect, no simulate.
+            <PushPaymentWait
+              reference={pendingCheckout.reference}
+              amountLabel={`ZMW ${formatCurrency(Number(pendingCheckout.amount))}`}
+              instruction={pendingCheckout.instruction}
+              onDone={(status) => {
+                setPendingCheckout(null);
+                if (status === 'SUCCESSFUL') {
+                  setPayingAd(null);
+                  void load();
+                } else {
+                  setError('The payment was not completed. You can try again.');
+                }
+              }}
+              onCancel={() => setPendingCheckout(null)}
+            />
+          ) : pendingCheckout ? (
             <div className="bg-white/10 rounded-2xl p-5 border border-white/10 space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-amber-400/20 flex items-center justify-center text-amber-300 shrink-0">

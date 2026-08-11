@@ -83,6 +83,7 @@ export class CheckoutService {
     totalCharged: string;
     instruction?: string;
     redirectUrl?: string;
+    provider?: string;
   }> {
     const quote = await this.dataSource.getRepository(Quote).findOne({
       where: { id: dto.quoteId },
@@ -179,6 +180,9 @@ export class CheckoutService {
 
     return {
       reference,
+      // Which adapter answered — the frontend branches its pending UI on this
+      // (sandbox → simulate button, dpo → approve-on-phone polling card).
+      provider: this.provider.name,
       status: result.status,
       amount: fees.amount,
       fee: fees.fee,
@@ -207,6 +211,7 @@ export class CheckoutService {
     totalCharged: string;
     instruction?: string;
     redirectUrl?: string;
+    provider?: string;
   }> {
     const amountNgwee = toNgwee(dto.amount);
     if (amountNgwee <= 0) {
@@ -274,6 +279,9 @@ export class CheckoutService {
 
     return {
       reference,
+      // Which adapter answered — the frontend branches its pending UI on this
+      // (sandbox → simulate button, dpo → approve-on-phone polling card).
+      provider: this.provider.name,
       status: result.status,
       amount: fees.amount,
       fee: fees.fee,
@@ -302,6 +310,7 @@ export class CheckoutService {
     totalCharged: string;
     instruction?: string;
     redirectUrl?: string;
+    provider?: string;
   }> {
     const ad = await this.dataSource.getRepository(Advertisement).findOne({ where: { id: adId } });
     if (!ad) throw new NotFoundException('Advertisement not found');
@@ -373,6 +382,9 @@ export class CheckoutService {
 
     return {
       reference,
+      // Which adapter answered — the frontend branches its pending UI on this
+      // (sandbox → simulate button, dpo → approve-on-phone polling card).
+      provider: this.provider.name,
       status: result.status,
       amount: fees.amount,
       fee: fees.fee,
@@ -400,6 +412,7 @@ export class CheckoutService {
     totalCharged: string;
     instruction?: string;
     redirectUrl?: string;
+    provider?: string;
   }> {
     const posting = await this.dataSource
       .getRepository(JobPosting)
@@ -478,6 +491,9 @@ export class CheckoutService {
 
     return {
       reference,
+      // Which adapter answered — the frontend branches its pending UI on this
+      // (sandbox → simulate button, dpo → approve-on-phone polling card).
+      provider: this.provider.name,
       status: result.status,
       amount: fees.amount,
       fee: fees.fee,
@@ -859,6 +875,7 @@ export class CheckoutService {
     amount: string;
     instruction?: string;
     redirectUrl?: string;
+    provider?: string;
   }> {
     const quote = await this.dataSource.getRepository(Quote).findOne({
       where: { id: params.productQuoteId },
@@ -940,6 +957,9 @@ export class CheckoutService {
 
     return {
       reference,
+      // Which adapter answered — the frontend branches its pending UI on this
+      // (sandbox → simulate button, dpo → approve-on-phone polling card).
+      provider: this.provider.name,
       status: result.status,
       amount: fees.amount,
       instruction: result.instruction,

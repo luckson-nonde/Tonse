@@ -24,12 +24,19 @@ import { fromNgwee, toNgwee } from '../../../common/money/money';
 /**
  * Live DPO (Direct Pay Online) adapter — SERVER SIDE ONLY.
  *
- * DPO is a HOSTED-PAGE provider, which differs from a push-to-handset PSP in
- * three ways the rest of the system has to respect:
+ * DPO is primarily a HOSTED-PAGE provider, which differs from a push-to-handset
+ * PSP in three ways the rest of the system has to respect:
  *
  *   1. `initiateCollection` does not charge anyone. It calls `createToken` and
  *      returns a `redirectUrl` — the payer must be sent to DPO's page to pay by
  *      card or mobile money. A collection with no redirect is a dead end.
+ *      EXCEPTION: for mobile money with a phone number supplied, this adapter
+ *      first attempts DPO's in-app path (`ChargeTokenMobile` — a push to the
+ *      payer's handset, approved in our own UI with no redirect). If the
+ *      operator isn't enabled on this DPO account, or DPO demands a redirect
+ *      (RedirectOption=1), it falls back to the hosted page — the fancier path
+ *      must never be the reason a payment can't start. Cards ALWAYS use the
+ *      hosted page: collecting card numbers ourselves would put us in PCI scope.
  *   2. There is no signed webhook. DPO's "Payment Notification" carries no HMAC,
  *      so `parseWebhook` CANNOT authenticate it the way a signature would. The
  *      real authentication is `verifyCollection` → DPO's `verifyToken`, which
@@ -274,6 +281,41 @@ export class DpoPaymentProvider implements PaymentProvider {
       );
     }
 
+    // In-app mobile money first: push the charge to the payer's handset so
+    // they approve inside OUR payment sheet, no redirect. Any miss — operator
+    // not on this DPO account, DPO insisting on a redirect, a request error —
+    // falls through to the hosted page below.
+    if (input.channel === 'mobile-money' && input.phone) {
+      try {
+        const push = await this.chargeTokenMobile(transToken, input);
+        if (push) {
+          return {
+            reference: input.reference,
+            providerReference: transToken,
+            // 'pay-offline' is exactly what this is: the payer approves
+            // out-of-band on their handset, and we learn the outcome from
+            // verifyToken (polled) or the payment notification.
+            status: 'pay-offline',
+            amount: input.amount,
+            currency: input.currency,
+            instruction: push.instruction,
+            raw: {
+              result,
+              resultExplanation: explanation,
+              transToken,
+              transRef: this.read(xml, 'TransRef'),
+              mno: push.mno,
+              chargeStatusCode: push.statusCode,
+            },
+          };
+        }
+      } catch (e) {
+        this.logger.warn(
+          `In-app mobile push unavailable for ${input.reference}: ${(e as Error).message} — using the hosted page`,
+        );
+      }
+    }
+
     const pageUrl = this.config.get<string>('psp.dpo.paymentPageUrl');
     return {
       reference: input.reference,
@@ -292,6 +334,105 @@ export class DpoPaymentProvider implements PaymentProvider {
         transRef: this.read(xml, 'TransRef'),
       },
     };
+  }
+
+  /** Payer-facing text arrives with XML/HTML entities (DPO even omits the
+   *  trailing `;` — "Shortly&#8218 you will…"), so decode before display. */
+  private decodeEntities(text: string): string {
+    return text
+      .replace(/&#(\d+);?/g, (_, code) => String.fromCodePoint(Number(code)))
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'");
+  }
+
+  /** Local Zambian MSISDN → the international digits-only form DPO expects
+   *  (097… → 26097…, +260… → 260…). */
+  private normalizeMsisdn(phone: string): string {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.startsWith('260')) return digits;
+    if (digits.startsWith('0')) return `260${digits.slice(1)}`;
+    return `260${digits}`;
+  }
+
+  /**
+   * Attempt DPO's in-app mobile-money push for a fresh TransactionToken.
+   *
+   * Returns null (→ hosted-page fallback) rather than throwing whenever the
+   * path simply isn't available: no Zambian mobile option on this account, no
+   * option matching the payer's chosen network, DPO answering anything but
+   * "invoice created", or DPO demanding a redirect. Request errors from the
+   * underlying calls still throw and are caught by the caller.
+   *
+   * The MNO identifier is DISCOVERED per transaction via
+   * `GetMobilePaymentOptions` instead of hardcoding DPO's spelling of each
+   * network — their catalogue names ('MTNZambia', 'AirtelZM', …) are account
+   * configuration, not stable API constants.
+   */
+  private async chargeTokenMobile(
+    transToken: string,
+    input: InitiateCollectionInput,
+  ): Promise<{ instruction: string; mno: string; statusCode: string } | null> {
+    const optionsXml = await this.call(
+      'GetMobilePaymentOptions',
+      `<TransactionToken>${this.esc(transToken)}</TransactionToken>`,
+    );
+
+    const options = [...optionsXml.matchAll(/<mobileoption>([\s\S]*?)<\/mobileoption>/gi)]
+      .map((m) => ({
+        paymentname: this.read(m[1], 'paymentname'),
+        country: this.read(m[1], 'country'),
+        instructions: this.read(m[1], 'instructions'),
+      }))
+      .filter(
+        (o): o is { paymentname: string; country: string | undefined; instructions: string | undefined } =>
+          Boolean(o.paymentname),
+      );
+
+    const zambian = options.filter((o) => (o.country ?? '').toLowerCase().includes('zambia'));
+    const wanted = (input.operator ?? '').trim().toLowerCase();
+    const match =
+      (wanted && zambian.find((o) => o.paymentname.toLowerCase().includes(wanted))) ||
+      (zambian.length === 1 ? zambian[0] : undefined);
+    if (!match) {
+      this.logger.warn(
+        `No Zambian mobile option matching "${input.operator ?? '(none)'}" on this DPO account ` +
+          `(available: ${options.map((o) => o.paymentname).join(', ') || 'none'})`,
+      );
+      return null;
+    }
+
+    const xml = await this.call(
+      'ChargeTokenMobile',
+      `<TransactionToken>${this.esc(transToken)}</TransactionToken>` +
+        `<PhoneNumber>${this.esc(this.normalizeMsisdn(input.phone!))}</PhoneNumber>` +
+        `<MNO>${this.esc(match.paymentname)}</MNO>` +
+        `<MNOcountry>${this.esc(match.country ?? 'zambia')}</MNOcountry>`,
+    );
+
+    // Per DPO's spec: 130 = "New invoice" (charge request accepted, prompt on
+    // its way to the handset). RedirectOption is deliberately IGNORED: the
+    // Zambian MNOs return RedirectOption=1 with no RedirectUrl anywhere in the
+    // v6 response and instructions that explicitly describe a handset push —
+    // verified against the live API — so gating on it would permanently
+    // disable the in-app path for exactly the networks it exists for.
+    const statusCode = this.read(xml, 'StatusCode') ?? '';
+    if (statusCode !== '130' && statusCode !== '000') {
+      this.logger.warn(
+        `ChargeTokenMobile declined the in-app path (StatusCode ${statusCode || '?'}): ` +
+          `${this.read(xml, 'ResultExplanation') ?? ''}`,
+      );
+      return null;
+    }
+
+    const instruction = this.decodeEntities(
+      this.read(xml, 'instructions') ??
+        match.instructions ??
+        'Approve the payment prompt on your phone to complete this payment.',
+    );
+    return { instruction, mno: match.paymentname, statusCode };
   }
 
   /**

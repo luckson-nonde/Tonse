@@ -35,6 +35,9 @@ export interface VentureDepositResult {
   amount: string;
   fee: string;
   totalCharged: string;
+  /** Which adapter answered ('sandbox' | 'dpo') — picks the pending UI:
+   *  simulate button vs the approve-on-phone polling card. */
+  provider?: string;
   instruction?: string;
   /** Set by hosted-page providers (DPO) — the payer MUST be sent here or
    *  nothing is collected. Absent on the sandbox provider. */
