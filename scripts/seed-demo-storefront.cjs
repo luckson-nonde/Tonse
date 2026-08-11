@@ -50,6 +50,7 @@ async function api(method, p, body, token) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const tokenOf = (j) => j?.accessToken || j?.token || j?.tokens?.accessToken;
+const userIdOf = (j) => j?.user?.id ?? null;
 
 /** One seller per master category. img: path segments under assets/images. */
 const SELLERS = [
@@ -292,6 +293,91 @@ const SELLERS = [
   },
 ];
 
+/**
+ * WAVE 3 — depth, not breadth. Wave 2 gave every master category a shop; the
+ * landing page still showed ~4 listings per category, so the grids and their
+ * "See all" rails looked thin. These top up existing shops instead of adding
+ * more, and every image is another unused file from that product's OWN
+ * category folder — no cross-category borrowing, no repeats.
+ *
+ * Reaches already-seeded environments thanks to the additive top-up path
+ * (existing shops get only the products they're missing, matched on name).
+ */
+const MORE_PRODUCTS = {
+  electronics: [
+    { name: 'Defy 350L Fridge / Freezer Combo', price: 8900, originalPrice: 9900, stock: 6, cat: 'Electronics', brand: 'Defy', img: [SPECIALTY, 'electronics', 'home-appliances-both.webp'] },
+    { name: 'Laptop Repair — Screen, Board & Data Recovery', price: 750, stock: 30, cat: 'Electronics', img: [SPECIALTY, 'electronics', 'laptops-repair.webp'] },
+    { name: 'Home Theatre Repair & Speaker Reconing', price: 600, stock: 25, cat: 'Electronics', img: [SPECIALTY, 'electronics', 'audio-video-repair.webp'] },
+  ],
+  'electronics-2': [
+    { name: 'iPhone 13 — 128GB, Certified Pre-Owned', price: 9500, originalPrice: 11000, stock: 8, cat: 'Electronics', brand: 'Apple', condition: 'Refurbished', img: [SPECIALTY, 'electronics', 'mobile-phones-both.webp'] },
+    { name: 'Fridge & Washing Machine Repair — Call-Out', price: 550, stock: 30, cat: 'Electronics', img: [SPECIALTY, 'electronics', 'home-appliances-repair.webp'] },
+  ],
+  'machinery-hire': [
+    { name: 'Backhoe Loader — Daily Hire', price: 6800, stock: 4, cat: 'Heavy Machinery for Hire', img: [SPECIALTY, 'machinery-hire', 'backhoe-loader.webp'] },
+    { name: 'Concrete Mixer — Daily Hire', price: 1400, stock: 8, cat: 'Heavy Machinery for Hire', img: [SPECIALTY, 'machinery-hire', 'concrete-mixer.webp'] },
+  ],
+  'machinery-hire-2': [
+    { name: 'Roller Compactor — Daily Hire', price: 5200, stock: 3, cat: 'Heavy Machinery for Hire', img: [SPECIALTY, 'machinery-hire', 'Roller  Compactor.webp'] },
+    { name: 'Farm Tractor + Implements — Daily Hire', price: 2600, originalPrice: 3100, stock: 6, cat: 'Heavy Machinery for Hire', img: [SPECIALTY, 'machinery-hire', 'Tractor.webp'] },
+    { name: 'Wheel Loader — Daily Hire', price: 7600, stock: 3, cat: 'Heavy Machinery for Hire', img: [SPECIALTY, 'machinery-hire', 'wheel-loader.webp'] },
+  ],
+  furniture: [
+    { name: 'Bedroom Furniture Repair & Refinishing', price: 1400, stock: 12, cat: 'Furniture', img: [SPECIALTY, 'furnture', 'bedroom-repair.webp'] },
+    { name: 'Office Chair & Desk Repair — On Site', price: 900, stock: 15, cat: 'Furniture', img: [SPECIALTY, 'furnture', 'office-repair.webp'] },
+  ],
+  'furniture-2': [
+    { name: 'Outdoor Furniture Restoration — Weatherproofing', price: 1650, stock: 8, cat: 'Furniture', img: [SPECIALTY, 'furnture', 'outdoor-repair.webp'] },
+  ],
+  entertainment: [
+    { name: 'Stand-Up Comedian — Corporate & Private', price: 3800, stock: 8, cat: 'Entertainment', img: [SPECIALTY, 'entertainment', 'Comedians.webp'] },
+    { name: 'Influencer Campaign — Brand Collaboration', price: 5500, originalPrice: 6500, stock: 10, cat: 'Entertainment', img: [SPECIALTY, 'entertainment', 'Influencers.webp'] },
+    { name: 'Keynote Speaker — Conferences & Workshops', price: 6200, stock: 6, cat: 'Entertainment', img: [SPECIALTY, 'entertainment', 'Public Speaker.webp'] },
+    { name: 'Spoken Word & Poetry Performance', price: 1800, stock: 12, cat: 'Entertainment', img: [SPECIALTY, 'entertainment', 'spoken-word.webp'] },
+  ],
+  agriculture: [
+    { name: 'Agro-Tech Advisory — Soil Testing & Yield Plan', price: 1900, stock: 15, cat: 'Agriculture', img: [SPECIALTY, 'agriculture', 'agro-tech-services.webp'] },
+    { name: 'Fish Farming Starter — Pond Setup & Fingerlings', price: 5600, originalPrice: 6400, stock: 8, cat: 'Agriculture', img: [SPECIALTY, 'agriculture', 'aquaculture.webp'] },
+  ],
+  automotive: [
+    { name: 'Used Engine & Gearbox — Breakers Yard Stock', price: 6500, stock: 9, cat: 'Automotive', condition: 'Used', img: [SPECIALTY, 'automotive', 'car-parts-breakers.webp'] },
+    { name: 'Motorcycle Spares & Service Kit', price: 720, stock: 20, cat: 'Automotive', img: [SPECIALTY, 'automotive', 'motorcycles-parts.webp'] },
+    { name: 'Toyota Corolla Quest — 2019, 78,000km', price: 165000, originalPrice: 178000, stock: 2, cat: 'Automotive', brand: 'Toyota', condition: 'Used', img: [SPECIALTY, 'automotive', 'vehicles.webp'] },
+  ],
+  construction: [
+    { name: 'Site Machinery Package — Mixer, Vibrator, Hoist', price: 9400, stock: 4, cat: 'Construction', img: [SPECIALTY, 'construction', 'construction-machinery.webp'] },
+  ],
+  'it-products': [
+    { name: 'Dell PowerEdge Server + 8TB Storage', price: 42000, originalPrice: 46000, stock: 3, cat: 'IT Products', brand: 'Dell', img: [SPECIALTY, 'it-products', 'servers-storage.webp'] },
+  ],
+  // Labour has by far the deepest image set — the trades double as day-rate
+  // service listings, which is what a labour shop actually sells.
+  labour: [
+    { name: 'Carpenter — Day Rate', price: 850, stock: 12, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'construction', 'Carpenter.webp'] },
+    { name: 'Electrician — Certified, Day Rate', price: 1100, stock: 10, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'construction', 'Electrician.webp'] },
+    { name: 'Plumber — Day Rate', price: 950, stock: 10, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'construction', 'Plumber.webp'] },
+    { name: 'Bricklayer / Mason — Day Rate', price: 800, stock: 14, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'construction', 'bricklayer.webp'] },
+    { name: 'Tiler — Per Square Metre', price: 120, stock: 40, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'construction', 'Tiler.webp'] },
+    { name: 'Roofer — Day Rate', price: 900, originalPrice: 1050, stock: 10, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'construction', 'Roofer.webp'] },
+    { name: 'Painter & Decorator — Day Rate', price: 700, stock: 15, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'construction', 'painter.webp'] },
+    { name: 'General Labourer — Day Rate', price: 350, stock: 30, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'construction', 'General Labourer.webp'] },
+    { name: 'Heavy Goods Driver — Day Rate', price: 1200, stock: 8, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'transport', 'driver-heavy.webp'] },
+    { name: 'Forklift Operator — Certified, Day Rate', price: 1000, stock: 8, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'industrial', 'Forklift Operator.webp'] },
+    { name: 'Warehouse Team — 4 Workers / Day', price: 1600, stock: 10, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'industrial', 'Warehouse Worker.webp'] },
+    { name: 'Gardener & Grounds Maintenance — Day Rate', price: 400, stock: 20, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'domestic', 'gardener.webp'] },
+    { name: 'Live-In Nanny — Monthly Placement', price: 2500, stock: 10, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'domestic', 'nanny.webp'] },
+    { name: 'Private Cook / Chef — Monthly Placement', price: 3200, stock: 8, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'domestic', 'cook.webp'] },
+    { name: 'Farm Worker Crew — 5 Workers / Day', price: 1500, stock: 12, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'agricultural', 'farm-worker.webp'] },
+    { name: 'Irrigation Technician — Day Rate', price: 1050, stock: 8, cat: 'Labour & Skills', img: [SPECIALTY, 'labour', 'agricultural', 'Irrigation Technician.webp'] },
+  ],
+};
+
+for (const [slug, extra] of Object.entries(MORE_PRODUCTS)) {
+  const seller = SELLERS.find((s) => s.slug === slug);
+  if (seller) seller.products.push(...extra);
+  else console.log(`WARN: MORE_PRODUCTS has no seller '${slug}'`);
+}
+
 // Wave-2 accounts number from 0955000131 / NRC 900031 upward: on environments
 // seeded before wave 2 existed, the buyer already owns …111 (it was seq 11
 // back then), and phone/nrc are unique-indexed — without the offset the first
@@ -370,40 +456,61 @@ const BUYS = [
     const doRegister = () => authApi('/auth/register', payload);
 
     if (loginFirst) {
-      const token = tokenOf((await doLogin()).json);
-      if (token) return { token, existed: true };
+      const login = (await doLogin()).json;
+      if (tokenOf(login)) return { token: tokenOf(login), userId: userIdOf(login), existed: true };
       loginFirst = false; // this environment has unseeded accounts after all
     }
 
     const res = await doRegister();
-    const freshToken = tokenOf(res.json);
-    if (freshToken) return { token: freshToken, existed: false };
+    if (tokenOf(res.json)) {
+      return { token: tokenOf(res.json), userId: userIdOf(res.json), existed: false };
+    }
 
-    const token = tokenOf((await doLogin()).json);
-    if (token) {
+    const login = (await doLogin()).json;
+    if (tokenOf(login)) {
       loginFirst = true; // already seeded — stop paying for doomed registers
-      return { token, existed: true };
+      return { token: tokenOf(login), userId: userIdOf(login), existed: true };
     }
     console.log(`FAIL ${payload.email}: register ${res.status} ${JSON.stringify(res.json).slice(0, 140)}`);
-    return { token: null, existed: false };
+    return { token: null, userId: null, existed: false };
   }
 
   for (const seller of SELLERS) {
     const email = `demo.${seller.slug}@nyuwe.demo`;
     const n = nextSeq() + (seller.numOffset ?? 0);
-    const { token, existed } = await registerOrLogin({
+    const { token, userId, existed } = await registerOrLogin({
       email, password: PASSWORD, name: seller.shop,
       phone: `0955000${100 + n}`, role: 'SELLER', nrc: `${900000 + n}/10/1`,
       categoryIds: [seller.category],
     });
     if (!token) continue;
-    if (existed) {
-      console.log(`— ${seller.shop} (${email}) already seeded, skipping`);
-      continue;
-    }
     productIds[seller.slug] = [];
 
+    // ADDITIVE, not all-or-nothing: an existing shop is topped up with only
+    // the products it's missing (matched on name), so growing a seller's
+    // catalogue in this file reaches environments seeded by an earlier run.
+    // Skipping the whole seller — the old behaviour — meant new products
+    // could only ever land on a virgin database.
+    let have = new Set();
+    if (existed) {
+      if (!userId) {
+        console.log(`— ${seller.shop} exists but login returned no user id, skipping`);
+        continue;
+      }
+      const mine = await api('GET', `/products/seller/${userId}`);
+      const rows = Array.isArray(mine.json) ? mine.json : (mine.json?.items ?? []);
+      have = new Set(rows.map((r) => r.name));
+      const missing = seller.products.filter((p) => !have.has(p.name)).length;
+      console.log(
+        missing
+          ? `+ ${seller.shop} exists with ${have.size} products — adding ${missing}`
+          : `— ${seller.shop} already complete (${have.size} products)`,
+      );
+      if (!missing) continue;
+    }
+
     for (const p of seller.products) {
+      if (have.has(p.name)) continue;
       const res = await api('POST', '/products', {
         name: p.name,
         description: `${p.name} — quality you can trust from ${seller.shop}. Verified Zambian seller on Nyuwe; collect in person or arrange delivery.`,
@@ -412,7 +519,7 @@ const BUYS = [
         ...(p.originalPrice ? { originalPrice: p.originalPrice } : {}),
         stock: p.stock,
         brand: p.brand,
-        condition: 'New',
+        condition: p.condition ?? 'New',
         images: [dataUrl(...p.img)],
         isActive: true,
       }, token);

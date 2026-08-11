@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { motion } from 'motion/react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getCategoryArt, getMeta } from '../buyer/categoryMeta';
 import { CATEGORIES_DB } from '../../services/categories';
 import type { StorefrontCategory } from '../../services/api/storefrontService';
@@ -19,8 +20,13 @@ interface TopCategoryRowProps {
  * src/assets/images/categories/ to get a photo here; anything without one keeps
  * the icon-chip treatment rather than rendering a hole.
  *
- * Snap-scrolls on narrow screens and lays out as a grid from `sm` up. Borders
- * are opaque hexes throughout — translucent borders on rounded cards
+ * ONE line at every width — never wraps. Overflow is reached by scrolling the
+ * row sideways (drag/wheel on touch and trackpads, arrow buttons on desktop
+ * where neither is natural). Wrapping was the old behaviour from `sm` up; it
+ * grew the band a row at a time as categories were added and pushed the
+ * storefront below the fold.
+ *
+ * Borders are opaque hexes throughout — translucent borders on rounded cards
  * mis-rasterize on Mali-GPU Android phones (see the android-gpu-ghosting skill).
  */
 export default function TopCategoryRow({
@@ -28,29 +34,66 @@ export default function TopCategoryRow({
   activeCategoryId,
   onSelect,
 }: TopCategoryRowProps) {
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  /** One "page" is most of the visible width, so a click always leaves a
+   *  partial pill in view as a hint that the row continues. */
+  const scrollByPage = (direction: -1 | 1) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: 'smooth' });
+  };
+
   if (categories.length === 0) return null;
 
   return (
     <section id="storefront-categories" className="px-5 sm:px-8 lg:px-12 mt-9 scroll-mt-24">
-      <div className="flex items-baseline justify-between mb-4">
+      <div className="flex items-baseline justify-between gap-3 mb-4">
         <h2 className="font-serif font-semibold text-[1.25rem] sm:text-[1.4rem] text-[#1B3068]">
           Top categories
         </h2>
-        {activeCategoryId && (
-          <button
-            onClick={() => onSelect(activeCategoryId)}
-            className="text-[12px] font-semibold text-[#a97c27] hover:underline underline-offset-2 shrink-0"
-          >
-            Clear filter
-          </button>
-        )}
+        <div className="flex items-center gap-3 shrink-0">
+          {activeCategoryId && (
+            <button
+              onClick={() => onSelect(activeCategoryId)}
+              className="text-[12px] font-semibold text-[#a97c27] hover:underline underline-offset-2"
+            >
+              Clear filter
+            </button>
+          )}
+          {/* Desktop-only: touch and trackpads scroll the row natively, a
+              mouse can't. Mirrors the hero carousel's arrow pair. */}
+          <div className="hidden sm:flex items-center gap-1.5 self-center">
+            <button
+              type="button"
+              onClick={() => scrollByPage(-1)}
+              aria-label="Scroll categories left"
+              className="w-7 h-7 rounded-full border border-[#e7e0d5] bg-[#fffaf5] text-[#1B3068] flex items-center justify-center hover:border-[#e9d2aa] hover:bg-[#fdf6e9] transition-colors"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollByPage(1)}
+              aria-label="Scroll categories right"
+              className="w-7 h-7 rounded-full border border-[#e7e0d5] bg-[#fffaf5] text-[#1B3068] flex items-center justify-center hover:border-[#e9d2aa] hover:bg-[#fdf6e9] transition-colors"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Compact action buttons, not display tiles: a small round thumbnail +
           name + count in a pill. Clicking one swaps the section below for
           that category's product grid — the pill is the CONTROL, the grid is
           the display. Horizontal snap-scroll on phones, wrapping from sm up. */}
-      <div className="flex gap-3 overflow-x-auto snap-x scrollbar-hide sm:flex-wrap sm:overflow-visible -mx-1 px-1 pb-1">
+      {/* flex-nowrap at EVERY width — the band stays exactly one pill tall
+          however many categories exist, and the rest are a scroll away. */}
+      <div
+        ref={scrollerRef}
+        className="flex flex-nowrap gap-3 overflow-x-auto snap-x scrollbar-hide -mx-1 px-1 pb-1"
+      >
         {categories.map((category, i) => {
           // Photo resolution: dropped local artwork first, then the catalog's
           // own image URL — every button gets a real photo; the icon chip is
