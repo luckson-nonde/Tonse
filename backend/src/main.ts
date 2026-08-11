@@ -7,13 +7,22 @@ import * as cors from 'cors';
 import * as path from 'path';
 import * as express from 'express';
 import { assertPiiCryptoReady } from './common/crypto/pii-crypto';
-import { getUploadsDir, isFilesystemStorage } from './config/storage.config';
+import {
+  getUploadsDir,
+  isFilesystemStorage,
+  warnIfEphemeralProductionStorage,
+} from './config/storage.config';
 
 async function bootstrap() {
   // Fail fast on missing PII_ENCRYPTION_KEY (production fail-closed). The key
   // resolution is otherwise lazy, so without this a misconfigured deploy boots
   // with a green health check and 500s on the first registration instead.
   assertPiiCryptoReady();
+
+  // Loud (non-fatal) alarm for the ephemeral-disk trap: production +
+  // filesystem driver + no mounted-volume override = every upload silently
+  // destroyed on the next restart. Logs cannot miss it; the app still boots.
+  warnIfEphemeralProductionStorage((msg) => console.error(`❌ ${msg}`));
 
   const app = await NestFactory.create(AppModule);
 

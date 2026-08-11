@@ -89,6 +89,33 @@ export function getSpacesConfig(): SpacesConfig {
   };
 }
 
+/**
+ * Scream at boot when a production deploy is about to lose every upload.
+ *
+ * The dangerous combination: NODE_ENV=production + filesystem driver + no
+ * UPLOADS_DIR override. That means uploads go to the in-container default
+ * path, and container filesystems are wiped on every redeploy/restart — the
+ * exact silent-loss mode that once destroyed uploads on DO App Platform
+ * before the Spaces driver was configured. Deliberately a WARNING, not a
+ * hard fail: a mis-set flag must never take a running marketplace down, but
+ * it must be impossible to miss in the logs.
+ */
+export function warnIfEphemeralProductionStorage(logError: (msg: string) => void): void {
+  if (
+    process.env.NODE_ENV === 'production' &&
+    isFilesystemStorage() &&
+    !process.env.UPLOADS_DIR
+  ) {
+    logError(
+      'STORAGE MISCONFIGURED: NODE_ENV=production with STORAGE_DRIVER=filesystem and no ' +
+        'UPLOADS_DIR. Uploads are being written to the EPHEMERAL container disk and WILL BE ' +
+        'DESTROYED on the next redeploy/restart. Set STORAGE_DRIVER=spaces (+ SPACES_* vars) ' +
+        'on platforms without persistent volumes, or mount a disk and point UPLOADS_DIR / ' +
+        'SECURE_UPLOADS_DIR at it.',
+    );
+  }
+}
+
 /** World-readable uploads, served statically from `/uploads`. */
 export function getUploadsDir(): string {
   return process.env.UPLOADS_DIR || path.join(process.cwd(), 'public', 'uploads');
