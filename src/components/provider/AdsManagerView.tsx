@@ -33,6 +33,7 @@ import {
   AdMediaType,
   EffectiveAdStatus,
 } from '../../services/api/adsService';
+import { beginHostedPayment } from '../../services/api/paymentsService';
 import DateTimePicker from '../DateTimePicker';
 import PaymentSheet, { PaymentSheetSubmitPayload } from '../PaymentSheet';
 import Button from '../Button';
@@ -379,6 +380,9 @@ export default function AdsManagerView() {
       setError('Payment could not be started. Please try again.');
       return;
     }
+    // Live (DPO): the money is taken on the provider's own page, so leave the
+    // app. Sandbox returns no redirect and falls through to the pending card.
+    if (beginHostedPayment(result, { label: `Your ad "${payingAd.title}"` })) return;
     setPendingCheckout({ reference: result.reference, status: result.status, amount: result.amount });
   };
 

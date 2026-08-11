@@ -129,6 +129,29 @@ services:
       #     Update if you rename the static site or attach a custom domain. ---
       - key: CORS_ORIGINS
         value: https://tonse-web.onrender.com
+      # --- Payments: DPO (Direct Pay Online) ---
+      #     'sandbox' keeps the in-app simulated approval; 'dpo' switches to the
+      #     live hosted-page checkout. Set the token in the dashboard only.
+      - key: PAYMENT_PROVIDER
+        value: sandbox
+      # The merchant credential. sync:false means Render NEVER stores it in this
+      # file or in git — set it by hand in the tonse-api dashboard.
+      - key: DPO_COMPANY_TOKEN
+        sync: false
+      - key: DPO_DEFAULT_SERVICE_TYPE
+        sync: false
+      - key: DPO_PAYMENT_PAGE_URL
+        value: https://secure.3gdirectpay.com/payv3.php
+      # Where DPO returns the payer. FRONTEND urls — must match the static
+      # site's public origin, same reasoning as CORS_ORIGINS above.
+      - key: DPO_REDIRECT_URL
+        value: https://tonse-web.onrender.com/payment/return
+      - key: DPO_BACK_URL
+        value: https://tonse-web.onrender.com/payment/return?cancelled=1
+      # Shared secret for the Payment Notification URL configured in the DPO
+      # portal (https://tonse-api.onrender.com/webhooks/psp?secret=...).
+      - key: DPO_NOTIFICATION_SECRET
+        sync: false
       # --- Promoter programme ---
       - key: PROMOTER_INVITE_KEY
         sync: false
@@ -193,5 +216,7 @@ services:
       # Optional integrations — leave blank if unused.
       - key: GEMINI_API_KEY
         sync: false
-      - key: LENCO_API_KEY
-        sync: false
+      # NOTE: there is deliberately NO payment credential here. Vite bakes build
+      # env into the bundle, so a PSP key on this service is shipped to every
+      # visitor. The DPO company token lives on tonse-api only; the browser
+      # talks to our API, our API talks to DPO.

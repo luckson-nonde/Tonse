@@ -3,6 +3,7 @@ import { Wallet, Loader2, ArrowDownCircle, Clock, Plus, FlaskConical } from 'luc
 import emptyStateImage from '../../assets/images/empty-states/owl_reading.webp';
 import { formatCurrency } from '../../utils/financeUtils';
 import { ventureService, VentureJournalEntry } from '../../services/api/ventureService';
+import { beginHostedPayment } from '../../services/api/paymentsService';
 import PaymentSheet, { PaymentSheetSubmitPayload } from '../PaymentSheet';
 import Button from '../Button';
 
@@ -63,6 +64,9 @@ export default function VentureAccountView() {
       setError('Deposit could not be started. Please try again.');
       return;
     }
+    // Live (DPO): the money is taken on the provider's own page, so leave the
+    // app. Sandbox returns no redirect and falls through to the pending card.
+    if (beginHostedPayment(result, { label: 'Your deposit' })) return;
     setPendingDeposit({ reference: result.reference, status: result.status, amount: result.amount });
   };
 

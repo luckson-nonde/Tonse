@@ -54,6 +54,7 @@ import DiscoverPage from './pages/DiscoverPage';
 import PublicShopProfile from './pages/PublicShopProfile';
 import TicketPurchasePage from './pages/TicketPurchasePage';
 import TicketScanPage from './pages/TicketScanPage';
+import PaymentReturnPage from './pages/PaymentReturnPage';
 
 function ProtectedRoute({
   children,
@@ -256,6 +257,20 @@ export default function App() {
                   <ProtectedRoute>
                     <PageTransition transitionKey="ticket-scan">
                       <TicketScanPage />
+                    </PageTransition>
+                  </ProtectedRoute>
+                }
+              />
+              {/* Where DPO returns the payer after its hosted page. Protected
+                  because verifying settles a real payment against the payer's
+                  own transaction — the round trip stays in the same tab, so the
+                  session is still live. The URL is DPO_REDIRECT_URL. */}
+              <Route
+                path="/payment/return"
+                element={
+                  <ProtectedRoute>
+                    <PageTransition transitionKey="payment-return">
+                      <PaymentReturnPage />
                     </PageTransition>
                   </ProtectedRoute>
                 }

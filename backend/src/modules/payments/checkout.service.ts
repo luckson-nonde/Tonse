@@ -64,9 +64,12 @@ export class CheckoutService {
   ) {}
 
   /**
-   * Start a collection for a quote. Returns what the payer must do next.
-   * The buyer is charged price + PSP fee (fee borne by the payer); only the
-   * price reaches the holding account.
+   * Start a collection for a quote. Returns what the payer must do next —
+   * which, on a hosted-page provider like DPO, means `redirectUrl`: the payer
+   * MUST be sent there or nothing is ever collected.
+   *
+   * What the payer is charged depends on the provider's fee model
+   * (`quoteFees`); only `amount` ever reaches the holding account.
    */
   async checkout(
     buyerId: string,
@@ -78,6 +81,7 @@ export class CheckoutService {
     fee: string;
     totalCharged: string;
     instruction?: string;
+    redirectUrl?: string;
   }> {
     const quote = await this.dataSource.getRepository(Quote).findOne({
       where: { id: dto.quoteId },
@@ -179,6 +183,7 @@ export class CheckoutService {
       fee: fees.fee,
       totalCharged: fees.totalCharged,
       instruction: result.instruction,
+      redirectUrl: result.redirectUrl,
     };
   }
 
@@ -200,6 +205,7 @@ export class CheckoutService {
     fee: string;
     totalCharged: string;
     instruction?: string;
+    redirectUrl?: string;
   }> {
     const amountNgwee = toNgwee(dto.amount);
     if (amountNgwee <= 0) {
@@ -272,6 +278,7 @@ export class CheckoutService {
       fee: fees.fee,
       totalCharged: fees.totalCharged,
       instruction: result.instruction,
+      redirectUrl: result.redirectUrl,
     };
   }
 
@@ -293,6 +300,7 @@ export class CheckoutService {
     fee: string;
     totalCharged: string;
     instruction?: string;
+    redirectUrl?: string;
   }> {
     const ad = await this.dataSource.getRepository(Advertisement).findOne({ where: { id: adId } });
     if (!ad) throw new NotFoundException('Advertisement not found');
@@ -369,13 +377,19 @@ export class CheckoutService {
       fee: fees.fee,
       totalCharged: fees.totalCharged,
       instruction: result.instruction,
+      redirectUrl: result.redirectUrl,
     };
   }
 
   /**
-   * Handle a verified webhook event. Idempotent twice over: the
+   * Handle a provider callback. Idempotent twice over: the
    * (provider, eventId) unique index rejects a redelivery, and the journal's
    * own idempotency key rejects a double-post.
+   *
+   * The callback itself decides nothing — `verifyAndSettle` re-asks the
+   * provider. That matters most with DPO, whose Payment Notification carries no
+   * signature at all: a forged "paid" event for a real reference is simply
+   * contradicted by verifyToken and dropped.
    */
   async handleWebhook(event: WebhookEvent): Promise<{ handled: boolean; reason?: string }> {
     try {
@@ -393,36 +407,116 @@ export class CheckoutService {
       return { handled: false, reason: 'duplicate' };
     }
 
-    if (event.type !== 'collection' || !event.reference) {
+    if (event.type !== 'collection') {
       return { handled: false, reason: 'unsupported event type' };
     }
 
-    // NEVER trust the payload's amount/status — ask the provider directly.
-    const verified = await this.provider.verifyCollection(event.reference);
-    if (verified.status !== 'successful') {
-      await this.pspTx.update(
-        { reference: event.reference },
-        { status: verified.status === 'failed' ? 'FAILED' : 'PENDING' },
-      );
-      await this.markEventProcessed(event.eventId);
-      return { handled: false, reason: `not successful (${verified.status})` };
+    // DPO's push identifies the transaction by ITS token, not by our reference
+    // (their payload carries no CompanyRef), so resolve ours from the token we
+    // stored at createToken time. Looking it up in our own table — rather than
+    // trusting a reference in the payload — is also what stops a caller naming
+    // someone else's transaction.
+    const reference = event.reference ?? (await this.resolveReference(event.providerReference));
+    if (!reference) {
+      return { handled: false, reason: 'unknown transaction' };
     }
 
+    const outcome = await this.verifyAndSettle(reference, event.providerReference);
+    await this.markEventProcessed(event.eventId);
+    return outcome;
+  }
+
+  /** Our reference for a provider-side handle, or null if we've never seen it. */
+  private async resolveReference(providerReference?: string): Promise<string | null> {
+    if (!providerReference) return null;
+    const tx = await this.pspTx.findOne({ where: { providerReference } });
+    if (!tx) {
+      this.logger.warn(`Callback for unknown provider reference ${providerReference} — ignoring`);
+      return null;
+    }
+    return tx.reference;
+  }
+
+  /**
+   * Settle from the payer's own return trip off a hosted payment page.
+   *
+   * A hosted-page provider cannot be relied on for a server-to-server callback
+   * alone — DPO's notification is best-effort and its arrival is not ordered
+   * against the payer landing back on our site. So the payer's return is a
+   * second, independent trigger for the SAME verify-then-journal path. It is
+   * safe to race the notification because every funding step is idempotent, and
+   * it is safe to expose because it still proves nothing itself: the money only
+   * moves if DPO says it moved.
+   */
+  async settleFromReturn(
+    userId: string,
+    reference: string,
+  ): Promise<{ handled: boolean; reason?: string; status: string }> {
+    const tx = await this.pspTx.findOne({ where: { reference } });
+    if (!tx) throw new NotFoundException('Payment not found');
+    if (tx.counterpartyId !== userId && tx.beneficiaryBuyerId !== userId) {
+      throw new BadRequestException('Not your payment');
+    }
+
+    const outcome = await this.verifyAndSettle(reference, tx.providerReference ?? undefined);
+    const settled = await this.pspTx.findOne({ where: { reference } });
+    return { ...outcome, status: settled?.status ?? tx.status };
+  }
+
+  /**
+   * Verify with the provider, then post whatever the verified result warrants.
+   * The single point where a collection becomes money — reached from the
+   * provider's callback and from the payer's return trip alike.
+   */
+  private async verifyAndSettle(
+    reference: string,
+    calledBackProviderReference?: string,
+  ): Promise<{ handled: boolean; reason?: string }> {
     // Route on what kind of collection this was. `quoteId` is only ever set
     // for a checkout(); initiateVentureDeposit() and initiateAdPurchase()
     // both leave it NULL, so between those two `context.kind` is the
     // discriminator (mirrors how LOAN context already rides the same field).
-    const tx = await this.pspTx.findOne({ where: { reference: event.reference } });
-    if (!tx) throw new NotFoundException(`Unknown PSP transaction ${event.reference}`);
+    // Loaded FIRST because the provider handle we verify against comes from
+    // our own row, not from the (unauthenticated) callback.
+    const tx = await this.pspTx.findOne({ where: { reference } });
+    if (!tx) throw new NotFoundException(`Unknown PSP transaction ${reference}`);
+
+    // NEVER trust the payload's amount/status — ask the provider directly.
+    const verified = await this.provider.verifyCollection(
+      reference,
+      tx.providerReference ?? calledBackProviderReference,
+    );
+    if (verified.status !== 'successful') {
+      await this.pspTx.update(
+        { reference },
+        { status: verified.status === 'failed' ? 'FAILED' : 'PENDING' },
+      );
+      return { handled: false, reason: `not successful (${verified.status})` };
+    }
+
+    // The provider says paid — but paid HOW MUCH? Everything downstream (escrow,
+    // the order, the seller's balance) is posted from the verified amount, so a
+    // short payment would otherwise fund a deal for less than its price and
+    // still mark it PAID. Refuse to settle a mismatch and leave it for a human;
+    // an under-funded order is far worse than a delayed one.
+    if (toNgwee(verified.amount) !== toNgwee(tx.amount)) {
+      this.logger.error(
+        `Amount mismatch on ${reference}: expected ${tx.amount}, provider reported ${verified.amount} — NOT settling`,
+      );
+      await this.pspTx.update(
+        { reference },
+        { lastError: `Amount mismatch: expected ${tx.amount}, provider reported ${verified.amount}` },
+      );
+      return { handled: false, reason: 'amount mismatch — held for review' };
+    }
 
     if (tx.quoteId) {
-      await this.fundEscrow(event.reference, verified.amount, verified.fee, verified.raw);
+      await this.fundEscrow(reference, verified.amount, verified.fee, verified.raw);
     } else if ((tx.context as any)?.kind === 'AD_PURCHASE') {
-      await this.fundAdPurchase(event.reference, verified.amount, verified.fee, verified.raw, (tx.context as any).adId);
+      await this.fundAdPurchase(reference, verified.amount, verified.fee, verified.raw, (tx.context as any).adId);
     } else {
-      await this.fundVentureDeposit(event.reference, verified.amount, verified.fee, verified.raw);
+      await this.fundVentureDeposit(reference, verified.amount, verified.fee, verified.raw);
     }
-    await this.markEventProcessed(event.eventId);
     return { handled: true };
   }
 
@@ -459,6 +553,11 @@ export class CheckoutService {
         [reference],
       );
       if (!tx) throw new NotFoundException(`Unknown PSP transaction ${reference}`);
+      // Idempotent — never double-fund. The journal's own key would no-op a
+      // replayed post, but the Order insert below has no such key, so a second
+      // delivery (notification racing the payer's return trip) would otherwise
+      // mint a duplicate order against one payment.
+      if (tx.status === 'SUCCESSFUL') return;
 
       const quote = await m.getRepository(Quote).findOne({
         where: { id: tx.quoteId },
@@ -646,7 +745,13 @@ export class CheckoutService {
     channel?: Channel;
     phone?: string;
     operator?: string;
-  }): Promise<{ reference: string; status: string; amount: string; instruction?: string }> {
+  }): Promise<{
+    reference: string;
+    status: string;
+    amount: string;
+    instruction?: string;
+    redirectUrl?: string;
+  }> {
     const quote = await this.dataSource.getRepository(Quote).findOne({
       where: { id: params.productQuoteId },
     });
@@ -730,6 +835,7 @@ export class CheckoutService {
       status: result.status,
       amount: fees.amount,
       instruction: result.instruction,
+      redirectUrl: result.redirectUrl,
     };
   }
 

@@ -13,7 +13,7 @@ import { CheckoutService } from './checkout.service';
 import { PaymentsController } from './controllers/payments.controller';
 import { CheckoutController, WebhookController } from './controllers/checkout.controller';
 import { SandboxPaymentProvider } from './providers/sandbox.provider';
-import { LencoPaymentProvider } from './providers/lenco.provider';
+import { DpoPaymentProvider } from './providers/dpo.provider';
 import { PAYMENT_PROVIDER } from './providers/payment-provider.interface';
 import { LedgerModule } from '../ledger/ledger.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -21,7 +21,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 /**
  * Payments.
  *
- * The provider is chosen at boot by `PAYMENT_PROVIDER` (sandbox | lenco).
+ * The provider is chosen at boot by `PAYMENT_PROVIDER` (sandbox | dpo).
  * Everything downstream depends on the PaymentProvider interface, never on a
  * concrete adapter — so going live is an env change, not a rewrite. Both
  * adapters are registered so the sandbox stays available for tests.
@@ -36,15 +36,15 @@ import { NotificationsModule } from '../notifications/notifications.module';
     PaymentsService,
     CheckoutService,
     SandboxPaymentProvider,
-    LencoPaymentProvider,
+    DpoPaymentProvider,
     {
       provide: PAYMENT_PROVIDER,
-      inject: [ConfigService, SandboxPaymentProvider, LencoPaymentProvider],
+      inject: [ConfigService, SandboxPaymentProvider, DpoPaymentProvider],
       useFactory: (
         config: ConfigService,
         sandbox: SandboxPaymentProvider,
-        lenco: LencoPaymentProvider,
-      ) => (config.get<string>('psp.provider') === 'lenco' ? lenco : sandbox),
+        dpo: DpoPaymentProvider,
+      ) => (config.get<string>('psp.provider') === 'dpo' ? dpo : sandbox),
     },
   ],
   controllers: [PaymentsController, CheckoutController, WebhookController],

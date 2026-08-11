@@ -31,8 +31,8 @@ export class FilesController {
    */
   @Get('secure/:filename')
   @UseGuards(JwtAuthGuard)
-  serveSecure(@Param('filename') filename: string, @Res() res: Response) {
-    const { data, contentType } = this.filesService.readSecureFile(filename);
+  async serveSecure(@Param('filename') filename: string, @Res() res: Response) {
+    const { data, contentType } = await this.filesService.readSecureFile(filename);
     res.set({
       'Content-Type': contentType,
       'Cache-Control': 'private, no-store',
@@ -47,12 +47,12 @@ export class FilesController {
   @Post('upload')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file'))
-  uploadFile(@UploadedFile() file: Express.Multer.File, @Query('category') category: string = 'general') {
+  async uploadFile(@UploadedFile() file: Express.Multer.File, @Query('category') category: string = 'general') {
     if (!file) {
       throw new BadRequestException('No file provided');
     }
 
-    const fileUrl = this.filesService.uploadFile(file, category);
+    const fileUrl = await this.filesService.uploadFile(file, category);
 
     return {
       success: true,
@@ -70,7 +70,7 @@ export class FilesController {
   @Post('upload-multiple')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FilesInterceptor('files', 10)) // Max 10 files
-  uploadMultipleFiles(
+  async uploadMultipleFiles(
     @UploadedFiles() files: Express.Multer.File[],
     @Query('category') category: string = 'general'
   ) {
@@ -78,7 +78,7 @@ export class FilesController {
       throw new BadRequestException('No files provided');
     }
 
-    const urls = this.filesService.uploadMultipleFiles(files, category);
+    const urls = await this.filesService.uploadMultipleFiles(files, category);
 
     return {
       success: true,

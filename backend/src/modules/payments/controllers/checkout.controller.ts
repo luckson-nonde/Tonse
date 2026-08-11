@@ -8,6 +8,7 @@ import {
   Request,
   UseGuards,
   BadRequestException,
+  Header,
   HttpCode,
   HttpStatus,
   Inject,
@@ -53,11 +54,28 @@ export class CheckoutController {
     return this.checkout.checkout(req.user.id, dto);
   }
 
-  /** Poll payment progress (the payer approves out-of-band on their handset). */
+  /** Poll payment progress (the payer approves out-of-band on their handset,
+   *  or on the provider's hosted page). */
   @Get('checkout/:reference')
   @UseGuards(JwtAuthGuard)
   async status(@Param('reference') reference: string, @Request() req) {
     return this.checkout.status(req.user.id, reference);
+  }
+
+  /**
+   * The payer is back from a hosted payment page — check with the provider and
+   * settle if it really was paid.
+   *
+   * This exists because a hosted-page provider's server-to-server notification
+   * is best-effort and unordered against the payer's return. Calling it proves
+   * nothing on its own: it re-asks the provider, exactly as the notification
+   * path does, and is idempotent against it.
+   */
+  @Post('checkout/:reference/verify')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async verifyReturn(@Param('reference') reference: string, @Request() req) {
+    return this.checkout.settleFromReturn(req.user.id, reference);
   }
 
   /**
@@ -89,9 +107,14 @@ export class CheckoutController {
 }
 
 /**
- * PSP webhooks. Public by necessity — the provider has no JWT. Authentication
- * is the SIGNATURE over the raw body, verified inside `parseWebhook`; an
- * unsigned or mis-signed event is rejected before it can touch money.
+ * PSP callbacks. Public by necessity — the provider has no JWT.
+ *
+ * Where the provider signs its callbacks, the signature over the raw body is
+ * the authentication and `parseWebhook` rejects anything that doesn't match.
+ * DPO signs nothing, so there the shared secret on the notification URL is all
+ * this endpoint can check — and it is deliberately NOT what makes the flow
+ * safe. Safety comes from the handler re-verifying every event with the
+ * provider before a single ngwee moves.
  */
 @Controller('webhooks')
 export class WebhookController {
@@ -102,14 +125,24 @@ export class WebhookController {
 
   @Post('psp')
   @HttpCode(HttpStatus.OK)
+  @Header('Content-Type', 'application/xml')
   async receive(@Req() req: ExpressRequest & { rawBody?: Buffer }) {
     const raw = req.rawBody;
     if (!raw?.length) {
-      // Without the raw bytes the signature can't be checked, and a webhook we
-      // can't authenticate is one we must not act on.
-      throw new BadRequestException('Missing raw body — cannot verify signature');
+      // Without the raw bytes a signature can't be checked, and for an unsigned
+      // provider there is nothing to parse — either way, nothing to act on.
+      throw new BadRequestException('Missing raw body — cannot process callback');
     }
-    const event = this.provider.parseWebhook(raw, req.headers as Record<string, any>);
-    return this.checkout.handleWebhook(event);
+    const event = this.provider.parseWebhook(
+      raw,
+      req.headers as Record<string, any>,
+      req.query as Record<string, any>,
+    );
+    await this.checkout.handleWebhook(event);
+
+    // DPO expects this exact acknowledgement document and re-pushes without it.
+    // We ack whatever the outcome was: the notification WAS received, and
+    // whether it settled is our business, not a delivery failure to retry.
+    return '<?xml version="1.0" encoding="utf-8"?>\n<API3G><Response>OK</Response></API3G>';
   }
 }

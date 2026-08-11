@@ -17,6 +17,7 @@ import {
 import { useAuth } from '../../AuthContext';
 import { loanService } from '../../services/api/loanService';
 import { financingService } from '../../services/api/financingService';
+import { beginHostedPayment } from '../../services/api/paymentsService';
 import { recordInquiryView } from '../../services/api/inquiryService';
 import SecureFile, { isSecureFileUrl } from '../SecureFile';
 import { recordConsent } from '../../services/api/consentService';
@@ -696,6 +697,9 @@ export const LoanOffersView: React.FC = () => {
         // escrow (and this loan → DISBURSED) only settles once the payment is
         // confirmed. So we report a pending state rather than an instant "done".
         const res = await financingService.initiateDisbursement(String(offer.id));
+        // Live (DPO): the lender pays the principal on the provider's own page,
+        // so leave the app. Sandbox returns no redirect and reports below.
+        if (beginHostedPayment(res, { label: 'This disbursement' })) return;
         if (res?.status === 'successful') {
           setNotice({ kind: 'info', text: 'Disbursement confirmed — the seller has been paid.' });
         } else {
