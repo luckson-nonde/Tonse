@@ -6,8 +6,7 @@ import {
   StorefrontSort,
 } from '../../services/api/storefrontService';
 import StorefrontProductCard from './StorefrontProductCard';
-import InlineAdSlot from '../ads/InlineAdSlot';
-import { AD_EVERY } from './StorefrontCardGrid';
+import InlineAdSlot, { interleaveAdCells } from '../ads/InlineAdSlot';
 
 interface CategoryProductGridProps {
   categoryId: string;
@@ -136,26 +135,25 @@ export default function CategoryProductGrid({
             key={`${categoryId}-${sort}-${page}`}
             className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-4.5 items-stretch"
           >
-            {/* Same cadence as the storefront band: every row carries one
-                sponsored cell, here targeted at the browsed category. */}
-            {data.items.map((card, i) => (
-              <React.Fragment key={card.id}>
-                <StorefrontProductCard card={card} index={i} onOpen={onOpen} />
-                {(i + 1) % AD_EVERY === 0 && (
-                  <InlineAdSlot
-                    placement="CATEGORY_SIDEBAR"
-                    categoryId={categoryId}
-                    offset={(i + 1) / AD_EVERY - 1}
-                  />
-                )}
-              </React.Fragment>
-            ))}
-            {data.items.length % AD_EVERY !== 0 && (
-              <InlineAdSlot
-                placement="CATEGORY_SIDEBAR"
-                categoryId={categoryId}
-                offset={Math.floor(data.items.length / AD_EVERY)}
-              />
+            {/* Same weave as the storefront band — one sponsored cell per
+                row, its column walking across rows — here targeted at the
+                browsed category. */}
+            {interleaveAdCells(data.items.length).map((cell) =>
+              cell.kind === 'ad' ? (
+                <InlineAdSlot
+                  key={`ad-${cell.offset}`}
+                  placement="CATEGORY_SIDEBAR"
+                  categoryId={categoryId}
+                  offset={cell.offset}
+                />
+              ) : (
+                <StorefrontProductCard
+                  key={data.items[cell.index].id}
+                  card={data.items[cell.index]}
+                  index={cell.index}
+                  onOpen={onOpen}
+                />
+              ),
             )}
           </div>
 
