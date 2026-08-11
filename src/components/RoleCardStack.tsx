@@ -7,10 +7,12 @@ export interface RoleValueProp {
 }
 
 export interface RoleBanner {
-  /** Master-role id ('BUYER' | 'SELLER' | 'SERVICE_PROVIDER'). */
+  /** Card id — resolved to a role + optional subRole by the caller's route map. */
   id: string;
+  /** Already-imported artwork URL. Wins over `artKey`/`fallbackImage` when set. */
+  image?: string;
   /** Artwork file stem looked up in src/assets/images/onboarding/ (buyer | seller | provider). */
-  artKey: string;
+  artKey?: string;
   eyebrow: string;
   headline: string;
   description: string;
@@ -19,7 +21,15 @@ export interface RoleBanner {
   /** Pill CTA label, e.g. "Start Buying". */
   cta: string;
   /** Photo used when no artwork file exists for this role. */
-  fallbackImage: string;
+  fallbackImage?: string;
+  /**
+   * `object-position` for the photo. Defaults to `right`, which crops the
+   * onboarding banners to their photographic half so the copy baked into the
+   * file never doubles the card's own text. Square, centre-composed artwork
+   * (the category renders) must override this to `center` or it loses its
+   * subject off the left edge.
+   */
+  focalPoint?: string;
 }
 
 /**
@@ -55,8 +65,8 @@ export default function RoleCardStack({ banners, onSelect }: RoleCardStackProps)
   return (
     <div className="flex flex-col gap-6">
       {banners.map((b) => {
-        const art = artFor(b.artKey);
-        const photo = art ?? b.fallbackImage;
+        const art = b.artKey ? artFor(b.artKey) : undefined;
+        const photo = b.image ?? art ?? b.fallbackImage;
         return (
           <div
             key={b.id}
@@ -122,7 +132,8 @@ export default function RoleCardStack({ banners, onSelect }: RoleCardStackProps)
                 <img
                   src={photo}
                   alt={b.headline}
-                  className="w-full aspect-[9/10] object-cover object-right sm:aspect-auto sm:h-full sm:min-h-[200px] sm:rounded-2xl transition-transform duration-300 ease-in-out lg:group-hover:scale-[1.01]"
+                  style={{ objectPosition: b.focalPoint ?? 'right' }}
+                  className="w-full aspect-[9/10] object-cover sm:aspect-auto sm:h-full sm:min-h-[200px] sm:rounded-2xl transition-transform duration-300 ease-in-out lg:group-hover:scale-[1.01]"
                 />
               </button>
             </div>

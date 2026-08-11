@@ -4,7 +4,6 @@ import {
   ShoppingBag,
   Store,
   Truck,
-  Wrench,
   Check,
   Music,
   Calendar,
@@ -33,6 +32,12 @@ import {
   CalendarCheck,
 } from 'lucide-react';
 import AuthSplitLayout from '../components/AuthSplitLayout';
+// Tier-1 artwork for the three provider lineages that were promoted out of the
+// old provider sub-menu. There is no dedicated onboarding banner for them, so
+// they reuse the category hero renders (same house style, already on-brand).
+import labourArt from '../assets/images/categories/labour.jpg';
+import loansArt from '../assets/images/categories/loans.webp';
+import machineryArt from '../assets/images/categories/machinery-hire.jpg';
 import Button from '../components/Button';
 import { motion, AnimatePresence } from 'motion/react';
 import { SubRole } from '../types';
@@ -49,6 +54,10 @@ import { nudgeRepaint } from '../utils/forceRepaint';
 // Each entry renders as one composed 60/40 card in the vertical stack.
 // The photo side crops the banner artwork in src/assets/images/onboarding/
 // to its photographic right half (falling back to the Unsplash photo).
+//
+// The provider sub-menu that used to sit at tier 2 is gone: every provider
+// lineage (Service / Looking for Employment / Loans / Machinery) is a major
+// card here and jumps straight to its category step. See TIER1_ROUTES.
 const ROLE_BANNERS: RoleBanner[] = [
   {
     id: 'BUYER',
@@ -85,7 +94,7 @@ const ROLE_BANNERS: RoleBanner[] = [
     artKey: 'provider',
     eyebrow: 'Service · Professional',
     headline: "I'm a Service Provider",
-    description: 'Repairs, events, entertainment, skilled trades — customers book you.',
+    description: 'Repairs, events, entertainment, IT, consulting — customers book you.',
     valueProps: [
       { icon: BadgeCheck, label: 'Verified Pro' },
       { icon: CalendarCheck, label: 'Easy Booking' },
@@ -95,7 +104,64 @@ const ROLE_BANNERS: RoleBanner[] = [
     fallbackImage:
       'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=1200&h=675',
   },
+  {
+    // Formerly the "Labour" row inside the provider sub-menu. Same
+    // SKILLED_LABOUR lineage and trade picker — it just leads with the reason
+    // a tradesperson is actually here: finding work.
+    id: 'SKILLED_LABOUR',
+    image: labourArt,
+    focalPoint: 'center',
+    eyebrow: 'Trade · Employment',
+    headline: 'Looking for Employment',
+    description:
+      'Carpenter, welder, plumber, electrician — get matched to jobs hiring your trade.',
+    valueProps: [
+      { icon: Hammer, label: 'Your Trade' },
+      { icon: Briefcase, label: 'Matched Jobs' },
+      { icon: ShieldCheck, label: 'Verified Hirers' },
+    ],
+    cta: 'Find Work',
+  },
+  {
+    id: 'LENDER',
+    image: loansArt,
+    focalPoint: 'center',
+    eyebrow: 'Finance · Lender',
+    headline: "I'm a Loan Provider",
+    description: 'Licensed lender — offer collateral, salary and government-employee loans.',
+    valueProps: [
+      { icon: Building2, label: 'Licensed Lender' },
+      { icon: Users, label: 'Qualified Leads' },
+      { icon: CreditCard, label: 'Secure Payments' },
+    ],
+    cta: 'Offer Loans',
+  },
+  {
+    id: 'MACHINERY_HIRE',
+    image: machineryArt,
+    focalPoint: 'center',
+    eyebrow: 'Equipment · Hire',
+    headline: 'Heavy Machinery for Hire',
+    description: 'Rent out plant & equipment — excavators, cranes, tippers, generators.',
+    valueProps: [
+      { icon: Truck, label: 'Plant & Equipment' },
+      { icon: CalendarCheck, label: 'Hire Requests' },
+      { icon: TrendingUp, label: 'Higher Utilisation' },
+    ],
+    cta: 'List Equipment',
+  },
 ];
+
+// Where each tier-1 card lands. A card carrying a `subRole` has no sub-menu of
+// its own, so it skips tier 2 entirely and opens its category step (tier 3).
+const TIER1_ROUTES: Record<string, { role: MasterRole; subRole?: SubRole }> = {
+  BUYER: { role: 'BUYER' },
+  SELLER: { role: 'SELLER' },
+  SERVICE_PROVIDER: { role: 'SERVICE_PROVIDER', subRole: 'INDIVIDUAL_PROVIDER' },
+  SKILLED_LABOUR: { role: 'SERVICE_PROVIDER', subRole: 'SKILLED_LABOUR' },
+  LENDER: { role: 'SERVICE_PROVIDER', subRole: 'LENDER' },
+  MACHINERY_HIRE: { role: 'SERVICE_PROVIDER', subRole: 'MACHINERY_HIRE' },
+};
 
 
 
@@ -214,47 +280,12 @@ const sellerSubRoles: RoleOption[] = [
   },
 ];
 
-// SERVICE_PROVIDER tier-2: two kinds of provider —
-//   Service  → books/rents/performs/fixes (solo pro OR agency; identical
-//              downstream, so they're one option). Sees service categories.
-//   Skilled Labour → tradespeople. Goes straight to the trade picker.
-// Tier 3 shows each its own category set (see categoryFilter below).
-const serviceProviderSubRoles: RoleOption[] = [
-  {
-    id: 'INDIVIDUAL_PROVIDER',
-    eyebrow: 'Service · Professional',
-    title: 'Service',
-    description: 'Solo pro or agency — repairs, events, entertainment, IT, consulting.',
-    icon: Briefcase,
-    subRole: 'INDIVIDUAL_PROVIDER',
-  },
-  {
-    // Lender (loan company) — Agency stays merged into "Service" (retired as
-    // a separate card in this lineage); LENDER is the one genuinely new shape.
-    id: 'LENDER',
-    eyebrow: 'Finance · Lender',
-    title: 'Loan Provider',
-    description: 'Licensed lender — offer collateral, salary and government-employee loans.',
-    icon: Building2,
-    subRole: 'LENDER',
-  },
-  {
-    id: 'SKILLED_LABOUR',
-    eyebrow: 'Trade · Hands-on',
-    title: 'Labour',
-    description: 'Tradesperson — carpenter, welder, plumber, electrician.',
-    icon: Wrench,
-    subRole: 'SKILLED_LABOUR',
-  },
-  {
-    id: 'MACHINERY_HIRE',
-    eyebrow: 'Equipment · Hire',
-    title: 'Heavy Machinery for Hire',
-    description: 'Rent out plant & equipment — excavators, cranes, tippers, generators.',
-    icon: Truck,
-    subRole: 'MACHINERY_HIRE',
-  },
-];
+// SERVICE_PROVIDER has no tier-2 step any more. Each of its lineages —
+// Service (INDIVIDUAL_PROVIDER), Looking for Employment (SKILLED_LABOUR),
+// Loan Provider (LENDER) and Heavy Machinery for Hire (MACHINERY_HIRE) — is a
+// major card in ROLE_BANNERS and opens its own tier-3 category set directly
+// (see TIER1_ROUTES and the categoryFilter below). AGENCY_PROVIDER stays
+// retired: an agency registers as Service, same as a solo pro.
 
 type MasterRole = 'BUYER' | 'SELLER' | 'SERVICE_PROVIDER';
 
@@ -394,6 +425,22 @@ export default function RoleSelection() {
     }
   };
 
+  // Leaving tier 3. Providers reached it straight from a tier-1 card (their
+  // sub-menu no longer exists), so they rewind the whole way; sellers still
+  // have their tier-2 business-model step to land on. Either way the
+  // subcategory-view flag the tier-3 child pushed up is cleared, so it can't
+  // strand `true` and blank the header/Continue button on the way out.
+  const backFromTier3 = () => {
+    if (masterRole === 'SERVICE_PROVIDER') {
+      setTier(1);
+      setSelectedSubRole(null);
+      setSelectedCategories([]);
+    } else {
+      setTier(2);
+    }
+    setIsViewingSubcategories(false);
+  };
+
   const handleBack = () => {
     if (tier === 2) {
       if (isCompanyExpanded) {
@@ -404,11 +451,7 @@ export default function RoleSelection() {
         setSelectedSubRole(null);
       }
     } else if (tier === 3) {
-      // Returning to the specialist step: also clear the subcategory-view flag
-      // the tier-3 child pushed up, so it can't strand `true` and blank the
-      // tier-2 header/Continue button.
-      setTier(2);
-      setIsViewingSubcategories(false);
+      backFromTier3();
     }
   };
 
@@ -438,9 +481,7 @@ export default function RoleSelection() {
                 ? 'Your Position'
                 : masterRole === 'BUYER'
                   ? 'Buyer Setup'
-                  : masterRole === 'SERVICE_PROVIDER'
-                    ? 'Provider Setup'
-                    : 'Seller Setup'
+                  : 'Seller Setup'
               : 'Business Categories'
       }
       subtitle={
@@ -462,9 +503,7 @@ export default function RoleSelection() {
                     ? 'Select your role within the company'
                     : masterRole === 'BUYER'
                       ? "Tell us how you'll buy on Nyuwe"
-                      : masterRole === 'SERVICE_PROVIDER'
-                        ? 'Tell us what kind of provider you are'
-                        : "Tell us how you'll sell on Nyuwe"
+                      : "Tell us how you'll sell on Nyuwe"
                   : 'Select the categories that best describe your business.'}
             </span>
       }
@@ -487,8 +526,13 @@ export default function RoleSelection() {
               <RoleCardStack
                 banners={ROLE_BANNERS}
                 onSelect={(id) => {
-                  setMasterRole(id as MasterRole);
-                  setTier(2);
+                  const route = TIER1_ROUTES[id];
+                  if (!route) return;
+                  setMasterRole(route.role);
+                  setSelectedSubRole(route.subRole ?? null);
+                  // Provider lineages carry their own subRole, so there is
+                  // nothing left to ask at tier 2 — go straight to categories.
+                  setTier(route.subRole ? 3 : 2);
                 }}
               />
 
@@ -537,15 +581,14 @@ export default function RoleSelection() {
                   onSelect={handleSubRoleSelect}
                 />
               ) : (() => {
-                const items = isCompanyExpanded
+                // Only two lineages still have a tier-2 step: company buyers
+                // (their position) and sellers (their business model).
+                const items: RoleOption[] = isCompanyExpanded
                   ? companySubRoles
-                  : masterRole === 'SERVICE_PROVIDER'
-                    ? serviceProviderSubRoles
-                    : sellerSubRoles;
-                // Provider menu stays a vertical stack even at 3 cards (Service /
-                // Labour / Heavy Machinery) — the large stacked cards read better
-                // than a 2-col grid with an orphaned third card.
-                const isStacked = items.length <= 2 || masterRole === 'SERVICE_PROVIDER';
+                  : sellerSubRoles;
+                // Short menus read better as large stacked cards than as a
+                // 2-col grid with an orphaned last card.
+                const isStacked = items.length <= 2;
                 return (
                   <div
                     className={
@@ -746,12 +789,7 @@ export default function RoleSelection() {
                   onSubcategoryViewChange={setIsViewingSubcategories}
                   autoLabour={selectedSubRole === 'SKILLED_LABOUR'}
                   autoMachinery={selectedSubRole === 'MACHINERY_HIRE'}
-                  onBack={() => {
-                    // Labour trade-picker's Back unmounts this child; clear the
-                    // subcategory-view flag it pushed so tier 2 renders cleanly.
-                    setTier(2);
-                    setIsViewingSubcategories(false);
-                  }}
+                  onBack={backFromTier3}
                 />
               </div>
             </motion.div>
