@@ -36,6 +36,9 @@ export interface VentureDepositResult {
   fee: string;
   totalCharged: string;
   instruction?: string;
+  /** Set by hosted-page providers (DPO) — the payer MUST be sent here or
+   *  nothing is collected. Absent on the sandbox provider. */
+  redirectUrl?: string;
 }
 
 export const ventureService = {

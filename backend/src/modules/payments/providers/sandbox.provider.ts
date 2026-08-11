@@ -22,7 +22,12 @@ import { fromNgwee, toNgwee } from '../../../common/money/money';
  * lifecycle (pending → pay-offline → successful/failed), charges a realistic
  * fee, and requires a signed webhook to confirm anything — so the whole money
  * path (checkout → webhook → verify → journal) is exercised for real today,
- * and swapping in live Lenco changes one env var, not the design.
+ * and swapping in live DPO changes one env var, not the design.
+ *
+ * It models the push-to-handset shape rather than DPO's hosted page (no
+ * `redirectUrl`), which is what keeps the in-app "simulate approval" flow
+ * usable in development. Callers must treat `redirectUrl` as optional for
+ * exactly this reason.
  *
  * Deterministic test hooks (amount-driven, so no magic flags):
  *   • amount ending .13 → the collection FAILS
@@ -132,7 +137,7 @@ export class SandboxPaymentProvider implements PaymentProvider {
   /** Signed exactly like the real thing, so signature handling is exercised. */
   parseWebhook(rawBody: Buffer, headers: Record<string, any>): WebhookEvent {
     const secret = process.env.PSP_WEBHOOK_SECRET || 'sandbox-secret';
-    const signature = String(headers['x-tonse-signature'] || headers['x-lenco-signature'] || '');
+    const signature = String(headers['x-tonse-signature'] || '');
     const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
 
     const sigBuf = Buffer.from(signature);

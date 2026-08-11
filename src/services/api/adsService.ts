@@ -101,6 +101,9 @@ export interface AdCheckoutResult {
   fee: string;
   totalCharged: string;
   instruction?: string;
+  /** Set by hosted-page providers (DPO) — the payer MUST be sent here or
+   *  nothing is collected. Absent on the sandbox provider. */
+  redirectUrl?: string;
 }
 
 /** Mirrors AdsService.priceFor so the create-ad form can show a live total

@@ -6,8 +6,9 @@ export class VentureDepositDto {
   @Matches(/^\d+(\.\d{1,2})?$/, { message: 'Amount must be a valid money value' })
   amount: string;
 
-  // Card requires a PCI-encrypted payload (see lenco.provider.ts) — out of
-  // scope for now, so this only ever accepts mobile-money.
+  // Kept to mobile-money on purpose. DPO's hosted page offers card too, but a
+  // deposit is a seller topping up their own balance, which the mobile-money
+  // path already covers — widening it is a product decision, not a plumbing one.
   @IsOptional()
   @IsIn(['mobile-money'])
   channel?: 'mobile-money';

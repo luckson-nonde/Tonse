@@ -1,13 +1,10 @@
-import {
-  Injectable,
-  Logger,
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, ConflictException, ForbiddenException, NotFoundException, UnauthorizedException, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import {
+  STORAGE_DRIVER,
+  StorageDriver,
+  storageKeyFromUrl,
+} from '../storage/storage-driver.interface';
 import { DataSource, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { UserEmail } from './entities/user-email.entity';
@@ -118,6 +115,9 @@ export class UsersService {
     // UsersModule → ReferralsModule (referrals never imports UsersModule —
     // it uses entity-only User/UserEmail repos).
     private readonly funnelTrackingService: FunnelTrackingService,
+  
+    @Inject(STORAGE_DRIVER)
+    private readonly storage: StorageDriver,
   ) {}
 
   // ===== PROFILE HELPERS (Phase 3) ============================================
@@ -1279,7 +1279,7 @@ export class UsersService {
       }
 
       // Files last — a failure here must not resurrect the (already-erased) account.
-      this.deleteUploadedFiles(files);
+      await this.deleteUploadedFiles(files);
       this.logger.log(
         `deleteAccount: erased user ${userId} + ${staffIds.length} staff; removed ${files.length} file(s)`,
       );
@@ -1330,34 +1330,29 @@ export class UsersService {
     }
   }
 
-  /** Unlink uploaded files from disk (public/uploads AND the encrypted
-   *  secure-uploads dir), each guarded to stay within its own directory. */
-  private deleteUploadedFiles(candidates: string[]): void {
-    const publicDir = path.join(process.cwd(), 'public');
-    const uploadsDir = path.join(publicDir, 'uploads');
-    const secureDir = path.join(process.cwd(), 'secure-uploads');
+  /**
+   * Erase a user's uploaded files — public images AND encrypted sensitive
+   * documents — through the configured storage backend.
+   *
+   * Previously this resolved paths against `process.cwd()/public/uploads` and
+   * `process.cwd()/secure-uploads`, ignoring UPLOADS_DIR / SECURE_UPLOADS_DIR
+   * entirely. On any deploy where uploads sit on a mounted volume (Render),
+   * those paths pointed at directories holding nothing, every unlink missed,
+   * and the erasure silently left KYC documents in place. Going through the
+   * driver fixes that and works on object storage too.
+   *
+   * Classification is by URL shape: `/files/secure/...` is the authenticated
+   * endpoint, so those are the encrypted ones; everything else is public.
+   */
+  private async deleteUploadedFiles(candidates: string[]): Promise<void> {
     for (const raw of candidates) {
       if (!raw || typeof raw !== 'string') continue;
+      const key = storageKeyFromUrl(raw);
+      if (!key) continue;
       try {
-        let p: string;
-        let root: string;
-        if (raw.includes('/files/secure/')) {
-          // Encrypted sensitive file — lives in secure-uploads/<basename>.
-          p = path.join(secureDir, path.basename(raw));
-          root = secureDir;
-        } else if (path.isAbsolute(raw)) {
-          p = path.normalize(raw);
-          root = uploadsDir;
-        } else {
-          const idx = raw.indexOf('/uploads/');
-          if (idx === -1) continue;
-          p = path.join(publicDir, raw.slice(idx + 1)); // 'uploads/…'
-          root = uploadsDir;
-        }
-        if (!p.startsWith(root)) continue; // never escape the intended dir
-        if (fs.existsSync(p)) fs.unlinkSync(p);
+        await this.storage.delete(key, raw.includes('/files/secure/') ? 'secure' : 'public');
       } catch {
-        // best-effort — a missing/locked file must not fail the deletion
+        // best-effort — one bad file must not stop the rest of the erasure
       }
     }
   }

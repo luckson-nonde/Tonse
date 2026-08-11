@@ -7,7 +7,7 @@ import * as cors from 'cors';
 import * as path from 'path';
 import * as express from 'express';
 import { assertPiiCryptoReady } from './common/crypto/pii-crypto';
-import { getUploadsDir } from './config/storage.config';
+import { getUploadsDir, isFilesystemStorage } from './config/storage.config';
 
 async function bootstrap() {
   // Fail fast on missing PII_ENCRYPTION_KEY (production fail-closed). The key
@@ -21,20 +21,27 @@ async function bootstrap() {
 
   // Configure payload size limits (for large file uploads and base64 images).
   //
-  // `verify` stashes the RAW request body before JSON parsing. PSP webhooks are
-  // signed over the exact bytes sent, so re-serialising the parsed object can
-  // never reproduce the signature (key order and whitespace differ). Without
-  // this, webhook signatures are unverifiable — i.e. anyone who knows the URL
+  // `verify` stashes the RAW request body before parsing. PSP callbacks are
+  // authenticated over the exact bytes sent, so re-serialising the parsed
+  // object can never reproduce a signature (key order and whitespace differ).
+  // Without this, callbacks are unverifiable — i.e. anyone who knows the URL
   // could post a "payment succeeded" event and mint escrow.
+  const stashRawBody = (req: any, _res: any, buf: Buffer) => {
+    if (buf?.length) req.rawBody = buf;
+  };
+
+  app.use(express.json({ limit: '50mb', verify: stashRawBody }));
+  // DPO posts its Payment Notification as XML or form-encoded, never JSON, so
+  // both parsers must stash the raw bytes too or /webhooks/psp sees an empty
+  // body and rejects every real notification.
+  app.use(express.urlencoded({ limit: '50mb', extended: true, verify: stashRawBody }));
   app.use(
-    express.json({
-      limit: '50mb',
-      verify: (req: any, _res, buf: Buffer) => {
-        if (buf?.length) req.rawBody = buf;
-      },
+    express.text({
+      limit: '5mb',
+      type: ['text/xml', 'application/xml', 'text/plain'],
+      verify: stashRawBody,
     }),
   );
-  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // Security — must run BEFORE express.static. express.static ends the
   // response directly for any matched file without calling next(), so any
@@ -52,10 +59,17 @@ async function bootstrap() {
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   };
 
-  // /uploads is mounted explicitly because in production it lives on a
-  // persistent disk OUTSIDE the bundled public/ dir (see storage.config.ts).
+  // /uploads is mounted explicitly because on a disk-backed deploy it lives on
+  // a persistent volume OUTSIDE the bundled public/ dir (see storage.config.ts).
   // Registered first so it wins regardless of where the files actually sit.
-  app.use('/uploads', express.static(getUploadsDir(), { setHeaders: embeddable }));
+  //
+  // Skipped entirely on object storage: there is no local directory to serve,
+  // and mounting one would answer /uploads/* with 404s that look like missing
+  // files rather than a misrouted request. Under that driver the stored URLs
+  // are absolute CDN links, so nothing should reach this path at all.
+  if (isFilesystemStorage()) {
+    app.use('/uploads', express.static(getUploadsDir(), { setHeaders: embeddable }));
+  }
 
   // Remaining bundled static assets.
   app.use(

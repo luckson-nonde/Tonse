@@ -7,6 +7,28 @@ import { saveAdInquiryIntent } from '../../services/adInquiryIntent';
 import { useAuth } from '../../AuthContext';
 
 const ROTATE_MS = 10000;
+const FETCH_TTL_MS = 60000;
+
+/**
+ * Short-lived cache of the active-ads request, keyed by placement+category.
+ * A rail stacks two slots that read the SAME pool (see AdRail) — without this
+ * every rail would fire the identical public GET twice on every mount.
+ * A rejected fetch is evicted so a transient failure isn't cached.
+ */
+const adsCache = new Map<string, { at: number; promise: Promise<Advertisement[]> }>();
+
+function fetchAds(placement: AdPlacementLocation, categoryId?: string): Promise<Advertisement[]> {
+  const key = `${placement}|${categoryId ?? ''}`;
+  const hit = adsCache.get(key);
+  if (hit && Date.now() - hit.at < FETCH_TTL_MS) return hit.promise;
+
+  const promise = adsService.getActiveAds(placement, categoryId).catch((err) => {
+    adsCache.delete(key);
+    throw err;
+  });
+  adsCache.set(key, { at: Date.now(), promise });
+  return promise;
+}
 
 interface AdCarouselProps {
   placement: AdPlacementLocation;
@@ -17,6 +39,10 @@ interface AdCarouselProps {
    *  the rail shows ads bought for THAT category (electronics → electronics
    *  ads, loans → lender ads) ahead of untargeted ones. */
   categoryId?: string;
+  /** Phase shift into the same ad pool, so stacked slots in one rail show
+   *  different advertisers instead of two copies of the same ad. With fewer
+   *  ads than slots it wraps and they repeat — better than a blank slot. */
+  offset?: number;
 }
 
 /**
@@ -27,7 +53,7 @@ interface AdCarouselProps {
  * (the only precedent, DashboardCalendar's counter-card rotation, is tightly
  * coupled to that shape) — this one is self-contained.
  */
-export default function AdCarousel({ placement, variant, categoryId }: AdCarouselProps) {
+export default function AdCarousel({ placement, variant, categoryId, offset = 0 }: AdCarouselProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [ads, setAds] = useState<Advertisement[]>([]);
@@ -41,8 +67,7 @@ export default function AdCarousel({ placement, variant, categoryId }: AdCarouse
     let cancelled = false;
     // Re-runs when the buyer switches category, so the rail re-targets.
     setLoaded(false);
-    adsService
-      .getActiveAds(placement, categoryId)
+    fetchAds(placement, categoryId)
       .then((rows) => {
         if (!cancelled) {
           setAds(rows);
@@ -122,7 +147,10 @@ export default function AdCarousel({ placement, variant, categoryId }: AdCarouse
     );
   }
 
-  const ad = ads[index];
+  // Every slot advances on its own timer but reads the pool at its own phase,
+  // so a two-slot rail shows two advertisers rather than the same one twice.
+  const active = (index + offset) % ads.length;
+  const ad = ads[active];
 
   return (
     <div
@@ -165,7 +193,7 @@ export default function AdCarousel({ placement, variant, categoryId }: AdCarouse
           {ads.map((_, i) => (
             <span
               key={i}
-              className={`w-1.5 h-1.5 rounded-full transition-all ${i === index ? 'bg-white' : 'bg-white/40'}`}
+              className={`w-1.5 h-1.5 rounded-full transition-all ${i === active ? 'bg-white' : 'bg-white/40'}`}
             />
           ))}
         </div>

@@ -35,6 +35,7 @@ import { SiteSettingsModule } from './modules/site-settings/site-settings.module
 import { FinancingModule } from './modules/financing/financing.module';
 import { ConsentsModule } from './modules/consents/consents.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
+import { StorageModule } from './modules/storage/storage.module';
 import { VentureModule } from './modules/venture/venture.module';
 import { CarePlansModule } from './modules/care-plans/care-plans.module';
 import { CalendarEventsModule } from './modules/calendar-events/calendar-events.module';
@@ -55,7 +56,7 @@ import { IdempotencyKey } from './modules/idempotency/entities/idempotency-key.e
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import encryptionConfig from './config/encryption.config';
-import pspConfig from './config/lenco.config';
+import pspConfig from './config/psp.config';
 import promoterConfig from './config/promoter.config';
 import webpushConfig from './config/webpush.config';
 
@@ -116,6 +117,8 @@ import webpushConfig from './config/webpush.config';
     FinancingModule,
     ConsentsModule,
     LedgerModule,
+    // Global: upload storage driver (filesystem | spaces). See storage.module.ts.
+    StorageModule,
     VentureModule,
     CarePlansModule,
     CalendarEventsModule,
