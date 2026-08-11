@@ -7,6 +7,7 @@ import FloatingInput from '../components/FloatingInput';
 import Logo from '../components/Logo';
 import { createInquiry } from '../services/api/inquiryService';
 import { getPendingInquiry, clearPendingInquiry } from '../services/pendingInquiry';
+import { peekAdInquiryIntent, clearAdInquiryIntent } from '../services/adInquiryIntent';
 import { getHomePathForRole } from '../utils/roleHome';
 
 export default function Login() {
@@ -26,6 +27,10 @@ export default function Login() {
   // this is just the name shown in the banner below.
   const pendingIntentShopName = (location.state as { pendingIntentShopName?: string } | null)
     ?.pendingIntentShopName;
+  // Set by AdCarousel when a logged-out visitor clicks an advert. Nothing is
+  // composed yet (unlike the draft above) — signing in just resumes the
+  // funnel at the advertiser, so the banner promises that and no more.
+  const pendingAdTitle = (location.state as { pendingAdTitle?: string } | null)?.pendingAdTitle;
   const [email, setEmail] = useState(prefillEmail);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -68,6 +73,25 @@ export default function Login() {
         // Logged into a non-BUYER account — that role can't file an
         // inquiry, so the draft can't be resumed. Discard silently.
         clearPendingInquiry();
+      }
+
+      // Resume point for an advert click made while logged out: the ad named
+      // the shop, so there's nothing left to pick — re-enter the funnel at
+      // "how do you want to buy" with that shop already targeted.
+      // Peeked, not taken: BuyerDashboard is the one that consumes it (it
+      // needs the shop id to hydrate the target), so it must still be there
+      // when we land.
+      const adIntent = peekAdInquiryIntent();
+      if (adIntent) {
+        if (loggedIn?.role === 'BUYER') {
+          navigate('/buyer/process-selection');
+          return;
+        }
+        // Any other role can't file an inquiry — show them the advertiser's
+        // shop page instead of silently swallowing the click.
+        clearAdInquiryIntent();
+        navigate(`/discover/${adIntent.shopProfileId}`);
+        return;
       }
 
       // Straight to their dashboard, not via "/" — when the landing page is
@@ -127,6 +151,13 @@ export default function Login() {
         <div className="p-4 bg-amber-50 border border-amber-100 text-amber-700 text-sm rounded-xl font-medium mb-6">
           Log in to send your inquiry to <strong>{pendingIntentShopName}</strong> — we'll send it the
           moment you're signed in.
+        </div>
+      )}
+
+      {pendingAdTitle && resumeStatus === 'idle' && (
+        <div className="p-4 bg-amber-50 border border-amber-100 text-amber-700 text-sm rounded-xl font-medium mb-6">
+          Log in to continue with <strong>{pendingAdTitle}</strong> — we'll take you straight to
+          your request, no searching needed.
         </div>
       )}
 
