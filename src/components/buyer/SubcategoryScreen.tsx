@@ -159,8 +159,8 @@ export default function SubcategoryScreen({
 
       {/* Category-targeted ad rail — keyed to the master the buyer is
           browsing, so Electronics shows electronics ads and Loans shows
-          lender ads. Two stacked slots that scroll with the list. */}
-      <AdRail placement="CATEGORY_SIDEBAR" categoryId={master.id} />
+          lender ads. Fills: as many slots as the subcategory list is tall. */}
+      <AdRail placement="CATEGORY_SIDEBAR" categoryId={master.id} fill />
     </div>
   );
 }

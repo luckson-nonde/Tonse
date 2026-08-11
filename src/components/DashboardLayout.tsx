@@ -61,7 +61,7 @@ import RoleManagerModal from './RoleManagerModal';
 import BuyerVerificationBanner from './BuyerVerificationBanner';
 import SubscriptionPaywall from './SubscriptionPaywall';
 import DashboardCalendar, { CalendarTone, CounterCard } from './DashboardCalendar';
-import AdCarousel from './ads/AdCarousel';
+import AdRail from './ads/AdRail';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
 import { useDashboard } from '../DashboardContext';
 import { hasPermission, isCollectionOfficer, isQuotationManager, isLoanOfficer, isTechnician, PERMISSIONS } from '../utils/rbac';
@@ -141,6 +141,7 @@ const AD_SIDEBAR_TABS = [
   'archived-leads',
   'paid-orders',
   'products',
+  'my-job-posts',
 ];
 
 // Calendar panel shown in right sidebar on dashboard/home tabs
@@ -1491,11 +1492,12 @@ export default function DashboardLayout({
 
           {/* Right ad panel - desktop only, shown on secondary list-view tabs
               (mirrors the calendar rail's container so ad slots line up with
-              the homepage sidebar). Mutually exclusive with the calendar. */}
+              the homepage sidebar). Mutually exclusive with the calendar.
+              The rail fills the panel's height with slots automatically. */}
           {AD_SIDEBAR_TABS.includes(activeTab) && (
             <aside className="hidden xl:flex flex-col w-88 shrink-0 border-l border-[#f1f5f9] bg-white overflow-y-auto">
-              <div className="p-6 pt-8">
-                <AdCarousel placement="SECONDARY_SIDEBAR" variant="sidebar" />
+              <div className="p-6 pt-8 flex-1 flex">
+                <AdRail placement="SECONDARY_SIDEBAR" fill className="flex-1" />
               </div>
             </aside>
           )}

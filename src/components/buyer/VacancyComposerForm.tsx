@@ -563,8 +563,9 @@ export default function VacancyComposerForm({ tradeLabel, initial, onBack, onSub
         </div>
 
         {/* Job posts only ever run under the labour master, so the rail stays
-            targeted at the same ads the trade picker showed a step earlier. */}
-        <AdRail placement="CATEGORY_SIDEBAR" categoryId="labour" />
+            targeted at the same ads the trade picker showed a step earlier.
+            Fills the form's full height with slots. */}
+        <AdRail placement="CATEGORY_SIDEBAR" categoryId="labour" fill />
       </div>
     </>
   );
