@@ -10,6 +10,7 @@ export const ACCOUNT = {
   PLATFORM_COMMISSION_REVENUE: 'PLATFORM_COMMISSION_REVENUE_ZMW',
   AD_REVENUE: 'AD_REVENUE_ZMW',
   JOB_BOARD_REVENUE: 'JOB_BOARD_REVENUE_ZMW',
+  SUBSCRIPTION_REVENUE: 'SUBSCRIPTION_REVENUE_ZMW',
   PSP_FEE_EXPENSE: 'PSP_FEE_EXPENSE_ZMW',
   SUSPENSE: 'SUSPENSE_ZMW',
 } as const;
@@ -98,6 +99,15 @@ export const LEDGER_ACCOUNTS: AccountSeed[] = [
     currency: 'ZMW',
     description:
       'Earned when a poster pays the admin-set job-posting fee. A rejected posting is NOT refunded — the poster edits and resubmits on the same paid fee.',
+  },
+  {
+    code: ACCOUNT.SUBSCRIPTION_REVENUE,
+    name: 'Shop subscription revenue',
+    type: 'REVENUE',
+    normalSide: 'CREDIT',
+    currency: 'ZMW',
+    description:
+      "Monthly shop subscriptions (SELLER / SERVICE_PROVIDER dashboard access while the admin's monetization switch is on). Credited only after the PSP verifies the payment.",
   },
   {
     code: ACCOUNT.PSP_FEE_EXPENSE,

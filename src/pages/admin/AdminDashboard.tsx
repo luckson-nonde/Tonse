@@ -76,6 +76,7 @@ import {
   AdminAuditLog,
   AdminCategoryNode,
   LedgerAccountBalance,
+  AdminPlatformEarnings,
   LedgerJournalRow,
   TrialBalance,
   EscrowPositions,
@@ -2426,6 +2427,7 @@ function LedgerTab() {
 /** The chart of accounts and where the float sits. */
 function AccountsTab() {
   const [rows, setRows] = useState<LedgerAccountBalance[]>([]);
+  const [earnings, setEarnings] = useState<AdminPlatformEarnings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -2434,7 +2436,12 @@ function AccountsTab() {
       setLoading(true);
       setError(null);
       try {
-        setRows(await adminService.getLedgerAccounts());
+        const [accounts, earned] = await Promise.all([
+          adminService.getLedgerAccounts(),
+          adminService.getPlatformEarnings(),
+        ]);
+        setRows(accounts);
+        setEarnings(earned);
       } catch (e: any) {
         setError(e?.message || 'Failed to load accounts');
       } finally {
@@ -2443,7 +2450,43 @@ function AccountsTab() {
     })();
   }, []);
 
+  const STREAM_LABEL: Record<string, string> = {
+    PLATFORM_COMMISSION_REVENUE_ZMW: 'Commissions (orders + tickets)',
+    AD_REVENUE_ZMW: 'Ad placements',
+    JOB_BOARD_REVENUE_ZMW: 'Job posting fees',
+    SUBSCRIPTION_REVENUE_ZMW: 'Shop subscriptions',
+  };
+
   return (
+    <>
+      {/* ── Platform Earnings — the admin's own account. Live from the ledger:
+            every stream credited only after the PSP verified the money. ── */}
+      {earnings && (
+        <div className="mb-6 bg-[#1a1a2e] rounded-2xl p-6 sm:p-7 text-white shadow-[0_4px_18px_-12px_rgba(15,23,42,0.3)]">
+          <p className="text-[10px] font-black uppercase tracking-[0.32em] text-[#C9973A] mb-1.5">
+            Platform Earnings
+          </p>
+          <p className="text-3xl sm:text-4xl font-black">
+            K{Number(earnings.totalZmw).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </p>
+          <p className="text-[11px] text-white/50 mt-1">
+            What Nyuwe itself has earned — commissions and fees, verified payments only.
+          </p>
+          <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {earnings.streams.map((s) => (
+              <div key={s.code} className="rounded-xl bg-white/5 border border-white/10 px-4 py-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-white/50">
+                  {STREAM_LABEL[s.code] ?? s.name}
+                </p>
+                <p className="text-lg font-black mt-0.5">
+                  K{Number(s.balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
     <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_4px_18px_-12px_rgba(15,23,42,0.08)] overflow-hidden">
       <EmptyOrLoading loading={loading} error={error} empty={rows.length === 0} emptyLabel="No accounts." />
       {!loading && !error && rows.length > 0 && (
@@ -2488,6 +2531,7 @@ function AccountsTab() {
         </div>
       )}
     </div>
+    </>
   );
 }
 

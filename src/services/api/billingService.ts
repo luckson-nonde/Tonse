@@ -98,14 +98,31 @@ export async function getMySubscription(): Promise<MySubscriptionStatus | null> 
   }
 }
 
-/** Simulated renewal — backend charges the CURRENT monthly fee regardless of `amount`. */
-export async function payMySubscription(payload: {
-  amount: number;
-  method: string;
+/** Result of starting a subscription checkout — the standard initiate shape. */
+export interface SubscriptionCheckoutResult {
+  reference: string;
+  status: 'pending' | 'successful' | 'failed' | 'pay-offline' | string;
+  amount: string;
+  /** 'sandbox' → simulate; 'dpo' → approve-on-phone polling card. */
   provider?: string;
+  instruction?: string;
+  redirectUrl?: string;
+}
+
+/**
+ * Start a REAL subscription payment (replaces the old simulated instant
+ * renewal). The backend charges the CURRENT monthly fee — the amount here is
+ * never sent. paidUntil extends only after the PSP verifies the money.
+ */
+export async function checkoutMySubscription(dto: {
+  channel?: 'mobile-money' | 'card';
   phone?: string;
-}): Promise<MySubscriptionStatus> {
-  const res = await apiClient.post<MySubscriptionStatus>('/billing/subscription/pay', payload);
-  if (!res.data) throw new Error('Payment did not return a subscription status — please refresh.');
+  operator?: string;
+}): Promise<SubscriptionCheckoutResult> {
+  const res = await apiClient.post<SubscriptionCheckoutResult>(
+    '/billing/subscription/checkout',
+    dto,
+  );
+  if (!res.data) throw new Error('The payment could not be started — please try again.');
   return res.data;
 }

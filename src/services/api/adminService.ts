@@ -413,6 +413,12 @@ export const adminService = {
     return res.data ?? null;
   },
 
+  /** The platform's own earnings — total + one row per revenue stream. */
+  async getPlatformEarnings(): Promise<AdminPlatformEarnings | null> {
+    const res = await apiClient.get<AdminPlatformEarnings>('/admin/platform-earnings');
+    return res.data ?? null;
+  },
+
   // ───── Ad placements (primary admin only) ──────────────────────────────────
 
   async getAdPricing(): Promise<AdminAdPricing | null> {
@@ -683,6 +689,14 @@ export type UpdateBillingSettingsInput = Partial<
     | 'jobPostingFee'
   >
 >;
+
+/** The admin's "virtual account": what the platform itself has earned, live
+ *  from the ledger — commissions (orders + tickets), ads, job board,
+ *  subscriptions — plus the sum. */
+export interface AdminPlatformEarnings {
+  totalZmw: string;
+  streams: Array<{ code: string; name: string; balance: string }>;
+}
 
 export type AdAdminPlacementLocation = 'HOMEPAGE_CENTER' | 'SECONDARY_SIDEBAR' | 'CATEGORY_SIDEBAR';
 

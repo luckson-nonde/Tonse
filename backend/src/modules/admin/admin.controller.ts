@@ -417,6 +417,13 @@ export class AdminController {
     return this.ledger.accountBalances();
   }
 
+  /** The platform's own earnings — total + one row per revenue stream
+   *  (commissions, ads, job board, subscriptions). The admin's "account". */
+  @Get('platform-earnings')
+  async platformEarnings() {
+    return this.ledger.platformEarnings();
+  }
+
   /** Debits vs credits per account. `balanced: false` means a broken ledger. */
   @Get('ledger/trial-balance')
   async trialBalance() {

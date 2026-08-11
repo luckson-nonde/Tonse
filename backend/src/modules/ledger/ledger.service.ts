@@ -298,6 +298,37 @@ export class LedgerService {
   }
 
   /**
+   * The platform's own earnings — the admin's "virtual account". One number
+   * per revenue stream (order + ticket commissions, ads, job board,
+   * subscriptions) plus the total, derived live from ledger_entries exactly
+   * like accountBalances() so it can never drift from the books.
+   */
+  async platformEarnings(): Promise<{
+    totalZmw: string;
+    streams: Array<{ code: string; name: string; balance: string }>;
+  }> {
+    const REVENUE_CODES = [
+      'PLATFORM_COMMISSION_REVENUE_ZMW',
+      'AD_REVENUE_ZMW',
+      'JOB_BOARD_REVENUE_ZMW',
+      'SUBSCRIPTION_REVENUE_ZMW',
+    ];
+    const rows: Array<{ code: string; name: string; balance: string }> =
+      await this.dataSource.query(
+        `SELECT a.code, a.name,
+                COALESCE(SUM(CASE WHEN e.direction='CREDIT' THEN e.amount ELSE -e.amount END), 0)::text AS balance
+           FROM ledger_accounts a
+           LEFT JOIN ledger_entries e ON e."accountCode" = a.code
+          WHERE a.code = ANY($1)
+          GROUP BY a.code, a.name, a."createdAt"
+          ORDER BY a."createdAt"`,
+        [REVENUE_CODES],
+      );
+    const total = rows.reduce((sum, r) => sum + Number(r.balance), 0);
+    return { totalZmw: total.toFixed(2), streams: rows };
+  }
+
+  /**
    * Journals, newest first, paginated in SQL. Deliberately NOT the
    * "pull 10 000 rows and aggregate in JS" pattern the old admin stats used —
    * a ledger only grows.

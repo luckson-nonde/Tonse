@@ -20,6 +20,8 @@ import { Advertisement } from '../ads/entities/advertisement.entity';
 import { JobPosting } from '../job-board/entities/job-posting.entity';
 import { TicketOrder } from '../tickets/entities/ticket-order.entity';
 import { TicketsService } from '../tickets/tickets.service';
+import { BillingSettings } from '../billing/entities/billing-settings.entity';
+import { ShopSubscription } from '../billing/entities/shop-subscription.entity';
 import { LedgerService } from '../ledger/ledger.service';
 import { ACCOUNT } from '../ledger/ledger-accounts';
 import { isEscrowHolding } from '../quotes/quote-status';
@@ -618,6 +620,106 @@ export class CheckoutService {
     };
   }
 
+  /**
+   * Start paying the monthly shop subscription. The amount is the CURRENT
+   * admin-set monthlyFee, read server-side; `ownerId` is the SHOP OWNER
+   * (staff resolve to their owner before this is called), who both pays and
+   * gets the 30-day extension when the payment verifies. Entities are read
+   * directly (not via BillingService) to keep BillingModule → PaymentsModule
+   * a one-way street.
+   */
+  async initiateSubscriptionFee(
+    ownerId: string,
+    dto: { channel?: Channel; phone?: string; operator?: string },
+  ): Promise<{
+    reference: string;
+    provider?: string;
+    status: string;
+    amount: string;
+    fee: string;
+    totalCharged: string;
+    instruction?: string;
+    redirectUrl?: string;
+  }> {
+    const [settings] = await this.dataSource.getRepository(BillingSettings).find({ take: 1 });
+    if (!settings?.subscriptionsEnabled) {
+      throw new ConflictException('Subscriptions are currently switched off — nothing to pay.');
+    }
+    const amount = String(Number(settings.monthlyFee));
+    if (!(Number(amount) > 0)) {
+      throw new ConflictException('The subscription fee is currently zero — nothing to pay.');
+    }
+
+    const bearer = this.config.get<'customer' | 'merchant'>('psp.feeBearer') || 'customer';
+    const channel: Channel = dto.channel || 'mobile-money';
+    const fees = await this.provider.quoteFees({ amount, channel, bearer });
+
+    const reference = `SUB-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+
+    await this.pspTx.save(
+      this.pspTx.create({
+        reference,
+        provider: this.provider.name,
+        type: 'COLLECTION',
+        status: 'PENDING',
+        amount: fees.amount,
+        feeAmount: fees.fee,
+        feeBearer: bearer,
+        currency: fees.currency,
+        quoteId: null,
+        counterpartyId: ownerId,
+        context: { kind: 'SUBSCRIPTION_FEE', ownerId },
+        payerMsisdn: dto.phone ?? null,
+        channel,
+        idempotencyKey: `subscription-fee-collection:${reference}`,
+      } as any),
+    );
+
+    let result;
+    try {
+      result = await this.provider.initiateCollection({
+        reference,
+        amount: fees.amount,
+        currency: fees.currency,
+        channel,
+        bearer,
+        phone: dto.phone,
+        operator: dto.operator,
+        description: 'Nyuwe monthly shop subscription',
+      });
+    } catch (e) {
+      await this.pspTx.update({ reference }, { status: 'FAILED', lastError: (e as Error).message });
+      throw e;
+    }
+
+    await this.pspTx.update(
+      { reference },
+      {
+        providerReference: result.providerReference ?? null,
+        status:
+          result.status === 'successful'
+            ? 'SUCCESSFUL'
+            : result.status === 'failed'
+              ? 'FAILED'
+              : result.status === 'pay-offline'
+                ? 'PAY_OFFLINE'
+                : 'PENDING',
+        rawPayload: result.raw ?? null,
+      },
+    );
+
+    return {
+      reference,
+      provider: this.provider.name,
+      status: result.status,
+      amount: fees.amount,
+      fee: fees.fee,
+      totalCharged: fees.totalCharged,
+      instruction: result.instruction,
+      redirectUrl: result.redirectUrl,
+    };
+  }
+
   /** Load a TICKET_SALE psp transaction by reference, or 404. The kind check
    *  is the whole ownership model for guests: these methods can only ever
    *  touch ticket transactions, never an authenticated user's payment. */
@@ -789,6 +891,8 @@ export class CheckoutService {
       await this.fundJobPostFee(reference, verified.amount, verified.fee, verified.raw, (tx.context as any).jobPostingId);
     } else if ((tx.context as any)?.kind === 'TICKET_SALE') {
       await this.fundTicketSale(reference, verified.raw, (tx.context as any).orderReference);
+    } else if ((tx.context as any)?.kind === 'SUBSCRIPTION_FEE') {
+      await this.fundSubscriptionFee(reference, verified.amount, verified.fee, verified.raw, (tx.context as any).ownerId);
     } else {
       await this.fundVentureDeposit(reference, verified.amount, verified.fee, verified.raw);
     }
@@ -1303,6 +1407,79 @@ export class CheckoutService {
     });
 
     this.logger.log(`Job posting fee funded for ${reference}`);
+  }
+
+  /**
+   * A verified subscription payment: recognise the revenue and extend the
+   * shop's paidUntil by 30 days from max(now, current paidUntil) — the same
+   * arithmetic the old simulated paySubscription used, now gated on the PSP.
+   * Everything commits together and the SUCCESSFUL guard makes replays no-ops.
+   */
+  private async fundSubscriptionFee(
+    reference: string,
+    verifiedAmount: string,
+    verifiedFee: string | undefined,
+    raw: Record<string, any> | undefined,
+    ownerId: string,
+  ): Promise<void> {
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    await this.dataSource.transaction(async (m) => {
+      const [tx]: PspTransaction[] = await m.query(
+        'SELECT * FROM psp_transactions WHERE reference = $1 FOR UPDATE',
+        [reference],
+      );
+      if (!tx) throw new NotFoundException(`Unknown PSP transaction ${reference}`);
+      if (tx.status === 'SUCCESSFUL') return; // idempotent — never double-extend
+
+      const amountNgwee = toNgwee(verifiedAmount);
+
+      await this.ledger.postJournal(
+        {
+          type: 'SUBSCRIPTION_FEE',
+          idempotencyKey: `subscription-fee:${tx.id}`,
+          pspTransactionId: tx.id,
+          currency: tx.currency,
+          description: 'Monthly shop subscription fee',
+          memo: {
+            ownerId,
+            pspReference: tx.providerReference,
+            pspFee: verifiedFee ?? tx.feeAmount,
+            feeBearer: tx.feeBearer,
+          },
+          lines: [
+            { accountCode: ACCOUNT.PSP_HOLDING, direction: 'DEBIT', amountNgwee },
+            { accountCode: ACCOUNT.SUBSCRIPTION_REVENUE, direction: 'CREDIT', amountNgwee },
+          ],
+        },
+        m,
+      );
+
+      const subs = m.getRepository(ShopSubscription);
+      let subscription = await subs.findOne({ where: { userId: ownerId } });
+      const extendFrom =
+        subscription?.paidUntil && subscription.paidUntil.getTime() > Date.now()
+          ? subscription.paidUntil.getTime()
+          : Date.now();
+      const paidUntil = new Date(extendFrom + THIRTY_DAYS_MS);
+      if (subscription) {
+        subscription.paidUntil = paidUntil;
+        subscription.lastAmount = Number(verifiedAmount);
+      } else {
+        subscription = subs.create({
+          userId: ownerId,
+          paidUntil,
+          lastAmount: Number(verifiedAmount),
+        });
+      }
+      await subs.save(subscription);
+
+      await m.query(
+        `UPDATE psp_transactions SET status='SUCCESSFUL', "settledAt"=NOW(), "rawPayload"=$2 WHERE reference=$1`,
+        [reference, raw ? JSON.stringify(raw) : null],
+      );
+    });
+
+    this.logger.log(`Subscription fee funded for ${reference} (owner ${ownerId})`);
   }
 
   /**

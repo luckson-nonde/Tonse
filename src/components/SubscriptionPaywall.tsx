@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Lock, ShieldCheck, CalendarClock } from 'lucide-react';
+import { Lock, ShieldCheck, CalendarClock, FlaskConical, Loader2 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import {
   getBillingSettings,
   getMySubscription,
-  payMySubscription,
+  checkoutMySubscription,
 } from '../services/api/billingService';
+import { beginHostedPayment, paymentsService } from '../services/api/paymentsService';
 import PaymentSheet, { type PaymentSheetSubmitPayload } from './PaymentSheet';
+import PushPaymentWait from './PushPaymentWait';
 
 /**
  * Full-screen subscription wall for shops (SELLER / SERVICE_PROVIDER).
@@ -35,6 +37,13 @@ export default function SubscriptionPaywall() {
   } | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<{
+    reference: string;
+    provider?: string;
+    instruction?: string;
+  } | null>(null);
+  const [simulating, setSimulating] = useState(false);
+  const [payError, setPayError] = useState('');
 
   const refresh = useCallback(async () => {
     if (!isShop) return;
@@ -65,19 +74,46 @@ export default function SubscriptionPaywall() {
 
   const handleSubmit = async (payload: PaymentSheetSubmitPayload) => {
     setBusy(true);
+    setPayError('');
     try {
-      // Simulated PSP delay — the backend records success immediately.
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      await payMySubscription({
-        amount: payload.amount,
-        method: payload.method,
-        provider: payload.provider,
+      // REAL payment: the server charges the current monthly fee and only a
+      // PSP-verified success extends paidUntil.
+      const result = await checkoutMySubscription({
+        channel: payload.method === 'card' ? 'card' : 'mobile-money',
         phone: payload.phone,
+        operator: payload.provider,
       });
-      await refresh();
+      if (!result?.reference || result.status === 'failed') {
+        throw new Error('Payment could not be started. Please try again.');
+      }
       setSheetOpen(false);
+      // Live card (and any mobile fallback): the provider's hosted page.
+      if (beginHostedPayment(result, { label: 'Your shop subscription' })) return;
+      // In-app: mobile push (dpo) or the sandbox pending card.
+      setPending({
+        reference: result.reference,
+        provider: result.provider,
+        instruction: result.instruction,
+      });
+    } catch (e: any) {
+      setPayError(e?.message || 'Payment could not be started. Please try again.');
+      throw e;
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleSimulateApproval = async () => {
+    if (!pending) return;
+    setSimulating(true);
+    try {
+      await paymentsService.simulateCheckout(pending.reference, 'successful');
+      setPending(null);
+      await refresh();
+    } catch (e: any) {
+      setPayError(e?.message || 'Could not confirm the payment. Please try again.');
+    } finally {
+      setSimulating(false);
     }
   };
 
@@ -104,12 +140,51 @@ export default function SubscriptionPaywall() {
               Your subscription expired on {expiredAt.toLocaleDateString()}
             </p>
           )}
-          <button
-            onClick={() => setSheetOpen(true)}
-            className="mt-4 w-full py-3.5 bg-[#C9973A] text-white rounded-2xl font-black uppercase tracking-widest text-[12px] hover:bg-[#b8852f] transition-colors cursor-pointer"
-          >
-            Pay {feeLabel} / month
-          </button>
+          {pending ? (
+            <div className="mt-4 text-left">
+              {pending.provider === 'dpo' ? (
+                <PushPaymentWait
+                  reference={pending.reference}
+                  amountLabel={feeLabel}
+                  instruction={pending.instruction}
+                  onDone={(status) => {
+                    setPending(null);
+                    if (status === 'SUCCESSFUL') void refresh();
+                    else setPayError('The payment was not completed. You can try again.');
+                  }}
+                  onCancel={() => setPending(null)}
+                />
+              ) : (
+                <div className="rounded-2xl border border-[#e2e8f0] bg-slate-50 p-4 space-y-3">
+                  <p className="text-[13px] font-black text-[#1a1a2e]">Awaiting approval</p>
+                  <p className="text-[12px] text-slate-500 leading-relaxed">
+                    In production you'd approve this on your phone. This environment runs on the
+                    sandbox payment provider, so use the button below to simulate that approval.
+                  </p>
+                  <button
+                    onClick={() => void handleSimulateApproval()}
+                    disabled={simulating}
+                    className="w-full py-3 rounded-xl bg-[#C9973A] text-white font-black uppercase tracking-widest text-[11px] hover:bg-[#b8852f] disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {simulating ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <FlaskConical className="w-3.5 h-3.5" />
+                    )}
+                    Simulate approval (sandbox)
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => setSheetOpen(true)}
+              className="mt-4 w-full py-3.5 bg-[#C9973A] text-white rounded-2xl font-black uppercase tracking-widest text-[12px] hover:bg-[#b8852f] transition-colors cursor-pointer"
+            >
+              Pay {feeLabel} / month
+            </button>
+          )}
+          {payError && <p className="mt-3 text-[12px] font-bold text-rose-500">{payError}</p>}
           <p className="mt-4 text-[10px] text-slate-400 flex items-center justify-center gap-1.5">
             <ShieldCheck className="w-3 h-3" /> Covers 30 days from today — instant activation
           </p>

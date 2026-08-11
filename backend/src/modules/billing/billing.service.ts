@@ -3,9 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { MoreThan, Repository } from 'typeorm';
 import { BillingSettings, QuoteTier } from './entities/billing-settings.entity';
 import { ShopSubscription } from './entities/shop-subscription.entity';
-import { PaymentsService } from '../payments/payments.service';
 import { UpdateBillingSettingsDto } from './dto/update-billing-settings.dto';
-import { PaySubscriptionDto } from './dto/pay-subscription.dto';
 
 /** Seeds the settings row — same 8 tiers InquiryPreferences.tsx hardcoded before. */
 const DEFAULT_TIERS: QuoteTier[] = [
@@ -18,8 +16,6 @@ const DEFAULT_TIERS: QuoteTier[] = [
   { count: 60, price: 40 },
   { count: 70, price: 45 },
 ];
-
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Minimal caller shape — staff resolve to their owner, like quotes' providerScope. */
 interface CallerLike {
@@ -34,7 +30,6 @@ export class BillingService {
     private readonly settingsRepository: Repository<BillingSettings>,
     @InjectRepository(ShopSubscription)
     private readonly subscriptionsRepository: Repository<ShopSubscription>,
-    private readonly paymentsService: PaymentsService,
   ) {}
 
   /** Subscriptions belong to the shop OWNER; staff act on the owner's row. */
@@ -107,42 +102,10 @@ export class BillingService {
     };
   }
 
-  /**
-   * Simulated renewal: extends paidUntil from max(now, current paidUntil) by
-   * 30 days and writes a payments ledger row so the admin Financial tab sees
-   * it. The charge is always the CURRENT monthlyFee — dto.amount is ignored.
-   */
-  async paySubscription(caller: CallerLike, dto: PaySubscriptionDto) {
-    const settings = await this.getOrCreateSettings();
-    const ownerId = this.resolveOwnerId(caller);
-    const amount = Number(settings.monthlyFee);
-
-    let subscription = await this.subscriptionsRepository.findOne({ where: { userId: ownerId } });
-    const extendFrom =
-      subscription?.paidUntil && subscription.paidUntil.getTime() > Date.now()
-        ? subscription.paidUntil.getTime()
-        : Date.now();
-    const paidUntil = new Date(extendFrom + THIRTY_DAYS_MS);
-
-    if (subscription) {
-      subscription.paidUntil = paidUntil;
-      subscription.lastAmount = amount;
-    } else {
-      subscription = this.subscriptionsRepository.create({ userId: ownerId, paidUntil, lastAmount: amount });
-    }
-    await this.subscriptionsRepository.save(subscription);
-
-    await this.paymentsService.create({
-      userId: ownerId,
-      type: 'PAYMENT',
-      amount,
-      status: 'SUCCESS',
-      paymentMethod: dto.method,
-      description: 'Monthly shop subscription fee',
-      metadata: { kind: 'SHOP_SUBSCRIPTION', ownerId, paidByUserId: caller.id },
-      processedAt: new Date(),
-    });
-
-    return this.getMySubscriptionStatus(caller);
-  }
+  // paySubscription (the simulated instant renewal) is GONE. Renewals now run
+  // through BillingController's subscription/checkout →
+  // CheckoutService.initiateSubscriptionFee: a real, PSP-verified collection
+  // whose funding step (fundSubscriptionFee) posts the SUBSCRIPTION_FEE
+  // ledger journal and extends paidUntil with the same max(now, paidUntil)
+  // + 30 days arithmetic this method used to apply on a bare click.
 }
