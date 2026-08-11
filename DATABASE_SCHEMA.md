@@ -1033,7 +1033,7 @@ Indexes: `idx_job_postings_poster` (posterId) · `idx_job_postings_status` (stat
 Relations: none — `posterId` is a loose uuid column, no `@ManyToOne`/FK declared (same convention as `audit_logs`).
 
 #### `job_posting_categories`
-Junction between a job posting and the labour trade categories it targets. Composite PK (jobPostingId, categoryId) — exact mirror of `inquiry_categories`. Seeker-feed matching is an equality join from here to `service_provider_profile_categories`.
+Junction between a job posting and the labour trade categories it targets. Composite PK (jobPostingId, categoryId) — exact mirror of `inquiry_categories`. **Display and filtering only** — the seeker feed no longer joins this to `service_provider_profile_categories`; every employment account sees the whole board, and trades are a card tag plus a client-side filter.
 Entity file: `backend/src/modules/job-board/entities/job-posting-category.entity.ts`
 
 | Column | Type | Null | Default | Notes |

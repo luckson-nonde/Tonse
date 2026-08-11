@@ -12,10 +12,11 @@ interface LabourHomeViewProps {
 
 /**
  * Labour Overview — the pure-labour seller's landing tab, rebuilt around
- * the job board: how many approved posts match their trades, where their
- * applications stand, and the newest matching jobs. Self-fetching (the
- * schema mounts it with just onNavigate); the wallet card is rendered by
- * the surrounding schema chrome, not here.
+ * the job board: how many jobs are open, where their applications stand,
+ * and the newest vacancies. The feed is the whole board (no trade matching),
+ * so these counts are platform-wide. Self-fetching (the schema mounts it
+ * with just onNavigate); the wallet card is rendered by the surrounding
+ * schema chrome, not here.
  */
 export default function LabourHomeView({ onNavigate }: LabourHomeViewProps) {
   const [feed, setFeed] = useState<JobFeedItem[]>([]);
@@ -71,7 +72,7 @@ export default function LabourHomeView({ onNavigate }: LabourHomeViewProps) {
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {metric(
-          'Jobs For You',
+          'Open Jobs',
           newJobs.length,
           <Search className="w-6 h-6" />,
           'bg-[#fdf6e9] text-[#c9973a]',
@@ -109,7 +110,7 @@ export default function LabourHomeView({ onNavigate }: LabourHomeViewProps) {
         ) : newJobs.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-slate-500 text-[14px]">
-              No new jobs match your trades right now — you'll get a notification when one lands.
+              No jobs on the board right now — you'll get a notification when one lands.
             </p>
           </div>
         ) : (
