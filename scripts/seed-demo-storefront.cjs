@@ -356,17 +356,34 @@ const BUYS = [
     return res;
   }
 
-  /** Login-first: an already-seeded account is one call to detect (a big
-   *  saving under the 5/min throttle once dozens of template accounts
-   *  exist); only genuinely new accounts pay for a register call too.
-   *  Callers skip existed accounts so re-runs never duplicate products. */
+  /** Which call to spend first. Under the 5/min throttle the order is the
+   *  whole cost: a fresh environment wants register-first (one call per new
+   *  account, two if we guess wrong), an already-seeded one wants
+   *  login-first. Start optimistic and FLIP on the first wrong guess —
+   *  environments are seeded in bulk, so one mistake pays for itself and the
+   *  rest of the run is optimal either way. Callers skip `existed` accounts,
+   *  so re-runs still never duplicate products. */
+  let loginFirst = false;
+
   async function registerOrLogin(payload) {
-    const login = await authApi('/auth/login', { email: payload.email, password: PASSWORD });
-    const existingToken = tokenOf(login.json);
-    if (existingToken) return { token: existingToken, existed: true };
-    const res = await authApi('/auth/register', payload);
+    const doLogin = () => authApi('/auth/login', { email: payload.email, password: PASSWORD });
+    const doRegister = () => authApi('/auth/register', payload);
+
+    if (loginFirst) {
+      const token = tokenOf((await doLogin()).json);
+      if (token) return { token, existed: true };
+      loginFirst = false; // this environment has unseeded accounts after all
+    }
+
+    const res = await doRegister();
     const freshToken = tokenOf(res.json);
     if (freshToken) return { token: freshToken, existed: false };
+
+    const token = tokenOf((await doLogin()).json);
+    if (token) {
+      loginFirst = true; // already seeded — stop paying for doomed registers
+      return { token, existed: true };
+    }
     console.log(`FAIL ${payload.email}: register ${res.status} ${JSON.stringify(res.json).slice(0, 140)}`);
     return { token: null, existed: false };
   }
