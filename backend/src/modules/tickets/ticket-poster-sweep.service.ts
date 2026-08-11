@@ -1,10 +1,12 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Not, Repository } from 'typeorm';
-import * as fs from 'fs';
-import * as path from 'path';
 import { TicketEvent } from './entities/ticket-event.entity';
-import { getUploadsDir } from '../../config/storage.config';
+import {
+  STORAGE_DRIVER,
+  StorageDriver,
+  storageKeyFromUrl,
+} from '../storage/storage-driver.interface';
 
 /**
  * Boot-time cleanup: NULL the posterUrl of any ticket event whose image file
@@ -25,6 +27,8 @@ export class TicketPosterSweepService implements OnModuleInit {
   constructor(
     @InjectRepository(TicketEvent)
     private readonly events: Repository<TicketEvent>,
+    @Inject(STORAGE_DRIVER)
+    private readonly storage: StorageDriver,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -39,21 +43,34 @@ export class TicketPosterSweepService implements OnModuleInit {
   }
 
   private async sweep(): Promise<number> {
-    const uploadsDir = getUploadsDir();
     const rows = await this.events.find({ where: { posterUrl: Not(IsNull()) } });
-    let cleared = 0;
+    if (rows.length === 0) return 0;
 
+    // Single listing rather than one existence probe per row — each probe is a
+    // network round trip on object storage.
+    const present = new Set(await this.storage.list('public'));
+
+    // Same safety valve as the ad sweep: an entirely empty listing alongside
+    // rows that reference posters points at a misconfigured bucket, not at
+    // genuine loss. Clearing every poster on that basis would be wrong.
+    if (present.size === 0) {
+      this.logger.error(
+        `Ticket poster sweep ABORTED: ${this.storage.name} storage returned no objects, ` +
+          `but ${rows.length} event(s) reference a poster. Check STORAGE_DRIVER and the bucket config.`,
+      );
+      return 0;
+    }
+
+    let cleared = 0;
     for (const event of rows) {
-      // posterUrl is "/uploads/<file>" or an absolute "https://…/uploads/<file>"
-      // — the basename is the file either way.
-      const filename = (event.posterUrl ?? '').split('/').pop() ?? '';
-      const exists = filename !== '' && fs.existsSync(path.join(uploadsDir, filename));
-      if (exists) continue;
+      // posterUrl may be "/uploads/<file>", an absolute app URL, or a CDN URL.
+      const key = storageKeyFromUrl(event.posterUrl ?? '');
+      if (key && present.has(key)) continue;
 
       await this.events.update(event.id, { posterUrl: null });
       cleared++;
       this.logger.warn(
-        `Cleared poster on event "${event.title}" (${event.code}) — ${filename || '(none)'} not on disk`,
+        `Cleared poster on event "${event.title}" (${event.code}) — ${key || '(none)'} not in ${this.storage.name} storage`,
       );
     }
     return cleared;

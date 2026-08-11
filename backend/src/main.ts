@@ -7,7 +7,7 @@ import * as cors from 'cors';
 import * as path from 'path';
 import * as express from 'express';
 import { assertPiiCryptoReady } from './common/crypto/pii-crypto';
-import { getUploadsDir } from './config/storage.config';
+import { getUploadsDir, isFilesystemStorage } from './config/storage.config';
 
 async function bootstrap() {
   // Fail fast on missing PII_ENCRYPTION_KEY (production fail-closed). The key
@@ -59,10 +59,17 @@ async function bootstrap() {
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   };
 
-  // /uploads is mounted explicitly because in production it lives on a
-  // persistent disk OUTSIDE the bundled public/ dir (see storage.config.ts).
+  // /uploads is mounted explicitly because on a disk-backed deploy it lives on
+  // a persistent volume OUTSIDE the bundled public/ dir (see storage.config.ts).
   // Registered first so it wins regardless of where the files actually sit.
-  app.use('/uploads', express.static(getUploadsDir(), { setHeaders: embeddable }));
+  //
+  // Skipped entirely on object storage: there is no local directory to serve,
+  // and mounting one would answer /uploads/* with 404s that look like missing
+  // files rather than a misrouted request. Under that driver the stored URLs
+  // are absolute CDN links, so nothing should reach this path at all.
+  if (isFilesystemStorage()) {
+    app.use('/uploads', express.static(getUploadsDir(), { setHeaders: embeddable }));
+  }
 
   // Remaining bundled static assets.
   app.use(

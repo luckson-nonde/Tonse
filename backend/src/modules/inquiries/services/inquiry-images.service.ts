@@ -3,15 +3,19 @@ import {
   BadRequestException,
   NotFoundException,
   ForbiddenException,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InquiryImage } from '../entities/inquiry-image.entity';
 import { Inquiry } from '../entities/inquiry.entity';
-import * as fs from 'fs';
-import * as path from 'path';
+
 import sharp from 'sharp';
-import { getUploadsDir } from '../../../config/storage.config';
+import {
+  STORAGE_DRIVER,
+  StorageDriver,
+  storageKeyFromUrl,
+} from '../../storage/storage-driver.interface';
 
 /**
  * Inquiry Images Service
@@ -19,9 +23,9 @@ import { getUploadsDir } from '../../../config/storage.config';
  */
 @Injectable()
 export class InquiryImagesService {
-  // Shares the configured uploads root so inquiry photos land on the same
-  // persistent disk as every other public upload (see storage.config.ts).
-  private readonly uploadsDir = path.join(getUploadsDir(), 'inquiries');
+  /** Key prefix inside the public storage class — the old `uploads/inquiries`
+   *  subdirectory, expressed as a key so it works on a disk or in a bucket. */
+  private static readonly PREFIX = 'inquiries';
   private readonly maxFileSize = 5 * 1024 * 1024; // 5MB per image
   private readonly maxImages = 10; // Max images per inquiry
   private readonly allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -30,13 +34,10 @@ export class InquiryImagesService {
     @InjectRepository(InquiryImage)
     private readonly inquiryImageRepository: Repository<InquiryImage>,
     @InjectRepository(Inquiry)
-    private readonly inquiryRepository: Repository<Inquiry>
-  ) {
-    // Ensure uploads directory exists
-    if (!fs.existsSync(this.uploadsDir)) {
-      fs.mkdirSync(this.uploadsDir, { recursive: true });
-    }
-  }
+    private readonly inquiryRepository: Repository<Inquiry>,
+    @Inject(STORAGE_DRIVER)
+    private readonly storage: StorageDriver,
+  ) {}
 
   /**
    * Upload image for an inquiry
@@ -62,35 +63,29 @@ export class InquiryImagesService {
       throw new BadRequestException(`Maximum ${this.maxImages} images per inquiry allowed`);
     }
 
-    // Create inquiry folder if not exists
-    const inquiryFolder = path.join(this.uploadsDir, inquiryId);
-    if (!fs.existsSync(inquiryFolder)) {
-      fs.mkdirSync(inquiryFolder, { recursive: true });
-    }
+    // `.jpg`, not the original extension: processImage always re-encodes to
+    // JPEG, so keeping the uploaded name's extension produced files like
+    // `1712345678.png` containing JPEG bytes — harmless on a filesystem, but
+    // object storage serves a Content-Type derived from the key, so the
+    // mismatch would reach browsers as a broken image.
+    const key = `${InquiryImagesService.PREFIX}/${inquiryId}/${Date.now()}.jpg`;
 
-    // Generate filename
-    const timestamp = Date.now();
-    const fileExtension = path.extname(file.originalname);
-    const fileName = `${timestamp}${fileExtension}`;
-    const filePath = path.join(inquiryFolder, fileName);
+    const optimised = await this.processImage(file.buffer);
 
-    // Process image (optimize before saving)
-    await this.processImage(file.buffer, filePath);
-
-    // Get file stats
-    const fileStats = fs.statSync(filePath);
-
-    // Create database record
-    const imageUrl = `/uploads/inquiries/${inquiryId}/${fileName}`;
-    const nextOrderIndex = existingImages;
+    const imageUrl = await this.storage.put(key, optimised, {
+      storageClass: 'public',
+      contentType: 'image/jpeg',
+    });
 
     const inquiryImage = this.inquiryImageRepository.create({
       inquiryId,
       imageUrl,
-      imagePath: filePath,
-      fileType: file.mimetype,
-      fileSize: fileStats.size,
-      orderIndex: nextOrderIndex,
+      // The storage KEY, not a server path — see the entity's comment.
+      imagePath: key,
+      // Also the re-encoded type, not the upload's: what we stored is JPEG.
+      fileType: 'image/jpeg',
+      fileSize: optimised.length,
+      orderIndex: existingImages,
     });
 
     return await this.inquiryImageRepository.save(inquiryImage);
@@ -159,14 +154,7 @@ export class InquiryImagesService {
       throw new NotFoundException(`Image not found`);
     }
 
-    // Delete file from disk
-    try {
-      if (fs.existsSync(image.imagePath)) {
-        fs.unlinkSync(image.imagePath);
-      }
-    } catch (error) {
-      console.error(`Failed to delete file: ${image.imagePath}`, error);
-    }
+    await this.deleteStoredImage(image);
 
     // Delete database record
     await this.inquiryImageRepository.remove(image);
@@ -185,16 +173,29 @@ export class InquiryImagesService {
     });
 
     for (const image of images) {
-      try {
-        if (fs.existsSync(image.imagePath)) {
-          fs.unlinkSync(image.imagePath);
-        }
-      } catch (error) {
-        console.error(`Failed to delete file: ${image.imagePath}`, error);
-      }
+      await this.deleteStoredImage(image);
     }
 
     await this.inquiryImageRepository.remove(images);
+  }
+
+  /**
+   * Remove the stored object behind a row, best-effort.
+   *
+   * Falls back from `imagePath` to `imageUrl` and normalises both through
+   * `storageKeyFromUrl`, because rows predating object storage hold an
+   * absolute server path in `imagePath` while new ones hold a key. A failure
+   * must never block the database delete — an orphaned object is recoverable,
+   * a row pointing at nothing is not.
+   */
+  private async deleteStoredImage(image: InquiryImage): Promise<void> {
+    const key = storageKeyFromUrl(image.imagePath || image.imageUrl || '');
+    if (!key) return;
+    try {
+      await this.storage.delete(key, 'public');
+    } catch (error) {
+      console.error(`Failed to delete stored image ${key}`, error);
+    }
   }
 
   /**
@@ -239,23 +240,24 @@ export class InquiryImagesService {
   }
 
   /**
-   * Process image (optimize and save)
-   * @param buffer - Image buffer
-   * @param filePath - Target file path
+   * Resize and re-encode to JPEG, returning bytes.
+   *
+   * Returns a buffer rather than writing a file so the result can go to either
+   * storage backend — sharp's `toFile` assumes a writable disk, which is the
+   * assumption this whole refactor removes.
    */
-  private async processImage(buffer: Buffer, filePath: string): Promise<void> {
+  private async processImage(buffer: Buffer): Promise<Buffer> {
     try {
-      // Resize and optimize image to max 1920x1440 and convert to webp if original is large
       const maxWidth = 1920;
       const maxHeight = 1440;
 
-      await sharp(buffer)
+      return await sharp(buffer)
         .resize(maxWidth, maxHeight, {
           fit: 'inside',
           withoutEnlargement: true,
         })
         .toFormat('jpeg', { quality: 85 })
-        .toFile(filePath);
+        .toBuffer();
     } catch (error) {
       throw new BadRequestException(`Failed to process image: ${(error as any)?.message || 'Unknown error'}`);
     }

@@ -1,10 +1,12 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as fs from 'fs';
-import * as path from 'path';
 import { Advertisement } from './entities/advertisement.entity';
-import { getUploadsDir } from '../../config/storage.config';
+import {
+  STORAGE_DRIVER,
+  StorageDriver,
+  storageKeyFromUrl,
+} from '../storage/storage-driver.interface';
 
 /**
  * Boot-time cleanup: DELETE any advertisement whose media file no longer
@@ -33,6 +35,8 @@ export class AdsMediaSweepService implements OnModuleInit {
   constructor(
     @InjectRepository(Advertisement)
     private readonly ads: Repository<Advertisement>,
+    @Inject(STORAGE_DRIVER)
+    private readonly storage: StorageDriver,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -47,22 +51,40 @@ export class AdsMediaSweepService implements OnModuleInit {
   }
 
   private async sweep(): Promise<number> {
-    const uploadsDir = getUploadsDir();
     const rows = await this.ads.find();
-    let removed = 0;
+    if (rows.length === 0) return 0;
 
+    // One listing, then set membership — rather than an existence probe per
+    // row. On object storage each probe is a network round trip, so a few
+    // hundred ads would turn boot into a few hundred sequential HTTP calls.
+    const present = new Set(await this.storage.list('public'));
+
+    // SAFETY VALVE. "Storage is completely empty but the database has ads" is
+    // far more likely a misconfigured bucket or a wrong prefix than genuine
+    // total media loss — and this sweep DELETES rows, which is unrecoverable.
+    // A handful of stranded rows renders as a broken image; a mass delete
+    // destroys paid placements. Refuse, and say what to check.
+    if (present.size === 0) {
+      this.logger.error(
+        `Ad media sweep ABORTED: ${this.storage.name} storage returned no objects at all, ` +
+          `but ${rows.length} advertisement(s) exist. Refusing to delete them. ` +
+          `Check STORAGE_DRIVER and the bucket/prefix configuration.`,
+      );
+      return 0;
+    }
+
+    let removed = 0;
     for (const ad of rows) {
-      // mediaUrl is either "/uploads/<file>" (early rows) or an absolute
-      // "https://…/uploads/<file>" (current) — the basename is the file
-      // either way. Windows-safe: URLs always use forward slashes.
-      const filename = (ad.mediaUrl ?? '').split('/').pop() ?? '';
-      const exists = filename !== '' && fs.existsSync(path.join(uploadsDir, filename));
-      if (exists) continue;
+      // mediaUrl is "/uploads/<file>" (early rows), an absolute
+      // "https://…/uploads/<file>", or a CDN URL under object storage.
+      // storageKeyFromUrl reduces all of them to the same key.
+      const key = storageKeyFromUrl(ad.mediaUrl ?? '');
+      if (key && present.has(key)) continue;
 
       await this.ads.delete(ad.id);
       removed++;
       this.logger.warn(
-        `Deleted ad "${ad.title}" (${ad.status}, ${ad.id}) — media ${filename || '(none)'} not on disk`,
+        `Deleted ad "${ad.title}" (${ad.status}, ${ad.id}) — media ${key || '(none)'} not in ${this.storage.name} storage`,
       );
     }
     return removed;
