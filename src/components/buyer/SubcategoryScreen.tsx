@@ -63,7 +63,9 @@ export default function SubcategoryScreen({
     // Two columns from xl up: the picker stays a centered reading-width
     // column and the freed space on the right becomes the category-targeted
     // ad rail. Below xl the rail drops entirely and the picker is unchanged.
-    <div className="w-full max-w-7xl mx-auto pb-8 flex justify-center gap-6">
+    // Wider than max-w-7xl on purpose — 7xl (1280px) left the rail no room to
+    // grow past its old fixed width on a 1080p-and-up screen.
+    <div className="w-full max-w-420 mx-auto pb-8 flex justify-center gap-6">
       <div className="w-full max-w-3xl min-w-0">
       <div className="flex items-center gap-3 mb-3">
         <button
@@ -157,7 +159,7 @@ export default function SubcategoryScreen({
 
       {/* Category-targeted ad rail — keyed to the master the buyer is
           browsing, so Electronics shows electronics ads and Loans shows
-          lender ads. Two stacked slots, sticky down a long subcategory list. */}
+          lender ads. Two stacked slots that scroll with the list. */}
       <AdRail placement="CATEGORY_SIDEBAR" categoryId={master.id} />
     </div>
   );

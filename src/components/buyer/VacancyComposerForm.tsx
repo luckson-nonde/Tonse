@@ -208,7 +208,7 @@ export default function VacancyComposerForm({ tradeLabel, initial, onBack, onSub
           (SubcategoryScreen): the composer keeps its reading-width column and
           the freed space on the right carries the sponsored rail. Below xl the
           rail drops and the composer is unchanged. */}
-      <div className="w-full max-w-7xl mx-auto flex justify-center gap-6">
+      <div className="w-full max-w-420 mx-auto flex justify-center gap-6">
         <div className="max-w-3xl w-full min-w-0 px-4 py-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-11 h-11 rounded-2xl bg-[#fdf6e9] border border-[#f0dfc0] flex items-center justify-center">
