@@ -7,10 +7,13 @@ import DiscoverHero from '../components/discover/DiscoverHero';
 import TopCategoryRow from '../components/discover/TopCategoryRow';
 import StorefrontCardGrid from '../components/discover/StorefrontCardGrid';
 import CategoryProductGrid from '../components/discover/CategoryProductGrid';
+import InlineAdSlot from '../components/ads/InlineAdSlot';
 import { CATEGORY_GROUPS } from '../services/categories/groups';
 import { CATEGORIES_DB } from '../services/categories';
 import { fetchDiscoverShops, DiscoverShop } from '../services/api/discoverService';
 import { storefrontService, StorefrontHome } from '../services/api/storefrontService';
+import { emitShoppingIntent } from '../services/spotlightTrigger';
+import { masterCategoryOf } from '../services/categories/masterOf';
 
 const NAVY = '#1B3068';
 const NAVY_DEEP = '#142550';
@@ -164,6 +167,10 @@ export default function DiscoverPage() {
     const next = activeCategory === categoryId ? null : categoryId;
     setSearchParams(next ? { category: next } : {});
     setActiveGroup('All');
+    // Guests shop here without an account, so this is their equivalent of the
+    // funnel's category step — the intent a Spotlight advert answers. Only on
+    // SELECT, never on clearing the filter.
+    if (next) emitShoppingIntent({ categoryId: masterCategoryOf(next) });
   };
 
   // Land the visitor on the results they just asked for, including on a cold
@@ -300,7 +307,12 @@ export default function DiscoverPage() {
           <>
             {activeGroup === 'All' && !search && !activeCategory ? (
               <div id="discover-sections" className="scroll-mt-24">
-                {groupedSections.map(({ group, items }) => (
+                {groupedSections.map(({ group, items }, gi) => {
+                  // One sponsored cell per rail, its position walking across
+                  // successive rails (front → middle → deeper) — same weave as
+                  // the product grids, so the slots never line up down the page.
+                  const adPos = Math.min([1, 3, 2, 4][gi % 4], items.length);
+                  return (
                   <section key={group.id}>
                     <div className="flex items-baseline justify-between mt-9 mb-4">
                       <h2 className="font-serif font-semibold text-[1.25rem] sm:text-[1.4rem] text-[#1B3068]">
@@ -318,7 +330,15 @@ export default function DiscoverPage() {
                     </div>
                     <div className="relative">
                       <div className="flex items-stretch gap-3.5 sm:gap-4 overflow-x-auto pb-2 scrollbar-hide">
-                        {items.map((shop) => (
+                        {items.slice(0, adPos).map((shop) => (
+                          <div key={shop.id} className="w-56 sm:w-68 shrink-0">
+                            <ShopCard shop={shop} onOpen={() => navigate(`/discover/${shop.id}`)} />
+                          </div>
+                        ))}
+                        <div className="w-56 sm:w-68 shrink-0">
+                          <InlineAdSlot placement="HOMEPAGE_CENTER" offset={gi} />
+                        </div>
+                        {items.slice(adPos).map((shop) => (
                           <div key={shop.id} className="w-56 sm:w-68 shrink-0">
                             <ShopCard shop={shop} onOpen={() => navigate(`/discover/${shop.id}`)} />
                           </div>
@@ -331,7 +351,8 @@ export default function DiscoverPage() {
                       )}
                     </div>
                   </section>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <>
