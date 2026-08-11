@@ -27,7 +27,10 @@ import {
 } from '../../services/api/jobBoardService';
 import { apiClient } from '../../services/api/client';
 import { LABOUR_CATEGORIES } from '../../services/labourCategories';
-import { getRequiredAttachmentSlots } from '../../services/labourFormSchema';
+import {
+  APPLICATION_LETTER_SLOT,
+  getRequiredAttachmentSlots,
+} from '../../services/labourFormSchema';
 import JobAttributesDisplay from './JobAttributesDisplay';
 import SecureFile from '../SecureFile';
 import DateTimePicker from '../DateTimePicker';
@@ -267,15 +270,17 @@ export default function JobSeekerFeedView() {
         <ApplyModal job={applyTarget} onClose={() => setApplyTarget(null)} onApplied={onApplied} />
       )}
 
-      <div className="flex items-end justify-between gap-3">
-        <div>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
           <h2 className="text-[19px] font-black text-[#0A1931]">All Jobs on Nyuwe</h2>
           <p className="text-[12px] text-slate-500 mt-0.5">
             Every open vacancy posted on the platform — shops, service providers and buyers.
           </p>
         </div>
-        <span className="shrink-0 text-[12px] font-bold text-slate-500">
+        <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[#e8e4dc] text-[12px] font-bold text-slate-600">
+          <Briefcase className="w-3.5 h-3.5 text-[#C9973A]" />
           {visible.length} {visible.length === 1 ? 'job' : 'jobs'}
+          {activeCount > 0 && <span className="text-slate-400">· filtered</span>}
         </span>
       </div>
 
@@ -501,64 +506,96 @@ function JobCard({
   const initial = (job.posterName || '?').trim().charAt(0).toUpperCase();
 
   return (
-    <div className="group bg-white rounded-2xl border border-[#e8e4dc] hover:border-[#E9D5B0] hover:shadow-[0_8px_24px_-18px_rgba(26,22,18,0.25)] transition-all">
-      <div className="flex items-start gap-3 p-4">
-        {/* The whole block is the link to the detail view; Apply sits outside
-            it so the two targets can't swallow one another. */}
-        <button
-          type="button"
-          onClick={onOpen}
-          className="flex-1 min-w-0 flex items-start gap-3 text-left"
-        >
-          <span className="w-11 h-11 shrink-0 rounded-xl bg-[#fdf6e9] border border-[#f0dfc0] flex items-center justify-center text-[15px] font-black text-[#C9973A]">
+    <article className="group bg-white rounded-2xl border border-[#e8e4dc] hover:border-[#E9D5B0] hover:shadow-[0_8px_24px_-18px_rgba(26,22,18,0.25)] transition-all overflow-hidden">
+      {/* The whole body is the link to the detail view; Apply lives in the
+          footer so the two targets can't swallow one another. */}
+      <button type="button" onClick={onOpen} className="w-full text-left p-4 pb-3.5">
+        <div className="flex items-start gap-3.5">
+          <span className="w-12 h-12 shrink-0 rounded-xl bg-[#fdf6e9] border border-[#f0dfc0] flex items-center justify-center text-[17px] font-black text-[#C9973A]">
             {initial}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[15px] font-bold text-[#0A1931] leading-snug group-hover:text-[#C9973A] transition-colors">
-              {job.title}
-            </span>
-            <span className="block text-[12px] text-slate-500 mt-0.5 truncate">
-              {[job.posterName, pay, place].filter(Boolean).join(' · ')}
-            </span>
-            {job.tradeCategoryIds.length > 0 && (
-              <span className="flex flex-wrap gap-1.5 mt-2">
-                {job.tradeCategoryIds.map((id) => (
-                  <span
-                    key={id}
-                    className="px-2 py-0.5 rounded-md border border-[#f0dfc0] bg-[#fdfaf3] text-[11px] font-bold text-[#a87b28]"
-                  >
-                    {tradeLabelOf(id)}
-                  </span>
-                ))}
+            <span className="flex items-start justify-between gap-3">
+              <span className="block text-[16px] font-black text-[#0A1931] leading-snug group-hover:text-[#C9973A] transition-colors">
+                {job.title}
               </span>
-            )}
+              <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 whitespace-nowrap mt-0.5">
+                <Clock className="w-3 h-3" />
+                {timeAgo(job.createdAt)}
+              </span>
+            </span>
+            <span className="block text-[12px] font-bold text-slate-500 mt-0.5 truncate">
+              {job.posterName}
+            </span>
           </span>
-        </button>
+        </div>
 
-        <div className="shrink-0 flex flex-col items-end gap-2">
-          <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 whitespace-nowrap">
-            <Clock className="w-3 h-3" />
-            {timeAgo(job.createdAt)}
+        {job.description && (
+          <span className="block text-[13px] text-slate-600 leading-relaxed mt-3 line-clamp-2">
+            {job.description}
           </span>
-          {job.hasApplied ? (
-            <AppliedBadge status={job.myApplicationStatus} />
-          ) : (
-            <button
-              onClick={onApply}
-              className="px-4 py-2 rounded-lg bg-[#C9973A] hover:bg-[#b8852f] text-white text-[12px] font-bold transition-colors"
+        )}
+
+        {/* Key facts as scannable chips — a vacancy ad's salary/place line. */}
+        <span className="flex flex-wrap items-center gap-1.5 mt-3">
+          {pay && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#f4faf6] border border-[#d3ecdc] text-[12px] font-bold text-emerald-700">
+              <Banknote className="w-3.5 h-3.5" />
+              {pay}
+            </span>
+          )}
+          {place && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#f7f8fa] border border-[#e2e8f0] text-[12px] font-bold text-slate-600">
+              <MapPin className="w-3.5 h-3.5 text-slate-400" />
+              {place}
+            </span>
+          )}
+          {job.workersNeeded ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#f7f8fa] border border-[#e2e8f0] text-[12px] font-bold text-slate-600">
+              <Users className="w-3.5 h-3.5 text-slate-400" />
+              {job.workersNeeded} needed
+            </span>
+          ) : null}
+          {job.tradeCategoryIds.map((id) => (
+            <span
+              key={id}
+              className="px-2.5 py-1 rounded-lg border border-[#f0dfc0] bg-[#fdfaf3] text-[12px] font-bold text-[#a87b28]"
             >
-              Apply
-            </button>
+              {tradeLabelOf(id)}
+            </span>
+          ))}
+        </span>
+      </button>
+
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-t border-[#f1ede4] bg-[#fbfaf7]">
+        <div className="min-w-0 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-slate-500">
+            <Users className="w-3.5 h-3.5 text-slate-400" />
+            {job.applicantsCount === 0
+              ? 'Be the first to apply'
+              : `${job.applicantsCount} applicant${job.applicantsCount === 1 ? '' : 's'}`}
+          </span>
+          {job.applicationDeadline ? (
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-rose-600">
+              <CalendarClock className="w-3.5 h-3.5" />
+              Apply by {new Date(job.applicationDeadline).toLocaleDateString()}
+            </span>
+          ) : (
+            <span className="text-[12px] font-bold text-slate-400">Open until filled</span>
           )}
         </div>
+        {job.hasApplied ? (
+          <AppliedBadge status={job.myApplicationStatus} />
+        ) : (
+          <button
+            onClick={onApply}
+            className="px-5 py-2 rounded-lg bg-[#C9973A] hover:bg-[#b8852f] text-white text-[12px] font-bold shadow-sm transition-colors"
+          >
+            Apply now
+          </button>
+        )}
       </div>
-
-      {job.applicationDeadline && (
-        <p className="px-4 pb-3 -mt-1 text-[11px] font-bold text-rose-500">
-          Apply by {new Date(job.applicationDeadline).toLocaleDateString()}
-        </p>
-      )}
-    </div>
+    </article>
   );
 }
 
@@ -643,6 +680,12 @@ function JobDetail({
                   Apply by {new Date(job.applicationDeadline).toLocaleDateString()}
                 </span>
               )}
+              <span className="inline-flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5" />
+                {job.applicantsCount === 0
+                  ? 'No applicants yet'
+                  : `${job.applicantsCount} applicant${job.applicantsCount === 1 ? '' : 's'}`}
+              </span>
             </div>
 
             <div>
@@ -713,6 +756,83 @@ function JobDetail({
  *  file name, shown so the applicant can tell two uploads apart. */
 type DraftAttachment = JobApplicationAttachment & { fileName?: string };
 
+/** One mandatory upload slot — shared by the application letter and the
+ *  employer-demanded documents so the two can never drift apart visually. */
+function AttachmentSlot({
+  label,
+  attached,
+  busy,
+  inputRef,
+  onFile,
+  onPick,
+  onRemove,
+}: {
+  label: string;
+  attached: DraftAttachment | undefined;
+  busy: boolean;
+  inputRef: (el: HTMLInputElement | null) => void;
+  onFile: (file: File | undefined) => void;
+  onPick: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div
+      className={`rounded-lg border px-2.5 py-2 ${
+        attached ? 'border-[#6ee7b7] bg-white' : 'border-[#e7d7b8] bg-white'
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        {attached ? (
+          <FileCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+        ) : (
+          <Paperclip className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+        )}
+        <span className="min-w-0 flex-1 text-[12px] font-bold text-slate-700 truncate">
+          {label}
+          {!attached && <span className="text-rose-500"> *</span>}
+        </span>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,application/pdf"
+          className="hidden"
+          onChange={(e) => {
+            onFile(e.target.files?.[0]);
+            e.target.value = '';
+          }}
+        />
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onPick}
+          className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#e2e8f0] bg-white text-[11px] font-bold text-slate-600 hover:border-[#C9973A] hover:text-[#8a6420] transition-colors disabled:opacity-60"
+        >
+          {busy && <Loader2 className="w-3 h-3 animate-spin" />}
+          {busy ? 'Uploading…' : attached ? 'Replace' : 'Upload'}
+        </button>
+        {attached && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="shrink-0 text-slate-400 hover:text-rose-500"
+            aria-label={`Remove ${label}`}
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      {attached && (
+        <div className="flex items-center gap-2 mt-1.5 pl-5.5 text-[11px] text-slate-500">
+          <span className="truncate max-w-[55%]">{attached.fileName}</span>
+          {/* Auth-gated /files/secure/ URL — SecureFile fetches it with the
+              bearer token; a bare <a> 401s. */}
+          <SecureFile url={attached.url} asLink alt={label} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ApplyModal({
   job,
   onClose,
@@ -731,11 +851,14 @@ function ApplyModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // The documents the POSTER demanded, each its own mandatory upload slot.
+  // Every mandatory upload slot: the application letter first (universal),
+  // then the documents the POSTER demanded. The letter gets its own section
+  // at the top of the builder, so it is split out of the doc list here.
   // `fileName` is a local display nicety only — it is NOT part of the API
   // contract, and the backend's ValidationPipe runs forbidNonWhitelisted, so
   // it must be stripped before submit or the whole request 400s.
   const requiredSlots = getRequiredAttachmentSlots(job.attributes);
+  const docSlots = requiredSlots.filter((label) => label !== APPLICATION_LETTER_SLOT);
   const [slotFiles, setSlotFiles] = useState<Record<string, DraftAttachment | undefined>>({});
   const [extras, setExtras] = useState<DraftAttachment[]>([]);
   const [uploadingSlot, setUploadingSlot] = useState<string | null>(null);
@@ -852,9 +975,34 @@ function ApplyModal({
         </div>
 
         <div className="p-5 space-y-4">
+          {/* The letter opens the application — it's the first thing the
+              poster reads, so it's the first thing the applicant attaches. */}
+          <div className="rounded-xl border border-[#f0dfc0] bg-[#fdf9f0] px-3.5 py-3">
+            <p className="text-[11px] font-black uppercase tracking-widest text-[#a87b28]">
+              1 · Application letter
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5 mb-2.5">
+              Start here — a letter introducing yourself and why you want this job. Upload it as
+              a PDF or a clear photo.
+            </p>
+            <AttachmentSlot
+              label={APPLICATION_LETTER_SLOT}
+              attached={slotFiles[APPLICATION_LETTER_SLOT]}
+              busy={uploadingSlot === APPLICATION_LETTER_SLOT}
+              inputRef={(el) => {
+                slotInputs.current[APPLICATION_LETTER_SLOT] = el;
+              }}
+              onFile={(file) => void uploadToSlot(APPLICATION_LETTER_SLOT, file)}
+              onPick={() => slotInputs.current[APPLICATION_LETTER_SLOT]?.click()}
+              onRemove={() =>
+                setSlotFiles((prev) => ({ ...prev, [APPLICATION_LETTER_SLOT]: undefined }))
+              }
+            />
+          </div>
+
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Why are you right for this job? *
+              2 · Why are you right for this job? *
             </label>
             <textarea
               value={coverMessage}
@@ -907,81 +1055,30 @@ function ApplyModal({
             />
           </div>
 
-          {requiredSlots.length > 0 && (
+          {docSlots.length > 0 && (
             <div className="rounded-xl border border-[#f0dfc0] bg-[#fdf9f0] px-3.5 py-3">
               <p className="text-[11px] font-black uppercase tracking-widest text-[#a87b28]">
-                Required documents
+                3 · Required documents
               </p>
               <p className="text-[11px] text-slate-500 mt-0.5 mb-2.5">
                 This employer requires each of these. Upload the PDF or a clear photo — only they
                 can open your files.
               </p>
               <div className="space-y-2">
-                {requiredSlots.map((label) => {
-                  const attached = slotFiles[label];
-                  const busy = uploadingSlot === label;
-                  return (
-                    <div
-                      key={label}
-                      className={`rounded-lg border px-2.5 py-2 ${
-                        attached ? 'border-[#6ee7b7] bg-white' : 'border-[#e7d7b8] bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {attached ? (
-                          <FileCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        ) : (
-                          <Paperclip className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        )}
-                        <span className="min-w-0 flex-1 text-[12px] font-bold text-slate-700 truncate">
-                          {label}
-                          {!attached && <span className="text-rose-500"> *</span>}
-                        </span>
-                        <input
-                          ref={(el) => {
-                            slotInputs.current[label] = el;
-                          }}
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp,application/pdf"
-                          className="hidden"
-                          onChange={(e) => {
-                            void uploadToSlot(label, e.target.files?.[0]);
-                            e.target.value = '';
-                          }}
-                        />
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => slotInputs.current[label]?.click()}
-                          className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#e2e8f0] bg-white text-[11px] font-bold text-slate-600 hover:border-[#C9973A] hover:text-[#8a6420] transition-colors disabled:opacity-60"
-                        >
-                          {busy && <Loader2 className="w-3 h-3 animate-spin" />}
-                          {busy ? 'Uploading…' : attached ? 'Replace' : 'Upload'}
-                        </button>
-                        {attached && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setSlotFiles((prev) => ({ ...prev, [label]: undefined }))
-                            }
-                            className="shrink-0 text-slate-400 hover:text-rose-500"
-                            aria-label={`Remove ${label}`}
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                      {attached && (
-                        <div className="flex items-center gap-2 mt-1.5 pl-5.5 text-[11px] text-slate-500">
-                          <span className="truncate max-w-[55%]">{attached.fileName}</span>
-                          {/* Auth-gated /files/secure/ URL — SecureFile fetches
-                              it with the bearer token; a bare <a> 401s. */}
-                          <SecureFile url={attached.url} asLink alt={label} />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {docSlots.map((label) => (
+                  <AttachmentSlot
+                    key={label}
+                    label={label}
+                    attached={slotFiles[label]}
+                    busy={uploadingSlot === label}
+                    inputRef={(el) => {
+                      slotInputs.current[label] = el;
+                    }}
+                    onFile={(file) => void uploadToSlot(label, file)}
+                    onPick={() => slotInputs.current[label]?.click()}
+                    onRemove={() => setSlotFiles((prev) => ({ ...prev, [label]: undefined }))}
+                  />
+                ))}
               </div>
               <p className="text-[10px] text-slate-400 mt-2">PDF, JPG or PNG · up to 10MB each</p>
             </div>

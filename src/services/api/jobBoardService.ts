@@ -57,6 +57,9 @@ export interface MyJobPosting extends JobPosting {
 /** Seeker feed rows carry poster identity + own-application state. */
 export interface JobFeedItem extends JobPosting {
   posterName: string;
+  /** How many applications the vacancy has drawn — a count only; who
+   *  applied stays poster-side. */
+  applicantsCount: number;
   hasApplied: boolean;
   myApplicationStatus: JobApplicationStatus | null;
 }

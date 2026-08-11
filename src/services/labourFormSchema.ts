@@ -183,16 +183,28 @@ export function getVacancyDetails(
   };
 }
 
+/** The universal first slot of every application — a letter, before any
+ *  evidence. Matched EXACTLY (string equality) by the server-side gate. */
+export const APPLICATION_LETTER_SLOT = 'Application Letter';
+
 /**
- * MANDATORY upload slots for an application: one per demanded document,
- * plus a certification slot when one is required. Every slot must carry a
- * file before the application can be submitted — the apply modal blocks on
- * it and JobBoardService.applyToJob enforces the same list server-side
- * (keep the two in lockstep: labels are matched exactly).
+ * MANDATORY upload slots for an application: the application letter first,
+ * then one per demanded document, plus a certification slot when one is
+ * required. Every slot must carry a file before the application can be
+ * submitted — the apply modal blocks on it and JobBoardService.applyToJob
+ * enforces the same list server-side (keep the two in lockstep: labels are
+ * matched exactly, and the Set dedupes a poster who listed a document
+ * literally named "Application Letter").
  */
 export function getRequiredAttachmentSlots(
   attributes: Record<string, any> | null | undefined,
 ): string[] {
   const docs: string[] = Array.isArray(attributes?.req_documents) ? attributes!.req_documents : [];
-  return [...docs, ...(attributes?.req_certifications ? ['Certification'] : [])];
+  return Array.from(
+    new Set([
+      APPLICATION_LETTER_SLOT,
+      ...docs,
+      ...(attributes?.req_certifications ? ['Certification'] : []),
+    ]),
+  );
 }

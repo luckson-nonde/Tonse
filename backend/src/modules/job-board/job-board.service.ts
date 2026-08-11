@@ -265,19 +265,30 @@ export class JobBoardService {
     );
     if (rows.length === 0) return [];
     const ids = rows.map((r) => r.id);
-    const [tradesByPosting, myApplications, posterContacts] = await Promise.all([
+    const [tradesByPosting, myApplications, posterContacts, applicantTallies] = await Promise.all([
       this.loadTradeIds(ids),
       this.applicationsRepository.find({
         where: { applicantUserId: userId },
         select: ['jobPostingId', 'status'],
       }),
       this.fetchContacts(rows.map((r) => r.posterId)),
+      // How contested each vacancy is — shown to seekers on the card, so a
+      // count only (never who applied; that stays poster-side).
+      this.dataSource.query(
+        `SELECT "jobPostingId", COUNT(*)::int AS total
+           FROM job_applications
+          WHERE "jobPostingId" = ANY($1)
+          GROUP BY "jobPostingId"`,
+        [ids],
+      ) as Promise<Array<{ jobPostingId: string; total: number }>>,
     ]);
     const myAppByPosting = new Map(myApplications.map((a) => [a.jobPostingId, a.status]));
+    const tallyByPosting = new Map(applicantTallies.map((t) => [t.jobPostingId, t.total]));
     return rows.map((p) => ({
       ...p,
       tradeCategoryIds: tradesByPosting.get(p.id) ?? [],
       posterName: posterContacts.get(p.posterId)?.name ?? 'Nyuwe member',
+      applicantsCount: tallyByPosting.get(p.id) ?? 0,
       hasApplied: myAppByPosting.has(p.id),
       myApplicationStatus: myAppByPosting.get(p.id) ?? null,
     }));
@@ -487,7 +498,16 @@ export class JobBoardService {
     const docs: string[] = Array.isArray(attributes?.req_documents)
       ? attributes!.req_documents
       : [];
-    return [...docs, ...(attributes?.req_certifications ? ['Certification'] : [])];
+    // 'Application Letter' leads every list: an application is a letter plus
+    // evidence, whatever the posting demands beyond it. The Set dedupes a
+    // poster who listed a document by the same name.
+    return Array.from(
+      new Set([
+        'Application Letter',
+        ...docs,
+        ...(attributes?.req_certifications ? ['Certification'] : []),
+      ]),
+    );
   }
 
   /** Every id must be an existing, admin-enabled child of `labour` —
