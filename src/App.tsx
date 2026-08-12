@@ -53,6 +53,7 @@ import ArchivedLeadsPage from './pages/ArchivedLeadsPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import DiscoverPage from './pages/DiscoverPage';
 import PublicShopProfile from './pages/PublicShopProfile';
+import PublicJobPosting from './pages/PublicJobPosting';
 import TicketPurchasePage from './pages/TicketPurchasePage';
 import TicketScanPage from './pages/TicketScanPage';
 import PaymentReturnPage from './pages/PaymentReturnPage';
@@ -234,6 +235,22 @@ export default function App() {
                   <LandingGate>
                     <PageTransition transitionKey="discover-shop">
                       <PublicShopProfile />
+                    </PageTransition>
+                  </LandingGate>
+                }
+              />
+              {/* Public job-posting detail — what a JobCard on /discover's
+                  Employment surfaces opens into. Three path segments vs.
+                  '/discover/:id''s two, so React Router never confuses
+                  '/discover/jobs/xyz' with a shop lookup regardless of
+                  declaration order — kept next to its sibling for
+                  readability, not correctness. */}
+              <Route
+                path="/discover/jobs/:id"
+                element={
+                  <LandingGate>
+                    <PageTransition transitionKey="discover-job">
+                      <PublicJobPosting />
                     </PageTransition>
                   </LandingGate>
                 }

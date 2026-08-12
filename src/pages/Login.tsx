@@ -8,6 +8,7 @@ import Logo from '../components/Logo';
 import { createInquiry } from '../services/api/inquiryService';
 import { getPendingInquiry, clearPendingInquiry } from '../services/pendingInquiry';
 import { peekAdInquiryIntent, clearAdInquiryIntent } from '../services/adInquiryIntent';
+import { peekJobApplicationIntent, clearJobApplicationIntent } from '../services/pendingJobApplication';
 import { getHomePathForRole } from '../utils/roleHome';
 
 export default function Login() {
@@ -31,6 +32,11 @@ export default function Login() {
   // composed yet (unlike the draft above) — signing in just resumes the
   // funnel at the advertiser, so the banner promises that and no more.
   const pendingAdTitle = (location.state as { pendingAdTitle?: string } | null)?.pendingAdTitle;
+  // Set by PublicJobPosting when a guest taps Apply while logged out. Same
+  // "resume the funnel, nothing was composed" philosophy as the ad intent
+  // above — a job application needs a document upload the guest couldn't
+  // have provided yet, so there's nothing to auto-submit either.
+  const pendingJobTitle = (location.state as { pendingJobTitle?: string } | null)?.pendingJobTitle;
   const [email, setEmail] = useState(prefillEmail);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -91,6 +97,19 @@ export default function Login() {
         // shop page instead of silently swallowing the click.
         clearAdInquiryIntent();
         navigate(`/discover/${adIntent.shopProfileId}`);
+        return;
+      }
+
+      // Resume point for a guest Apply click: send them back to the job
+      // posting, now signed in, to tap Apply again. No auto-submit — a job
+      // application needs an uploaded document a guest can't have provided,
+      // so there's no draft to resend, unlike the inquiry resume above.
+      // Any role can land here (eligibility isn't knowable client-side); an
+      // ineligible account sees the backend's message inline on that page.
+      const jobIntent = peekJobApplicationIntent();
+      if (jobIntent) {
+        clearJobApplicationIntent();
+        navigate(`/discover/jobs/${jobIntent.jobPostingId}`, { state: { resumeApply: true } });
         return;
       }
 
@@ -158,6 +177,13 @@ export default function Login() {
         <div className="p-4 bg-amber-50 border border-amber-100 text-amber-700 text-sm rounded-xl font-medium mb-6">
           Log in to continue with <strong>{pendingAdTitle}</strong> — we'll take you straight to
           your request, no searching needed.
+        </div>
+      )}
+
+      {pendingJobTitle && resumeStatus === 'idle' && (
+        <div className="p-4 bg-amber-50 border border-amber-100 text-amber-700 text-sm rounded-xl font-medium mb-6">
+          Log in to apply for <strong>{pendingJobTitle}</strong> — we'll take you straight back to
+          it.
         </div>
       )}
 

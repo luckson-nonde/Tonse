@@ -3,12 +3,18 @@ import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getCategoryArt, getMeta } from '../buyer/categoryMeta';
 import { CATEGORIES_DB } from '../../services/categories';
+import { publicCategoryLabel } from '../../services/categories/publicCategoryLabels';
 import type { StorefrontCategory } from '../../services/api/storefrontService';
 
 interface TopCategoryRowProps {
   categories: StorefrontCategory[];
   activeCategoryId: string | null;
   onSelect: (categoryId: string) => void;
+  /** Per-category caption override, keyed by category id — used for
+   *  'labour' so its pill reads "N openings" (live job-posting count) rather
+   *  than the stock product/shop count, which no longer means anything once
+   *  labour shops are filtered out of the shop-based rails. */
+  captionOverrides?: Record<string, string>;
 }
 
 /**
@@ -33,6 +39,7 @@ export default function TopCategoryRow({
   categories,
   activeCategoryId,
   onSelect,
+  captionOverrides,
 }: TopCategoryRowProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
@@ -107,9 +114,10 @@ export default function TopCategoryRow({
           // Listings are the honest headline where they exist; a services
           // category with no catalogue still has real shops behind it.
           const caption =
-            category.productCount > 0
+            captionOverrides?.[category.id] ??
+            (category.productCount > 0
               ? `${category.productCount} listing${category.productCount === 1 ? '' : 's'}`
-              : `${category.shopCount} shop${category.shopCount === 1 ? '' : 's'}`;
+              : `${category.shopCount} shop${category.shopCount === 1 ? '' : 's'}`);
 
           return (
             <motion.button
@@ -143,7 +151,7 @@ export default function TopCategoryRow({
               </span>
               <span className="min-w-0">
                 <p className="text-[14px] font-semibold text-[#1B3068] leading-tight whitespace-nowrap">
-                  {category.name}
+                  {publicCategoryLabel(category.id, category.name)}
                 </p>
                 <p className="text-[12px] text-[#8a8577] leading-tight whitespace-nowrap mt-0.5">{caption}</p>
               </span>

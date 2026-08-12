@@ -5,6 +5,7 @@ import { JobPostingCategory } from './entities/job-posting-category.entity';
 import { JobApplication } from './entities/job-application.entity';
 import { JobBoardService } from './job-board.service';
 import { JobApplicationsController, JobPostingsController } from './job-board.controller';
+import { PublicJobPostingsController } from './public-job-board.controller';
 import { CategoriesModule } from '../categories/categories.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { BillingModule } from '../billing/billing.module';
@@ -23,7 +24,7 @@ import { PaymentsModule } from '../payments/payments.module';
     PaymentsModule,
   ],
   providers: [JobBoardService],
-  controllers: [JobPostingsController, JobApplicationsController],
+  controllers: [JobPostingsController, JobApplicationsController, PublicJobPostingsController],
   exports: [JobBoardService],
 })
 export class JobBoardModule {}

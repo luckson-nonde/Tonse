@@ -131,6 +131,34 @@ export interface MyJobApplication {
   posterContact: { name: string | null; phone: string | null; email: string | null } | null;
 }
 
+/**
+ * One posting as an anonymous `/discover` visitor sees it — the backend's
+ * public allowlist (`JobBoardService.toPublicPosting`), deliberately NOT a
+ * `JobPosting` (no `posterId`/`feeAmount`/`rejectionReason`/
+ * `approvedByAdminId` — those never leave the server for this surface) and
+ * NOT a `JobFeedItem` (no `hasApplied`/`myApplicationStatus` — there's no
+ * session to have applied from).
+ */
+export interface PublicJobFeedItem {
+  id: string;
+  title: string;
+  description: string;
+  workersNeeded: number | null;
+  payOffer: number | string | null;
+  payRateUnit: string | null;
+  applicationDeadline: string | null;
+  location: string | null;
+  province: string | null;
+  city: string | null;
+  attributes: Record<string, any> | null;
+  status: JobPostingStatus;
+  createdAt: string;
+  updatedAt: string;
+  tradeCategoryIds: string[];
+  posterName: string;
+  applicantsCount: number;
+}
+
 export interface CreateJobPostingInput {
   title: string;
   description: string;
@@ -270,5 +298,24 @@ export const jobBoardService = {
   async listMyApplications(): Promise<MyJobApplication[]> {
     const res = await apiClient.get<MyJobApplication[]>('/job-applications/mine');
     return payload<MyJobApplication[]>(res, []);
+  },
+
+  // ── Public (no session — /discover) ────────────────────────────────
+  async listPublicFeed(): Promise<PublicJobFeedItem[]> {
+    const res = await apiClient.get<PublicJobFeedItem[]>('/job-postings/public');
+    return payload<PublicJobFeedItem[]>(res, []);
+  },
+
+  /** Null for anything not APPROVED — the backend 404s a pending/rejected/
+   *  missing id identically, so a public caller can't distinguish them. */
+  async getPublicPosting(id: string): Promise<PublicJobFeedItem | null> {
+    try {
+      const res = await apiClient.get<PublicJobFeedItem>(
+        `/job-postings/public/${encodeURIComponent(id)}`,
+      );
+      return payload<PublicJobFeedItem | null>(res, null);
+    } catch {
+      return null;
+    }
   },
 };

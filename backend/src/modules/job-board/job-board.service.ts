@@ -348,6 +348,106 @@ export class JobBoardService {
     }));
   }
 
+  // ── Public surface (no session) ──────────────────────────────────────
+
+  /**
+   * The whole open board, for an anonymous `/discover` visitor — same query
+   * as `listOpenJobs` minus the caller-exclusion and the per-applicant
+   * fields (`hasApplied`/`myApplicationStatus` don't exist without a
+   * session). Every row goes through `toPublicPosting`'s explicit allowlist,
+   * never a raw spread, so an internal column added to `JobPosting` later
+   * can't silently leak into a public response.
+   */
+  async listPublicJobs(): Promise<any[]> {
+    const rows: JobPosting[] = await this.dataSource.query(
+      `SELECT jp.*
+         FROM job_postings jp
+        WHERE jp.status = 'APPROVED'
+          AND (jp."applicationDeadline" IS NULL OR jp."applicationDeadline" > NOW())
+        ORDER BY jp."createdAt" DESC`,
+    );
+    if (rows.length === 0) return [];
+    const ids = rows.map((r) => r.id);
+    const [tradesByPosting, posterContacts, applicantTallies] = await Promise.all([
+      this.loadTradeIds(ids),
+      this.fetchContacts(rows.map((r) => r.posterId)),
+      // A count only — never who applied; that stays poster-side.
+      this.dataSource.query(
+        `SELECT "jobPostingId", COUNT(*)::int AS total
+           FROM job_applications
+          WHERE "jobPostingId" = ANY($1)
+          GROUP BY "jobPostingId"`,
+        [ids],
+      ) as Promise<Array<{ jobPostingId: string; total: number }>>,
+    ]);
+    const tallyByPosting = new Map(applicantTallies.map((t) => [t.jobPostingId, t.total]));
+    return rows.map((p) =>
+      this.toPublicPosting(
+        p,
+        tradesByPosting.get(p.id) ?? [],
+        posterContacts.get(p.posterId)?.name ?? 'Nyuwe member',
+        tallyByPosting.get(p.id) ?? 0,
+      ),
+    );
+  }
+
+  /**
+   * One posting for an anonymous visitor. Stricter than the poster-only
+   * `getPostingWithApplicants`: a PENDING_APPROVAL or REJECTED id 404s
+   * exactly like a missing one, so the public surface can never confirm a
+   * posting exists before it's actually live. No applicants array.
+   */
+  async getPublicJobPosting(id: string): Promise<any> {
+    const posting = await this.postingsRepository.findOne({ where: { id } });
+    if (!posting || posting.status !== 'APPROVED') {
+      throw new NotFoundException('Job posting not found');
+    }
+    const [tradesByPosting, posterContacts, tally] = await Promise.all([
+      this.loadTradeIds([id]),
+      this.fetchContacts([posting.posterId]),
+      this.dataSource.query(
+        `SELECT COUNT(*)::int AS total FROM job_applications WHERE "jobPostingId" = $1`,
+        [id],
+      ) as Promise<Array<{ total: number }>>,
+    ]);
+    return this.toPublicPosting(
+      posting,
+      tradesByPosting.get(id) ?? [],
+      posterContacts.get(posting.posterId)?.name ?? 'Nyuwe member',
+      tally[0]?.total ?? 0,
+    );
+  }
+
+  /** The public allowlist shared by both methods above — explicit fields,
+   *  never a spread. Deliberately omits feeAmount/rejectionReason/
+   *  approvedByAdminId (operational internals) and any applicant identity. */
+  private toPublicPosting(
+    p: JobPosting,
+    tradeCategoryIds: string[],
+    posterName: string,
+    applicantsCount: number,
+  ) {
+    return {
+      id: p.id,
+      title: p.title,
+      description: p.description,
+      workersNeeded: p.workersNeeded,
+      payOffer: p.payOffer,
+      payRateUnit: p.payRateUnit,
+      applicationDeadline: p.applicationDeadline,
+      location: p.location,
+      province: p.province,
+      city: p.city,
+      attributes: p.attributes,
+      status: p.status,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      tradeCategoryIds,
+      posterName,
+      applicantsCount,
+    };
+  }
+
   async applyToJob(jobPostingId: string, applicantUserId: string, dto: ApplyToJobDto): Promise<any> {
     const posting = await this.postingsRepository.findOne({ where: { id: jobPostingId } });
     if (!posting) throw new NotFoundException('Job posting not found');

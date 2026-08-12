@@ -7,11 +7,14 @@ import DiscoverHero from '../components/discover/DiscoverHero';
 import TopCategoryRow from '../components/discover/TopCategoryRow';
 import StorefrontCardGrid from '../components/discover/StorefrontCardGrid';
 import CategoryProductGrid from '../components/discover/CategoryProductGrid';
+import EmploymentSection from '../components/discover/EmploymentSection';
+import EmploymentGrid from '../components/discover/EmploymentGrid';
 import InlineAdSlot from '../components/ads/InlineAdSlot';
 import { CATEGORY_GROUPS } from '../services/categories/groups';
 import { CATEGORIES_DB } from '../services/categories';
 import { fetchDiscoverShops, DiscoverShop } from '../services/api/discoverService';
 import { storefrontService, StorefrontHome } from '../services/api/storefrontService';
+import { jobBoardService, PublicJobFeedItem } from '../services/api/jobBoardService';
 import { emitShoppingIntent } from '../services/spotlightTrigger';
 import { masterCategoryOf } from '../services/categories/masterOf';
 
@@ -129,6 +132,12 @@ export default function DiscoverPage() {
     cards: [],
     mode: 'PROMO',
   });
+  // The whole public job board — loaded once, feeding three things: the
+  // Employment rail, the Employment category grid, and the Top Categories
+  // pill's live opening count. See publicCategoryLabels.ts for why 'labour'
+  // reads "Employment" on this page specifically.
+  const [employmentJobs, setEmploymentJobs] = useState<PublicJobFeedItem[]>([]);
+  const [employmentLoading, setEmploymentLoading] = useState(true);
 
   // Category lives in the URL so a promo tile (or a shared link) can land
   // straight on a filtered directory: /discover?category=electronics.
@@ -138,7 +147,14 @@ export default function DiscoverPage() {
     let isMounted = true;
     fetchDiscoverShops({ limit: 60 })
       .then((data) => {
-        if (isMounted) setShops(data);
+        if (!isMounted) return;
+        // 'labour' shops aren't a real concept in this product — a job is
+        // posted by a buyer and worked by an individual, never "sold" by a
+        // shop. What used to appear here was demo-seed data standing in for
+        // real job postings, which now render from the actual job board via
+        // EmploymentSection/EmploymentGrid below instead.
+        const labourScope = masterScopeIds('labour');
+        setShops(data.filter((s) => !s.categoryIds.some((id) => labourScope.includes(id))));
       })
       .finally(() => {
         if (isMounted) setIsLoading(false);
@@ -155,6 +171,22 @@ export default function DiscoverPage() {
     storefrontService.getHome().then((data) => {
       if (isMounted) setStorefront(data);
     });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Same fail-soft contract as the storefront load above.
+  useEffect(() => {
+    let isMounted = true;
+    jobBoardService
+      .listPublicFeed()
+      .then((data) => {
+        if (isMounted) setEmploymentJobs(data);
+      })
+      .finally(() => {
+        if (isMounted) setEmploymentLoading(false);
+      });
     return () => {
       isMounted = false;
     };
@@ -252,12 +284,24 @@ export default function DiscoverPage() {
         categories={storefront.categories}
         activeCategoryId={activeCategory}
         onSelect={handleCategorySelect}
+        captionOverrides={{
+          labour: `${employmentJobs.length} opening${employmentJobs.length === 1 ? '' : 's'}`,
+        }}
       />
 
-      {/* One slot, two states: a picked category shows that category's
-          paginated product grid; otherwise the curated band (best-sellers
-          topped up with admin promo tiles — the backend decides the mix). */}
-      {activeCategory ? (
+      {/* One slot, three states: the Employment category (real job postings,
+          a different data source entirely) shows the Employment grid; any
+          other picked category shows that category's paginated product
+          grid; otherwise the curated band (best-sellers topped up with
+          admin promo tiles — the backend decides the mix). */}
+      {activeCategory === 'labour' ? (
+        <EmploymentGrid
+          jobs={employmentJobs}
+          isLoading={employmentLoading}
+          onOpenJob={(id) => navigate(`/discover/jobs/${id}`)}
+          onClearCategory={() => setSearchParams({})}
+        />
+      ) : activeCategory ? (
         <CategoryProductGrid
           categoryId={activeCategory}
           categoryName={activeCategoryName ?? 'Category'}
@@ -353,6 +397,17 @@ export default function DiscoverPage() {
                   </section>
                   );
                 })}
+                {/* Its own explicit section, not folded into the loop above —
+                    job postings are a structurally different data source
+                    than the DiscoverShop[] every other rail here reads. */}
+                <EmploymentSection
+                  jobs={employmentJobs}
+                  onOpenJob={(id) => navigate(`/discover/jobs/${id}`)}
+                  onSeeAll={() => {
+                    setSearchParams({ category: 'labour' });
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                />
               </div>
             ) : (
               <>
