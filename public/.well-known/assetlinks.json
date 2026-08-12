@@ -3,8 +3,10 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "com.tonsehub.twa",
-      "sha256_cert_fingerprints": ["REPLACE_WITH_SIGNING_CERT_SHA256"]
+      "package_name": "com.nyuwe.app",
+      "sha256_cert_fingerprints": [
+        "39:AC:0C:D3:4D:C5:65:6D:70:DD:2A:7B:21:21:8C:93:5A:19:AB:0B:6A:F0:10:3E:E4:3F:9F:FE:B6:88:5B:74"
+      ]
     }
   }
 ]
