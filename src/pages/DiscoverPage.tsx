@@ -349,7 +349,12 @@ export default function DiscoverPage() {
           </div>
         ) : (
           <>
-            {activeGroup === 'All' && !search && !activeCategory ? (
+            {activeCategory === 'labour' ? null /* EmploymentGrid, rendered above
+              alongside TopCategoryRow, already covers this — filteredShops is
+              always empty for 'labour' now that its shops are filtered out of
+              the shop pipeline entirely, so this shop-grid branch would just
+              show a redundant, always-empty "Labour & Skills providers"
+              section underneath it. */ : activeGroup === 'All' && !search && !activeCategory ? (
               <div id="discover-sections" className="scroll-mt-24">
                 {groupedSections.map(({ group, items }, gi) => {
                   // One sponsored cell per rail, its position walking across
