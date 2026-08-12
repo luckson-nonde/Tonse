@@ -10,7 +10,9 @@ import {
   CheckCircle2,
   Loader2,
   MessageSquare,
+  Maximize2,
 } from 'lucide-react';
+import ImageLightbox, { useImageLightbox } from './ImageLightbox';
 import { toNumber } from '../services/api/discoverService';
 import {
   extractYouTubeId,
@@ -70,6 +72,14 @@ export default function CatalogItemModal({
     const imgs: Slide[] = (item.images ?? []).filter(Boolean).map((src) => ({ type: 'image', src }));
     return videoId ? [...imgs, { type: 'video', videoId }] : imgs;
   }, [item.images, videoId]);
+
+  /** Just the photos — the full-screen viewer shows images, not the video
+   *  slide, so its indices are their own sequence. */
+  const imageSlides = useMemo(
+    () => slides.filter((s): s is Extract<Slide, { type: 'image' }> => s.type === 'image').map((s) => s.src),
+    [slides],
+  );
+  const lightbox = useImageLightbox(imageSlides);
 
   const [slideIdx, setSlideIdx] = useState(0);
   const [step, setStep] = useState<Step>('view');
@@ -205,12 +215,28 @@ export default function CatalogItemModal({
                     allowFullScreen
                   />
                 ) : activeSlide?.type === 'image' ? (
-                  <img
-                    src={activeSlide.src}
-                    alt={item.name}
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
+                  /* The hero is cropped to the modal's ratio; clicking it
+                     opens the uncropped photo full-screen, with the rest of
+                     this item's photos one arrow/swipe away. */
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const imageOnlyIdx = imageSlides.indexOf(activeSlide.src);
+                      lightbox.openAt(imageOnlyIdx < 0 ? 0 : imageOnlyIdx);
+                    }}
+                    aria-label={`View ${item.name} photo full screen`}
+                    className="group w-full h-full cursor-zoom-in"
+                  >
+                    <img
+                      src={activeSlide.src}
+                      alt={item.name}
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                    <span className="absolute top-3 right-3 w-9 h-9 rounded-full bg-slate-900/55 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Maximize2 className="w-4 h-4" />
+                    </span>
+                  </button>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <Package className="w-12 h-12 text-slate-300" />
@@ -429,6 +455,10 @@ export default function CatalogItemModal({
           )}
         </div>
       </motion.div>
+
+      {/* Full-screen photo viewer — portals to the body, so it clears this
+          modal rather than being clipped inside it. */}
+      <ImageLightbox {...lightbox.props} title={item.name} />
     </div>
   );
 }

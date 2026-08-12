@@ -12,6 +12,7 @@ import {
   TrendingUp,
   Camera,
   Megaphone,
+  Maximize2,
 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import DiscoverHeader from '../components/discover/DiscoverHeader';
@@ -30,6 +31,7 @@ import { savePendingInquiry } from '../services/pendingInquiry';
 import DateTimePicker from '../components/DateTimePicker';
 import CatalogItemGrid from '../components/CatalogItemGrid';
 import CatalogItemModal from '../components/CatalogItemModal';
+import ImageLightbox, { useImageLightbox } from '../components/ImageLightbox';
 import { createBookingInquiry } from '../services/catalogBooking';
 import { buyProduct } from '../services/api/shopService';
 
@@ -143,6 +145,10 @@ export default function PublicShopProfile() {
     const urls = products.flatMap((p) => p.images || []).filter(Boolean);
     return Array.from(new Set(urls)).slice(0, 10);
   }, [products]);
+
+  // Clicking any shop photo opens it full-screen, with the rest of the
+  // gallery one arrow (or swipe) away.
+  const gallery = useImageLightbox(galleryImages);
 
   const handleSubmit = async () => {
     if (!profile) return;
@@ -331,14 +337,27 @@ export default function PublicShopProfile() {
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {galleryImages.map((src, i) => (
-                  <div key={i} className="aspect-square rounded-2xl overflow-hidden bg-[#f1f5f9]">
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => gallery.openAt(i)}
+                    aria-label={`View photo ${i + 1} of ${galleryImages.length}`}
+                    className="group relative aspect-square rounded-2xl overflow-hidden bg-[#f1f5f9] cursor-zoom-in"
+                  >
                     <img
                       src={src}
                       alt=""
-                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       referrerPolicy="no-referrer"
                     />
-                  </div>
+                    {/* The grid crops square; the affordance says the full
+                        picture is one tap away. */}
+                    <span className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/25 transition-colors flex items-center justify-center">
+                      <span className="w-9 h-9 rounded-full bg-white/90 text-[#1B3068] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Maximize2 className="w-4 h-4" />
+                      </span>
+                    </span>
+                  </button>
                 ))}
               </div>
             </section>
@@ -604,6 +623,8 @@ export default function PublicShopProfile() {
           </div>
         </aside>
       </div>
+
+      <ImageLightbox {...gallery.props} title={profile.name} />
 
       {selectedItem && (
         <CatalogItemModal

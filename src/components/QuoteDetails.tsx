@@ -40,6 +40,7 @@ import { db } from '../services/api/database';
 
 import PaymentSheet from './PaymentSheet';
 import PushPaymentWait from './PushPaymentWait';
+import ImageLightbox, { useImageLightbox } from './ImageLightbox';
 import PortfolioShowcase from './PortfolioShowcase';
 
 /**
@@ -295,6 +296,13 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
   }, [autoOpenPay, hasAutoOpened, quote, onAction, expired]);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [paid, setPaid] = useState(false);
+
+  // Reference photos the provider attached — viewed in-app, full screen.
+  const referencePhotos: string[] = React.useMemo(() => {
+    const dynamicFields = robustParse(quote.dynamicFields);
+    return (dynamicFields?.referencePhotos || (quote as any).referencePhotos || []) as string[];
+  }, [quote]);
+  const photoViewer = useImageLightbox(referencePhotos);
   const [parentQuote, setParentQuote] = useState<Quote | null>(null);
 
   // Financed checkout: while a lender reviews the buyer's salary-backed loan the
@@ -339,6 +347,8 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
           />
         )}
       </AnimatePresence>
+
+      <ImageLightbox {...photoViewer.props} title={quote.inquiryTitle || 'Reference photos'} />
 
       {/* ── Receipt / Invoice Modal for Printing ── */}
       <AnimatePresence>
@@ -711,36 +721,32 @@ export default function QuoteDetails({ quote, inquiry, onAction, autoOpenPay }: 
               );
             })()}
 
-            {/* Reference Photos Gallery */}
-            {(() => {
-              const dynamicFields = robustParse(quote.dynamicFields);
-              const photos = dynamicFields?.referencePhotos || (quote as any).referencePhotos || [];
-
-              if (photos.length === 0) return null;
-
-              return (
-                <div className="mt-8">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">
-                    Reference Photos
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {photos.map((url: string, i: number) => (
-                      <div
-                        key={i}
-                        className="aspect-square rounded-2xl overflow-hidden border border-slate-200 cursor-pointer hover:opacity-90 transition-opacity"
-                        onClick={() => window.open(url, '_blank')}
-                      >
-                        <img
-                          src={url}
-                          alt={`Reference ${i + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ))}
-                  </div>
+            {/* Reference Photos Gallery — opens the in-app viewer rather
+                than dumping the raw file into a new browser tab. */}
+            {referencePhotos.length > 0 && (
+              <div className="mt-8">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">
+                  Reference Photos
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {referencePhotos.map((url: string, i: number) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => photoViewer.openAt(i)}
+                      aria-label={`View reference photo ${i + 1} of ${referencePhotos.length}`}
+                      className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 cursor-zoom-in"
+                    >
+                      <img
+                        src={url}
+                        alt={`Reference ${i + 1}`}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </button>
+                  ))}
                 </div>
-              );
-            })()}
+              </div>
+            )}
 
             {/* All Quote Data - Comprehensive Display */}
             <div className="mt-12 pt-8 border-t border-slate-200 space-y-6">

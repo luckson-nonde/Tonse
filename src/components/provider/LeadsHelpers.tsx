@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Play, ZoomIn } from 'lucide-react';
+import { Play, ZoomIn } from 'lucide-react';
+import ImageLightbox from '../ImageLightbox';
 
 // ─── Preference tag formatter ─────────────────────────────────────────────────
 
@@ -110,38 +111,23 @@ interface LightboxProps {
   onClose: () => void;
 }
 
+/**
+ * Kept as a thin wrapper so the leads call sites keep their existing
+ * `{images, startIndex, onClose}` API — the viewer itself is now the shared
+ * ImageLightbox (arrows, keyboard, swipe, counter, filmstrip, scroll lock),
+ * so lead photos and catalogue photos behave identically.
+ */
 export function Lightbox({ images, startIndex, onClose }: LightboxProps) {
   const [current, setCurrent] = useState(startIndex);
 
   return (
-    <div
-      className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 p-2 text-white/70 hover:text-white"
-      >
-        <X className="w-6 h-6" />
-      </button>
-      <img
-        src={images[current]}
-        alt={`Photo ${current + 1}`}
-        className="max-w-full max-h-[85vh] object-contain rounded-xl"
-        onClick={(e) => e.stopPropagation()}
-      />
-      {images.length > 1 && (
-        <div className="absolute bottom-6 flex gap-2">
-          {images.map((_, i) => (
-            <button
-              key={i}
-              onClick={(e) => { e.stopPropagation(); setCurrent(i); }}
-              className={`w-2 h-2 rounded-full transition-all ${i === current ? 'bg-white scale-125' : 'bg-white/40'}`}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+    <ImageLightbox
+      images={images}
+      index={current}
+      open
+      onClose={onClose}
+      onIndexChange={setCurrent}
+    />
   );
 }
 
