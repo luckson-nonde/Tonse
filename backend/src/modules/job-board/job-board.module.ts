@@ -24,7 +24,16 @@ import { PaymentsModule } from '../payments/payments.module';
     PaymentsModule,
   ],
   providers: [JobBoardService],
-  controllers: [JobPostingsController, JobApplicationsController, PublicJobPostingsController],
+  // PublicJobPostingsController MUST be registered before JobPostingsController:
+  // Nest/Express matches routes in registration order, and JobPostingsController's
+  // guarded `GET /job-postings/:id` (:id = ANY single segment) would otherwise
+  // swallow `GET /job-postings/public` first — matching literal 'public' as an
+  // id — and 401 it before the unguarded controller's exact route is even tried.
+  // (`/job-postings/public/:id`, two segments, was never at risk — it can't
+  // match a one-segment `:id` route regardless of order.) Same "specific before
+  // greedy" rule job-board.controller.ts's own comment already documents for
+  // 'mine'/'feed' within a single controller, just spanning two controllers here.
+  controllers: [PublicJobPostingsController, JobPostingsController, JobApplicationsController],
   exports: [JobBoardService],
 })
 export class JobBoardModule {}
